@@ -17,13 +17,41 @@ const trackersFile = path.join(
 
 
 
-// ======================
-// LEER TRACKERS
-// ======================
+function bmHeaders() {
+
+    if(!process.env.BATTLEMETRICS_TOKEN) {
+
+        console.log(
+            "❌ BATTLEMETRICS_TOKEN NO ENCONTRADO"
+        );
+
+    }
+
+
+    return {
+
+        headers: {
+
+            Authorization:
+            `Bearer ${process.env.BATTLEMETRICS_TOKEN}`,
+
+            Accept:
+            "application/json"
+
+        }
+
+    };
+
+}
+
+
+
+
 
 function leerTrackers() {
 
     try {
+
 
         if(!fs.existsSync(trackersFile)) {
 
@@ -44,10 +72,12 @@ function leerTrackers() {
 
     } catch(error) {
 
+
         console.log(
             "ERROR LEYENDO TRACKERS:",
             error.message
         );
+
 
         return [];
 
@@ -57,13 +87,13 @@ function leerTrackers() {
 
 
 
-// ======================
-// GUARDAR TRACKERS
-// ======================
+
+
 
 function guardarTrackers(trackers) {
 
     try {
+
 
         fs.writeFileSync(
 
@@ -78,12 +108,19 @@ function guardarTrackers(trackers) {
         );
 
 
+        console.log(
+            "💾 Trackers guardados"
+        );
+
+
     } catch(error) {
+
 
         console.log(
             "ERROR GUARDANDO TRACKERS:",
             error.message
         );
+
 
     }
 
@@ -92,9 +129,9 @@ function guardarTrackers(trackers) {
 
 
 
-// ======================
-// SERVIDOR
-// ======================
+
+
+
 
 async function obtenerServidor(serverId) {
 
@@ -104,7 +141,9 @@ async function obtenerServidor(serverId) {
 
         const response = await axios.get(
 
-            `https://api.battlemetrics.com/servers/${serverId}`
+            `https://api.battlemetrics.com/servers/${serverId}`,
+
+            bmHeaders()
 
         );
 
@@ -118,6 +157,12 @@ async function obtenerServidor(serverId) {
 
 
     } catch(error) {
+
+
+        console.log(
+            "ERROR OBTENIENDO SERVIDOR:",
+            error.response?.data || error.message
+        );
 
 
         return {
@@ -136,9 +181,9 @@ async function obtenerServidor(serverId) {
 
 
 
-// ======================
-// JUGADORES ONLINE
-// ======================
+
+
+
 
 async function obtenerJugadoresOnline(serverId) {
 
@@ -146,47 +191,47 @@ async function obtenerJugadoresOnline(serverId) {
     try {
 
 
+        console.log(
+            "🔑 Consultando jugadores BM..."
+        );
+
+
         const response = await axios.get(
 
-            `https://api.battlemetrics.com/servers/${serverId}`,
 
-            {
+            `https://api.battlemetrics.com/servers/${serverId}/relationships/players`,
 
-                params: {
+            bmHeaders()
 
-                    include:
-                    "player"
-
-                }
-
-            }
 
         );
 
 
 
-        const incluidos =
-            response.data.included || [];
+        const jugadores =
+
+            response.data.data || [];
 
 
 
-        const jugadores = incluidos.map(
+        const ids = jugadores.map(
 
-            p =>
-            String(p.id)
+            jugador =>
+            String(jugador.id)
 
         );
 
 
 
         console.log(
-            "👥 Jugadores online detectados:",
-            jugadores.length
+
+            `👥 Jugadores online detectados: ${ids.length}`
+
         );
 
 
 
-        return jugadores;
+        return ids;
 
 
 
@@ -195,7 +240,7 @@ async function obtenerJugadoresOnline(serverId) {
 
         console.log(
 
-            "ERROR JUGADORES ONLINE:",
+            "❌ ERROR JUGADORES ONLINE:",
 
             error.response?.data ||
             error.message
@@ -205,7 +250,6 @@ async function obtenerJugadoresOnline(serverId) {
 
         return [];
 
-
     }
 
 
@@ -214,9 +258,9 @@ async function obtenerJugadoresOnline(serverId) {
 
 
 
-// ======================
-// PLAYTIME
-// ======================
+
+
+
 
 async function obtenerPlaytime(playerId) {
 
@@ -227,7 +271,9 @@ async function obtenerPlaytime(playerId) {
         const data =
 
             await getBattleMetricsHours(
+
                 playerId
+
             );
 
 
@@ -237,14 +283,6 @@ async function obtenerPlaytime(playerId) {
             Number(
                 data.totalHoras || 0
             );
-
-
-
-        if(horas <= 0) {
-
-            return "0h";
-
-        }
 
 
 
@@ -291,9 +329,8 @@ async function obtenerPlaytime(playerId) {
 
 
 
-// ======================
-// TIEMPO RESTANTE
-// ======================
+
+
 
 function tiempoRestante(expira) {
 
@@ -310,29 +347,36 @@ function tiempoRestante(expira) {
 
 
     const horas =
+
         Math.floor(
+
             diferencia / 3600000
+
         );
 
 
 
     const minutos =
+
         Math.floor(
+
             (diferencia % 3600000) / 60000
+
         );
 
 
 
     return `${horas}h ${minutos}m`;
 
+
 }
 
 
 
 
-// ======================
-// REVISAR TRACKERS
-// ======================
+
+
+
 
 async function revisarTrackers(client) {
 
@@ -353,19 +397,17 @@ async function revisarTrackers(client) {
 
 
 
+
     for(const tracker of trackers) {
 
 
-
         console.log(
-
             `🔎 Revisando ${tracker.playerName}`
-
         );
 
 
 
-        const onlinePlayers =
+        const jugadoresOnline =
 
             await obtenerJugadoresOnline(
 
@@ -377,7 +419,7 @@ async function revisarTrackers(client) {
 
         const online =
 
-            onlinePlayers.includes(
+            jugadoresOnline.includes(
 
                 String(
                     tracker.playerId
@@ -387,15 +429,15 @@ async function revisarTrackers(client) {
 
 
 
-
         const estado =
 
             online
 
-            ? "ONLINE"
+            ?
+            "ONLINE"
 
-            : "OFFLINE";
-
+            :
+            "OFFLINE";
 
 
 
@@ -404,6 +446,7 @@ async function revisarTrackers(client) {
             `${tracker.playerName}: ${estado}`
 
         );
+
 
 
 
@@ -429,6 +472,7 @@ async function revisarTrackers(client) {
                     tracker.playerId
 
                 );
+
 
 
 
@@ -476,17 +520,14 @@ async function revisarTrackers(client) {
                         "🎮 Tracker BattleMetrics"
                     )
 
-
                     .setColor(
 
                         estado === "ONLINE"
 
                         ?
-
                         "#57F287"
 
                         :
-
                         "#ED4245"
 
                     )
@@ -501,6 +542,7 @@ async function revisarTrackers(client) {
 
                     .addFields(
 
+
                         {
 
                             name:
@@ -511,11 +553,9 @@ async function revisarTrackers(client) {
                             estado === "ONLINE"
 
                             ?
-
                             "🟢 ONLINE"
 
                             :
-
                             "🔴 OFFLINE"
 
                         },
@@ -564,18 +604,13 @@ async function revisarTrackers(client) {
 
 
 
-
                 await canal.send({
 
                     embeds:[
-
                         embed
-
                     ]
 
                 });
-
-
 
 
 
@@ -593,7 +628,6 @@ async function revisarTrackers(client) {
                 console.log(
 
                     "ERROR ENVIANDO TRACKER:",
-
                     error.message
 
                 );
@@ -606,12 +640,14 @@ async function revisarTrackers(client) {
 
 
 
+
+
         tracker.lastState =
             estado;
 
 
-
     }
+
 
 
 
@@ -621,8 +657,9 @@ async function revisarTrackers(client) {
     );
 
 
-
 }
+
+
 
 
 
