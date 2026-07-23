@@ -5,7 +5,6 @@ const {
 const fs = require("fs");
 const path = require("path");
 
-
 const file = path.join(
     __dirname,
     "..",
@@ -13,61 +12,51 @@ const file = path.join(
     "config.json"
 );
 
-
 module.exports = {
 
     data: new SlashCommandBuilder()
 
-    .setName("configurar-servidor")
+        .setName("configurar-servidor")
 
-    .setDescription("Configura el servidor BattleMetrics")
+        .setDescription("Configura el servidor BattleMetrics")
 
-    .addStringOption(option =>
-        option
-        .setName("link")
-        .setDescription("Link del servidor BattleMetrics")
-        .setRequired(true)
-    ),
+        .addStringOption(option =>
+            option
+                .setName("link")
+                .setDescription("Link del servidor BattleMetrics")
+                .setRequired(true)
+        ),
 
-
-    async execute(interaction){
-
+    async execute(interaction) {
 
         const link =
-        interaction.options.getString("link");
-
+            interaction.options.getString("link");
 
         const match =
-        link.match(/servers\/rust\/(\d+)/);
+            link.match(/servers\/rust\/(\d+)/);
 
-
-        if(!match){
+        if (!match) {
 
             return interaction.reply({
 
                 content:
-                "❌ Link de BattleMetrics inválido",
+                    "❌ Link de BattleMetrics inválido",
 
-                flags:64
+                flags: 64
 
             });
 
         }
 
-
-        const servidorId =
-        match[1];
-
+        const servidorId = match[1];
 
         let config = {};
 
+        try {
 
-        try{
+            if (fs.existsSync(file)) {
 
-            if(fs.existsSync(file)){
-
-                config =
-                JSON.parse(
+                config = JSON.parse(
                     fs.readFileSync(
                         file,
                         "utf8"
@@ -76,7 +65,7 @@ module.exports = {
 
             }
 
-        }catch(error){
+        } catch (error) {
 
             console.log(
                 "ERROR LEYENDO CONFIG:",
@@ -85,14 +74,16 @@ module.exports = {
 
         }
 
+        // Crear configuración para este servidor de Discord
+        if (!config[interaction.guild.id]) {
 
+            config[interaction.guild.id] = {};
 
-        config.battlemetricsServer =
-        servidorId;
+        }
 
+        config[interaction.guild.id].battlemetricsServer = servidorId;
 
-
-        try{
+        try {
 
             fs.writeFileSync(
                 file,
@@ -103,37 +94,35 @@ module.exports = {
                 )
             );
 
-
-        }catch(error){
+        } catch (error) {
 
             console.log(
                 "ERROR GUARDANDO CONFIG:",
                 error.message
             );
 
-
             return interaction.reply({
 
                 content:
-                "❌ Error guardando configuración",
+                    "❌ Error guardando configuración",
 
-                flags:64
+                flags: 64
 
             });
 
         }
 
-
-
         await interaction.reply({
 
             content:
-            `✅ Servidor guardado correctamente\n\n🌐 BattleMetrics ID: ${servidorId}`,
+                `✅ Servidor BattleMetrics configurado correctamente.
 
-            flags:64
+🌐 BattleMetrics ID: ${servidorId}
+🖥️ Servidor Discord: ${interaction.guild.name}`,
+
+            flags: 64
 
         });
-
 
     }
 
