@@ -3,10 +3,6 @@ const path = require("path");
 const axios = require("axios");
 const { EmbedBuilder } = require("discord.js");
 
-const {
-    getBattleMetricsHours
-} = require("./battlemetricsHours");
-
 
 const trackersFile = path.join(
     __dirname,
@@ -38,6 +34,7 @@ function bmHeaders(){
     };
 
 }
+
 
 
 
@@ -75,6 +72,7 @@ function leerTrackers(){
     }
 
 }
+
 
 
 
@@ -121,6 +119,8 @@ function guardarTrackers(trackers){
 
 
 
+
+
 // ======================
 // OBTENER SERVIDOR
 // ======================
@@ -151,6 +151,12 @@ async function obtenerServidor(serverId){
     }catch(error){
 
 
+        console.log(
+            "ERROR SERVIDOR:",
+            error.message
+        );
+
+
         return {
 
             nombre:
@@ -161,6 +167,8 @@ async function obtenerServidor(serverId){
     }
 
 }
+
+
 
 
 
@@ -178,6 +186,7 @@ async function obtenerJugadoresOnline(serverId){
         console.log(
             "🔑 Consultando jugadores BM..."
         );
+
 
 
         const response = await axios.get(
@@ -244,84 +253,55 @@ async function obtenerJugadoresOnline(serverId){
     }
 
 }
-
-
-
-
 // ======================
-// PLAYTIME REAL BM
+// PLAYTIME SESIÓN ACTUAL
 // ======================
 
-async function obtenerPlaytime(playerId){
+function obtenerTiempoSesion(tracker){
 
 
-    try{
+    if(!tracker.sessionStart){
 
-
-        console.log(
-            `⏱️ Consultando horas BM ${playerId}`
-        );
-
-
-
-        const data = await getBattleMetricsHours(
-
-            playerId
-
-        );
-
-
-
-        const horas = Number(
-
-            data.totalHoras || 0
-
-        );
-
-
-
-        const horasEnteras = Math.floor(horas);
-
-
-
-        const minutos = Math.floor(
-
-            (horas - horasEnteras) * 60
-
-        );
-
-
-
-        console.log(
-
-            `✅ Horas BM: ${horasEnteras}h ${minutos}m`
-
-        );
-
-
-
-        return `${horasEnteras}h ${minutos}m`;
-
-
-
-    }catch(error){
-
-
-        console.log(
-
-            "❌ ERROR PLAYTIME:",
-
-            error.message
-
-        );
-
-
-        return "No disponible";
-
+        return "0h 0m";
 
     }
 
+
+
+    const segundos = Math.floor(
+
+        (Date.now() - tracker.sessionStart) / 1000
+
+    );
+
+
+
+    const horas = Math.floor(
+
+        segundos / 3600
+
+    );
+
+
+
+    const minutos = Math.floor(
+
+        (segundos % 3600) / 60
+
+    );
+
+
+
+    return `${horas}h ${minutos}m`;
+
 }
+
+
+
+
+
+
+
 // ======================
 // TIEMPO RESTANTE
 // ======================
@@ -341,29 +321,28 @@ function tiempoRestante(expira){
 
 
 
-    const horas =
+    const horas = Math.floor(
 
-        Math.floor(
+        diferencia / 3600000
 
-            diferencia / 3600000
-
-        );
+    );
 
 
 
-    const minutos =
+    const minutos = Math.floor(
 
-        Math.floor(
+        (diferencia % 3600000) / 60000
 
-            (diferencia % 3600000) / 60000
-
-        );
+    );
 
 
 
     return `${horas}h ${minutos}m`;
 
 }
+
+
+
 
 
 
@@ -391,6 +370,7 @@ async function revisarTrackers(client){
 
 
 
+
     for(const tracker of trackers){
 
 
@@ -403,6 +383,8 @@ async function revisarTrackers(client){
 
 
 
+
+
         const jugadoresOnline =
 
             await obtenerJugadoresOnline(
@@ -410,6 +392,7 @@ async function revisarTrackers(client){
                 tracker.serverId
 
             );
+
 
 
 
@@ -431,6 +414,7 @@ async function revisarTrackers(client){
 
 
 
+
         const estado =
 
             online
@@ -447,11 +431,48 @@ async function revisarTrackers(client){
 
 
 
+
         console.log(
 
             `${tracker.playerName}: ${estado}`
 
         );
+
+
+
+
+
+        // ======================
+        // CONTROL DE SESIÓN
+        // ======================
+
+
+        if(estado === "ONLINE"){
+
+
+            if(!tracker.sessionStart){
+
+
+                tracker.sessionStart = Date.now();
+
+
+                console.log(
+
+                    "🟢 Nueva sesión iniciada"
+
+                );
+
+            }
+
+
+        }else{
+
+
+            tracker.sessionStart = null;
+
+
+        }
+
 
 
 
@@ -475,11 +496,12 @@ async function revisarTrackers(client){
 
             const playtime =
 
-                await obtenerPlaytime(
+                obtenerTiempoSesion(
 
-                    tracker.playerId
+                    tracker
 
                 );
+
 
 
 
@@ -506,6 +528,7 @@ async function revisarTrackers(client){
 
 
 
+
                 const canal =
 
                     guild.channels.cache.get(
@@ -519,6 +542,8 @@ async function revisarTrackers(client){
                 if(!canal)
 
                     continue;
+
+
 
 
 
@@ -565,6 +590,7 @@ async function revisarTrackers(client){
                     .addFields(
 
 
+
                         {
 
                             name:
@@ -586,6 +612,7 @@ async function revisarTrackers(client){
                         },
 
 
+
                         {
 
                             name:
@@ -599,6 +626,7 @@ async function revisarTrackers(client){
                         },
 
 
+
                         {
 
                             name:
@@ -610,6 +638,7 @@ async function revisarTrackers(client){
                             servidor.nombre
 
                         },
+
 
 
                         {
@@ -629,11 +658,14 @@ async function revisarTrackers(client){
                         }
 
 
+
                     )
 
 
 
                     .setTimestamp();
+
+
 
 
 
@@ -653,11 +685,15 @@ async function revisarTrackers(client){
 
 
 
+
+
                 console.log(
 
                     `📢 Cambio enviado ${tracker.playerName}`
 
                 );
+
+
 
 
 
@@ -676,8 +712,9 @@ async function revisarTrackers(client){
             }
 
 
-
         }
+
+
 
 
 
@@ -692,7 +729,12 @@ async function revisarTrackers(client){
 
 
 
-    guardarTrackers(trackers);
+
+    guardarTrackers(
+
+        trackers
+
+    );
 
 
 
@@ -702,8 +744,12 @@ async function revisarTrackers(client){
 
 
 
+
+
 module.exports = {
 
+
     revisarTrackers
+
 
 };
