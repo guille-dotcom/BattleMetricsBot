@@ -32,9 +32,13 @@ async function getBattleMetricsHours(playerId) {
         const servidores = response.data.included || [];
 
 
+        const nombreJugador =
+            player.attributes.name || "Desconocido";
+
+
         console.log(
             "JUGADOR:",
-            player.attributes.name
+            nombreJugador
         );
 
 
@@ -129,15 +133,21 @@ async function getBattleMetricsHours(playerId) {
 
         return {
 
+            // Nombre del perfil BattleMetrics
+            nombre:
+                nombreJugador,
 
-            totalHoras: horasTotales,
+
+            totalHoras:
+                horasTotales,
 
 
             servidores: {
 
                 rust: {
 
-                    horas: horasTotales,
+                    horas:
+                        horasTotales,
 
                     datos: {
 
@@ -168,16 +178,31 @@ async function getBattleMetricsHours(playerId) {
 
         return {
 
-            totalHoras:"0.00",
+            nombre:
+                "Desconocido",
 
-            servidores:{
-                rust:{
-                    horas:"0.00",
-                    datos:{
-                        servidoresEncontrados:0,
-                        lista:[]
+            totalHoras:
+                "0.00",
+
+            servidores: {
+
+                rust: {
+
+                    horas:
+                        "0.00",
+
+                    datos: {
+
+                        servidoresEncontrados:
+                            0,
+
+                        lista:
+                            []
+
                     }
+
                 }
+
             }
 
         };
