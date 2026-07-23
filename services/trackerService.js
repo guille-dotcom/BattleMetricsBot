@@ -23,11 +23,13 @@ function bmHeaders(){
     return {
 
         headers:{
+
             Authorization:
             `Bearer ${process.env.BATTLEMETRICS_TOKEN}`,
 
             Accept:
             "application/json"
+
         }
 
     };
@@ -51,10 +53,12 @@ function leerTrackers(){
 
 
         return JSON.parse(
+
             fs.readFileSync(
                 trackersFile,
                 "utf8"
             )
+
         );
 
 
@@ -83,6 +87,7 @@ function guardarTrackers(trackers){
 
     try{
 
+
         fs.writeFileSync(
 
             trackersFile,
@@ -103,10 +108,12 @@ function guardarTrackers(trackers){
 
     }catch(error){
 
+
         console.log(
             "ERROR GUARDANDO TRACKERS:",
             error.message
         );
+
 
     }
 
@@ -126,8 +133,9 @@ async function obtenerServidor(serverId){
 
     try{
 
-        const response =
-        await axios.get(
+
+        const response = await axios.get(
+
 
             `https://api.battlemetrics.com/servers/${serverId}`,
 
@@ -136,15 +144,18 @@ async function obtenerServidor(serverId){
         );
 
 
+
         return {
 
             nombre:
+
             response.data.data.attributes.name
 
         };
 
 
     }catch(error){
+
 
         return {
 
@@ -170,6 +181,7 @@ async function obtenerServidor(serverId){
 
 async function obtenerJugadoresOnline(serverId){
 
+
     try{
 
 
@@ -178,8 +190,9 @@ async function obtenerJugadoresOnline(serverId){
         );
 
 
-        const response =
-        await axios.get(
+
+        const response = await axios.get(
+
 
             `https://api.battlemetrics.com/servers/${serverId}`,
 
@@ -260,43 +273,66 @@ async function obtenerPlaytime(serverId, playerId){
 
 
         console.log(
-            `⏱️ Consultando tiempo ${playerId} en servidor ${serverId}`
+
+            `⏱️ Consultando playtime ${playerId}`
+
         );
 
 
 
-        const response =
-        await axios.get(
+        const response = await axios.get(
 
 
-            `https://api.battlemetrics.com/servers/${serverId}/relationships/players`,
-
+            `https://api.battlemetrics.com/players/${playerId}`,
 
             bmHeaders()
 
-
         );
 
 
 
-        const jugadores =
+        const player =
 
-            response.data.data || [];
+            response.data.data;
 
 
 
-        const jugador =
+        if(!player){
 
-            jugadores.find(
 
-                p =>
-                String(p.id) === String(playerId)
+            return "0h 0m";
+
+
+        }
+
+
+
+        const servidores =
+
+            player.attributes?.servers || [];
+
+
+
+        const servidor =
+
+            servidores.find(
+
+                s =>
+
+                String(s.serverId) === String(serverId)
 
             );
 
 
 
-        if(!jugador){
+        if(!servidor){
+
+
+            console.log(
+
+                "⚠️ Sin datos de este servidor"
+
+            );
 
 
             return "0h 0m";
@@ -308,9 +344,9 @@ async function obtenerPlaytime(serverId, playerId){
 
         const segundos =
 
-            jugador.attributes?.timePlayed ||
+            servidor.timePlayed ||
 
-            jugador.attributes?.playtime ||
+            servidor.playtime ||
 
             0;
 
@@ -319,16 +355,25 @@ async function obtenerPlaytime(serverId, playerId){
         const horas =
 
             Math.floor(
+
                 segundos / 3600
+
             );
-
-
-
-        const minutos =
+                    const minutos =
 
             Math.floor(
+
                 (segundos % 3600) / 60
+
             );
+
+
+
+        console.log(
+
+            `✅ Playtime: ${horas}h ${minutos}m`
+
+        );
 
 
 
@@ -341,7 +386,7 @@ async function obtenerPlaytime(serverId, playerId){
 
         console.log(
 
-            "❌ ERROR PLAYTIME SERVIDOR:",
+            "❌ ERROR PLAYTIME:",
 
             error.response?.data ||
             error.message
@@ -362,37 +407,48 @@ async function obtenerPlaytime(serverId, playerId){
 
 
 
+// ======================
+// TIEMPO RESTANTE
+// ======================
+
 function tiempoRestante(expira){
 
 
     const diferencia =
-    expira-Date.now();
+
+        expira - Date.now();
 
 
 
-    if(diferencia<=0)
+    if(diferencia <= 0)
+
         return "Expirado";
 
 
 
     const horas =
-    Math.floor(
-        diferencia/3600000
-    );
+
+        Math.floor(
+
+            diferencia / 3600000
+
+        );
 
 
 
     const minutos =
-    Math.floor(
-        (diferencia%3600000)/60000
-    );
+
+        Math.floor(
+
+            (diferencia % 3600000) / 60000
+
+        );
 
 
 
     return `${horas}h ${minutos}m`;
 
 }
-
 
 
 
@@ -408,17 +464,20 @@ async function revisarTrackers(client){
 
 
     let trackers =
-    leerTrackers();
+
+        leerTrackers();
 
 
 
     trackers =
-    trackers.filter(
 
-        tracker =>
-        tracker.expiresAt > Date.now()
+        trackers.filter(
 
-    );
+            tracker =>
+
+            tracker.expiresAt > Date.now()
+
+        );
 
 
 
@@ -429,48 +488,59 @@ async function revisarTrackers(client){
 
 
         console.log(
+
             `🔎 Revisando ${tracker.playerName}`
+
         );
+
 
 
 
         const jugadoresOnline =
 
-        await obtenerJugadoresOnline(
+            await obtenerJugadoresOnline(
 
-            tracker.serverId
+                tracker.serverId
 
-        );
+            );
 
 
 
 
         const online =
 
-        jugadoresOnline.includes(
+            jugadoresOnline.includes(
 
-            String(
-                tracker.playerId
-            )
+                String(
 
-        );
+                    tracker.playerId
+
+                )
+
+            );
 
 
 
 
         const estado =
 
-        online
-        ?
-        "ONLINE"
-        :
-        "OFFLINE";
+            online
+
+            ?
+
+            "ONLINE"
+
+            :
+
+            "OFFLINE";
 
 
 
 
         console.log(
+
             `${tracker.playerName}: ${estado}`
+
         );
 
 
@@ -483,25 +553,23 @@ async function revisarTrackers(client){
 
             const servidor =
 
-            await obtenerServidor(
+                await obtenerServidor(
 
-                tracker.serverId
+                    tracker.serverId
 
-            );
-
+                );
 
 
 
             const playtime =
 
-            await obtenerPlaytime(
+                await obtenerPlaytime(
 
-                tracker.serverId,
+                    tracker.serverId,
 
-                tracker.playerId
+                    tracker.playerId
 
-            );
-
+                );
 
 
 
@@ -512,15 +580,16 @@ async function revisarTrackers(client){
 
                 const guild =
 
-                client.guilds.cache.get(
+                    client.guilds.cache.get(
 
-                    tracker.guildId
+                        tracker.guildId
 
-                );
+                    );
 
 
 
                 if(!guild)
+
                     continue;
 
 
@@ -528,15 +597,16 @@ async function revisarTrackers(client){
 
                 const canal =
 
-                guild.channels.cache.get(
+                    guild.channels.cache.get(
 
-                    tracker.channelId
+                        tracker.channelId
 
-                );
+                    );
 
 
 
                 if(!canal)
+
                     continue;
 
 
@@ -545,73 +615,106 @@ async function revisarTrackers(client){
 
                 const embed =
 
-                new EmbedBuilder()
+                    new EmbedBuilder()
 
 
-                .setTitle(
-                    "🎮 Tracker BattleMetrics"
-                )
+
+                    .setTitle(
+
+                        "🎮 Tracker BattleMetrics"
+
+                    )
 
 
-                .setColor(
 
-                    estado==="ONLINE"
+                    .setColor(
 
-                    ?
-                    "#57F287"
+                        estado === "ONLINE"
 
-                    :
-                    "#ED4245"
-
-                )
-
-
-                .setDescription(
-
-                    `👤 **${tracker.playerName}**`
-
-                )
-
-
-                .addFields(
-
-                    {
-                        name:"Estado",
-                        value:
-                        estado==="ONLINE"
                         ?
-                        "🟢 ONLINE"
+
+                        "#57F287"
+
                         :
-                        "🔴 OFFLINE"
-                    },
+
+                        "#ED4245"
+
+                    )
 
 
-                    {
-                        name:"⏱️ Play Time",
-                        value:
-                        playtime
-                    },
+
+                    .setDescription(
+
+                        `👤 **${tracker.playerName}**`
+
+                    )
 
 
-                    {
-                        name:"📡 Servidor",
-                        value:
-                        servidor.nombre
-                    },
+
+                    .addFields(
 
 
-                    {
-                        name:"⌛ Tracker restante",
-                        value:
-                        tiempoRestante(
-                            tracker.expiresAt
-                        )
-                    }
+                        {
 
-                )
+                            name:"Estado",
+
+                            value:
+
+                            estado === "ONLINE"
+
+                            ?
+
+                            "🟢 ONLINE"
+
+                            :
+
+                            "🔴 OFFLINE"
+
+                        },
 
 
-                .setTimestamp();
+                        {
+
+                            name:"⏱️ Play Time",
+
+                            value:
+
+                            playtime
+
+                        },
+
+
+                        {
+
+                            name:"📡 Servidor",
+
+                            value:
+
+                            servidor.nombre
+
+                        },
+
+
+                        {
+
+                            name:"⌛ Tracker restante",
+
+                            value:
+
+                            tiempoRestante(
+
+                                tracker.expiresAt
+
+                            )
+
+                        }
+
+
+                    )
+
+
+
+                    .setTimestamp();
 
 
 
@@ -620,7 +723,9 @@ async function revisarTrackers(client){
                 await canal.send({
 
                     embeds:[
+
                         embed
+
                     ]
 
                 });
@@ -628,9 +733,10 @@ async function revisarTrackers(client){
 
 
 
-
                 console.log(
+
                     `📢 Cambio enviado ${tracker.playerName}`
+
                 );
 
 
@@ -639,8 +745,11 @@ async function revisarTrackers(client){
 
 
                 console.log(
+
                     "ERROR ENVIANDO TRACKER:",
+
                     error.message
+
                 );
 
 
@@ -652,9 +761,9 @@ async function revisarTrackers(client){
 
 
 
-
         tracker.lastState =
-        estado;
+
+            estado;
 
 
 
@@ -663,10 +772,18 @@ async function revisarTrackers(client){
 
 
 
-    guardarTrackers(trackers);
+
+    guardarTrackers(
+
+        trackers
+
+    );
+
 
 
 }
+
+
 
 
 
