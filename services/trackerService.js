@@ -12,47 +12,42 @@ const trackersFile = path.join(
 );
 
 
-const configFile = path.join(
-    __dirname,
-    "..",
-    "data",
-    "config.json"
-);
 
-
-// Leer JSON seguro
-function leerArchivo(file) {
+function leerTrackers() {
 
     try {
 
-        if (!fs.existsSync(file)) {
-            return {};
+        if(!fs.existsSync(trackersFile)) {
+
+            return [];
+
         }
+
 
         return JSON.parse(
             fs.readFileSync(
-                file,
+                trackersFile,
                 "utf8"
             )
         );
 
+
     } catch(error) {
 
         console.log(
-            "ERROR LEYENDO:",
-            file,
+            "ERROR LEYENDO TRACKERS:",
             error.message
         );
 
-        return {};
+        return [];
 
     }
 
 }
 
 
-// Guardar trackers
-function guardarTrackers(data) {
+
+function guardarTrackers(trackers) {
 
     try {
 
@@ -61,12 +56,13 @@ function guardarTrackers(data) {
             trackersFile,
 
             JSON.stringify(
-                data,
+                trackers,
                 null,
                 2
             )
 
         );
+
 
     } catch(error) {
 
@@ -80,58 +76,132 @@ function guardarTrackers(data) {
 }
 
 
-// Obtener jugadores online del servidor
-async function obtenerJugadoresOnline(serverId) {
+
+
+async function obtenerServidor(serverId) {
+
 
     try {
+
 
         const response =
             await axios.get(
 
-                `https://api.battlemetrics.com/servers/${serverId}/relationships/players`,
-
-                {
-                    params: {
-                        "filter[online]": "true"
-                    }
-                }
+                `https://api.battlemetrics.com/servers/${serverId}`
 
             );
 
 
-        return response.data.data.map(
-            player => player.id
-        );
+        return {
+
+            nombre:
+            response.data.data.attributes.name
+
+        };
 
 
     } catch(error) {
 
-        console.log(
-            "ERROR CONSULTANDO JUGADORES:",
-            error.response?.data || error.message
-        );
 
-        return [];
+        return {
+
+            nombre:
+            "Servidor Rust"
+
+        };
+
 
     }
+
 
 }
 
 
 
-// Revisar trackers
+
+
+async function obtenerJugadoresOnline(serverId) {
+
+
+    try {
+
+
+        const response =
+            await axios.get(
+
+                `https://api.battlemetrics.com/servers/${serverId}/relationships/players`
+
+            );
+
+
+
+        return response.data.data.map(
+
+            player => player.id
+
+        );
+
+
+    } catch(error) {
+
+
+        console.log(
+
+            "ERROR JUGADORES ONLINE:",
+
+            error.response?.data || error.message
+
+        );
+
+
+        return [];
+
+    }
+
+
+}
+
+
+
+
+
+function tiempoRestante(expira) {
+
+
+    const diferencia =
+        expira - Date.now();
+
+
+    if(diferencia <= 0)
+        return "Expirado";
+
+
+    const horas =
+        Math.floor(
+            diferencia / 3600000
+        );
+
+
+    const minutos =
+        Math.floor(
+            (diferencia % 3600000) / 60000
+        );
+
+
+    return `${horas}h ${minutos}m`;
+
+}
+
+
+
+
+
 async function revisarTrackers(client) {
 
 
     let trackers =
-        leerArchivo(trackersFile);
+        leerTrackers();
 
-
-    if(!Array.isArray(trackers)) {
-
-        trackers = [];
-
-    }
 
 
     const ahora =
@@ -139,73 +209,53 @@ async function revisarTrackers(client) {
 
 
 
-    // eliminar expirados
     trackers =
         trackers.filter(
             tracker => {
 
-                if(tracker.expiresAt <= ahora) {
-
-                    console.log(
-                        `⏳ Tracker expirado: ${tracker.playerName}`
-                    );
-
-                    return false;
-
-                }
-
-                return true;
+                return tracker.expiresAt > ahora;
 
             }
         );
 
 
 
-    const config =
-        leerArchivo(configFile);
-
-
 
     for(const tracker of trackers) {
 
 
-        const serverId =
-            tracker.serverId;
 
-
-
-        if(!serverId) {
-            continue;
-        }
-
-
-
-        const jugadoresOnline =
+        const onlinePlayers =
             await obtenerJugadoresOnline(
-                serverId
+                tracker.serverId
             );
 
 
 
-        const estaOnline =
-            jugadoresOnline.includes(
+        const online =
+            onlinePlayers.includes(
                 tracker.playerId
             );
 
 
 
         const nuevoEstado =
-            estaOnline
+            online
             ? "ONLINE"
             : "OFFLINE";
 
 
 
-        // solo avisar cuando cambia
         if(
-            tracker.lastState !== "UNKNOWN" &&
             tracker.lastState !== nuevoEstado
         ) {
+
+
+            const servidor =
+                await obtenerServidor(
+                    tracker.serverId
+                );
+
 
 
             try {
@@ -217,87 +267,155 @@ async function revisarTrackers(client) {
                     );
 
 
-                if(guild) {
+
+                if(!guild)
+                    continue;
 
 
-                    const canal =
-                        guild.channels.cache.get(
-                            tracker.channelId
-                        );
+
+                const canal =
+                    guild.channels.cache.get(
+                        tracker.channelId
+                    );
 
 
-                    if(canal) {
+
+                if(!canal)
+                    continue;
 
 
-                        const embed =
-                            new EmbedBuilder()
 
-                            .setTitle(
-                                "🎮 Tracker BattleMetrics"
+                const embed =
+                    new EmbedBuilder()
+
+
+
+                    .setTitle(
+                        "🎮 Tracker BattleMetrics"
+                    )
+
+
+
+                    .setColor(
+
+                        nuevoEstado === "ONLINE"
+
+                        ?
+
+                        "#57F287"
+
+                        :
+
+                        "#ED4245"
+
+                    )
+
+
+
+                    .setDescription(
+
+                        `👤 **${tracker.playerName}**`
+
+                    )
+
+
+
+                    .addFields(
+
+                        {
+
+                            name:
+                            "Estado",
+
+                            value:
+                            nuevoEstado === "ONLINE"
+
+                            ?
+
+                            "🟢 ONLINE"
+
+                            :
+
+                            "🔴 OFFLINE"
+
+                        },
+
+
+                        {
+
+                            name:
+                            "⏱️ Play Time",
+
+                            value:
+                            "Consultando BattleMetrics..."
+
+                        },
+
+
+                        {
+
+                            name:
+                            "📡 Servidor",
+
+                            value:
+                            servidor.nombre
+
+                        },
+
+
+                        {
+
+                            name:
+                            "⌛ Tracker restante",
+
+                            value:
+                            tiempoRestante(
+                                tracker.expiresAt
                             )
 
-                            .setColor(
-                                nuevoEstado === "ONLINE"
-                                ? "#57F287"
-                                : "#ED4245"
-                            )
+                        }
 
-                            .setDescription(
+                    )
 
-                                nuevoEstado === "ONLINE"
 
-                                ?
-
-                                `🟢 **${tracker.playerName} entró al servidor**`
-
-                                :
-
-                                `🔴 **${tracker.playerName} salió del servidor**`
-
-                            )
-
-                            .addFields({
-
-                                name:
-                                "Estado",
-
-                                value:
-                                nuevoEstado
-
-                            })
-
-                            .setTimestamp();
+                    .setTimestamp();
 
 
 
-                        await canal.send({
 
-                            embeds:[
-                                embed
-                            ]
+                await canal.send({
 
-                        });
+                    embeds:[
+                        embed
+                    ]
 
+                });
 
-                    }
-
-                }
 
 
             } catch(error) {
 
+
                 console.log(
+
                     "ERROR ENVIANDO TRACKER:",
+
                     error.message
+
                 );
 
+
             }
+
+
 
         }
 
 
+
         tracker.lastState =
             nuevoEstado;
+
 
 
     }
@@ -312,6 +430,9 @@ async function revisarTrackers(client) {
 }
 
 
+
 module.exports = {
+
     revisarTrackers
+
 };
