@@ -4,44 +4,23 @@ const {
 
 const fs = require("fs");
 const path = require("path");
-const axios = require("axios");
 
-
-const dataFolder = path.join(
-    __dirname,
-    "..",
-    "data"
-);
+const {
+    getBattleMetricsHours
+} = require("../services/battlemetricsHours");
 
 
 const file = path.join(
-    dataFolder,
+    __dirname,
+    "..",
+    "data",
     "trackers.json"
-);
-
-
-// Crear carpeta data si no existe
-
-if(!fs.existsSync(dataFolder)) {
-
-    fs.mkdirSync(
-        dataFolder,
-        {
-            recursive: true
-        }
-    );
-
-}
-
-
-console.log(
-    "📁 Archivo tracker:",
-    file
 );
 
 
 
 module.exports = {
+
 
     data: new SlashCommandBuilder()
 
@@ -65,12 +44,11 @@ module.exports = {
 
 
 
-
     async execute(interaction) {
 
 
         await interaction.deferReply({
-            flags:64
+            flags: 64
         });
 
 
@@ -80,9 +58,8 @@ module.exports = {
 
 
 
-
         // ======================
-        // LEER CONFIG
+        // LEER CONFIGURACION
         // ======================
 
 
@@ -92,6 +69,7 @@ module.exports = {
             "data",
             "config.json"
         );
+
 
 
         let config = {};
@@ -124,17 +102,12 @@ module.exports = {
 
 
             console.log(
-
                 "ERROR LEYENDO CONFIG:",
-
                 error.message
-
             );
 
 
         }
-
-
 
 
 
@@ -143,7 +116,6 @@ module.exports = {
             config.battlemetricsServer ||
 
             config[interaction.guild.id]?.battlemetricsServer;
-
 
 
 
@@ -158,8 +130,6 @@ module.exports = {
 
 
         }
-
-
 
 
 
@@ -195,6 +165,7 @@ module.exports = {
             }
 
 
+
         } catch(error) {
 
 
@@ -212,6 +183,10 @@ module.exports = {
 
 
 
+        // ======================
+        // LIMITE 20
+        // ======================
+
 
         const activosServidor =
 
@@ -222,8 +197,6 @@ module.exports = {
                 t.guildId === interaction.guild.id
 
             );
-
-
 
 
 
@@ -242,6 +215,10 @@ module.exports = {
 
 
 
+        // ======================
+        // EVITAR DUPLICADOS
+        // ======================
+
 
         const existe =
 
@@ -254,8 +231,6 @@ module.exports = {
                 t.playerId === playerId
 
             );
-
-
 
 
 
@@ -274,10 +249,8 @@ module.exports = {
 
 
 
-
-
         // ======================
-        // OBTENER NOMBRE
+        // OBTENER NOMBRE DESDE BM
         // ======================
 
 
@@ -289,11 +262,11 @@ module.exports = {
         try {
 
 
-            const response =
+            const data =
 
-                await axios.get(
+                await getBattleMetricsHours(
 
-                    `https://api.battlemetrics.com/players/${playerId}`
+                    playerId
 
                 );
 
@@ -301,7 +274,9 @@ module.exports = {
 
             nombreJugador =
 
-                response.data.data.attributes.name;
+                data.nombre ||
+
+                "Jugador desconocido";
 
 
 
@@ -310,17 +285,14 @@ module.exports = {
 
             console.log(
 
-                "ERROR OBTENIENDO JUGADOR:",
+                "ERROR OBTENIENDO PERFIL BM:",
 
-                error.response?.data || error.message
+                error.message
 
             );
 
 
         }
-
-
-
 
 
 
@@ -347,40 +319,48 @@ module.exports = {
 
         trackers.push({
 
+
             guildId:
+
                 interaction.guild.id,
 
 
             channelId:
+
                 interaction.channel.id,
 
 
             serverId:
+
                 serverId,
 
 
             playerId:
+
                 playerId,
 
 
             playerName:
+
                 nombreJugador,
 
 
             lastState:
+
                 "UNKNOWN",
 
 
             createdAt:
+
                 ahora,
 
 
             expiresAt:
+
                 expira
 
+
         });
-
-
 
 
 
@@ -407,19 +387,7 @@ module.exports = {
 
                     2
 
-                ),
-
-                "utf8"
-
-            );
-
-
-
-            console.log(
-
-                "💾 Tracker guardado:",
-
-                trackers
+                )
 
             );
 
@@ -451,25 +419,23 @@ module.exports = {
 
 
 
-
-
         await interaction.editReply({
 
 
             content:
 
 
-            `✅ Tracker creado correctamente\n\n` +
+                `✅ Tracker creado correctamente\n\n` +
 
-            `👤 Jugador: **${nombreJugador}**\n` +
+                `👤 Jugador: **${nombreJugador}**\n` +
 
-            `🆔 BattleMetrics ID: \`${playerId}\`\n` +
+                `🆔 BattleMetrics ID: \`${playerId}\`\n` +
 
-            `📡 Servidor ID: \`${serverId}\`\n` +
+                `📡 Servidor ID: \`${serverId}\`\n` +
 
-            `⏳ Duración: 24 horas\n\n` +
+                `⏳ Duración: 24 horas\n\n` +
 
-            `📋 Trackers activos: ${activosServidor.length + 1}/20`
+                `📋 Trackers activos: ${activosServidor.length + 1}/20`
 
 
         });
