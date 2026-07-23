@@ -32,13 +32,10 @@ module.exports = {
 
         .addStringOption(option =>
             option
-
                 .setName("id")
-
                 .setDescription(
                     "ID del jugador BattleMetrics"
                 )
-
                 .setRequired(true)
         ),
 
@@ -71,7 +68,6 @@ module.exports = {
         );
 
 
-
         let config = {};
 
 
@@ -85,11 +81,8 @@ module.exports = {
                 config = JSON.parse(
 
                     fs.readFileSync(
-
                         configFile,
-
                         "utf8"
-
                     )
 
                 );
@@ -111,11 +104,64 @@ module.exports = {
 
 
 
-        const serverId =
+        console.log(
+            "CONFIG ACTUAL:",
+            config
+        );
 
-            config.battlemetricsServer ||
 
-            config[interaction.guild.id]?.battlemetricsServer;
+
+        // Acepta cualquier formato de config
+
+        let serverId = null;
+
+
+
+        // Formato:
+        // { battlemetricsServer:"433255" }
+
+        if(config.battlemetricsServer) {
+
+
+            serverId =
+                config.battlemetricsServer;
+
+
+        }
+
+
+
+        // Formato:
+        // { "ID_DISCORD": {battlemetricsServer:"433255"} }
+
+        else if(
+            config[interaction.guild.id]?.battlemetricsServer
+        ) {
+
+
+            serverId =
+                config[interaction.guild.id]
+                .battlemetricsServer;
+
+
+        }
+
+
+
+        // Formato:
+        // { "ID_DISCORD":"433255" }
+
+        else if(
+            config[interaction.guild.id]
+        ) {
+
+
+            serverId =
+                config[interaction.guild.id];
+
+
+        }
+
 
 
 
@@ -130,6 +176,7 @@ module.exports = {
 
 
         }
+
 
 
 
@@ -152,11 +199,8 @@ module.exports = {
                 trackers = JSON.parse(
 
                     fs.readFileSync(
-
                         file,
-
                         "utf8"
-
                     )
 
                 );
@@ -170,15 +214,13 @@ module.exports = {
 
 
             console.log(
-
                 "ERROR LEYENDO TRACKERS:",
-
                 error.message
-
             );
 
 
         }
+
 
 
 
@@ -193,7 +235,6 @@ module.exports = {
             trackers.filter(
 
                 t =>
-
                 t.guildId === interaction.guild.id
 
             );
@@ -215,6 +256,7 @@ module.exports = {
 
 
 
+
         // ======================
         // EVITAR DUPLICADOS
         // ======================
@@ -225,9 +267,7 @@ module.exports = {
             trackers.find(
 
                 t =>
-
                 t.guildId === interaction.guild.id &&
-
                 t.playerId === playerId
 
             );
@@ -249,8 +289,9 @@ module.exports = {
 
 
 
+
         // ======================
-        // OBTENER NOMBRE DESDE BM
+        // OBTENER NOMBRE BM
         // ======================
 
 
@@ -265,18 +306,19 @@ module.exports = {
             const data =
 
                 await getBattleMetricsHours(
-
                     playerId
-
                 );
 
 
 
-            nombreJugador =
+            if(data?.nombre) {
 
-                data.nombre ||
 
-                "Jugador desconocido";
+                nombreJugador =
+                    data.nombre;
+
+
+            }
 
 
 
@@ -286,13 +328,13 @@ module.exports = {
             console.log(
 
                 "ERROR OBTENIENDO PERFIL BM:",
-
                 error.message
 
             );
 
 
         }
+
 
 
 
@@ -310,9 +352,7 @@ module.exports = {
         const expira =
 
             ahora +
-
             (24 * 60 * 60 * 1000);
-
 
 
 
@@ -321,42 +361,34 @@ module.exports = {
 
 
             guildId:
-
                 interaction.guild.id,
 
 
             channelId:
-
                 interaction.channel.id,
 
 
             serverId:
-
-                serverId,
+                String(serverId),
 
 
             playerId:
-
-                playerId,
+                String(playerId),
 
 
             playerName:
-
                 nombreJugador,
 
 
             lastState:
-
                 "UNKNOWN",
 
 
             createdAt:
-
                 ahora,
 
 
             expiresAt:
-
                 expira
 
 
@@ -380,15 +412,18 @@ module.exports = {
                 file,
 
                 JSON.stringify(
-
                     trackers,
-
                     null,
-
                     2
-
                 )
 
+            );
+
+
+
+            console.log(
+                "💾 Tracker guardado:",
+                trackers
             );
 
 
@@ -397,11 +432,8 @@ module.exports = {
 
 
             console.log(
-
                 "ERROR GUARDANDO TRACKERS:",
-
                 error.message
-
             );
 
 
@@ -414,6 +446,8 @@ module.exports = {
 
 
         }
+
+
 
 
 
