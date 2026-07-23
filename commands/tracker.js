@@ -51,11 +51,6 @@ module.exports = {
 
 
 
-        // ======================
-        // LEER CONFIGURACION
-        // ======================
-
-
         const configFile = path.join(
             __dirname,
             "..",
@@ -75,13 +70,17 @@ module.exports = {
             if(fs.existsSync(configFile)) {
 
 
-                config =
-                    JSON.parse(
-                        fs.readFileSync(
-                            configFile,
-                            "utf8"
-                        )
-                    );
+                config = JSON.parse(
+
+                    fs.readFileSync(
+
+                        configFile,
+
+                        "utf8"
+
+                    )
+
+                );
 
 
             }
@@ -101,8 +100,13 @@ module.exports = {
 
 
 
+        // Acepta ambos formatos
+
         const serverId =
-            config.battlemetricsServer;
+
+            config.battlemetricsServer ||
+
+            config[interaction.guild.id]?.battlemetricsServer;
 
 
 
@@ -123,11 +127,6 @@ module.exports = {
 
 
 
-        // ======================
-        // LEER TRACKERS
-        // ======================
-
-
         let trackers = [];
 
 
@@ -138,18 +137,17 @@ module.exports = {
             if(fs.existsSync(file)) {
 
 
-                trackers =
-                    JSON.parse(
+                trackers = JSON.parse(
 
-                        fs.readFileSync(
+                    fs.readFileSync(
 
-                            file,
+                        file,
 
-                            "utf8"
+                        "utf8"
 
-                        )
+                    )
 
-                    );
+                );
 
 
             }
@@ -172,11 +170,6 @@ module.exports = {
 
 
 
-
-
-        // ======================
-        // LIMITE 20 JUGADORES
-        // ======================
 
 
         const activosServidor =
@@ -205,13 +198,6 @@ module.exports = {
 
 
 
-
-
-
-
-        // ======================
-        // EVITAR DUPLICADOS
-        // ======================
 
 
         const existe =
@@ -244,12 +230,6 @@ module.exports = {
 
 
 
-
-        // ======================
-        // OBTENER NOMBRE PLAYER
-        // ======================
-
-
         let nombreJugador =
             "Jugador desconocido";
 
@@ -262,19 +242,7 @@ module.exports = {
 
                 await axios.get(
 
-                    `https://api.battlemetrics.com/players/${playerId}`,
-
-                    {
-
-                        headers: {
-
-                            Authorization:
-
-                            `Bearer ${process.env.BATTLEMETRICS_TOKEN}`
-
-                        }
-
-                    }
+                    `https://api.battlemetrics.com/players/${playerId}`
 
                 );
 
@@ -304,11 +272,6 @@ module.exports = {
 
 
 
-        // ======================
-        // CREAR TRACKER
-        // ======================
-
-
         const ahora =
             Date.now();
 
@@ -328,62 +291,35 @@ module.exports = {
 
 
             guildId:
-
                 interaction.guild.id,
 
 
             channelId:
-
                 interaction.channel.id,
 
 
-
             serverId:
-
-
-
                 serverId,
 
 
-
             playerId:
-
-
-
                 playerId,
 
 
-
             playerName:
-
-
-
                 nombreJugador,
 
 
-
             lastState:
-
-
-
                 "UNKNOWN",
 
 
-
             createdAt:
-
-
-
                 ahora,
 
 
-
             expiresAt:
-
-
-
                 expira
-
 
 
         });
@@ -393,20 +329,12 @@ module.exports = {
 
 
 
-
-        // ======================
-        // GUARDAR
-        // ======================
-
-
         try {
 
 
             fs.writeFileSync(
 
-
                 file,
-
 
                 JSON.stringify(
 
@@ -417,7 +345,6 @@ module.exports = {
                     2
 
                 )
-
 
             );
 
@@ -451,32 +378,23 @@ module.exports = {
 
 
 
-
-
         await interaction.editReply({
 
 
             content:
 
 
-
             `✅ Tracker creado correctamente\n\n` +
-
 
             `👤 Jugador: **${nombreJugador}**\n` +
 
-
             `🆔 BattleMetrics ID: \`${playerId}\`\n` +
-
 
             `📡 Servidor ID: \`${serverId}\`\n` +
 
-
             `⏳ Duración: 24 horas\n\n` +
 
-
             `📋 Trackers activos: ${activosServidor.length + 1}/20`
-
 
 
         });
@@ -484,7 +402,6 @@ module.exports = {
 
 
     }
-
 
 
 };
