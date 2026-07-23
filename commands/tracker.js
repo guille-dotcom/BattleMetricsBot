@@ -7,11 +7,36 @@ const path = require("path");
 const axios = require("axios");
 
 
-const file = path.join(
+const dataFolder = path.join(
     __dirname,
     "..",
-    "data",
+    "data"
+);
+
+
+const file = path.join(
+    dataFolder,
     "trackers.json"
+);
+
+
+// Crear carpeta data si no existe
+
+if(!fs.existsSync(dataFolder)) {
+
+    fs.mkdirSync(
+        dataFolder,
+        {
+            recursive: true
+        }
+    );
+
+}
+
+
+console.log(
+    "📁 Archivo tracker:",
+    file
 );
 
 
@@ -28,12 +53,16 @@ module.exports = {
 
         .addStringOption(option =>
             option
+
                 .setName("id")
+
                 .setDescription(
                     "ID del jugador BattleMetrics"
                 )
+
                 .setRequired(true)
         ),
+
 
 
 
@@ -41,7 +70,7 @@ module.exports = {
 
 
         await interaction.deferReply({
-            flags: 64
+            flags:64
         });
 
 
@@ -51,13 +80,18 @@ module.exports = {
 
 
 
+
+        // ======================
+        // LEER CONFIG
+        // ======================
+
+
         const configFile = path.join(
             __dirname,
             "..",
             "data",
             "config.json"
         );
-
 
 
         let config = {};
@@ -90,8 +124,11 @@ module.exports = {
 
 
             console.log(
+
                 "ERROR LEYENDO CONFIG:",
+
                 error.message
+
             );
 
 
@@ -100,7 +137,6 @@ module.exports = {
 
 
 
-        // Acepta ambos formatos
 
         const serverId =
 
@@ -127,6 +163,12 @@ module.exports = {
 
 
 
+
+        // ======================
+        // LEER TRACKERS
+        // ======================
+
+
         let trackers = [];
 
 
@@ -151,7 +193,6 @@ module.exports = {
 
 
             }
-
 
 
         } catch(error) {
@@ -181,6 +222,8 @@ module.exports = {
                 t.guildId === interaction.guild.id
 
             );
+
+
 
 
 
@@ -214,6 +257,8 @@ module.exports = {
 
 
 
+
+
         if(existe) {
 
 
@@ -228,6 +273,12 @@ module.exports = {
 
 
 
+
+
+
+        // ======================
+        // OBTENER NOMBRE
+        // ======================
 
 
         let nombreJugador =
@@ -272,6 +323,13 @@ module.exports = {
 
 
 
+
+
+        // ======================
+        // CREAR TRACKER
+        // ======================
+
+
         const ahora =
             Date.now();
 
@@ -288,7 +346,6 @@ module.exports = {
 
 
         trackers.push({
-
 
             guildId:
                 interaction.guild.id,
@@ -321,12 +378,18 @@ module.exports = {
             expiresAt:
                 expira
 
-
         });
 
 
 
 
+
+
+
+
+        // ======================
+        // GUARDAR
+        // ======================
 
 
         try {
@@ -344,14 +407,25 @@ module.exports = {
 
                     2
 
-                )
+                ),
+
+                "utf8"
+
+            );
+
+
+
+            console.log(
+
+                "💾 Tracker guardado:",
+
+                trackers
 
             );
 
 
 
         } catch(error) {
-
 
 
             console.log(
@@ -372,6 +446,7 @@ module.exports = {
 
 
         }
+
 
 
 
