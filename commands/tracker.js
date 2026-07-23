@@ -15,6 +15,7 @@ const file = path.join(
 );
 
 
+
 module.exports = {
 
     data: new SlashCommandBuilder()
@@ -35,6 +36,7 @@ module.exports = {
         ),
 
 
+
     async execute(interaction) {
 
 
@@ -43,8 +45,15 @@ module.exports = {
         });
 
 
+
         const playerId =
             interaction.options.getString("id");
+
+
+
+        // ======================
+        // LEER CONFIGURACION
+        // ======================
 
 
         const configFile = path.join(
@@ -55,119 +64,212 @@ module.exports = {
         );
 
 
+
         let config = {};
 
 
-        try {
-
-            config = JSON.parse(
-                fs.readFileSync(
-                    configFile,
-                    "utf8"
-                )
-            );
-
-
-        } catch(error) {
-
-            console.log(
-                "ERROR LEYENDO CONFIG:",
-                error.message
-            );
-
-        }
-
-
-        const guildConfig =
-            config[interaction.guild.id];
-
-
-        if(!guildConfig?.battlemetricsServer) {
-
-            return interaction.editReply(
-                "❌ Este servidor no tiene BattleMetrics configurado.\nUsa primero `/configurar-servidor`."
-            );
-
-        }
-
-
-        let trackers = [];
-
 
         try {
 
-            if(fs.existsSync(file)) {
 
-                trackers =
+            if(fs.existsSync(configFile)) {
+
+
+                config =
                     JSON.parse(
                         fs.readFileSync(
-                            file,
+                            configFile,
                             "utf8"
                         )
                     );
+
 
             }
 
 
         } catch(error) {
 
+
             console.log(
-                "ERROR LEYENDO TRACKERS:",
+                "ERROR LEYENDO CONFIG:",
                 error.message
             );
+
 
         }
 
 
-        const activosServidor =
-            trackers.filter(
-                t =>
-                t.guildId === interaction.guild.id
+
+
+        const serverId =
+            config.battlemetricsServer;
+
+
+
+
+        if(!serverId) {
+
+
+            return interaction.editReply(
+
+                "❌ Este servidor no tiene BattleMetrics configurado.\nUsa primero `/configurar-servidor`."
+
             );
+
+
+        }
+
+
+
+
+
+        // ======================
+        // LEER TRACKERS
+        // ======================
+
+
+        let trackers = [];
+
+
+
+        try {
+
+
+            if(fs.existsSync(file)) {
+
+
+                trackers =
+                    JSON.parse(
+
+                        fs.readFileSync(
+
+                            file,
+
+                            "utf8"
+
+                        )
+
+                    );
+
+
+            }
+
+
+
+        } catch(error) {
+
+
+            console.log(
+
+                "ERROR LEYENDO TRACKERS:",
+
+                error.message
+
+            );
+
+
+        }
+
+
+
+
+
+        // ======================
+        // LIMITE 20 JUGADORES
+        // ======================
+
+
+        const activosServidor =
+
+            trackers.filter(
+
+                t =>
+
+                t.guildId === interaction.guild.id
+
+            );
+
 
 
         if(activosServidor.length >= 20) {
 
+
             return interaction.editReply(
+
                 "❌ Este servidor ya tiene el límite de 20 jugadores en seguimiento."
+
             );
+
 
         }
 
 
+
+
+
+
+
+        // ======================
+        // EVITAR DUPLICADOS
+        // ======================
+
+
         const existe =
+
             trackers.find(
+
                 t =>
+
                 t.guildId === interaction.guild.id &&
+
                 t.playerId === playerId
+
             );
+
 
 
         if(existe) {
 
+
             return interaction.editReply(
+
                 "⚠️ Este jugador ya está siendo monitoreado."
+
             );
 
+
         }
+
+
+
+
+
+
+        // ======================
+        // OBTENER NOMBRE PLAYER
+        // ======================
 
 
         let nombreJugador =
             "Jugador desconocido";
 
 
+
         try {
 
 
             const response =
+
                 await axios.get(
 
                     `https://api.battlemetrics.com/players/${playerId}`,
 
                     {
+
                         headers: {
 
                             Authorization:
+
                             `Bearer ${process.env.BATTLEMETRICS_TOKEN}`
 
                         }
@@ -177,58 +279,124 @@ module.exports = {
                 );
 
 
+
             nombreJugador =
+
                 response.data.data.attributes.name;
+
 
 
         } catch(error) {
 
 
             console.log(
+
                 "ERROR OBTENIENDO JUGADOR:",
+
                 error.response?.data || error.message
+
             );
 
 
         }
 
 
+
+
+
+        // ======================
+        // CREAR TRACKER
+        // ======================
+
+
         const ahora =
             Date.now();
 
 
+
         const expira =
-            ahora + (24 * 60 * 60 * 1000);
+
+            ahora +
+
+            (24 * 60 * 60 * 1000);
+
+
 
 
 
         trackers.push({
 
+
             guildId:
+
                 interaction.guild.id,
 
+
             channelId:
+
                 interaction.channel.id,
 
-            serverId:
-                guildConfig.battlemetricsServer,
 
-            playerId,
+
+            serverId:
+
+
+
+                serverId,
+
+
+
+            playerId:
+
+
+
+                playerId,
+
+
 
             playerName:
+
+
+
                 nombreJugador,
 
+
+
             lastState:
+
+
+
                 "UNKNOWN",
 
+
+
             createdAt:
+
+
+
                 ahora,
 
+
+
             expiresAt:
+
+
+
                 expira
+
+
 
         });
 
+
+
+
+
+
+
+        // ======================
+        // GUARDAR
+        // ======================
 
 
         try {
@@ -236,51 +404,87 @@ module.exports = {
 
             fs.writeFileSync(
 
+
                 file,
 
+
                 JSON.stringify(
+
                     trackers,
+
                     null,
+
                     2
+
                 )
 
+
             );
+
 
 
         } catch(error) {
 
 
+
             console.log(
+
                 "ERROR GUARDANDO TRACKERS:",
+
                 error.message
+
             );
+
 
 
             return interaction.editReply(
+
                 "❌ Error guardando el tracker."
+
             );
+
 
         }
 
 
 
+
+
+
+
+
         await interaction.editReply({
+
 
             content:
 
+
+
             `✅ Tracker creado correctamente\n\n` +
+
 
             `👤 Jugador: **${nombreJugador}**\n` +
 
+
             `🆔 BattleMetrics ID: \`${playerId}\`\n` +
+
+
+            `📡 Servidor ID: \`${serverId}\`\n` +
+
 
             `⏳ Duración: 24 horas\n\n` +
 
+
             `📋 Trackers activos: ${activosServidor.length + 1}/20`
+
+
 
         });
 
 
+
     }
+
+
 
 };
