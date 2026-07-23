@@ -3,6 +3,10 @@ const path = require("path");
 const axios = require("axios");
 const { EmbedBuilder } = require("discord.js");
 
+const {
+    getBattleMetricsHours
+} = require("./battlemetricsHours");
+
 
 const trackersFile = path.join(
     __dirname,
@@ -31,11 +35,8 @@ function leerTrackers() {
         return JSON.parse(
 
             fs.readFileSync(
-
                 trackersFile,
-
                 "utf8"
-
             )
 
         );
@@ -69,13 +70,9 @@ function guardarTrackers(trackers) {
             trackersFile,
 
             JSON.stringify(
-
                 trackers,
-
                 null,
-
                 2
-
             )
 
         );
@@ -94,8 +91,9 @@ function guardarTrackers(trackers) {
 
 
 
+
 // ======================
-// OBTENER SERVIDOR
+// SERVIDOR
 // ======================
 
 async function obtenerServidor(serverId) {
@@ -137,9 +135,9 @@ async function obtenerServidor(serverId) {
 
 
 
+
 // ======================
-// OBTENER JUGADORES ONLINE
-// DESDE BATTLEMETRICS WEB
+// JUGADORES ONLINE
 // ======================
 
 async function obtenerJugadoresOnline(serverId) {
@@ -150,72 +148,40 @@ async function obtenerJugadoresOnline(serverId) {
 
         const response = await axios.get(
 
-
-            `https://www.battlemetrics.com/servers/rust/${serverId}`,
-
+            `https://api.battlemetrics.com/servers/${serverId}`,
 
             {
 
-                headers: {
+                params: {
 
-                    "User-Agent":
-                    "Mozilla/5.0"
+                    include:
+                    "player"
 
                 }
 
             }
 
+        );
+
+
+
+        const incluidos =
+            response.data.included || [];
+
+
+
+        const jugadores = incluidos.map(
+
+            p =>
+            String(p.id)
 
         );
 
 
 
-        const html =
-            response.data;
-
-
-
-        const jugadores = [];
-
-
-
-        const regex =
-            /players\/(\d+)/g;
-
-
-
-        let match;
-
-
-
-        while(
-            (match = regex.exec(html)) !== null
-        ) {
-
-
-
-            if(
-                !jugadores.includes(match[1])
-            ) {
-
-
-                jugadores.push(
-                    match[1]
-                );
-
-
-            }
-
-
-        }
-
-
-
-
         console.log(
-
-            `👥 Jugadores detectados: ${jugadores.length}`
-
+            "👥 Jugadores online detectados:",
+            jugadores.length
         );
 
 
@@ -227,15 +193,14 @@ async function obtenerJugadoresOnline(serverId) {
     } catch(error) {
 
 
-
         console.log(
 
-            "ERROR OBTENIENDO JUGADORES:",
+            "ERROR JUGADORES ONLINE:",
 
+            error.response?.data ||
             error.message
 
         );
-
 
 
         return [];
@@ -245,6 +210,84 @@ async function obtenerJugadoresOnline(serverId) {
 
 
 }
+
+
+
+
+// ======================
+// PLAYTIME
+// ======================
+
+async function obtenerPlaytime(playerId) {
+
+
+    try {
+
+
+        const data =
+
+            await getBattleMetricsHours(
+                playerId
+            );
+
+
+
+        const horas =
+
+            Number(
+                data.totalHoras || 0
+            );
+
+
+
+        if(horas <= 0) {
+
+            return "0h";
+
+        }
+
+
+
+        const horasEnteras =
+
+            Math.floor(horas);
+
+
+
+        const minutos =
+
+            Math.floor(
+
+                (horas - horasEnteras) * 60
+
+            );
+
+
+
+        return `${horasEnteras}h ${minutos}m`;
+
+
+
+    } catch(error) {
+
+
+        console.log(
+
+            "ERROR PLAYTIME:",
+            error.message
+
+        );
+
+
+        return "No disponible";
+
+
+    }
+
+
+}
+
+
 
 
 
@@ -282,8 +325,8 @@ function tiempoRestante(expira) {
 
     return `${horas}h ${minutos}m`;
 
-
 }
+
 
 
 
@@ -299,21 +342,13 @@ async function revisarTrackers(client) {
 
 
 
-    const ahora =
-        Date.now();
+    trackers = trackers.filter(
 
+        tracker =>
 
+        tracker.expiresAt > Date.now()
 
-    // eliminar expirados
-
-    trackers =
-        trackers.filter(
-
-            tracker =>
-
-            tracker.expiresAt > ahora
-
-        );
+    );
 
 
 
@@ -324,13 +359,13 @@ async function revisarTrackers(client) {
 
         console.log(
 
-            `🔎 Revisando tracker: ${tracker.playerName}`
+            `🔎 Revisando ${tracker.playerName}`
 
         );
 
 
 
-        const jugadoresOnline =
+        const onlinePlayers =
 
             await obtenerJugadoresOnline(
 
@@ -340,40 +375,40 @@ async function revisarTrackers(client) {
 
 
 
-
         const online =
 
-            jugadoresOnline.includes(
+            onlinePlayers.includes(
 
-                tracker.playerId
+                String(
+                    tracker.playerId
+                )
 
             );
 
 
 
 
-
-        const nuevoEstado =
+        const estado =
 
             online
 
-            ?
+            ? "ONLINE"
 
-            "ONLINE"
-
-            :
-
-            "OFFLINE";
+            : "OFFLINE";
 
 
 
 
+        console.log(
 
-        if(
+            `${tracker.playerName}: ${estado}`
 
-            tracker.lastState !== nuevoEstado
+        );
 
-        ) {
+
+
+
+        if(tracker.lastState !== estado) {
 
 
 
@@ -387,9 +422,18 @@ async function revisarTrackers(client) {
 
 
 
+            const playtime =
+
+                await obtenerPlaytime(
+
+                    tracker.playerId
+
+                );
+
+
+
 
             try {
-
 
 
                 const guild =
@@ -403,9 +447,7 @@ async function revisarTrackers(client) {
 
 
                 if(!guild)
-
                     continue;
-
 
 
 
@@ -420,8 +462,8 @@ async function revisarTrackers(client) {
 
 
                 if(!canal)
-
                     continue;
+
 
 
 
@@ -430,19 +472,14 @@ async function revisarTrackers(client) {
 
                     new EmbedBuilder()
 
-
-
                     .setTitle(
-
                         "🎮 Tracker BattleMetrics"
-
                     )
-
 
 
                     .setColor(
 
-                        nuevoEstado === "ONLINE"
+                        estado === "ONLINE"
 
                         ?
 
@@ -455,7 +492,6 @@ async function revisarTrackers(client) {
                     )
 
 
-
                     .setDescription(
 
                         `👤 **${tracker.playerName}**`
@@ -463,10 +499,7 @@ async function revisarTrackers(client) {
                     )
 
 
-
                     .addFields(
-
-
 
                         {
 
@@ -475,7 +508,7 @@ async function revisarTrackers(client) {
 
                             value:
 
-                            nuevoEstado === "ONLINE"
+                            estado === "ONLINE"
 
                             ?
 
@@ -494,8 +527,7 @@ async function revisarTrackers(client) {
                             "⏱️ Play Time",
 
                             value:
-
-                            "Consultando BattleMetrics..."
+                            playtime
 
                         },
 
@@ -506,7 +538,6 @@ async function revisarTrackers(client) {
                             "📡 Servidor",
 
                             value:
-
                             servidor.nombre
 
                         },
@@ -518,18 +549,14 @@ async function revisarTrackers(client) {
                             "⌛ Tracker restante",
 
                             value:
-
                             tiempoRestante(
-
                                 tracker.expiresAt
-
                             )
 
                         }
 
 
                     )
-
 
 
                     .setTimestamp();
@@ -554,7 +581,7 @@ async function revisarTrackers(client) {
 
                 console.log(
 
-                    `📢 Cambio detectado ${tracker.playerName}: ${nuevoEstado}`
+                    `📢 Cambio enviado ${tracker.playerName}`
 
                 );
 
@@ -575,14 +602,12 @@ async function revisarTrackers(client) {
             }
 
 
-
         }
 
 
 
-
         tracker.lastState =
-            nuevoEstado;
+            estado;
 
 
 
@@ -591,16 +616,15 @@ async function revisarTrackers(client) {
 
 
 
-
     guardarTrackers(
-
         trackers
-
     );
 
 
 
 }
+
+
 
 
 
