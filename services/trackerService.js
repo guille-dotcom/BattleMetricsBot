@@ -13,6 +13,10 @@ const trackersFile = path.join(
 
 
 
+// ======================
+// LEER TRACKERS
+// ======================
+
 function leerTrackers() {
 
     try {
@@ -25,10 +29,15 @@ function leerTrackers() {
 
 
         return JSON.parse(
+
             fs.readFileSync(
+
                 trackersFile,
+
                 "utf8"
+
             )
+
         );
 
 
@@ -47,6 +56,10 @@ function leerTrackers() {
 
 
 
+// ======================
+// GUARDAR TRACKERS
+// ======================
+
 function guardarTrackers(trackers) {
 
     try {
@@ -56,9 +69,13 @@ function guardarTrackers(trackers) {
             trackersFile,
 
             JSON.stringify(
+
                 trackers,
+
                 null,
+
                 2
+
             )
 
         );
@@ -77,10 +94,15 @@ function guardarTrackers(trackers) {
 
 
 
+// ======================
+// OBTENER SERVIDOR
+// ======================
 
 async function obtenerServidor(serverId) {
 
+
     try {
+
 
         const response = await axios.get(
 
@@ -99,11 +121,6 @@ async function obtenerServidor(serverId) {
 
     } catch(error) {
 
-        console.log(
-            "ERROR OBTENIENDO SERVIDOR:",
-            error.response?.data || error.message
-        );
-
 
         return {
 
@@ -112,80 +129,128 @@ async function obtenerServidor(serverId) {
 
         };
 
+
     }
+
 
 }
 
 
 
-
+// ======================
+// OBTENER JUGADORES ONLINE
+// DESDE BATTLEMETRICS WEB
+// ======================
 
 async function obtenerJugadoresOnline(serverId) {
+
 
     try {
 
 
         const response = await axios.get(
 
-            `https://api.battlemetrics.com/servers/${serverId}`,
+
+            `https://www.battlemetrics.com/servers/rust/${serverId}`,
+
 
             {
 
-                params: {
+                headers: {
 
-                    include: "player"
+                    "User-Agent":
+                    "Mozilla/5.0"
 
                 }
 
             }
 
-        );
-
-
-
-        const jugadores =
-            response.data.included || [];
-
-
-
-        const ids = jugadores.map(
-
-            jugador => jugador.id
 
         );
+
+
+
+        const html =
+            response.data;
+
+
+
+        const jugadores = [];
+
+
+
+        const regex =
+            /players\/(\d+)/g;
+
+
+
+        let match;
+
+
+
+        while(
+            (match = regex.exec(html)) !== null
+        ) {
+
+
+
+            if(
+                !jugadores.includes(match[1])
+            ) {
+
+
+                jugadores.push(
+                    match[1]
+                );
+
+
+            }
+
+
+        }
+
 
 
 
         console.log(
-            `👥 Jugadores detectados online: ${ids.length}`
+
+            `👥 Jugadores detectados: ${jugadores.length}`
+
         );
 
 
-        return ids;
+
+        return jugadores;
 
 
 
     } catch(error) {
 
 
+
         console.log(
 
-            "ERROR JUGADORES ONLINE:",
+            "ERROR OBTENIENDO JUGADORES:",
 
-            error.response?.data || error.message
+            error.message
 
         );
 
 
+
         return [];
 
+
     }
+
 
 }
 
 
 
-
+// ======================
+// TIEMPO RESTANTE
+// ======================
 
 function tiempoRestante(expira) {
 
@@ -196,6 +261,7 @@ function tiempoRestante(expira) {
 
 
     if(diferencia <= 0)
+
         return "Expirado";
 
 
@@ -216,11 +282,14 @@ function tiempoRestante(expira) {
 
     return `${horas}h ${minutos}m`;
 
+
 }
 
 
 
-
+// ======================
+// REVISAR TRACKERS
+// ======================
 
 async function revisarTrackers(client) {
 
@@ -235,6 +304,7 @@ async function revisarTrackers(client) {
 
 
 
+    // eliminar expirados
 
     trackers =
         trackers.filter(
@@ -248,31 +318,38 @@ async function revisarTrackers(client) {
 
 
 
-
     for(const tracker of trackers) {
 
 
 
         console.log(
+
             `🔎 Revisando tracker: ${tracker.playerName}`
+
         );
 
 
 
-        const onlinePlayers =
+        const jugadoresOnline =
+
             await obtenerJugadoresOnline(
+
                 tracker.serverId
+
             );
+
 
 
 
         const online =
 
-            onlinePlayers.includes(
+            jugadoresOnline.includes(
 
                 tracker.playerId
 
             );
+
+
 
 
 
@@ -291,16 +368,23 @@ async function revisarTrackers(client) {
 
 
 
+
         if(
+
             tracker.lastState !== nuevoEstado
+
         ) {
 
 
 
             const servidor =
+
                 await obtenerServidor(
+
                     tracker.serverId
+
                 );
+
 
 
 
@@ -319,6 +403,7 @@ async function revisarTrackers(client) {
 
 
                 if(!guild)
+
                     continue;
 
 
@@ -335,8 +420,8 @@ async function revisarTrackers(client) {
 
 
                 if(!canal)
-                    continue;
 
+                    continue;
 
 
 
@@ -348,7 +433,9 @@ async function revisarTrackers(client) {
 
 
                     .setTitle(
+
                         "🎮 Tracker BattleMetrics"
+
                     )
 
 
@@ -378,6 +465,7 @@ async function revisarTrackers(client) {
 
 
                     .addFields(
+
 
 
                         {
@@ -432,7 +520,9 @@ async function revisarTrackers(client) {
                             value:
 
                             tiempoRestante(
+
                                 tracker.expiresAt
+
                             )
 
                         }
@@ -447,13 +537,17 @@ async function revisarTrackers(client) {
 
 
 
+
                 await canal.send({
 
                     embeds:[
+
                         embed
+
                     ]
 
                 });
+
 
 
 
@@ -481,7 +575,9 @@ async function revisarTrackers(client) {
             }
 
 
+
         }
+
 
 
 
@@ -496,9 +592,11 @@ async function revisarTrackers(client) {
 
 
 
-guardarTrackers(
-    trackers
-);
+    guardarTrackers(
+
+        trackers
+
+    );
 
 
 
