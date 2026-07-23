@@ -54,11 +54,11 @@ async function obtenerServidor(serverId){
 } 
 
 // ====================== // 
-// JUGADORES ONLINE + TIEMPO DE SESIÓN ESTILO BM // 
+// JUGADORES ONLINE + SESIÓN (CON REINTENTOS ANTI-RATE LIMIT) // 
 // ====================== // 
-async function obtenerJugadorServidor(serverId, playerId){ 
+async function obtenerJugadorServidor(serverId, playerId, intentos = 2){ 
   try{ 
-    console.log("🔑 Consultando jugador y sesiones BM..."); 
+    console.log(`🔑 Consultando jugador y sesiones BM... (Intentos restantes: ${intentos})`); 
     
     const response = await axios.get(
       `https://battlemetrics.com{serverId}`, 
@@ -92,8 +92,14 @@ async function obtenerJugadorServidor(serverId, playerId){
 
     return { online: true, playtime: tiempoFormateado }; 
   }catch(error){ 
-    console.log("❌ ERROR CONSULTANDO BM:", error.response?.data || error.message); 
-    return { online: false, playtime: "0:00" }; 
+    // Si la API da error por saturación y nos quedan intentos, esperamos 2 segundos y reintentamos
+    if (intentos > 0) {
+      console.log("⚠ BattleMetrics saturado. Reintentando en 2 segundos...");
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return await obtenerJugadorServidor(serverId, playerId, intentos - 1);
+    }
+    console.log("❌ ERROR FINAL CONSULTANDO BM:", error.response?.data || error.message); 
+    return { online: null, playtime: "0:00" }; // Retornamos null para que el bot ignore la revisión de este ciclo en vez de dar falso offline
   } 
 } 
 
@@ -118,6 +124,13 @@ async function revisarTrackers(client){
   for(const tracker of trackers){ 
     console.log(`🔎 Revisando ${tracker.playerName}`); 
     const jugador = await obtenerJugadorServidor(tracker.serverId, tracker.playerId); 
+    
+    // Si hubo un error de conexión (null), saltamos este ciclo para evitar falsas alarmas de offline
+    if (jugador.online === null) {
+      console.log(`⏩ Saltando revisión de ${tracker.playerName} por error de red provisional.`);
+      continue;
+    }
+
     const estado = jugador.online ? "ONLINE" : "OFFLINE"; 
     console.log(`${tracker.playerName}: ${estado}`); 
 
@@ -136,7 +149,7 @@ async function revisarTrackers(client){
           .addFields( 
             { name: "Estado", value: estado === "ONLINE" ? "🟢 ONLINE" : "🔴 OFFLINE" }, 
             { name: "⏱️ Play Time (Sesión)", value: jugador.playtime }, 
-            { name: "📡 Servidor", value: `||${servidor.nombre}||` }, // <-- CAMBIADO A SPOILER (CUADRO NEGRO OCULTO)
+            { name: "📡 Servidor", value: `||${servidor.nombre}||` }, // Oculto con caja negra de spoiler
             { name: "⌛ Tracker restante", value: tiempoRestante(tracker.expiresAt) } 
           ) 
           .setTimestamp(); 
