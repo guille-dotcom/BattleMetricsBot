@@ -1,2 +1,9 @@
 node_modules/
 .env
+
+bm-profile/
+chrome-profile/
+
+*.log
+
+battlemetrics_debug.png
