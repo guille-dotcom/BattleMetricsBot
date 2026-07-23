@@ -51,12 +51,14 @@ module.exports = {
 
 
         const playerId =
-            interaction.options.getString("id");
+            String(
+                interaction.options.getString("id")
+            );
 
 
 
         // ======================
-        // LEER CONFIGURACION
+        // CONFIG BATTLEMETRICS
         // ======================
 
 
@@ -105,67 +107,68 @@ module.exports = {
 
 
         console.log(
-            "CONFIG ACTUAL:",
-            config
+            "CONFIG:",
+            JSON.stringify(config,null,2)
         );
 
 
 
-        // Acepta cualquier formato de config
+        const guildId =
+            String(interaction.guild.id);
+
+
 
         let serverId = null;
 
 
 
-        // Formato:
-        // { battlemetricsServer:"433255" }
-
+        // formato directo
         if(config.battlemetricsServer) {
-
 
             serverId =
                 config.battlemetricsServer;
 
-
         }
 
 
 
-        // Formato:
-        // { "ID_DISCORD": {battlemetricsServer:"433255"} }
-
-        else if(
-            config[interaction.guild.id]?.battlemetricsServer
+        // formato por servidor Discord
+        if(
+            !serverId &&
+            config[guildId]
         ) {
 
 
-            serverId =
-                config[interaction.guild.id]
-                .battlemetricsServer;
+            if(
+                typeof config[guildId] === "object"
+            ) {
 
 
-        }
+                serverId =
+                    config[guildId].battlemetricsServer;
 
 
-
-        // Formato:
-        // { "ID_DISCORD":"433255" }
-
-        else if(
-            config[interaction.guild.id]
-        ) {
+            }
+            else {
 
 
-            serverId =
-                config[interaction.guild.id];
+                serverId =
+                    config[guildId];
 
+
+            }
 
         }
-
 
 
 
         if(!serverId) {
+
+
+            console.log(
+                "❌ No se encontró BattleMetrics para:",
+                guildId
+            );
 
 
             return interaction.editReply(
@@ -177,6 +180,17 @@ module.exports = {
 
         }
 
+
+
+        serverId =
+            String(serverId);
+
+
+
+        console.log(
+            "✅ SERVER BM:",
+            serverId
+        );
 
 
 
@@ -209,7 +223,6 @@ module.exports = {
             }
 
 
-
         } catch(error) {
 
 
@@ -223,10 +236,18 @@ module.exports = {
 
 
 
+        if(!Array.isArray(trackers)) {
+
+            trackers = [];
+
+        }
+
+
+
 
 
         // ======================
-        // LIMITE 20
+        // LIMITE
         // ======================
 
 
@@ -235,7 +256,7 @@ module.exports = {
             trackers.filter(
 
                 t =>
-                t.guildId === interaction.guild.id
+                String(t.guildId) === guildId
 
             );
 
@@ -257,8 +278,9 @@ module.exports = {
 
 
 
+
         // ======================
-        // EVITAR DUPLICADOS
+        // DUPLICADOS
         // ======================
 
 
@@ -267,8 +289,10 @@ module.exports = {
             trackers.find(
 
                 t =>
-                t.guildId === interaction.guild.id &&
-                t.playerId === playerId
+
+                String(t.guildId) === guildId &&
+
+                String(t.playerId) === playerId
 
             );
 
@@ -290,8 +314,9 @@ module.exports = {
 
 
 
+
         // ======================
-        // OBTENER NOMBRE BM
+        // NOMBRE BM
         // ======================
 
 
@@ -313,10 +338,8 @@ module.exports = {
 
             if(data?.nombre) {
 
-
                 nombreJugador =
                     data.nombre;
-
 
             }
 
@@ -327,13 +350,14 @@ module.exports = {
 
             console.log(
 
-                "ERROR OBTENIENDO PERFIL BM:",
+                "ERROR OBTENIENDO NOMBRE BM:",
                 error.message
 
             );
 
 
         }
+
 
 
 
@@ -352,48 +376,77 @@ module.exports = {
         const expira =
 
             ahora +
+
             (24 * 60 * 60 * 1000);
 
 
 
 
-        trackers.push({
+        const nuevoTracker = {
 
 
             guildId:
-                interaction.guild.id,
+
+
+                guildId,
 
 
             channelId:
-                interaction.channel.id,
+
+
+                String(interaction.channel.id),
+
 
 
             serverId:
-                String(serverId),
+
+
+                serverId,
+
 
 
             playerId:
-                String(playerId),
+
+
+                playerId,
+
 
 
             playerName:
+
+
                 nombreJugador,
 
 
+
             lastState:
+
+
                 "UNKNOWN",
 
 
+
             createdAt:
+
+
                 ahora,
 
 
+
             expiresAt:
+
+
                 expira
 
 
-        });
+        };
 
+
+
+
+        trackers.push(
+            nuevoTracker
+        );
 
 
 
@@ -412,9 +465,13 @@ module.exports = {
                 file,
 
                 JSON.stringify(
+
                     trackers,
+
                     null,
+
                     2
+
                 )
 
             );
@@ -423,7 +480,7 @@ module.exports = {
 
             console.log(
                 "💾 Tracker guardado:",
-                trackers
+                nuevoTracker
             );
 
 
@@ -432,8 +489,10 @@ module.exports = {
 
 
             console.log(
-                "ERROR GUARDANDO TRACKERS:",
+
+                "ERROR GUARDANDO TRACKER:",
                 error.message
+
             );
 
 
@@ -446,7 +505,6 @@ module.exports = {
 
 
         }
-
 
 
 
