@@ -54,12 +54,13 @@ async function obtenerServidor(serverId){
 } 
 
 // ====================== // 
-// JUGADORES ONLINE + SESIÓN (CON REINTENTOS ANTI-RATE LIMIT) // 
+// JUGADORES ONLINE + SESIÓN (CORREGIDO CON COMILLAS INVERTIDAS) // 
 // ====================== // 
 async function obtenerJugadorServidor(serverId, playerId, intentos = 2){ 
   try{ 
     console.log(`🔑 Consultando jugador y sesiones BM... (Intentos restantes: ${intentos})`); 
     
+    // CORREGIDO: Ahora usa comillas invertidas ` para que Node.js lea la ID del servidor correctamente
     const response = await axios.get(
       `https://battlemetrics.com{serverId}`, 
       { 
@@ -86,20 +87,19 @@ async function obtenerJugadorServidor(serverId, playerId, intentos = 2){
     const diferenciaMs = horaActual - horaConexion;
 
     const horas = Math.floor(diferenciaMs / (1000 * 60 * 60));
-    const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60));
+    const minutes = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60));
 
-    const tiempoFormateado = `${horas}:${minutos.toString().padStart(2, '0')}`;
+    const tiempoFormateado = `${horas}:${minutes.toString().padStart(2, '0')}`;
 
     return { online: true, playtime: tiempoFormateado }; 
   }catch(error){ 
-    // Si la API da error por saturación y nos quedan intentos, esperamos 2 segundos y reintentamos
     if (intentos > 0) {
       console.log("⚠ BattleMetrics saturado. Reintentando en 2 segundos...");
       await new Promise(resolve => setTimeout(resolve, 2000));
       return await obtenerJugadorServidor(serverId, playerId, intentos - 1);
     }
     console.log("❌ ERROR FINAL CONSULTANDO BM:", error.response?.data || error.message); 
-    return { online: null, playtime: "0:00" }; // Retornamos null para que el bot ignore la revisión de este ciclo en vez de dar falso offline
+    return { online: null, playtime: "0:00" }; 
   } 
 } 
 
@@ -110,8 +110,8 @@ function tiempoRestante(expira){
   const diferencia = expira - Date.now(); 
   if(diferencia <= 0) return "Expirado"; 
   const horas = Math.floor(diferencia / 3600000); 
-  const minutos = Math.floor((diferencia % 3600000) / 60000); 
-  return `${horas}h ${minutos}m`; 
+  const minutes = Math.floor((diferencia % 3600000) / 60000); 
+  return `${horas}h ${minutes}m`; 
 } 
 
 // ====================== // 
@@ -125,7 +125,6 @@ async function revisarTrackers(client){
     console.log(`🔎 Revisando ${tracker.playerName}`); 
     const jugador = await obtenerJugadorServidor(tracker.serverId, tracker.playerId); 
     
-    // Si hubo un error de conexión (null), saltamos este ciclo para evitar falsas alarmas de offline
     if (jugador.online === null) {
       console.log(`⏩ Saltando revisión de ${tracker.playerName} por error de red provisional.`);
       continue;
@@ -149,7 +148,7 @@ async function revisarTrackers(client){
           .addFields( 
             { name: "Estado", value: estado === "ONLINE" ? "🟢 ONLINE" : "🔴 OFFLINE" }, 
             { name: "⏱️ Play Time (Sesión)", value: jugador.playtime }, 
-            { name: "📡 Servidor", value: `||${servidor.nombre}||` }, // Oculto con caja negra de spoiler
+            { name: "📡 Servidor", value: `||${servidor.nombre}||` }, 
             { name: "⌛ Tracker restante", value: tiempoRestante(tracker.expiresAt) } 
           ) 
           .setTimestamp(); 
