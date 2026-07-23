@@ -52,6 +52,7 @@ server.listen(PORT, "0.0.0.0", () => {
 });
 
 
+
 // ======================
 // CLIENTE DISCORD
 // ======================
@@ -67,6 +68,7 @@ const client = new Client({
 
 
 client.commands = new Collection();
+
 
 
 // ======================
@@ -145,6 +147,7 @@ for (const file of commandFiles) {
 
 
 
+
 // ======================
 // REGISTRAR COMANDOS
 // ======================
@@ -168,6 +171,7 @@ async function registrarComandos(guild) {
 
         await rest.put(
 
+
             Routes.applicationGuildCommands(
 
                 client.user.id,
@@ -176,11 +180,13 @@ async function registrarComandos(guild) {
 
             ),
 
+
             {
 
                 body: commands
 
             }
+
 
         );
 
@@ -208,24 +214,35 @@ async function registrarComandos(guild) {
 
 
 }
+
+
+
 // ======================
 // BOT CONECTADO
 // ======================
 
 client.once("clientReady", async () => {
 
+
     console.log(
+
         `✅ Bot conectado como ${client.user.tag}`
+
     );
+
 
 
     try {
 
+
         await client.user.setPresence({
+
 
             status: "online",
 
+
             activities: [
+
 
                 {
 
@@ -235,14 +252,20 @@ client.once("clientReady", async () => {
 
                 }
 
+
             ]
+
 
         });
 
 
+
         console.log(
+
             "🟢 Estado ONLINE establecido"
+
         );
+
 
 
     } catch(error) {
@@ -261,9 +284,14 @@ client.once("clientReady", async () => {
 
 
 
+
+
     console.log(
+
         "🔄 Registrando comandos en servidores..."
+
     );
+
 
 
 
@@ -277,8 +305,11 @@ client.once("clientReady", async () => {
 
 
 
+
     console.log(
+
         "✅ Registro de comandos finalizado"
+
     );
 
 
@@ -288,25 +319,69 @@ client.once("clientReady", async () => {
     // ======================
 
 
-    setInterval(() => {
+    console.log(
+
+        "🔎 Tracker iniciado cada 5 minutos"
+
+    );
 
 
-        revisarTrackers(client);
+
+    // Revisión inmediata al iniciar
+
+    try {
+
+
+        await revisarTrackers(client);
+
+
+    } catch(error) {
+
+
+        console.log(
+
+            "❌ Error revisión inicial tracker:",
+
+            error.message
+
+        );
+
+
+    }
+
+
+
+    // Revisión automática cada 5 minutos
+
+    setInterval(async () => {
+
+
+        try {
+
+
+            await revisarTrackers(client);
+
+
+        } catch(error) {
+
+
+            console.log(
+
+                "❌ Error tracker automático:",
+
+                error.message
+
+            );
+
+
+        }
 
 
     }, 5 * 60 * 1000);
 
 
 
-    console.log(
-        "🔎 Tracker iniciado cada 5 minutos"
-    );
-
-
 });
-
-
-
 // ======================
 // NUEVOS SERVIDORES
 // ======================
@@ -315,7 +390,9 @@ client.on("guildCreate", async (guild) => {
 
 
     console.log(
+
         `📥 Nuevo servidor: ${guild.name}`
+
     );
 
 
@@ -323,6 +400,8 @@ client.on("guildCreate", async (guild) => {
 
 
 });
+
+
 
 
 
@@ -334,18 +413,23 @@ client.on("interactionCreate", async interaction => {
 
 
     if (!interaction.isChatInputCommand())
+
         return;
 
 
 
     const command =
+
         client.commands.get(
+
             interaction.commandName
+
         );
 
 
 
     if (!command)
+
         return;
 
 
@@ -354,7 +438,9 @@ client.on("interactionCreate", async interaction => {
 
 
         await command.execute(
+
             interaction
+
         );
 
 
@@ -362,19 +448,28 @@ client.on("interactionCreate", async interaction => {
     } catch(error) {
 
 
+
         console.log(
+
             "ERROR EJECUTANDO COMANDO:",
+
             error
+
         );
+
 
 
 
         try {
 
 
+
             if (
+
                 interaction.deferred ||
+
                 interaction.replied
+
             ) {
 
 
@@ -382,6 +477,7 @@ client.on("interactionCreate", async interaction => {
                 await interaction.editReply({
 
                     content:
+
                     "❌ Error ejecutando comando"
 
                 });
@@ -395,6 +491,7 @@ client.on("interactionCreate", async interaction => {
                 await interaction.reply({
 
                     content:
+
                     "❌ Error ejecutando comando",
 
                     ephemeral: true
@@ -410,6 +507,7 @@ client.on("interactionCreate", async interaction => {
         } catch(err) {
 
 
+
             console.log(
 
                 "ERROR RESPONDIENDO DISCORD:",
@@ -422,10 +520,14 @@ client.on("interactionCreate", async interaction => {
         }
 
 
+
     }
 
 
+
 });
+
+
 
 
 
@@ -435,22 +537,35 @@ client.on("interactionCreate", async interaction => {
 
 client.on("error", (error) => {
 
+
     console.error(
+
         "❌ Error del cliente Discord:",
+
         error
+
     );
 
+
 });
+
 
 
 client.on("warn", (info) => {
 
+
     console.warn(
+
         "⚠️ Advertencia:",
+
         info
+
     );
 
+
 });
+
+
 
 
 
@@ -458,58 +573,90 @@ client.on("warn", (info) => {
 // CONEXIÓN Y RECONEXIÓN
 // ======================
 
+
 client.on("disconnect", () => {
 
+
     console.log(
+
         "⚠️ Bot desconectado de Discord"
+
     );
 
+
 });
+
 
 
 client.on("reconnecting", () => {
 
+
     console.log(
+
         "🔄 Intentando reconectar con Discord..."
+
     );
 
+
 });
+
 
 
 client.on("resume", (replayed) => {
 
+
     console.log(
+
         `🟢 Conexión Discord recuperada. Eventos: ${replayed}`
+
     );
 
+
 });
+
 
 
 client.on("shardDisconnect", (event, shardId) => {
 
+
     console.log(
+
         `⚠️ Shard ${shardId} desconectado. Código: ${event.code}`
+
     );
 
+
 });
+
 
 
 client.on("shardReconnecting", (shardId) => {
 
+
     console.log(
+
         `🔄 Shard ${shardId} intentando reconectar`
+
     );
 
+
 });
+
 
 
 client.on("shardResume", (shardId, replayedEvents) => {
 
+
     console.log(
+
         `🟢 Shard ${shardId} reconectado. Eventos: ${replayedEvents}`
+
     );
 
+
 });
+
+
 
 
 
@@ -517,24 +664,38 @@ client.on("shardResume", (shardId, replayedEvents) => {
 // ERRORES DEL PROCESO
 // ======================
 
+
 process.on("unhandledRejection", (reason) => {
 
+
     console.error(
+
         "❌ Unhandled Promise Rejection:",
+
         reason
+
     );
 
+
 });
+
 
 
 process.on("uncaughtException", (error) => {
 
+
     console.error(
+
         "❌ Uncaught Exception:",
+
         error
+
     );
 
+
 });
+
+
 
 
 
@@ -542,6 +703,9 @@ process.on("uncaughtException", (error) => {
 // LOGIN
 // ======================
 
+
 client.login(
+
     process.env.TOKEN
+
 );
