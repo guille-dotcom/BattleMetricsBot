@@ -3,205 +3,159 @@ const {
     EmbedBuilder
 } = require("discord.js");
 
-
 const {
     getBattleMetricsHours
 } = require("../services/battlemetricsHours");
 
-
-
 module.exports = {
 
+    data: new SlashCommandBuilder()
 
-data: new SlashCommandBuilder()
+        .setName("horasbm")
 
-.setName("horasbm")
+        .setDescription(
+            "Muestra las horas usando un perfil de BattleMetrics"
+        )
 
-.setDescription(
-    "Muestra las horas usando un perfil de BattleMetrics"
-)
+        .addStringOption(option =>
+            option
+                .setName("link")
+                .setDescription(
+                    "Link del perfil BattleMetrics"
+                )
+                .setRequired(true)
+        ),
 
-.addStringOption(option =>
-    option
-    .setName("link")
-    .setDescription(
-        "Link del perfil BattleMetrics"
-    )
-    .setRequired(true)
-),
+    async execute(interaction) {
 
+        try {
 
+            console.log("===== INICIO /horasbm =====");
 
-async execute(interaction){
+            await interaction.deferReply();
 
+            const link =
+                interaction.options.getString("link");
 
-try {
+            console.log("LINK:", link);
 
-    await interaction.deferReply();
+            const match =
+                link.match(/players\/(\d+)/);
 
-} catch(error){
+            if (!match) {
 
-    console.log(
-        "ERROR DEFER:",
-        error.message
-    );
+                return await interaction.editReply(
+                    "❌ Link inválido.\n\nEjemplo:\nhttps://www.battlemetrics.com/players/1010507609"
+                );
 
-    return;
+            }
 
-}
+            const battlemetricsId = match[1];
 
+            console.log("ID BM:", battlemetricsId);
 
+            await interaction.editReply(
+                "⏱️ Calculando horas..."
+            );
 
-const link =
-interaction.options.getString("link");
+            const data =
+                await getBattleMetricsHours(
+                    battlemetricsId
+                );
 
+            console.log("DATOS RECIBIDOS:", data);
 
+            const totalHoras =
+                Number(data.totalHoras || 0);
 
-const match =
-link.match(
-    /players\/(\d+)/
-);
+            let servidoresEncontrados = 0;
 
+            try {
 
+                servidoresEncontrados =
+                    data.servidores.rust.datos.servidoresEncontrados || 0;
 
-if(!match){
+            } catch {
 
-    return interaction.editReply(
-        "❌ Link inválido.\nEjemplo:\nhttps://www.battlemetrics.com/players/1010507609"
-    );
+                servidoresEncontrados = 0;
 
-}
+            }
 
+            const embed =
+                new EmbedBuilder()
 
+                    .setTitle("🎮 Perfil BattleMetrics")
 
-const battlemetricsId =
-match[1];
+                    .setColor("#57F287")
 
+                    .setDescription(
+                        `**ID BattleMetrics**\n\`${battlemetricsId}\``
+                    )
 
+                    .addFields(
 
-console.log(
-    "BATTLEMETRICS ID:",
-    battlemetricsId
-);
+                        {
+                            name: "🖥️ Servidores",
+                            value: `${servidoresEncontrados}`,
+                            inline: true
+                        },
 
+                        {
+                            name: "⏱️ Horas",
+                            value: `${totalHoras.toFixed(2)} horas`,
+                            inline: true
+                        }
 
+                    )
 
-await interaction.editReply(
-    "⏱️ Calculando horas..."
-);
+                    .setTimestamp()
 
+                    .setFooter({
+                        text: "BattleMetrics Bot"
+                    });
 
+            console.log("ENVIANDO EMBED...");
 
-let data;
+            await interaction.editReply({
 
+                content: null,
+                embeds: [embed]
 
-try {
+            });
 
+            console.log("✅ RESPUESTA ENVIADA");
 
-    data =
-    await getBattleMetricsHours(
-        battlemetricsId
-    );
+        } catch (error) {
 
+            console.error("ERROR EN /horasbm");
+            console.error(error);
 
-}catch(error){
+            try {
 
+                if (interaction.deferred || interaction.replied) {
 
-    console.log(
-        "ERROR HORAS BM:",
-        error
-    );
+                    await interaction.editReply(
+                        "❌ Ocurrió un error ejecutando el comando."
+                    );
 
+                } else {
 
-    return interaction.editReply(
-        "❌ Error obteniendo datos de BattleMetrics"
-    );
+                    await interaction.reply({
+                        content: "❌ Ocurrió un error ejecutando el comando.",
+                        ephemeral: true
+                    });
 
+                }
 
-}
+            } catch (err) {
 
+                console.error("ERROR RESPONDIENDO A DISCORD");
+                console.error(err);
 
+            }
 
-const totalHoras =
-Number(
-    data.totalHoras || 0
-);
+        }
 
-
-
-let servidoresEncontrados = 0;
-
-
-try {
-
-    servidoresEncontrados =
-    data.servidores
-    .rust
-    .datos
-    .servidoresEncontrados;
-
-
-}catch(error){
-
-    servidoresEncontrados = 0;
-
-}
-
-
-
-const embed =
-new EmbedBuilder()
-
-.setTitle(
-    "🎮 Perfil BattleMetrics Rust"
-)
-
-.setColor(
-    "#57F287"
-)
-
-.setDescription(
-`🆔 Perfil BattleMetrics\n\`${battlemetricsId}\``
-)
-
-.addFields(
-
-{
-    name:"🖥️ Servidores jugados",
-    value:`\`${servidoresEncontrados}\``,
-    inline:true
-},
-
-{
-    name:"⏱️ Horas totales",
-    value:`**${totalHoras.toFixed(2)} horas**`,
-    inline:true
-}
-
-)
-
-.setFooter({
-
-text:
-"BattleMetrics Rust Bot"
-
-})
-
-.setTimestamp();
-
-
-
-await interaction.editReply({
-
-    content:"",
-    embeds:[
-        embed
-    ]
-
-});
-
-
-}
-
+    }
 
 };
