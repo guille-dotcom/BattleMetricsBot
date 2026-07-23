@@ -46,7 +46,7 @@ function guardarTrackers(trackers){
 // ====================== // 
 async function obtenerServidor(serverId){ 
   try{ 
-    const response = await axios.get(`https://api.battlemetrics.com/servers/${serverId}`, bmHeaders()); 
+    const response = await axios.get(`https://battlemetrics.com{serverId}`, bmHeaders()); 
     return { nombre: response.data.data.attributes.name }; 
   }catch(error){ 
     return { nombre: "Servidor Rust" }; 
@@ -60,9 +60,8 @@ async function obtenerJugadorServidor(serverId, playerId){
   try{ 
     console.log("🔑 Consultando jugador y sesiones BM..."); 
     
-    // Consultamos las sesiones activas del servidor para obtener la hora exacta de conexión
     const response = await axios.get(
-      `https://api.battlemetrics.com/servers/${serverId}`, 
+      `https://battlemetrics.com{serverId}`, 
       { 
         ...bmHeaders(), 
         params: { include: "session" } 
@@ -71,11 +70,10 @@ async function obtenerJugadorServidor(serverId, playerId){
 
     const incluidos = response.data.included || []; 
     
-    // Buscamos la sesión activa que coincida con la ID del jugador monitoreado
     const sesionActiva = incluidos.find(s => 
       s.type === "session" && 
       s.relationships?.player?.data?.id === String(playerId) && 
-      s.attributes?.stop === null // Si 'stop' es null, significa que sigue jugando en línea
+      s.attributes?.stop === null 
     );
 
     if (!sesionActiva) { 
@@ -83,7 +81,6 @@ async function obtenerJugadorServidor(serverId, playerId){
       return { online: false, playtime: "0:00" }; 
     } 
 
-    // Calculamos el tiempo de la sesión actual restando la hora de inicio de la hora actual
     const horaConexion = new Date(sesionActiva.attributes.start);
     const horaActual = new Date();
     const diferenciaMs = horaActual - horaConexion;
@@ -91,7 +88,6 @@ async function obtenerJugadorServidor(serverId, playerId){
     const horas = Math.floor(diferenciaMs / (1000 * 60 * 60));
     const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60));
 
-    // Formateamos como en la foto -> Ej: 16:56 o 0:05
     const tiempoFormateado = `${horas}:${minutos.toString().padStart(2, '0')}`;
 
     return { online: true, playtime: tiempoFormateado }; 
@@ -139,8 +135,8 @@ async function revisarTrackers(client){
           .setDescription(`👤 **${tracker.playerName}**`) 
           .addFields( 
             { name: "Estado", value: estado === "ONLINE" ? "🟢 ONLINE" : "🔴 OFFLINE" }, 
-            { name: "⏱️ Play Time (Sesión)", value: jugador.playtime }, // Muestra las horas exactas formateadas
-            { name: "📡 Servidor", value: servidor.nombre }, 
+            { name: "⏱️ Play Time (Sesión)", value: jugador.playtime }, 
+            { name: "📡 Servidor", value: `||${servidor.nombre}||` }, // <-- CAMBIADO A SPOILER (CUADRO NEGRO OCULTO)
             { name: "⌛ Tracker restante", value: tiempoRestante(tracker.expiresAt) } 
           ) 
           .setTimestamp(); 
