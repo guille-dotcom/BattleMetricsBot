@@ -13,6 +13,7 @@ const trackersFile = path.join(
 
 
 
+
 // ======================
 // HEADERS BM
 // ======================
@@ -38,6 +39,7 @@ function bmHeaders(){
 
 
 
+
 // ======================
 // LEER TRACKERS
 // ======================
@@ -46,15 +48,21 @@ function leerTrackers(){
 
     try{
 
+
         if(!fs.existsSync(trackersFile))
+
             return [];
+
 
 
         return JSON.parse(
 
             fs.readFileSync(
+
                 trackersFile,
+
                 "utf8"
+
             )
 
         );
@@ -62,10 +70,15 @@ function leerTrackers(){
 
     }catch(error){
 
+
         console.log(
+
             "ERROR LEYENDO TRACKERS:",
+
             error.message
+
         );
+
 
         return [];
 
@@ -76,11 +89,15 @@ function leerTrackers(){
 
 
 
+
+
+
 // ======================
 // GUARDAR TRACKERS
 // ======================
 
 function guardarTrackers(trackers){
+
 
     try{
 
@@ -90,31 +107,43 @@ function guardarTrackers(trackers){
             trackersFile,
 
             JSON.stringify(
+
                 trackers,
+
                 null,
+
                 2
+
             )
 
         );
 
 
         console.log(
+
             "💾 Trackers guardados"
+
         );
+
 
 
     }catch(error){
 
 
         console.log(
+
             "ERROR GUARDANDO TRACKERS:",
+
             error.message
+
         );
 
 
     }
 
+
 }
+
 
 
 
@@ -126,6 +155,7 @@ function guardarTrackers(trackers){
 // ======================
 
 async function obtenerServidor(serverId){
+
 
     try{
 
@@ -139,32 +169,35 @@ async function obtenerServidor(serverId){
         );
 
 
+
         return {
+
 
             nombre:
 
             response.data.data.attributes.name
 
+
         };
+
 
 
     }catch(error){
 
 
-        console.log(
-            "ERROR SERVIDOR:",
-            error.message
-        );
-
-
         return {
 
+
             nombre:
+
             "Servidor Rust"
+
 
         };
 
+
     }
+
 
 }
 
@@ -173,18 +206,21 @@ async function obtenerServidor(serverId){
 
 
 
+
 // ======================
-// JUGADORES ONLINE
+// JUGADORES ONLINE + TIEMPO BM
 // ======================
 
-async function obtenerJugadoresOnline(serverId){
+async function obtenerJugadorServidor(serverId, playerId){
 
 
     try{
 
 
         console.log(
-            "🔑 Consultando jugadores BM..."
+
+            "🔑 Consultando jugador BM..."
+
         );
 
 
@@ -196,103 +232,145 @@ async function obtenerJugadoresOnline(serverId){
 
             {
 
+
                 ...bmHeaders(),
 
+
                 params:{
+
                     include:"player"
+
                 }
 
+
             }
+
 
         );
 
 
 
-        const jugadores =
+        const incluidos =
 
             response.data.included || [];
 
 
 
-        const ids = jugadores.map(
 
-            jugador =>
-            String(jugador.id)
+
+        const jugador = incluidos.find(
+
+
+            p =>
+
+            String(p.id) === String(playerId)
+
 
         );
 
 
 
-        console.log(
 
-            `👥 Jugadores detectados: ${ids.length}`
+        if(!jugador){
+
+
+            console.log(
+
+                "⚠️ Jugador no encontrado en respuesta BM"
+
+            );
+
+
+            return {
+
+
+                online:false,
+
+                playtime:"0h 0m"
+
+
+            };
+
+
+        }
+
+
+
+
+
+
+        const segundos =
+
+            jugador.attributes?.timePlayed || 0;
+
+
+
+
+
+
+        const horas = Math.floor(
+
+            segundos / 3600
 
         );
 
 
 
-        return ids;
+
+        const minutos = Math.floor(
+
+            (segundos % 3600) / 60
+
+        );
+
+
+
+
+
+
+        return {
+
+
+            online:true,
+
+            playtime:
+
+            `${horas}h ${minutos}m`
+
+
+        };
 
 
 
     }catch(error){
 
 
+
         console.log(
 
-            "❌ ERROR JUGADORES ONLINE:",
+            "❌ ERROR CONSULTANDO BM:",
 
             error.response?.data ||
+
             error.message
 
         );
 
 
-        return [];
+
+        return {
+
+
+            online:false,
+
+            playtime:"0h 0m"
+
+
+        };
+
 
     }
 
-}
-// ======================
-// PLAYTIME SESIÓN ACTUAL
-// ======================
-
-function obtenerTiempoSesion(tracker){
-
-
-    if(!tracker.sessionStart){
-
-        return "0h 0m";
-
-    }
-
-
-
-    const segundos = Math.floor(
-
-        (Date.now() - tracker.sessionStart) / 1000
-
-    );
-
-
-
-    const horas = Math.floor(
-
-        segundos / 3600
-
-    );
-
-
-
-    const minutos = Math.floor(
-
-        (segundos % 3600) / 60
-
-    );
-
-
-
-    return `${horas}h ${minutos}m`;
 
 }
 
@@ -315,9 +393,11 @@ function tiempoRestante(expira){
 
 
 
+
     if(diferencia <= 0)
 
         return "Expirado";
+
 
 
 
@@ -329,6 +409,7 @@ function tiempoRestante(expira){
 
 
 
+
     const minutos = Math.floor(
 
         (diferencia % 3600000) / 60000
@@ -337,16 +418,11 @@ function tiempoRestante(expira){
 
 
 
+
     return `${horas}h ${minutos}m`;
 
+
 }
-
-
-
-
-
-
-
 // ======================
 // REVISAR TRACKERS
 // ======================
@@ -370,7 +446,6 @@ async function revisarTrackers(client){
 
 
 
-
     for(const tracker of trackers){
 
 
@@ -384,49 +459,27 @@ async function revisarTrackers(client){
 
 
 
+        const jugador = await obtenerJugadorServidor(
 
-        const jugadoresOnline =
+            tracker.serverId,
 
-            await obtenerJugadoresOnline(
+            tracker.playerId
 
-                tracker.serverId
-
-            );
-
+        );
 
 
 
 
 
-        const online =
+        const estado = jugador.online
 
-            jugadoresOnline.includes(
+        ?
 
-                String(
+        "ONLINE"
 
-                    tracker.playerId
+        :
 
-                )
-
-            );
-
-
-
-
-
-
-        const estado =
-
-            online
-
-            ?
-
-            "ONLINE"
-
-            :
-
-            "OFFLINE";
-
+        "OFFLINE";
 
 
 
@@ -442,65 +495,15 @@ async function revisarTrackers(client){
 
 
 
-        // ======================
-        // CONTROL DE SESIÓN
-        // ======================
-
-
-        if(estado === "ONLINE"){
-
-
-            if(!tracker.sessionStart){
-
-
-                tracker.sessionStart = Date.now();
-
-
-                console.log(
-
-                    "🟢 Nueva sesión iniciada"
-
-                );
-
-            }
-
-
-        }else{
-
-
-            tracker.sessionStart = null;
-
-
-        }
-
-
-
-
-
-
         if(tracker.lastState !== estado){
 
 
 
-            const servidor =
+            const servidor = await obtenerServidor(
 
-                await obtenerServidor(
+                tracker.serverId
 
-                    tracker.serverId
-
-                );
-
-
-
-
-
-            const playtime =
-
-                obtenerTiempoSesion(
-
-                    tracker
-
-                );
+            );
 
 
 
@@ -518,6 +521,7 @@ async function revisarTrackers(client){
                         tracker.guildId
 
                     );
+
 
 
 
@@ -539,10 +543,11 @@ async function revisarTrackers(client){
 
 
 
+
+
                 if(!canal)
 
                     continue;
-
 
 
 
@@ -621,7 +626,7 @@ async function revisarTrackers(client){
 
                             value:
 
-                            playtime
+                            jugador.playtime
 
                         },
 
@@ -670,7 +675,6 @@ async function revisarTrackers(client){
 
 
 
-
                 await canal.send({
 
                     embeds:[
@@ -686,7 +690,6 @@ async function revisarTrackers(client){
 
 
 
-
                 console.log(
 
                     `📢 Cambio enviado ${tracker.playerName}`
@@ -696,8 +699,8 @@ async function revisarTrackers(client){
 
 
 
-
             }catch(error){
+
 
 
                 console.log(
@@ -712,9 +715,8 @@ async function revisarTrackers(client){
             }
 
 
+
         }
-
-
 
 
 
@@ -730,12 +732,7 @@ async function revisarTrackers(client){
 
 
 
-    guardarTrackers(
-
-        trackers
-
-    );
-
+    guardarTrackers(trackers);
 
 
 }
