@@ -1,17 +1,5 @@
 require("dotenv").config();
 
-const express = require("express");
-const app = express();
-
-app.get("/", (req, res) => {
-    res.send("BattleMetricsBot activo");
-});
-
-app.listen(process.env.PORT || 3000, () => {
-    console.log("✅ Servidor web activo");
-});
-
-
 const {
     Client,
     GatewayIntentBits,
@@ -20,7 +8,29 @@ const {
 
 const fs = require("fs");
 const path = require("path");
+const http = require("http");
 
+
+// ======================
+// PUERTO PARA RENDER
+// ======================
+
+const PORT = process.env.PORT || 3000;
+
+http.createServer((req, res) => {
+    res.writeHead(200, {
+        "Content-Type": "text/plain"
+    });
+
+    res.end("BattleMetricsBot funcionando ✅");
+}).listen(PORT, () => {
+    console.log(`🌐 Servidor web activo en puerto ${PORT}`);
+});
+
+
+// ======================
+// CLIENTE DISCORD
+// ======================
 
 const client = new Client({
 
@@ -38,25 +48,19 @@ client.commands = new Collection();
 // CARGAR COMANDOS
 // ======================
 
-const commandsPath =
-path.join(__dirname, "commands");
+const commandsPath = path.join(__dirname, "commands");
 
 
-const commandFiles =
-fs.readdirSync(commandsPath)
-.filter(file => file.endsWith(".js"));
+const commandFiles = fs.readdirSync(commandsPath)
+    .filter(file => file.endsWith(".js"));
 
 
 
 for (const file of commandFiles) {
 
-
     try {
 
-
-        const command =
-        require(`./commands/${file}`);
-
+        const command = require(`./commands/${file}`);
 
 
         client.commands.set(
@@ -70,19 +74,16 @@ for (const file of commandFiles) {
         );
 
 
-    } catch(error){
-
+    } catch(error) {
 
         console.log(
             `❌ Error cargando comando ${file}:`,
             error.message
         );
 
-
     }
 
 }
-
 
 
 
@@ -121,7 +122,7 @@ async interaction => {
 
 
 
-    } catch(error){
+    } catch(error) {
 
 
         console.log(
@@ -148,8 +149,7 @@ async interaction => {
                 });
 
 
-
-            }else{
+            } else {
 
 
                 await interaction.reply({
@@ -166,7 +166,7 @@ async interaction => {
 
 
 
-        }catch(err){
+        } catch(err) {
 
 
             console.log(
@@ -185,7 +185,6 @@ async interaction => {
 
 
 
-
 // ======================
 // BOT CONECTADO
 // ======================
@@ -201,7 +200,6 @@ client.once(
 
 
 });
-
 
 
 
