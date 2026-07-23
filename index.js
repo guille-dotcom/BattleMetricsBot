@@ -38,7 +38,7 @@ const server = http.createServer((req, res) => {
     });
 
 
-    return res.end("OK");
+    res.end("OK");
 
 });
 
@@ -50,6 +50,7 @@ server.listen(PORT, "0.0.0.0", () => {
     );
 
 });
+
 
 
 
@@ -68,6 +69,7 @@ const client = new Client({
 
 
 client.commands = new Collection();
+
 
 
 
@@ -148,6 +150,7 @@ for (const file of commandFiles) {
 
 
 
+
 // ======================
 // REGISTRAR COMANDOS
 // ======================
@@ -162,15 +165,17 @@ async function registrarComandos(guild) {
         const rest =
             new REST({
 
-                version: "10"
+                version:"10"
 
             }).setToken(
+
                 process.env.TOKEN
+
             );
 
 
-        await rest.put(
 
+        await rest.put(
 
             Routes.applicationGuildCommands(
 
@@ -180,13 +185,11 @@ async function registrarComandos(guild) {
 
             ),
 
-
             {
 
                 body: commands
 
             }
-
 
         );
 
@@ -196,6 +199,7 @@ async function registrarComandos(guild) {
             `✅ Comandos registrados en: ${guild.name}`
 
         );
+
 
 
     } catch(error) {
@@ -217,9 +221,12 @@ async function registrarComandos(guild) {
 
 
 
+
+
 // ======================
-// BOT CONECTADO
+// BOT READY
 // ======================
+
 
 client.once("clientReady", async () => {
 
@@ -238,26 +245,23 @@ client.once("clientReady", async () => {
         await client.user.setPresence({
 
 
-            status: "online",
+            status:"online",
 
 
-            activities: [
-
+            activities:[
 
                 {
 
-                    name: "BattleMetrics",
+                    name:"BattleMetrics",
 
-                    type: 0
+                    type:0
 
                 }
-
 
             ]
 
 
         });
-
 
 
         console.log(
@@ -273,7 +277,7 @@ client.once("clientReady", async () => {
 
         console.log(
 
-            "⚠️ Error estableciendo presencia:",
+            "⚠️ Error presencia:",
 
             error.message
 
@@ -294,15 +298,13 @@ client.once("clientReady", async () => {
 
 
 
-
-    for (const guild of client.guilds.cache.values()) {
+    for(const guild of client.guilds.cache.values()) {
 
 
         await registrarComandos(guild);
 
 
     }
-
 
 
 
@@ -314,29 +316,28 @@ client.once("clientReady", async () => {
 
 
 
+
+
     // ======================
-    // INICIAR TRACKER
+    // TRACKER AUTOMÁTICO
     // ======================
 
 
     console.log(
 
-        "🔎 Tracker iniciado cada 5 minutos"
+        "🔎 Tracker iniciado cada 30 segundos"
 
     );
 
 
 
-    // Revisión inmediata al iniciar
+    // Revisión inmediata
 
     try {
 
-
         await revisarTrackers(client);
 
-
     } catch(error) {
-
 
         console.log(
 
@@ -346,12 +347,13 @@ client.once("clientReady", async () => {
 
         );
 
-
     }
 
 
 
-    // Revisión automática cada 5 minutos
+
+
+    // Revisión cada 30 segundos
 
     setInterval(async () => {
 
@@ -377,16 +379,23 @@ client.once("clientReady", async () => {
         }
 
 
-    }, 5 * 60 * 1000);
+    }, 30 * 1000);
 
 
 
 });
+
+
+
+
+
+
 // ======================
 // NUEVOS SERVIDORES
 // ======================
 
-client.on("guildCreate", async (guild) => {
+
+client.on("guildCreate", async (guild)=>{
 
 
     console.log(
@@ -405,14 +414,17 @@ client.on("guildCreate", async (guild) => {
 
 
 
+
+
 // ======================
-// INTERACCIONES DISCORD
+// INTERACCIONES
 // ======================
 
-client.on("interactionCreate", async interaction => {
+
+client.on("interactionCreate", async interaction=>{
 
 
-    if (!interaction.isChatInputCommand())
+    if(!interaction.isChatInputCommand())
 
         return;
 
@@ -428,7 +440,7 @@ client.on("interactionCreate", async interaction => {
 
 
 
-    if (!command)
+    if(!command)
 
         return;
 
@@ -444,9 +456,7 @@ client.on("interactionCreate", async interaction => {
         );
 
 
-
     } catch(error) {
-
 
 
         console.log(
@@ -458,54 +468,35 @@ client.on("interactionCreate", async interaction => {
         );
 
 
-
-
         try {
 
 
-
-            if (
-
-                interaction.deferred ||
-
-                interaction.replied
-
-            ) {
-
+            if(interaction.deferred || interaction.replied){
 
 
                 await interaction.editReply({
 
-                    content:
-
-                    "❌ Error ejecutando comando"
+                    content:"❌ Error ejecutando comando"
 
                 });
-
 
 
             } else {
 
 
-
                 await interaction.reply({
 
-                    content:
+                    content:"❌ Error ejecutando comando",
 
-                    "❌ Error ejecutando comando",
-
-                    ephemeral: true
+                    ephemeral:true
 
                 });
-
 
 
             }
 
 
-
-        } catch(err) {
-
+        } catch(err){
 
 
             console.log(
@@ -520,180 +511,52 @@ client.on("interactionCreate", async interaction => {
         }
 
 
-
     }
 
 
-
 });
 
 
 
 
 
+
 // ======================
-// ERRORES DEL CLIENTE
+// ERRORES
 // ======================
 
-client.on("error", (error) => {
 
+client.on("error",error=>{
 
     console.error(
-
-        "❌ Error del cliente Discord:",
-
+        "❌ Error Discord:",
         error
-
     );
-
 
 });
 
 
 
-client.on("warn", (info) => {
-
-
-    console.warn(
-
-        "⚠️ Advertencia:",
-
-        info
-
-    );
-
-
-});
-
-
-
-
-
-// ======================
-// CONEXIÓN Y RECONEXIÓN
-// ======================
-
-
-client.on("disconnect", () => {
-
-
-    console.log(
-
-        "⚠️ Bot desconectado de Discord"
-
-    );
-
-
-});
-
-
-
-client.on("reconnecting", () => {
-
-
-    console.log(
-
-        "🔄 Intentando reconectar con Discord..."
-
-    );
-
-
-});
-
-
-
-client.on("resume", (replayed) => {
-
-
-    console.log(
-
-        `🟢 Conexión Discord recuperada. Eventos: ${replayed}`
-
-    );
-
-
-});
-
-
-
-client.on("shardDisconnect", (event, shardId) => {
-
-
-    console.log(
-
-        `⚠️ Shard ${shardId} desconectado. Código: ${event.code}`
-
-    );
-
-
-});
-
-
-
-client.on("shardReconnecting", (shardId) => {
-
-
-    console.log(
-
-        `🔄 Shard ${shardId} intentando reconectar`
-
-    );
-
-
-});
-
-
-
-client.on("shardResume", (shardId, replayedEvents) => {
-
-
-    console.log(
-
-        `🟢 Shard ${shardId} reconectado. Eventos: ${replayedEvents}`
-
-    );
-
-
-});
-
-
-
-
-
-// ======================
-// ERRORES DEL PROCESO
-// ======================
-
-
-process.on("unhandledRejection", (reason) => {
-
+process.on("unhandledRejection",(reason)=>{
 
     console.error(
-
-        "❌ Unhandled Promise Rejection:",
-
+        "❌ Unhandled Promise:",
         reason
-
     );
-
 
 });
 
 
 
-process.on("uncaughtException", (error) => {
-
+process.on("uncaughtException",(error)=>{
 
     console.error(
-
         "❌ Uncaught Exception:",
-
         error
-
     );
 
-
 });
+
 
 
 
