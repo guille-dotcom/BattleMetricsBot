@@ -49,11 +49,33 @@ async function getBattleMetricsHours(playerId) {
         let listaServidores = [];
 
 
+        // Evita sumar el mismo servidor más de una vez
+        const servidoresContados = new Set();
+
+
         for (const servidor of servidores) {
 
 
             if (servidor.type !== "server")
                 continue;
+
+
+            const servidorId = servidor.id;
+
+
+            if (servidoresContados.has(servidorId)) {
+
+                console.log(
+                    "SERVIDOR DUPLICADO IGNORADO:",
+                    servidor.attributes.name
+                );
+
+                continue;
+
+            }
+
+
+            servidoresContados.add(servidorId);
 
 
             const tiempo =
@@ -64,6 +86,9 @@ async function getBattleMetricsHours(playerId) {
 
 
             listaServidores.push({
+
+                id:
+                    servidorId,
 
                 nombre:
                     servidor.attributes.name,
@@ -82,6 +107,12 @@ async function getBattleMetricsHours(playerId) {
 
         const horasTotales =
             (segundosTotales / 3600).toFixed(2);
+
+
+        console.log(
+            "SERVIDORES ÚNICOS:",
+            listaServidores.length
+        );
 
 
         console.log(
@@ -111,7 +142,7 @@ async function getBattleMetricsHours(playerId) {
                     datos: {
 
                         servidoresEncontrados:
-                            servidores.length,
+                            listaServidores.length,
 
                         lista:
                             listaServidores
@@ -142,7 +173,10 @@ async function getBattleMetricsHours(playerId) {
             servidores:{
                 rust:{
                     horas:"0.00",
-                    datos:{}
+                    datos:{
+                        servidoresEncontrados:0,
+                        lista:[]
+                    }
                 }
             }
 
