@@ -3,10 +3,6 @@ const path = require("path");
 const axios = require("axios");
 const { EmbedBuilder } = require("discord.js");
 
-const {
-    getBattleMetricsHours
-} = require("./battlemetricsHours");
-
 
 const trackersFile = path.join(
     __dirname,
@@ -121,6 +117,7 @@ function guardarTrackers(trackers){
 
 
 
+
 // ======================
 // OBTENER SERVIDOR
 // ======================
@@ -166,12 +163,12 @@ async function obtenerServidor(serverId){
 
 
 
+
 // ======================
 // JUGADORES ONLINE
 // ======================
 
 async function obtenerJugadoresOnline(serverId){
-
 
     try{
 
@@ -184,7 +181,6 @@ async function obtenerJugadoresOnline(serverId){
         const response =
         await axios.get(
 
-
             `https://api.battlemetrics.com/servers/${serverId}`,
 
             {
@@ -196,7 +192,6 @@ async function obtenerJugadoresOnline(serverId){
                 }
 
             }
-
 
         );
 
@@ -219,7 +214,7 @@ async function obtenerJugadoresOnline(serverId){
 
         console.log(
 
-            `👥 Jugadores online detectados: ${ids.length}`
+            `👥 Jugadores detectados: ${ids.length}`
 
         );
 
@@ -246,7 +241,6 @@ async function obtenerJugadoresOnline(serverId){
 
     }
 
-
 }
 
 
@@ -255,52 +249,108 @@ async function obtenerJugadoresOnline(serverId){
 
 
 
-
 // ======================
-// PLAYTIME
+// PLAYTIME DEL SERVIDOR
 // ======================
 
-async function obtenerPlaytime(playerId){
+async function obtenerPlaytime(serverId, playerId){
 
 
     try{
 
 
-        const data =
-
-        await getBattleMetricsHours(
-            playerId
+        console.log(
+            `⏱️ Consultando tiempo ${playerId} en servidor ${serverId}`
         );
+
+
+
+        const response =
+        await axios.get(
+
+
+            `https://api.battlemetrics.com/servers/${serverId}/relationships/players`,
+
+
+            bmHeaders()
+
+
+        );
+
+
+
+        const jugadores =
+
+            response.data.data || [];
+
+
+
+        const jugador =
+
+            jugadores.find(
+
+                p =>
+                String(p.id) === String(playerId)
+
+            );
+
+
+
+        if(!jugador){
+
+
+            return "0h 0m";
+
+
+        }
+
+
+
+        const segundos =
+
+            jugador.attributes?.timePlayed ||
+
+            jugador.attributes?.playtime ||
+
+            0;
 
 
 
         const horas =
 
-        Number(
-            data.totalHoras || 0
-        );
-
-
-
-        const enteras =
-        Math.floor(horas);
+            Math.floor(
+                segundos / 3600
+            );
 
 
 
         const minutos =
-        Math.floor(
-            (horas-enteras)*60
-        );
+
+            Math.floor(
+                (segundos % 3600) / 60
+            );
 
 
 
-        return `${enteras}h ${minutos}m`;
+        return `${horas}h ${minutos}m`;
 
 
 
     }catch(error){
 
+
+        console.log(
+
+            "❌ ERROR PLAYTIME SERVIDOR:",
+
+            error.response?.data ||
+            error.message
+
+        );
+
+
         return "No disponible";
+
 
     }
 
@@ -349,6 +399,7 @@ function tiempoRestante(expira){
 
 
 
+
 // ======================
 // REVISAR TRACKERS
 // ======================
@@ -356,10 +407,8 @@ function tiempoRestante(expira){
 async function revisarTrackers(client){
 
 
-
     let trackers =
     leerTrackers();
-
 
 
 
@@ -375,7 +424,6 @@ async function revisarTrackers(client){
 
 
 
-
     for(const tracker of trackers){
 
 
@@ -386,7 +434,6 @@ async function revisarTrackers(client){
 
 
 
-
         const jugadoresOnline =
 
         await obtenerJugadoresOnline(
@@ -394,7 +441,6 @@ async function revisarTrackers(client){
             tracker.serverId
 
         );
-
 
 
 
@@ -412,7 +458,6 @@ async function revisarTrackers(client){
 
 
 
-
         const estado =
 
         online
@@ -420,7 +465,6 @@ async function revisarTrackers(client){
         "ONLINE"
         :
         "OFFLINE";
-
 
 
 
@@ -447,13 +491,17 @@ async function revisarTrackers(client){
 
 
 
+
             const playtime =
 
             await obtenerPlaytime(
 
+                tracker.serverId,
+
                 tracker.playerId
 
             );
+
 
 
 
@@ -490,7 +538,6 @@ async function revisarTrackers(client){
 
                 if(!canal)
                     continue;
-
 
 
 
@@ -616,13 +663,10 @@ async function revisarTrackers(client){
 
 
 
-
     guardarTrackers(trackers);
 
 
-
 }
-
 
 
 
