@@ -66,9 +66,9 @@ async function registrarComandos(guild) {
 } 
 
 // ====================== // 
-// BOT CONECTADO // 
+// BOT CONECTADO (CORREGIDO PARA DISCORD.JS V15) // 
 // ====================== // 
-client.once("ready", async () => { 
+client.once("clientReady", async () => { 
   console.log(`✅ Bot conectado como ${client.user.tag}`); 
   try { 
     await client.user.setPresence({ status: "online", activities: [{ name: "BattleMetrics", type: 0 }] }); 
