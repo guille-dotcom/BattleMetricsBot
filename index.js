@@ -3,7 +3,9 @@ require("dotenv").config();
 const {
     Client,
     GatewayIntentBits,
-    Collection
+    Collection,
+    REST,
+    Routes
 } = require("discord.js");
 
 const fs = require("fs");
@@ -50,10 +52,11 @@ client.commands = new Collection();
 
 const commandsPath = path.join(__dirname, "commands");
 
-
 const commandFiles = fs.readdirSync(commandsPath)
     .filter(file => file.endsWith(".js"));
 
+
+const commands = [];
 
 
 for (const file of commandFiles) {
@@ -66,6 +69,11 @@ for (const file of commandFiles) {
         client.commands.set(
             command.data.name,
             command
+        );
+
+
+        commands.push(
+            command.data.toJSON()
         );
 
 
@@ -84,6 +92,116 @@ for (const file of commandFiles) {
     }
 
 }
+
+
+
+// ======================
+// FUNCIÓN REGISTRAR COMANDOS
+// ======================
+
+async function registrarComandos(guild) {
+
+
+    try {
+
+
+        const rest = new REST({
+            version: "10"
+        }).setToken(
+            process.env.TOKEN
+        );
+
+
+
+        await rest.put(
+
+            Routes.applicationGuildCommands(
+                client.user.id,
+                guild.id
+            ),
+
+            {
+                body: commands
+            }
+
+        );
+
+
+
+        console.log(
+            `✅ Comandos registrados en: ${guild.name}`
+        );
+
+
+    } catch(error) {
+
+
+        console.log(
+            `❌ Error registrando comandos en ${guild.name}:`,
+            error.message
+        );
+
+
+    }
+
+}
+
+
+
+// ======================
+// BOT CONECTADO
+// ======================
+
+client.once(
+"clientReady",
+async (client) => {
+
+
+    console.log(
+        `✅ Bot conectado como ${client.user.tag}`
+    );
+
+
+    console.log(
+        "🔄 Registrando comandos en servidores..."
+    );
+
+
+
+    for (const guild of client.guilds.cache.values()) {
+
+        await registrarComandos(guild);
+
+    }
+
+
+    console.log(
+        "✅ Registro de comandos finalizado"
+    );
+
+
+});
+
+
+
+// ======================
+// NUEVOS SERVIDORES
+// ======================
+
+client.on(
+"guildCreate",
+async (guild) => {
+
+
+    console.log(
+        `📥 Nuevo servidor: ${guild.name}`
+    );
+
+
+    await registrarComandos(guild);
+
+
+});
 
 
 
@@ -131,7 +249,6 @@ async interaction => {
         );
 
 
-
         try {
 
 
@@ -165,7 +282,6 @@ async interaction => {
             }
 
 
-
         } catch(err) {
 
 
@@ -179,24 +295,6 @@ async interaction => {
 
 
     }
-
-
-});
-
-
-
-// ======================
-// BOT CONECTADO
-// ======================
-
-client.once(
-"clientReady",
-(client) => {
-
-
-    console.log(
-        `✅ Bot conectado como ${client.user.tag}`
-    );
 
 
 });
