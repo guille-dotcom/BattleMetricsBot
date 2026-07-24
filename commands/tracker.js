@@ -65,9 +65,9 @@ module.exports = {
     const headers = { Authorization: `Bearer ${apiToken}`, Accept: "application/json" };
 
     try { 
-      // 1. FIJADO DEFINITIVO: Añadida la ruta /api/players/ oficial completa para evitar colisiones
+      // 1. REPARACIÓN ABSOLUTA: Usamos comillas invertidas pero sin dejar espacio a que se borre la barra
       try {
-        const urlJugador = "https://battlemetrics.com" + playerId;
+        const urlJugador = `https://battlemetrics.com{playerId}`;
         const resPlayer = await axios.get(urlJugador, { headers });
         if(resPlayer.data?.data?.attributes?.name) {
           nombreJugador = resPlayer.data.data.attributes.name;
@@ -76,8 +76,8 @@ module.exports = {
         console.log("Error consultando nombre del jugador en comando:", e.message);
       }
 
-      // 2. Servidor e inclusión de sesiones activas
-      const resBM = await axios.get("https://battlemetrics.com", { 
+      // 2. Consulta limpia al servidor de Rustafied
+      const resBM = await axios.get(`https://battlemetrics.com`, { 
         headers, 
         params: { include: "session" } 
       }); 
@@ -130,7 +130,7 @@ module.exports = {
       return interaction.editReply("❌ Error guardando el tracker."); 
     } 
 
-    // Construir el Embed limpio
+    // Construir el Embed limpio con spoiler
     const embed = new EmbedBuilder() 
       .setTitle("🎮 Tracker BattleMetrics") 
       .setColor(estado === "ONLINE" ? "#57F287" : "#ED4245") 
