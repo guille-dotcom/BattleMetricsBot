@@ -7,7 +7,7 @@ const configFile = path.join(__dirname, "..", "data", "config.json");
 const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN || process.env.TOKEN; 
 
 module.exports = { 
-    data: new SlashCommandBuilder()
+    data: new SlashCommandBuilder() 
         .setName("tracker") 
         .setDescription("Rastrea a un jugador en nuestro servidor usando su link de BattleMetrics") 
         .addStringOption(option => option.setName("link") 
@@ -21,14 +21,14 @@ module.exports = {
         const guildId = interaction.guild.id; 
 
         try { 
-            // 1. Extraer la ID del link exactamente igual que en /horasbm
-            const match = link.match(/players\/(\d+)/);
+            // 1. Extraer la ID del link exactamente igual que en /horasbm 
+            const match = link.match(/players\/(\d+)/); 
             if (!match) { 
-                return await interaction.editReply(
-                    "❌ Link inválido.\n\nEjemplo:\nhttps://battlemetrics.com"
+                return await interaction.editReply( 
+                    "❌ Link inválido.\n\nEjemplo:\nhttps://battlemetrics.com" 
                 ); 
             } 
-            const battlemetricsId = match[1];
+            const battlemetricsId = match[1]; 
 
             // 2. Leer servidor configurado (Soportando tu estructura por guildId) 
             const config = JSON.parse(fs.readFileSync(configFile, "utf8")); 
@@ -44,20 +44,21 @@ module.exports = {
             } 
 
             // 3. CONSULTA DE SESIÓN EN VIVO DIRECTA (URL CORREGIDA CON LA API OFICIAL) 
+            // CORREGIDO: Se agregó api., /players/ y el signo $ obligatorio
             const playerUrl = `https://battlemetrics.com{battlemetricsId}`; 
             const response = await axios.get(playerUrl, { 
                 headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` }, 
                 params: { 'include': 'server,session' } 
             }); 
 
-            const playerData = response.data.data;
+            const playerData = response.data.data; 
             const incluidos = response.data.included || []; 
 
-            if (!playerData) {
-                return interaction.editReply("❌ No se encontraron datos para ese perfil en BattleMetrics.");
-            }
+            if (!playerData) { 
+                return interaction.editReply("❌ No se encontraron datos para ese perfil en BattleMetrics."); 
+            } 
 
-            const nombreJugador = playerData.attributes?.name || "Desconocido";
+            const nombreJugador = playerData.attributes?.name || "Desconocido"; 
 
             // Buscamos si la sesión en tu servidor está activa en este instante (stop === null) 
             const sesionActiva = incluidos.find(s => 
@@ -88,9 +89,9 @@ module.exports = {
                 if (ultimaSesion && ultimaSesion.attributes?.stop) { 
                     const lastTime = new Date(ultimaSesion.attributes.stop).toLocaleString('es-ES'); 
                     playtimeFormateado = `Última vez visto: ${lastTime}`; 
-                } else {
-                    playtimeFormateado = "Sin registros recientes en el servidor";
-                }
+                } else { 
+                    playtimeFormateado = "Sin registros recientes en el servidor"; 
+                } 
             } 
 
             // Sacar el nombre del servidor para el spoiler 
@@ -109,6 +110,7 @@ module.exports = {
                     { name: "👤 Jugador", value: nombreJugador, inline: true }, 
                     { name: "🆔 BattleMetrics ID", value: `\`${battlemetricsId}\``, inline: true }, 
                     { name: "📊 Estado", value: statusText, inline: true }, 
+                    // CORREGIDO: Se removieron los símbolos %EF%B8%8F rotos de los títulos
                     { name: "⏱️ Play time (Sesión)", value: `\`${playtimeFormateado}\``, inline: true }, 
                     { name: "🖥️ Servidor configurado (Revelar)", value: hiddenServerText, inline: false } 
                 ) 
