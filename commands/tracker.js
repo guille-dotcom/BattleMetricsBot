@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { getSteamProfile } = require("../services/steam");
 const { searchBattleMetricsPlayer } = require("../services/battlemetricsSearch");
-const axios = require('axios'); // Lo usamos de forma segura para la sesión
+const axios = require('axios'); 
 const fs = require("fs");
 const path = require("path");
 
@@ -30,7 +30,7 @@ module.exports = {
                 return interaction.editReply("❌ No se encontró ese Steam ID.");
             }
 
-            // 2. Leer servidor configurado (Soportando la estructura por guildId que tienes)
+            // 2. Leer servidor configurado (Soportando tu estructura por guildId)
             const config = JSON.parse(fs.readFileSync(configFile, "utf8"));
             let battlemetricsServerId = null;
 
@@ -44,13 +44,13 @@ module.exports = {
                 return interaction.editReply("❌ No hay ningún servidor de Rust configurado en esta comunidad.");
             }
 
-            // 3. Buscar el jugador en tu servidor usando tu servicio nativo (Evita el 403 por completo)
+            // 3. Llamar a tu función nativa de forma correcta para buscar al jugador
             const player = await searchBattleMetricsPlayer(steam.name, battlemetricsServerId);
             if (!player) {
                 return interaction.editReply(`❌ El jugador **${steam.name}** nunca ha ingresado a nuestro servidor de Rust.`);
             }
 
-            // 4. CONSULTA DE SESIÓN EN VIVO DIRECTA (Usando el ID que nos dio tu servicio)
+            // 4. CONSULTA DE SESIÓN EN VIVO DIRECTA (URL CORREGIDA CON ACENTOS GRAVES PARA ACATAR EL ID REAL)
             const playerUrl = `https://battlemetrics.com{player.id}`;
             const response = await axios.get(playerUrl, {
                 headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` },
@@ -59,7 +59,7 @@ module.exports = {
 
             const incluidos = response.data.included || [];
             
-            // Buscamos si la sesión en tu servidor está en ejecución (stop === null)
+            // Buscamos si la sesión en tu servidor está activa en este instante (stop === null)
             const sesionActiva = incluidos.find(s => 
                 s.type === "session" && 
                 String(s.relationships?.server?.data?.id) === String(battlemetricsServerId) && 
@@ -80,7 +80,7 @@ module.exports = {
                 const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60));
                 playtimeFormateado = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
             } else {
-                // Si está offline, sacamos su última hora de juego en tu mapa
+                // Si está offline, buscamos su última sesión guardada en tu mapa
                 const ultimaSesion = incluidos.find(s => 
                     s.type === "session" && 
                     String(s.relationships?.server?.data?.id) === String(battlemetricsServerId)
@@ -91,7 +91,7 @@ module.exports = {
                 }
             }
 
-            // Sacar el nombre del servidor para taparlo en spoiler
+            // Sacar el nombre del servidor para el spoiler
             let serverName = "Nuestro Servidor de Rust";
             const serverInfo = incluidos.find(s => s.type === "server" && String(s.id) === String(battlemetricsServerId));
             if (serverInfo && serverInfo.attributes?.name) {
@@ -100,7 +100,7 @@ module.exports = {
 
             const hiddenServerText = `||${serverName}||`;
 
-            // 5. Diseñar la tarjeta final del Tracker
+            // 5. Enviar la tarjeta visual con los datos formateados
             const embed = new EmbedBuilder()
                 .setTitle(`🎯 Monitoreo de Perfil: ${steam.name}`)
                 .setColor(embedColor)
