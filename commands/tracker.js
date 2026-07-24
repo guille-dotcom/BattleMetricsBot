@@ -66,19 +66,20 @@ module.exports = {
                 return interaction.editReply('❌ No se encontró ningún perfil de Steam válido asociado a esa SteamID64.');
             }
             
-            // Extraer el nombre de usuario de la primera cuenta devuelta
-            const steamName = players[0].personaname; 
+            // CORRECCIÓN DE MAPEO: Accedemos explícitamente al primer elemento [0] del array devuelto por Valve
+            const steamName = players[0]?.personaname; 
 
             if (!steamName) {
                 return interaction.editReply('❌ No se pudo determinar el nombre público de la cuenta de Steam.');
             }
 
-            // STEP B: Buscar al jugador por su NOMBRE de forma legal dentro de tu servidor de BattleMetrics
+            // STEP B: Buscar al jugador utilizando el formato nativo por identificadores para evitar bloqueos 403
             const searchUrl = 'https://battlemetrics.com';
             const response = await axios.get(searchUrl, {
                 headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` },
                 params: {
-                    'filter[search]': steamName, // Buscamos por texto (Nombre), evitando el bloqueo 403
+                    'filter[identifiers][type]': 'steamId',
+                    'filter[identifiers][value]': steamId,
                     'filter[servers]': battleMetricsServerId, 
                     'include': 'server,session'
                 }
@@ -89,7 +90,8 @@ module.exports = {
                 return interaction.editReply(`❌ El jugador **${steamName}** no tiene ningún registro de actividad en nuestro servidor de Rust.`);
             }
 
-            const playerData = response.data.data[0]; // Extraer el primer jugador del listado
+            // Tomamos los datos del jugador encontrado
+            const playerData = response.data.data[0]; 
             const includedData = response.data.included || [];
             const playerName = playerData.attributes.name;
 
