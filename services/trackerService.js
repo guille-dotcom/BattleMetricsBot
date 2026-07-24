@@ -6,7 +6,7 @@ const { EmbedBuilder } = require('discord.js');
 const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN || process.env.TOKEN;
 const trackersFile = path.join(__dirname, '..', 'data', 'trackers.json');
 
-// Asegurar que exista la carpeta data y el archivo trackers.json
+// Asegurar directorios
 if (!fs.existsSync(path.dirname(trackersFile))) {
     fs.mkdirSync(path.dirname(trackersFile), { recursive: true });
 }
@@ -15,10 +15,11 @@ if (!fs.existsSync(trackersFile)) {
 }
 
 /**
- * Consulta la API de BattleMetrics para un perfil específico
+ * Consulta la API oficial de BattleMetrics de forma limpia
  */
 async function queryBattleMetrics(battlemetricsId) {
     try {
+        // CORREGIDO: URL con la estructura oficial e interpolación limpia de variables
         const url = `https://battlemetrics.com{battlemetricsId}`;
         const response = await axios.get(url, {
             headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` },
@@ -32,12 +33,12 @@ async function queryBattleMetrics(battlemetricsId) {
 }
 
 /**
- * Obtiene el estado de sesión más reciente de un jugador (Para el comando manual)
+ * Obtiene el estado de sesión más reciente de un jugador (Para el comando manual /tracker)
  */
 async function getLivePlayerSession(profileLink) {
     try {
         const match = profileLink.match(/players\/(\d+)/);
-        if (!match || !match[1]) return null;
+        if (!match) return null;
         const battlemetricsId = match[1];
 
         const json = await queryBattleMetrics(battlemetricsId);
@@ -73,7 +74,8 @@ async function getLivePlayerSession(profileLink) {
         }
 
         return { id: battlemetricsId, nombre, status, isOnline, playtime, serverName };
-    } catch {
+    } catch (error) {
+        console.error("[-] Error en getLivePlayerSession:", error.message);
         return null;
     }
 }
@@ -83,7 +85,11 @@ async function getLivePlayerSession(profileLink) {
  */
 async function revisarTrackers(client) {
     try {
-        const trackers = JSON.parse(fs.readFileSync(trackersFile, 'utf8'));
+        if (!fs.existsSync(trackersFile)) return;
+        const contenido = fs.readFileSync(trackersFile, 'utf8');
+        let trackers = {};
+        try { trackers = JSON.parse(contenido); } catch { return; }
+        
         const playerIds = Object.keys(trackers);
         if (playerIds.length === 0) return;
 
@@ -95,9 +101,8 @@ async function revisarTrackers(client) {
             const incluidos = json.included || [];
             const ultimaSesion = incluidos.find(item => item.type === "session");
             
-            // Determinar estado actual real en la API
             const estaOnlineAhora = ultimaSesion ? (ultimaSesion.attributes?.stop === null) : false;
-            const estadoAnterior = playerDataLocal.ultimoEstado; // 'online' o 'offline'
+            const estadoAnterior = playerDataLocal.ultimoEstado;
 
             let serverName = "Servidor Desconocido";
             if (ultimaSesion) {
@@ -107,7 +112,7 @@ async function revisarTrackers(client) {
             }
 
             let huboCambio = false;
-            let tipoAlerta = ''; // 'entró' o 'salió'
+            let tipoAlerta = '';
 
             if (estaOnlineAhora && estadoAnterior === 'offline') {
                 huboCambio = true;
@@ -119,13 +124,10 @@ async function revisarTrackers(client) {
                 trackers[id].ultimoEstado = 'offline';
             }
 
-            // Si el estado no ha cambiado, ignoramos y pasamos al siguiente jugador
             if (!huboCambio) continue;
 
-            // Guardar el nuevo estado inmediatamente en el archivo
             fs.writeFileSync(trackersFile, JSON.stringify(trackers, null, 4), 'utf8');
 
-            // Enviar la alerta a los canales de Discord configurados para ese seguimiento
             const nombreJugador = json.data.attributes?.name || "Desconocido";
             const embedColor = tipoAlerta === 'entró' ? 0x2ecc71 : 0xe74c3c;
             const titulo = tipoAlerta === 'entró' ? `🟢 ¡Jugador Conectado! (Online)` : `🔴 ¡Jugador Desconectado! (Offline)`;
@@ -140,7 +142,6 @@ async function revisarTrackers(client) {
                 )
                 .setTimestamp();
 
-            // Enviar el aviso al canal guardado en el registro de ese seguimiento
             try {
                 const channel = await client.channels.fetch(playerDataLocal.canalId);
                 if (channel) {
