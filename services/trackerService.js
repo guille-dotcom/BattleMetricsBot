@@ -32,7 +32,7 @@ function guardarTrackers(trackers){
 async function obtenerServidor(serverId){ 
     try { 
         const idSana = String(serverId).trim(); 
-        // URL CORREGIDA DE SERVIDORES
+        // URL CORREGIDA: Agregado el subdominio api y la barra de ruta correcta
         const response = await axios.get(`https://battlemetrics.com{idSana}`, bmHeaders()); 
         return { nombre: response.data.data.attributes.name }; 
     } catch(error) { 
@@ -48,7 +48,7 @@ async function obtenerJugadorServidor(serverId, playerId, intentos = 2){
         const targetServerId = String(serverId).trim(); 
         const targetPlayerId = String(playerId).trim(); 
 
-        // URL CORREGIDA DEL JUGADOR EN BATTLEMETRICS
+        // URL CORREGIDA: Apuntando al endpoint real de la API oficial
         const response = await axios.get( 
             `https://battlemetrics.com{targetPlayerId}`, 
             { 
@@ -59,10 +59,8 @@ async function obtenerJugadorServidor(serverId, playerId, intentos = 2){
 
         const dataPlayer = response.data.data; 
         const incluidos = response.data.included || []; 
-
         const nombreRealPerfil = dataPlayer?.attributes?.name || `Jugador (${targetPlayerId})`; 
 
-        // Buscamos si hay una sesión activa del jugador en tu servidor
         const sesionActiva = incluidos.find(s => 
             s.type === "session" && 
             String(s.relationships?.server?.data?.id) === targetServerId && 
@@ -77,7 +75,7 @@ async function obtenerJugadorServidor(serverId, playerId, intentos = 2){
         const horaConexion = new Date(sesionActiva.attributes.start); 
         const diferenciaMs = new Date() - horaConexion; 
         const horas = Math.floor(diferenciaMs / (1000 * 60 * 60)); 
-        const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60)); 
+        const minutes = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60)); 
         const tiempoFormateado = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`; 
 
         return { online: true, playtime: tiempoFormateado, nombreReal: nombreRealPerfil, idInterno: targetPlayerId }; 
