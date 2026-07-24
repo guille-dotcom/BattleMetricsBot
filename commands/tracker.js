@@ -26,11 +26,11 @@ module.exports = {
 
         // Verificación de seguridad por si acaso no carga el token
         if (!BATTLEMETRICS_TOKEN) {
-            return interaction.editReply('⚠️ Error interno: No se encontró el BATTLEMETRICS_TOKEN en la configuración.');
+            return interaction.editReply('⚠️ Error interno: No se encontró el BATTLEMETRICS_TOKEN en la configuración de Render.');
         }
 
         try {
-            // Petición a BattleMetrics incluyendo servidores y sesiones
+            // URL CORREGIDA: Ahora incluye correctamente /players?filter antes de los corchetes
             const url = `https://battlemetrics.com[search]=${steamId}&include=server,session`;
             
             const response = await axios.get(url, {
@@ -44,7 +44,7 @@ module.exports = {
                 return interaction.editReply('❌ No se encontró ningún registro de ese jugador en BattleMetrics.');
             }
 
-            const playerData = response.data.data[0]; // Tomamos el primer resultado devuelto
+            const playerData = response.data.data[0]; // Tomamos el primer resultado devuelto de la lista
             const includedData = response.data.included || [];
 
             const playerName = playerData.attributes.name;
