@@ -5,11 +5,12 @@ const path = require('path');
 
 const file = path.join(__dirname, '..', 'data', 'config.json');
 const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN; 
+const STEAM_API_KEY = process.env.STEAM_API_KEY; // Usamos tu clave de Steam configurada
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('tracker')
-        .setDescription('Rastrea las estadísticas de un jugador en NUESTRO servidor mediante su SteamID64')
+        .setDescription('Rastrea las estadísticas de un jugador en NUESTRO servidor de Rust')
         .addStringOption(option =>
             option.setName('steamid')
                 .setDescription('La SteamID64 de 17 dígitos del jugador')
@@ -44,47 +45,38 @@ module.exports = {
         }
 
         try {
-            // STEP A: Consultar el endpoint MATCH para convertir la SteamID64 en el ID interno de BattleMetrics
-            const matchUrl = 'https://battlemetrics.com';
-            const matchResponse = await axios.post(matchUrl, {
-                data: [
-                    {
-                        type: "identifier",
-                        attributes: {
-                            type: "steamId",
-                            identifier: steamId
-                        }
-                    }
-                ]
-            }, {
-                headers: { 
-                    'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            // Verificar si el jugador existe en BattleMetrics
-            if (!matchResponse.data || !matchResponse.data.data || matchResponse.data.data.length === 0) {
-                return interaction.editReply('❌ No se encontró ningún jugador vinculado a esa SteamID64 en los registros globales de BattleMetrics.');
+            // STEP A: Consultar a la API oficial de Steam para obtener el nombre actual real del usuario
+            const steamUrl = `https://steampowered.com{STEAM_API_KEY}&steamids=${steamId}`;
+            const steamResponse = await axios.get(steamUrl);
+            
+            const players = steamResponse.data.response.players;
+            if (!players || players.length === 0) {
+                return interaction.editReply('❌ No se encontró ningún perfil de Steam válido asociado a esa SteamID64.');
             }
+            
+            const steamName = players[0].personaname; // Nombre real exacto en Steam
 
-            // Extraemos el ID interno que nos dio el puente
-            const bmPlayerId = matchResponse.data.data[0].relationships.player.data.id;
-
-            // STEP B: Ahora que tenemos el ID interno real, pedimos su ficha incluyendo la sesión de TU servidor
-            const playerUrl = `https://battlemetrics.com{bmPlayerId}`;
-            const response = await axios.get(playerUrl, {
+            // STEP B: Buscar ese nombre en BattleMetrics filtrando ÚNICAMENTE por tu servidor configurado
+            const bmUrl = 'https://battlemetrics.com';
+            const response = await axios.get(bmUrl, {
                 headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` },
                 params: {
+                    'filter[search]': steamName,
+                    'filter[servers]': battleMetricsServerId,
                     'include': 'server,session'
                 }
             });
 
-            const playerData = response.data.data;
+            if (!response.data || !response.data.data || response.data.data.length === 0) {
+                return interaction.editReply(`❌ El jugador **${steamName}** no tiene ningún registro de actividad en nuestro servidor de Rust.`);
+            }
+
+            // Tomamos el jugador exacto de los resultados filtrados por tu servidor
+            const playerData = response.data.data[0]; 
             const includedData = response.data.included || [];
             const playerName = playerData.attributes.name;
 
-            // Buscamos si el jugador tiene una sesión en tu servidor activo
+            // Buscamos la sesión del jugador en tu servidor activo
             const targetSession = includedData.find(item => 
                 item.type === 'session' && 
                 item.relationships.server.data.id === battleMetricsServerId
@@ -114,7 +106,7 @@ module.exports = {
                     embedColor = 0x34495e; 
                 }
             } else {
-                return interaction.editReply(`❌ El jugador **${playerName}** está en BattleMetrics, pero jamás ha entrado a tu servidor de Rust.`);
+                return interaction.editReply(`❌ El jugador **${playerName}** no tiene registros en nuestro servidor de Rust.`);
             }
 
             const trackerEmbed = new EmbedBuilder()
@@ -133,8 +125,8 @@ module.exports = {
             await interaction.editReply({ embeds: [trackerEmbed] });
 
         } catch (error) {
-            console.error('ERROR EN RE-ESTRUCTURACIÓN TRACKER:', error.response ? error.response.data : error.message);
-            await interaction.editReply('⚠️ Ocurrió un error al procesar el rastreo mediante el identificador de Steam.');
+            console.error('ERROR EN TRACKER HÍBRIDO STEAM/BM:', error.message);
+            await interaction.editReply('⚠️ Ocurrió un error al procesar el rastreo de datos mediante el puente de Steam.');
         }
     },
 };
