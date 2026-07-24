@@ -14,6 +14,7 @@ path.join(
 
 
 
+
 // ======================
 // HEADERS BM
 // ======================
@@ -38,6 +39,8 @@ function bmHeaders(){
 
 
 
+
+
 // ======================
 // LEER TRACKERS
 // ======================
@@ -51,10 +54,12 @@ function leerTrackers(){
 
 
         return JSON.parse(
+
             fs.readFileSync(
                 trackersFile,
                 "utf8"
             )
+
         );
 
 
@@ -73,6 +78,8 @@ function leerTrackers(){
 
 
 
+
+
 // ======================
 // GUARDAR TRACKERS
 // ======================
@@ -80,6 +87,7 @@ function leerTrackers(){
 function guardarTrackers(trackers){
 
     try{
+
 
         fs.writeFileSync(
 
@@ -101,11 +109,13 @@ function guardarTrackers(trackers){
 
     }catch(error){
 
+
         console.log(
             "ERROR GUARDANDO TRACKERS:",
             error.message
         );
 
+
     }
 
 }
@@ -113,57 +123,52 @@ function guardarTrackers(trackers){
 
 
 
+
+
 // ======================
-// OBTENER SERVIDOR
+// SERVIDOR
 // ======================
 
 async function obtenerServidor(serverId){
 
-    try{
+
+try{
 
 
-        const response =
-        await axios.get(
+const response =
+await axios.get(
 
-            `https://api.battlemetrics.com/servers/${serverId}`,
+`https://api.battlemetrics.com/servers/${serverId}`,
 
-            bmHeaders()
+bmHeaders()
 
-        );
-
-
-
-        return {
-
-            nombre:
-
-            response.data.data.attributes.name
-
-        };
+);
 
 
-    }catch(error){
+
+return {
+
+nombre:
+
+response.data.data.attributes.name
+
+};
 
 
-        console.log(
 
-            "ERROR SERVIDOR:",
-
-            error.response?.data ||
-            error.message
-
-        );
+}catch(error){
 
 
-        return {
+return {
 
-            nombre:
-            "Servidor Rust"
+nombre:
+"Servidor Rust"
 
-        };
+};
 
 
-    }
+}
+
 
 }
 
@@ -171,205 +176,236 @@ async function obtenerServidor(serverId){
 
 
 
+
+
+
 // ======================
-// OBTENER SESION JUGADOR
+// JUGADOR + PLAYTIME
 // ======================
 
 async function obtenerJugadorServidor(
-    serverId,
-    playerId,
-    intentos = 2
+
+serverId,
+
+playerId,
+
+intentos = 2
+
 ){
 
-    try{
 
+try{
 
-        console.log(
 
-            `🔎 Revisando ${playerId} en ${serverId}`
+console.log(
 
-        );
+`🔎 Revisando ${playerId} en ${serverId}`
 
+);
 
 
-        const response =
-        await axios.get(
 
-            `https://api.battlemetrics.com/players/${playerId}/sessions`,
 
-            {
 
-                ...bmHeaders(),
+const response =
+await axios.get(
 
-                params:{
+`https://api.battlemetrics.com/players/${playerId}/relationships/sessions`,
 
-                    "filter[servers]":
-                    serverId
+bmHeaders()
 
-                }
+);
 
-            }
 
-        );
 
 
 
-        const sesiones =
-        response.data.data || [];
+const sesiones =
+response.data.data || [];
 
 
 
-        const activa =
-        sesiones.find(
 
-            s =>
 
-            s.attributes.stop === null
+const sesionActiva =
 
-        );
+sesiones.find(
 
+s =>
 
+s.attributes?.stop === null
 
-        if(!activa){
+);
 
 
-            return {
 
-                online:false,
 
-                playtime:"0:00"
 
-            };
 
+if(!sesionActiva){
 
-        }
 
+return {
 
+online:false,
 
+playtime:"0:00"
 
+};
 
-        const inicio =
-        new Date(
-
-            activa.attributes.start
-
-        );
-
-
-
-        const ahora =
-        new Date();
-
-
-
-        const diferencia =
-        ahora - inicio;
-
-
-
-        const horas =
-        Math.floor(
-
-            diferencia /
-            3600000
-
-        );
-
-
-
-        const minutos =
-        Math.floor(
-
-            (diferencia % 3600000)
-            /
-            60000
-
-        );
-
-
-
-        return {
-
-
-            online:true,
-
-
-            playtime:
-
-            `${horas}:${minutos.toString().padStart(2,"0")}`
-
-
-        };
-
-
-
-
-    }catch(error){
-
-
-
-        if(intentos > 0){
-
-
-            console.log(
-
-                "⚠ BattleMetrics ocupado, reintentando..."
-
-            );
-
-
-
-            await new Promise(
-
-                resolve =>
-
-                setTimeout(
-                    resolve,
-                    2000
-                )
-
-            );
-
-
-
-            return obtenerJugadorServidor(
-
-                serverId,
-
-                playerId,
-
-                intentos - 1
-
-            );
-
-
-        }
-
-
-
-        console.log(
-
-            "❌ ERROR SESION BM:",
-
-            error.response?.data ||
-            error.message
-
-        );
-
-
-
-        return {
-
-            online:null,
-
-            playtime:"0:00"
-
-        };
-
-
-    }
 
 }
+
+
+
+
+
+
+
+const inicio =
+
+new Date(
+
+sesionActiva.attributes.start
+
+);
+
+
+
+
+const ahora =
+
+new Date();
+
+
+
+
+const diferencia =
+
+ahora - inicio;
+
+
+
+
+
+const horas =
+
+Math.floor(
+
+diferencia / 3600000
+
+);
+
+
+
+
+
+const minutos =
+
+Math.floor(
+
+(diferencia % 3600000)
+
+/
+
+60000
+
+);
+
+
+
+
+
+
+return {
+
+online:true,
+
+playtime:
+
+`${horas}:${minutos.toString().padStart(2,"0")}`
+
+};
+
+
+
+}catch(error){
+
+
+
+if(intentos > 0){
+
+
+console.log(
+
+"⚠ BattleMetrics ocupado, reintentando..."
+
+);
+
+
+
+await new Promise(
+
+resolve =>
+
+setTimeout(
+resolve,
+2000
+)
+
+);
+
+
+
+
+return obtenerJugadorServidor(
+
+serverId,
+
+playerId,
+
+intentos - 1
+
+);
+
+
+}
+
+
+
+
+
+console.log(
+
+"❌ ERROR SESION BM:",
+
+error.response?.data ||
+
+error.message
+
+);
+
+
+
+
+return {
+
+online:null,
+
+playtime:"0:00"
+
+};
+
+
+
+}
+
+
+
+}
+
+
+
 
 
 
@@ -383,40 +419,47 @@ async function obtenerJugadorServidor(
 function tiempoRestante(expira){
 
 
-    const diferencia =
-    expira - Date.now();
+const diferencia =
+
+expira - Date.now();
 
 
 
-    if(diferencia <= 0)
 
-        return "Expirado";
+if(diferencia <= 0)
 
-
-
-    const horas =
-    Math.floor(
-
-        diferencia / 3600000
-
-    );
+return "Expirado";
 
 
 
-    const minutos =
-    Math.floor(
 
-        (diferencia % 3600000)
-        /
-        60000
+const horas =
 
-    );
+Math.floor(
+
+diferencia / 3600000
+
+);
 
 
 
-    return `${horas}h ${minutos}m`;
+
+const minutos =
+
+Math.floor(
+
+(diferencia % 3600000) / 60000
+
+);
+
+
+
+
+return `${horas}h ${minutos}m`;
 
 }
+
+
 
 
 
@@ -432,300 +475,325 @@ async function revisarTrackers(client){
 
 
 
-    let trackers =
-    leerTrackers();
+let trackers =
 
+leerTrackers();
 
 
-    trackers =
-    trackers.filter(
 
-        tracker =>
 
-        tracker.expiresAt > Date.now()
 
-    );
+trackers =
 
+trackers.filter(
 
+tracker =>
 
+tracker.expiresAt > Date.now()
 
+);
 
-    for(const tracker of trackers){
 
 
 
-        if(
-            tracker.playerName ===
-            "Jugador desconocido"
-        )
 
-            continue;
 
+for(const tracker of trackers){
 
 
 
+console.log(
 
-        console.log(
+`🔎 Revisando ${tracker.playerName}`
 
-            `🔎 Revisando ${tracker.playerName}`
+);
 
-        );
 
 
 
 
 
-        const jugador =
+const jugador =
 
-        await obtenerJugadorServidor(
+await obtenerJugadorServidor(
 
-            tracker.serverId,
+tracker.serverId,
 
-            tracker.playerId
+tracker.playerId
 
-        );
+);
 
 
 
 
 
-        if(jugador.online === null)
+if(jugador.online === null)
 
-            continue;
+continue;
 
 
 
 
 
-        const estado =
+const estado =
 
-        jugador.online
+jugador.online
 
-        ?
+?
 
-        "ONLINE"
+"ONLINE"
 
-        :
+:
 
-        "OFFLINE";
+"OFFLINE";
 
 
 
 
 
-        console.log(
+console.log(
 
-            `${tracker.playerName}: ${estado}`
+`${tracker.playerName}: ${estado}`
 
-        );
+);
 
 
 
 
 
-        if(
 
-            tracker.lastState !== estado
 
-        ){
+if(tracker.lastState !== estado){
 
 
 
-            const servidor =
 
-            await obtenerServidor(
 
-                tracker.serverId
+const servidor =
 
-            );
+await obtenerServidor(
 
+tracker.serverId
 
+);
 
 
-            try{
 
 
 
-                const guild =
 
-                client.guilds.cache.get(
+try{
 
-                    tracker.guildId
 
-                );
 
+const guild =
 
+client.guilds.cache.get(
 
-                if(!guild)
+tracker.guildId
 
-                    continue;
+);
 
 
 
-                const canal =
+if(!guild)
 
-                guild.channels.cache.get(
+continue;
 
-                    tracker.channelId
 
-                );
 
 
 
-                if(!canal)
 
-                    continue;
+const canal =
 
+guild.channels.cache.get(
 
+tracker.channelId
 
+);
 
 
-                const embed =
 
-                new EmbedBuilder()
 
 
-                .setTitle(
+if(!canal)
 
-                    "🎮 Tracker BattleMetrics"
+continue;
 
-                )
 
 
-                .setColor(
 
-                    estado === "ONLINE"
 
-                    ?
 
-                    "#57F287"
 
-                    :
+const embed =
 
-                    "#ED4245"
+new EmbedBuilder()
 
-                )
+.setTitle(
 
+"🎮 Tracker BattleMetrics"
 
-                .setDescription(
+)
 
-                    `👤 **${tracker.playerName}**`
 
-                )
 
+.setColor(
 
-                .addFields(
+estado === "ONLINE"
 
-                    {
+?
 
-                        name:"Estado",
+"#57F287"
 
-                        value:
+:
 
-                        estado === "ONLINE"
+"#ED4245"
 
-                        ?
+)
 
-                        "🟢 ONLINE"
 
-                        :
 
-                        "🔴 OFFLINE"
+.setDescription(
 
-                    },
+`👤 **${tracker.playerName}**`
 
+)
 
-                    {
 
-                        name:"⏱️ Play Time (Sesión)",
 
-                        value:
+.addFields(
 
-                        jugador.playtime
+{
 
-                    },
+name:"Estado",
 
+value:
 
-                    {
+estado === "ONLINE"
 
-                        name:"📡 Servidor",
+?
 
-                        value:
+"🟢 ONLINE"
 
-                        servidor.nombre
+:
 
-                    },
+"🔴 OFFLINE"
 
+},
 
-                    {
 
-                        name:"⌛ Tracker restante",
+{
 
-                        value:
+name:"⏱️ Play Time (Sesión)",
 
-                        tiempoRestante(
-                            tracker.expiresAt
-                        )
+value:
 
-                    }
+jugador.playtime
 
-                )
+},
 
 
-                .setTimestamp();
+{
 
+name:"📡 Servidor",
 
+value:
 
+`||${servidor.nombre}||`
 
-                await canal.send({
+},
 
-                    embeds:[embed]
 
-                });
+{
 
+name:"⌛ Tracker restante",
 
+value:
 
-                console.log(
+tiempoRestante(
 
-                    `📢 Cambio enviado ${tracker.playerName}`
+tracker.expiresAt
 
-                );
+)
 
+}
 
+)
 
-            }catch(error){
 
 
-                console.log(
+.setTimestamp();
 
-                    "ERROR ENVIANDO TRACKER:",
 
-                    error.message
 
-                );
 
 
-            }
 
 
-        }
 
+await canal.send({
 
+embeds:[embed]
 
+});
 
 
-        tracker.lastState =
-        estado;
 
 
 
-    }
+console.log(
 
+`📢 Cambio enviado ${tracker.playerName}`
 
+);
 
 
 
-    guardarTrackers(trackers);
+
+
+}catch(error){
+
+
+
+console.log(
+
+"❌ ERROR ENVIANDO TRACKER:",
+
+error.message
+
+);
+
+
+
+}
+
+
+
+}
+
+
+
+
+
+
+tracker.lastState =
+
+estado;
+
+
+
+
+}
+
+
+
+
+
+
+
+guardarTrackers(trackers);
 
 
 
@@ -737,6 +805,6 @@ async function revisarTrackers(client){
 
 module.exports = {
 
-    revisarTrackers
+revisarTrackers
 
 };
