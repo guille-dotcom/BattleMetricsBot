@@ -30,21 +30,26 @@ module.exports = {
         }
 
         try {
-            // URL CORREGIDA: Ahora incluye correctamente /players?filter antes de los corchetes
-            const url = `https://battlemetrics.com[search]=${steamId}&include=server,session`;
+            // URL limpia base de la API sin parámetros pegados en el texto
+            const url = 'https://battlemetrics.com';
             
+            // Pasamos los filtros de forma estructurada para evitar fallos de formato de Axios
             const response = await axios.get(url, {
                 headers: {
                     'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}`
+                },
+                params: {
+                    'filter[search]': steamId,
+                    'include': 'server,session'
                 }
             });
 
-            // Si el array de data viene vacío
-            if (!response.data.data || response.data.data.length === 0) {
+            // Si el array de data viene vacío o no existe
+            if (!response.data || !response.data.data || response.data.data.length === 0) {
                 return interaction.editReply('❌ No se encontró ningún registro de ese jugador en BattleMetrics.');
             }
 
-            const playerData = response.data.data[0]; // Tomamos el primer resultado devuelto de la lista
+            const playerData = response.data.data[0]; // Tomamos explícitamente el primer jugador
             const includedData = response.data.included || [];
 
             const playerName = playerData.attributes.name;
@@ -102,7 +107,7 @@ module.exports = {
             await interaction.editReply({ embeds: [trackerEmbed] });
 
         } catch (error) {
-            console.error(error);
+            console.error('Error detallado en la ejecución:', error.message);
             await interaction.editReply('⚠️ Ocurrió un error al conectar con la API de BattleMetrics o procesar los datos.');
         }
     },
