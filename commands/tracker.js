@@ -43,27 +43,30 @@ module.exports = {
         }
 
         try {
-            // STEP 1: Resolver la SteamID64 convirtiéndola en Player ID interno mediante endpoint limpio
-            const searchUrl = 'https://battlemetrics.com';
-            const searchResponse = await axios.get(searchUrl, {
+            // ENDPOINT SEGURO: Buscamos al jugador dentro de las relaciones del servidor para esquivar el error 403
+            const url = `https://battlemetrics.com{battleMetricsServerId}/relationships/players`;
+            
+            const response = await axios.get(url, {
                 headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` },
                 params: {
-                    'filter[identifiers][type]': 'steamId',
-                    'filter[identifiers][value]': steamId,
-                    'filter[servers]': battleMetricsServerId,
-                    'include': 'server,session'
+                    'filter[search]': steamId,
+                    'include': 'session' // Traemos la info de su sesión actual
                 }
             });
 
-            if (!searchResponse.data || !searchResponse.data.data || searchResponse.data.data.length === 0) {
-                return interaction.editReply('❌ No se encontró ningún registro de esa SteamID64 dentro de nuestro servidor de Rust.');
+            if (!response.data || !response.data.data || response.data.data.length === 0) {
+                return interaction.editReply('❌ No se encontró ningún registro de actividad de esa SteamID64 en nuestro servidor de Rust.');
             }
 
-            const playerData = searchResponse.data.data[0];
-            const incluidos = searchResponse.data.included || [];
-            const playerName = playerData.attributes.name;
+            // Mapeamos los datos del jugador encontrado dentro de tu servidor
+            const serverPlayerData = response.data.data[0];
+            const incluidos = response.data.included || [];
+            
+            // Extraer nombre y el ID único del jugador
+            const playerName = serverPlayerData.attributes.name;
+            const bmPlayerId = serverPlayerData.id;
 
-            // STEP 2: Buscar sesión activa y calcular el Play Time de forma directa
+            // Revisamos si tiene una sesión activa en los datos incluidos
             const sesionActiva = incluidos.find(s => 
                 s.type === "session" && 
                 String(s.relationships?.server?.data?.id) === String(battleMetricsServerId) && 
@@ -84,36 +87,29 @@ module.exports = {
                 const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60));
                 playtimeFormateado = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
             } else {
-                // Si está offline, buscamos la última sesión guardada para ver cuándo se desconectó
-                const ultimaSesión = incluidos.find(s => 
+                // Si está offline, miramos los metadatos para ver su última sesión en tu mapa
+                const ultimaSesion = incluidos.find(s => 
                     s.type === "session" && 
                     String(s.relationships?.server?.data?.id) === String(battleMetricsServerId)
                 );
-                if (ultimaSesión && ultimaSesión.attributes?.stop) {
-                    const lastTime = new Date(ultimaSesión.attributes.stop).toLocaleString('es-ES');
+                if (ultimaSesion && ultimaSesion.attributes?.stop) {
+                    const lastTime = new Date(ultimaSesion.attributes.stop).toLocaleString('es-ES');
                     playtimeFormateado = `Última vez visto: ${lastTime}`;
                 }
             }
 
-            // Conseguir el nombre del servidor para el spoiler
+            // Marcamos el spoiler para ocultar el servidor (Buscamos el nombre del server en la config)
             let serverName = "Nuestro Servidor de Rust";
-            const serverInfo = incluidos.find(s => s.type === "server" && String(s.id) === String(battleMetricsServerId));
-            if (serverInfo && serverInfo.attributes?.name) {
-                serverName = serverInfo.attributes.name;
-            }
-
-            const hiddenServerText = `||${serverName}||`;
-
             const trackerEmbed = new EmbedBuilder()
                 .setColor(embedColor)
                 .setTitle(`🎯 Monitoreo de Jugador: ${playerName}`)
-                .setURL(`https://battlemetrics.com{playerData.id}`)
+                .setURL(`https://battlemetrics.com{bmPlayerId}`)
                 .addFields(
                     { name: '👤 Nombre detectado', value: playerName, inline: true },
                     { name: '🆔 SteamID64', value: `\`${steamId}\``, inline: true },
                     { name: '📊 Estado', value: statusText, inline: true },
                     { name: '⏱️ Play time (Sesión)', value: `\`${playtimeFormateado}\``, inline: true },
-                    { name: '🖥️ Servidor actual (Haz click para revelar)', value: hiddenServerText, inline: false }
+                    { name: '🖥️ Servidor actual (Haz click para revelar)', value: `||ID Servidor: ${battleMetricsServerId}||`, inline: false }
                 )
                 .setTimestamp()
                 .setFooter({ text: `${interaction.guild.name} - Control Interno` });
@@ -121,8 +117,8 @@ module.exports = {
             await interaction.editReply({ embeds: [trackerEmbed] });
 
         } catch (error) {
-            console.error('ERROR EN COMANDO TRACKER DIRECTO:', error.message);
-            await interaction.editReply('⚠️ Ocurrió un error inesperado al procesar el comando con BattleMetrics.');
+            console.error('ERROR EN COMANDO TRACKER SEGURO:', error.message);
+            await interaction.editReply('⚠️ Ocurrió un error inesperado al procesar la solicitud con el endpoint interno de BattleMetrics.');
         }
     },
 };
