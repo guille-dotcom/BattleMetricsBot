@@ -1,3 +1,4 @@
+require("dotenv").config(); // <-- LÍNEA IMPORTANTE AÑADIDA PARA CARGAR EL TOKEN
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js"); 
 const fs = require("fs"); 
 const path = require("path"); 
@@ -16,7 +17,6 @@ module.exports = {
     ), 
 
   async execute(interaction) { 
-    // Hacemos que la respuesta sea pública para todo el chat quitando los filtros ocultos
     await interaction.deferReply(); 
     const playerId = String(interaction.options.getString("id")); 
 
@@ -94,7 +94,7 @@ module.exports = {
     };
 
     try { 
-      // 1. Conseguir datos de la sesión del jugador usando comillas invertidas correctas
+      // 1. Conseguir datos de la sesión del jugador
       const resBM = await axios.get(`https://battlemetrics.com{serverId}`, { headers, params: { include: "session" } }); 
       const incluidos = resBM.data.included || []; 
       
@@ -113,13 +113,13 @@ module.exports = {
         tiempoSesion = `${horas}:${minutos.toString().padStart(2, '0')}`;
       }
 
-      // 2. Conseguir el nombre real del jugador desde su perfil de BattleMetrics
+      // 2. Conseguir el nombre real del jugador
       const resPlayer = await axios.get(`https://battlemetrics.com{playerId}`, { headers });
       if(resPlayer.data?.data?.attributes?.name) {
         nombreJugador = resPlayer.data.data.attributes.name;
       }
 
-      // 3. Conseguir el nombre real del servidor de Rust
+      // 3. Conseguir nombre real del servidor
       if(resBM.data?.data?.attributes?.name) {
         nombreServidor = resBM.data.data.attributes.name;
       }
@@ -139,7 +139,7 @@ module.exports = {
       serverId: serverId, 
       playerId: playerId, 
       playerName: nombreJugador, 
-      lastState: estado, // Sincroniza el estado actual para evitar alertas dobles
+      lastState: estado, 
       createdAt: ahora, 
       expiresAt: expira 
     }; 
@@ -168,10 +168,7 @@ module.exports = {
       ) 
       .setTimestamp(); 
 
-    // ====================== // 
-    // RESPUESTA UNIFICADA (TEXTO + EMBED) // 
-    // ====================== // 
-    // Enviamos el texto arriba y adjuntamos el recuadro justo debajo en un solo mensaje
+    // Respuesta unificada
     await interaction.editReply({ 
       content: `✅ **Tracker creado correctamente**\n\n` + 
                `👤 Jugador: **${nombreJugador}**\n` + 
