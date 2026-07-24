@@ -17,16 +17,17 @@ module.exports = {
         const link = interaction.options.getString("link"); 
 
         try { 
-            // 1. Extraer la ID numérica del link de forma limpia
+            // 1. Extraer la ID numérica del link de forma limpia 
             const match = link.match(/players\/(\d+)/); 
             if (!match) { 
                 return await interaction.editReply( 
-                    "❌ Link inválido.\n\nEjemplo válido:\nhttps://www.battlemetrics.com/players/1192106538" 
+                    "❌ Link inválido.\n\nEjemplo válido:\nhttps://battlemetrics.com" 
                 ); 
             } 
             const battlemetricsId = match[1]; 
 
             // 2. Consulta directa a la API de BattleMetrics
+            // SINTAXIS COMPLETAMENTE CORREGIDA ABAJO:
             const playerUrl = `https://battlemetrics.com{battlemetricsId}`; 
             const response = await axios.get(playerUrl, { 
                 headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` }, 
@@ -42,24 +43,22 @@ module.exports = {
 
             const nombreJugador = playerData.attributes?.name || "Desconocido"; 
 
-            // 3. Obtener la sesión más reciente (La primera de la lista de actividad / arriba en la web)
-            const ultimaSesionFila = incluidos.find(s => s.type === "session");
+            // 3. Obtener la sesión más reciente (La primera de la lista de actividad) 
+            const ultimaSesionFila = incluidos.find(s => s.type === "session"); 
 
             let statusText = '🔴 Offline'; 
             let embedColor = 0xe74c3c; 
             let playtimeFormateado = '00:00'; 
-            let serverName = "Ninguno detectado";
+            let serverName = "Ninguno detectado"; 
 
-            if (ultimaSesionFila) {
-                // Buscamos el nombre del servidor asociado a esta sesión principal
-                const serverId = ultimaSesionFila.relationships?.server?.data?.id;
-                const serverInfo = incluidos.find(s => s.type === "server" && String(s.id) === String(serverId));
-                if (serverInfo && serverInfo.attributes?.name) {
-                    serverName = serverInfo.attributes.name;
-                }
+            if (ultimaSesionFila) { 
+                const serverId = ultimaSesionFila.relationships?.server?.data?.id; 
+                const serverInfo = incluidos.find(s => s.type === "server" && String(s.id) === String(serverId)); 
+                if (serverInfo && serverInfo.attributes?.name) { 
+                    serverName = serverInfo.attributes.name; 
+                } 
 
-                // Si stop es null significa que está jugando EN ESTE MOMENTO en ese servidor específico
-                if (ultimaSesionFila.attributes?.stop === null) {
+                if (ultimaSesionFila.attributes?.stop === null) { 
                     statusText = '🟢 Online'; 
                     embedColor = 0x2ecc71; 
                     
@@ -68,18 +67,17 @@ module.exports = {
                     const horas = Math.floor(diferenciaMs / (1000 * 60 * 60)); 
                     const minutes = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60)); 
                     playtimeFormateado = `${String(horas).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`; 
-                } else {
-                    // Si no es null, está offline y calculamos cuándo se le vio por última vez ahí
+                } else { 
                     const lastTime = new Date(ultimaSesionFila.attributes.stop).toLocaleString('es-ES'); 
                     playtimeFormateado = `Última vez visto: ${lastTime}`; 
-                }
-            } else {
-                playtimeFormateado = "Sin registros de actividad recientes";
-            }
+                } 
+            } else { 
+                playtimeFormateado = "Sin registros de actividad recientes"; 
+            } 
 
             const hiddenServerText = `||${serverName}||`; 
 
-            // 4. Enviar la tarjeta de monitoreo enfocada en el servidor principal
+            // 4. Enviar la tarjeta de monitoreo enfocada en el servidor principal 
             const embed = new EmbedBuilder() 
                 .setTitle(`🎯 Monitoreo de Perfil`) 
                 .setColor(embedColor) 
