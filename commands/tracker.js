@@ -5,7 +5,7 @@ const path = require('path');
 
 const file = path.join(__dirname, '..', 'data', 'config.json');
 const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN; 
-const STEAM_API_KEY = process.env.STEAM_API_KEY; // Usamos tu clave de Steam configurada
+const STEAM_API_KEY = process.env.STEAM_API_KEY; 
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -44,17 +44,28 @@ module.exports = {
             return interaction.editReply('❌ Por favor, introduce una SteamID64 válida de 17 dígitos.');
         }
 
+        // Validación de que tengas agregada la clave de Steam en Render
+        if (!STEAM_API_KEY) {
+            return interaction.editReply('⚠️ Error interno: Falta la variable STEAM_API_KEY en la configuración de Render.');
+        }
+
         try {
-            // STEP A: Consultar a la API oficial de Steam para obtener el nombre actual real del usuario
-            const steamUrl = `https://steampowered.com{STEAM_API_KEY}&steamids=${steamId}`;
-            const steamResponse = await axios.get(steamUrl);
+            // STEP A: Consultar a la API oficial de Steam usando parámetros estructurados sin corchetes de texto
+            const steamUrl = 'https://steampowered.com';
+            const steamResponse = await axios.get(steamUrl, {
+                params: {
+                    key: STEAM_API_KEY,
+                    steamids: steamId
+                }
+            });
             
-            const players = steamResponse.data.response.players;
+            const players = steamResponse.data?.response?.players;
             if (!players || players.length === 0) {
                 return interaction.editReply('❌ No se encontró ningún perfil de Steam válido asociado a esa SteamID64.');
             }
             
-            const steamName = players[0].personaname; // Nombre real exacto en Steam
+            // Extraer el nombre real actual de la cuenta
+            const steamName = players[0].personaname; 
 
             // STEP B: Buscar ese nombre en BattleMetrics filtrando ÚNICAMENTE por tu servidor configurado
             const bmUrl = 'https://battlemetrics.com';
@@ -71,7 +82,7 @@ module.exports = {
                 return interaction.editReply(`❌ El jugador **${steamName}** no tiene ningún registro de actividad en nuestro servidor de Rust.`);
             }
 
-            // Tomamos el jugador exacto de los resultados filtrados por tu servidor
+            // Tomamos el primer jugador encontrado que calce con el filtro de tu servidor
             const playerData = response.data.data[0]; 
             const includedData = response.data.included || [];
             const playerName = playerData.attributes.name;
@@ -106,7 +117,7 @@ module.exports = {
                     embedColor = 0x34495e; 
                 }
             } else {
-                return interaction.editReply(`❌ El jugador **${playerName}** no tiene registros en nuestro servidor de Rust.`);
+                return interaction.editReply(`❌ El jugador **${playerName}** no tiene registros de sesión en nuestro servidor de Rust.`);
             }
 
             const trackerEmbed = new EmbedBuilder()
