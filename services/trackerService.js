@@ -4,9 +4,6 @@ const axios = require("axios");
 const { EmbedBuilder } = require("discord.js"); 
 const trackersFile = path.join(__dirname, "..", "data", "trackers.json"); 
 
-// ====================== // 
-// HEADERS BM // 
-// ====================== // 
 function bmHeaders(){ 
   return { 
     headers:{ 
@@ -16,34 +13,19 @@ function bmHeaders(){
   }; 
 } 
 
-// ====================== // 
-// LEER TRACKERS // 
-// ====================== // 
 function leerTrackers(){ 
   try{ 
     if(!fs.existsSync(trackersFile)) return []; 
     return JSON.parse(fs.readFileSync(trackersFile, "utf8")); 
   }catch(error){ 
-    console.log("ERROR LEYENDO TRACKERS:", error.message); 
     return []; 
   } 
 } 
 
-// ====================== // 
-// GUARDAR TRACKERS // 
-// ====================== // 
 function guardarTrackers(trackers){ 
-  try{ 
-    fs.writeFileSync(trackersFile, JSON.stringify(trackers, null, 2)); 
-    console.log("💾 Trackers guardados"); 
-  }catch(error){ 
-    console.log("ERROR GUARDANDO TRACKERS:", error.message); 
-  } 
+  try{ fs.writeFileSync(trackersFile, JSON.stringify(trackers, null, 2)); }catch(error){} 
 } 
 
-// ====================== // 
-// OBTENER SERVIDOR // 
-// ====================== // 
 async function obtenerServidor(serverId){ 
   try { 
     const idSana = "433255";
@@ -54,21 +36,10 @@ async function obtenerServidor(serverId){
   } 
 } 
 
-// ====================== // 
-// JUGADORES ONLINE + SESIÓN // 
-// ====================== // 
 async function obtenerJugadorServidor(serverId, playerId, intentos = 2){ 
   try { 
     const idSana = "433255";
-    
-    const response = await axios.get(
-      `https://battlemetrics.com{idSana}`, 
-      { 
-        ...bmHeaders(), 
-        params: { include: "session" } 
-      } 
-    ); 
-
+    const response = await axios.get(`https://battlemetrics.com{idSana}`, { ...bmHeaders(), params: { include: "session" } }); 
     const incluidos = response.data.included || []; 
     
     const sesionActiva = incluidos.find(s => 
@@ -77,19 +48,13 @@ async function obtenerJugadorServidor(serverId, playerId, intentos = 2){
       s.attributes?.stop === null 
     );
 
-    if (!sesionActiva) { 
-      return { online: false, playtime: "0:00" }; 
-    } 
+    if (!sesionActiva) return { online: false, playtime: "0:00" }; 
 
     const horaConexion = new Date(sesionActiva.attributes.start);
-    const horaActual = new Date();
-    const diferenciaMs = horaActual - horaConexion;
-
+    const diferenciaMs = new Date() - horaConexion;
     const horas = Math.floor(diferenciaMs / (1000 * 60 * 60));
     const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60));
-    const tiempoFormateado = `${horas}:${minutos.toString().padStart(2, '0')}`;
-
-    return { online: true, playtime: tiempoFormateado }; 
+    return { online: true, playtime: `${horas}:${minutos.toString().padStart(2, '0')}` }; 
   } catch(error) { 
     if (intentos > 0) {
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -99,9 +64,6 @@ async function obtenerJugadorServidor(serverId, playerId, intentos = 2){
   } 
 } 
 
-// ====================== // 
-// TIEMPO RESTANTE // 
-// ====================== // 
 function tiempoRestante(expira){ 
   const diferencia = expira - Date.now(); 
   if(diferencia <= 0) return "Expirado"; 
@@ -110,37 +72,18 @@ function tiempoRestante(expira){
   return `${horas}h ${minutos}m`; 
 } 
 
-// ====================== // 
-// REVISAR TRACKERS AUTO // 
-// ====================== // 
 async function revisarTrackers(client){ 
   let trackers = leerTrackers(); 
   trackers = trackers.filter(tracker => tracker.expiresAt > Date.now()); 
 
   for(const tracker of trackers){ 
-    console.log(`🔎 Revisando ${tracker.playerName}`); 
     const jugador = await obtenerJugadorServidor(tracker.serverId, tracker.playerId); 
-    
     if (jugador.online === null) continue;
 
     const estado = jugador.online ? "ONLINE" : "OFFLINE"; 
 
+    // Alertas estrictas POR CAMBIO DE ESTADO REAL posterior al comando
     if(tracker.lastState !== estado){ 
-      let nombreReal = tracker.playerName;
-
-      // CLAVE DE LA SOLUCIÓN: Si el nombre está genérico como "Jugador (ID)", consultamos rápido el nombre real en BattleMetrics
-      if (!nombreReal || nombreReal.includes("Jugador (")) {
-        try {
-          const resPlayer = await axios.get(`https://battlemetrics.com{tracker.playerId}`, bmHeaders());
-          if (resPlayer.data?.data?.attributes?.name) {
-            nombreReal = resPlayer.data.data.attributes.name;
-            tracker.playerName = nombreReal; // Lo actualizamos en la base de datos para las siguientes alertas
-          }
-        } catch (err) {
-          console.log("Error extrayendo nombre real de fondo:", err.message);
-        }
-      }
-
       const servidor = await obtenerServidor(tracker.serverId); 
       try { 
         const guild = client.guilds.cache.get(tracker.guildId); if(!guild) continue; 
@@ -149,7 +92,7 @@ async function revisarTrackers(client){
         const embed = new EmbedBuilder() 
           .setTitle("🎮 Tracker BattleMetrics") 
           .setColor(estado === "ONLINE" ? "#57F287" : "#ED4245") 
-          .setDescription(`👤 **${nombreReal}**`) // <-- Aquí se pinta el nombre real (Ej: HankTheTank)
+          .setDescription(`👤 **${tracker.trackerName || tracker.playerName}**`) 
           .addFields( 
             { name: "Estado", value: estado === "ONLINE" ? "🟢 ONLINE" : "🔴 OFFLINE" }, 
             { name: "⏱️ Play Time (Sesión)", value: jugador.playtime }, 
@@ -159,10 +102,7 @@ async function revisarTrackers(client){
           .setTimestamp(); 
 
         await canal.send({ embeds:[embed] }); 
-        console.log(`📢 Cambio enviado ${nombreReal}`); 
-      } catch(error) { 
-        console.log("❌ ERROR ENVIANDO TRACKER:", error.message); 
-      } 
+      } catch(error) {} 
     } 
     tracker.lastState = estado; 
   } 

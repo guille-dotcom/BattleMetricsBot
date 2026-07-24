@@ -1,7 +1,8 @@
 require("dotenv").config(); 
-const { SlashCommandBuilder } = require("discord.js"); 
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js"); 
 const fs = require("fs"); 
 const path = require("path"); 
+const axios = require("axios"); 
 
 const file = path.join(__dirname, "..", "data", "trackers.json"); 
 
@@ -16,13 +17,13 @@ module.exports = {
     ), 
 
   async execute(interaction) { 
-    // Hacemos que la confirmación inicial sea rápida
+    // Hacemos la respuesta pública para todo el chat
     await interaction.deferReply(); 
     let inputId = interaction.options.getString("id"); 
 
     // Extractor inteligente de la ID del jugador
     const coincidenciaLink = inputId.match(/players\/(\d+)/);
-    const playerId = coincidenciaLink ? coincidenciaLink[1] : inputId.replace(/\D/g, "");
+    const playerId = coincidenciaLink ? coincidenciaLink : inputId.replace(/\D/g, "");
 
     if (!playerId) {
       return interaction.editReply("❌ La ID o el enlace de BattleMetrics que proporcionaste no es válido.");
@@ -55,7 +56,58 @@ module.exports = {
       return interaction.editReply("⚠️ Este jugador ya está siendo monitoreado."); 
     } 
 
-    // Guardar en la base de datos local
+    // Variables por defecto si falla la API
+    let nombreJugador = `Jugador (${playerId})`; 
+    let estado = "OFFLINE";
+    let tiempoSesion = "0:00";
+    let nombreServidor = "Servidor Rustafied";
+
+    const apiToken = process.env.BATTLEMETRICS_TOKEN || process.env.TOKEN;
+    const headers = { Authorization: `Bearer ${apiToken}`, Accept: "application/json" };
+
+    // CONSULTA INMEDIATA Y SEGURA AL INSTANTE
+    try { 
+      // 1. Consultar el perfil del jugador primero para asegurar el nombre real pase lo que pase
+      try {
+        const resPlayer = await axios.get(`https://battlemetrics.com{playerId}`, { headers });
+        if(resPlayer.data?.data?.attributes?.name) {
+          nombreJugador = resPlayer.data.data.attributes.name;
+        }
+      } catch (e) {
+        console.log("Error consultando nombre del jugador en comando:", e.message);
+      }
+
+      // 2. Consultar el servidor e incluir las sesiones para calcular el tiempo
+      const resBM = await axios.get("https://battlemetrics.com", { 
+        headers, 
+        params: { include: "session" } 
+      }); 
+
+      const incluidos = resBM.data.included || []; 
+      
+      const sesionActiva = incluidos.find(s => 
+        s.type === "session" && 
+        s.relationships?.player?.data?.id === String(playerId) && 
+        s.attributes?.stop === null 
+      );
+
+      if (sesionActiva && sesionActiva.attributes?.start) { 
+        estado = "ONLINE";
+        const horaConexion = new Date(sesionActiva.attributes.start); 
+        const diferenciaMs = new Date() - horaConexion; 
+        const horas = Math.floor(diferenciaMs / (1000 * 60 * 60));
+        const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60));
+        tiempoSesion = `${horas}:${minutos.toString().padStart(2, '0')}`;
+      }
+
+      if(resBM.data?.data?.attributes?.name) {
+        nombreServidor = resBM.data.data.attributes.name;
+      }
+    } catch(error) { 
+      console.log("❌ FALLO DE API CONTROLADO EN ENTRADA:", error.message); 
+    } 
+
+    // Guardar en la base de datos local (con el estado actual real para que el servicio de fondo no duplique)
     const ahora = Date.now(); 
     const expira = ahora + (24 * 60 * 60 * 1000); 
 
@@ -64,8 +116,8 @@ module.exports = {
       channelId: String(interaction.channel.id), 
       serverId: serverId, 
       playerId: playerId, 
-      playerName: `Jugador (${playerId})`, // El bucle automático actualizará el nombre real en segundos
-      lastState: "UNKNOWN", // Forzamos UNKNOWN para que el bucle dispare la primera alerta real al instante
+      playerName: nombreJugador, 
+      lastState: estado, // Al guardar ONLINE u OFFLINE real, el fondo no enviará nada hasta que cambie
       createdAt: ahora, 
       expiresAt: expira 
     }; 
@@ -79,11 +131,20 @@ module.exports = {
       return interaction.editReply("❌ Error guardando el tracker."); 
     } 
 
-    // Mensaje simple de confirmación para evitar el doble recuadro
-    await interaction.editReply({ 
-      content: `✅ **Seguimiento iniciado con éxito**\n` + 
-               `🆔 BattleMetrics ID: \`${playerId}\`\n` + 
-               `📋 El bot comenzará a enviar las alertas de estado en este canal de inmediato.`
-    }); 
+    // Renderizar un ÚNICO Embed público con todo resuelto
+    const embed = new EmbedBuilder() 
+      .setTitle("🎮 Tracker BattleMetrics") 
+      .setColor(estado === "ONLINE" ? "#57F287" : "#ED4245") 
+      .setDescription(`👤 **${nombreJugador}**`) 
+      .addFields( 
+        { name: "Estado", value: estado === "ONLINE" ? "🟢 ONLINE" : "🔴 OFFLINE" }, 
+        { name: "⏱️ Play Time (Sesión)", value: tiempoSesion }, 
+        { name: "📡 Servidor", value: `||${nombreServidor}||` }, // Spoiler activado
+        { name: "⌛ Tracker restante", value: "23h 59m" } 
+      ) 
+      .setTimestamp(); 
+
+    // Enviamos solo el recuadro limpio, eliminando textos de confirmación extra de arriba
+    await interaction.editReply({ embeds: [embed] }); 
   } 
 };
