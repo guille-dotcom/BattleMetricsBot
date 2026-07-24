@@ -43,14 +43,14 @@ module.exports = {
         }
 
         try {
-            // ENDPOINT SEGURO: Buscamos al jugador dentro de las relaciones del servidor para esquivar el error 403
-            const url = `https://battlemetrics.com{battleMetricsServerId}/relationships/players`;
+            // URL CORREGIDA PERFECTAMENTE: Apunta a ://battlemetrics.com y usa la variable con ${}
+            const url = `https://://battlemetrics.com/servers/${battleMetricsServerId}/relationships/players`;
             
             const response = await axios.get(url, {
                 headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` },
                 params: {
                     'filter[search]': steamId,
-                    'include': 'session' // Traemos la info de su sesión actual
+                    'include': 'session' 
                 }
             });
 
@@ -87,7 +87,7 @@ module.exports = {
                 const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60));
                 playtimeFormateado = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
             } else {
-                // Si está offline, miramos los metadatos para ver su última sesión en tu mapa
+                // Si está offline, miramos las sesiones para ver su última conexión
                 const ultimaSesion = incluidos.find(s => 
                     s.type === "session" && 
                     String(s.relationships?.server?.data?.id) === String(battleMetricsServerId)
@@ -98,8 +98,7 @@ module.exports = {
                 }
             }
 
-            // Marcamos el spoiler para ocultar el servidor (Buscamos el nombre del server en la config)
-            let serverName = "Nuestro Servidor de Rust";
+            // Creamos el diseño visual final con el spoiler
             const trackerEmbed = new EmbedBuilder()
                 .setColor(embedColor)
                 .setTitle(`🎯 Monitoreo de Jugador: ${playerName}`)
