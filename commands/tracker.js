@@ -27,7 +27,6 @@ module.exports = {
             const battlemetricsId = match[1]; 
 
             // 2. Consulta directa a la API de BattleMetrics
-            // SINTAXIS COMPLETAMENTE CORREGIDA ABAJO:
             const playerUrl = `https://battlemetrics.com{battlemetricsId}`; 
             const response = await axios.get(playerUrl, { 
                 headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` }, 
