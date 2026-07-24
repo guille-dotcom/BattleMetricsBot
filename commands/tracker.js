@@ -1,6 +1,4 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js"); 
-const { getSteamProfile } = require("../services/steam"); 
-const { searchBattleMetricsPlayer } = require("../services/battlemetricsSearch"); 
 const axios = require('axios'); 
 const fs = require("fs"); 
 const path = require("path"); 
@@ -9,24 +7,28 @@ const configFile = path.join(__dirname, "..", "data", "config.json");
 const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN || process.env.TOKEN; 
 
 module.exports = { 
-    data: new SlashCommandBuilder() .setName("tracker") 
-        .setDescription("Rastrea a un jugador en nuestro servidor usando su Steam ID") 
-        .addStringOption(option => option.setName("steamid") 
-            .setDescription("Steam ID del jugador") 
+    data: new SlashCommandBuilder()
+        .setName("tracker") 
+        .setDescription("Rastrea a un jugador en nuestro servidor usando su link de BattleMetrics") 
+        .addStringOption(option => option.setName("link") 
+            .setDescription("Link del perfil de BattleMetrics") 
             .setRequired(true) 
         ), 
 
     async execute(interaction) { 
         await interaction.deferReply(); 
-        const steamId = interaction.options.getString("steamid"); 
+        const link = interaction.options.getString("link"); 
         const guildId = interaction.guild.id; 
 
         try { 
-            // 1. Obtener perfil de Steam usando tu servicio nativo 
-            const steam = await getSteamProfile(steamId); 
-            if (!steam) { 
-                return interaction.editReply("❌ No se encontró ese Steam ID."); 
+            // 1. Extraer la ID del link exactamente igual que en /horasbm
+            const match = link.match(/players\/(\d+)/);
+            if (!match) { 
+                return await interaction.editReply(
+                    "❌ Link inválido.\n\nEjemplo:\nhttps://battlemetrics.com"
+                ); 
             } 
+            const battlemetricsId = match[1];
 
             // 2. Leer servidor configurado (Soportando tu estructura por guildId) 
             const config = JSON.parse(fs.readFileSync(configFile, "utf8")); 
@@ -41,20 +43,21 @@ module.exports = {
                 return interaction.editReply("❌ No hay ningún servidor de Rust configurado en esta comunidad."); 
             } 
 
-            // 3. Llamar a tu función nativa de forma correcta para buscar al jugador 
-            const player = await searchBattleMetricsPlayer(steam.name, battlemetricsServerId); 
-            if (!player) { 
-                return interaction.editReply(`❌ El jugador **${steam.name}** nunca ha ingresado a nuestro servidor de Rust.`); 
-            } 
-
-            // 4. CONSULTA DE SESIÓN EN VIVO DIRECTA (URL CORREGIDA CON API Y SYNTAX) 
-            const playerUrl = `https://battlemetrics.com{player.id}`; 
+            // 3. CONSULTA DE SESIÓN EN VIVO DIRECTA (URL CORREGIDA CON LA API OFICIAL) 
+            const playerUrl = `https://battlemetrics.com{battlemetricsId}`; 
             const response = await axios.get(playerUrl, { 
                 headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` }, 
                 params: { 'include': 'server,session' } 
             }); 
 
+            const playerData = response.data.data;
             const incluidos = response.data.included || []; 
+
+            if (!playerData) {
+                return interaction.editReply("❌ No se encontraron datos para ese perfil en BattleMetrics.");
+            }
+
+            const nombreJugador = playerData.attributes?.name || "Desconocido";
 
             // Buscamos si la sesión en tu servidor está activa en este instante (stop === null) 
             const sesionActiva = incluidos.find(s => 
@@ -73,10 +76,9 @@ module.exports = {
                 const horaConexion = new Date(sesionActiva.attributes.start); 
                 const diferenciaMs = new Date() - horaConexion; 
                 const horas = Math.floor(diferenciaMs / (1000 * 60 * 60)); 
-                const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60)); 
+                const minutes = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60)); 
                 
-                // CORREGIDO: Se cambió 'hours' por 'horas' para que coincida con la variable anterior
-                playtimeFormateado = `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`; 
+                playtimeFormateado = `${String(horas).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`; 
             } else { 
                 // Si está offline, buscamos su última sesión guardada en tu mapa 
                 const ultimaSesion = incluidos.find(s => 
@@ -86,7 +88,9 @@ module.exports = {
                 if (ultimaSesion && ultimaSesion.attributes?.stop) { 
                     const lastTime = new Date(ultimaSesion.attributes.stop).toLocaleString('es-ES'); 
                     playtimeFormateado = `Última vez visto: ${lastTime}`; 
-                } 
+                } else {
+                    playtimeFormateado = "Sin registros recientes en el servidor";
+                }
             } 
 
             // Sacar el nombre del servidor para el spoiler 
@@ -97,18 +101,16 @@ module.exports = {
             } 
             const hiddenServerText = `||${serverName}||`; 
 
-            // 5. Enviar la tarjeta visual con los datos formateados 
+            // 4. Enviar la tarjeta visual con los datos formateados 
             const embed = new EmbedBuilder() 
-                .setTitle(`🎯 Monitoreo de Perfil: ${steam.name}`) 
+                .setTitle(`🎯 Monitoreo de Perfil BM`) 
                 .setColor(embedColor) 
-                .setThumbnail(steam.avatar) 
                 .addFields( 
-                    { name: "👤 Nombre de Steam", value: steam.name, inline: true }, 
-                    { name: "🆔 Steam ID", value: `\`${steamId}\``, inline: true }, 
+                    { name: "👤 Jugador", value: nombreJugador, inline: true }, 
+                    { name: "🆔 BattleMetrics ID", value: `\`${battlemetricsId}\``, inline: true }, 
                     { name: "📊 Estado", value: statusText, inline: true }, 
-                    // CORREGIDO: Removidos los caracteres %EF%B8%8F corruptos de los títulos
                     { name: "⏱️ Play time (Sesión)", value: `\`${playtimeFormateado}\``, inline: true }, 
-                    { name: "🖥️ Servidor actual (Haz click para revelar)", value: hiddenServerText, inline: false } 
+                    { name: "🖥️ Servidor configurado (Revelar)", value: hiddenServerText, inline: false } 
                 ) 
                 .setTimestamp() 
                 .setFooter({ text: `${interaction.guild.name} - Control Interno` }); 
@@ -117,7 +119,7 @@ module.exports = {
 
         } catch (error) { 
             console.error("ERROR TRACKER INTEGRADO:", error); 
-            await interaction.editReply("❌ Error procesando el rastreo del jugador."); 
+            await interaction.editReply("❌ Error procesando el rastreo del jugador. Verifica que el link sea válido."); 
         } 
     } 
 };
