@@ -1,141 +1,77 @@
-const fs = require("fs"); 
-const path = require("path"); 
-const axios = require("axios"); 
-const { EmbedBuilder } = require("discord.js"); 
+const axios = require('axios');
+const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN || process.env.TOKEN;
 
-const trackersFile = path.join(__dirname, "..", "data", "trackers.json"); 
+/**
+ * Obtiene el estado de sesión más reciente de un jugador en BattleMetrics
+ * @param {string} profileLink - Enlace completo al perfil del jugador
+ * @returns {Promise<object|null>} Datos procesados de la sesión o null si falla
+ */
+async function getLivePlayerSession(profileLink) {
+    try {
+        // 1. Extraer ID del enlace de forma estricta
+        const match = profileLink.match(/players\/(\d+)/);
+        if (!match || !match[1]) return null;
+        const battlemetricsId = match[1];
 
-function bmHeaders(){ 
-    return { 
-        headers:{ 
-            Authorization: `Bearer ${process.env.BATTLEMETRICS_TOKEN || process.env.TOKEN}`, 
-            Accept: "application/json" 
-        } 
-    }; 
-} 
+        // 2. Realizar petición limpia a la API Oficial
+        const url = `https://battlemetrics.com{battlemetricsId}`;
+        const response = await axios.get(url, {
+            headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` },
+            params: { 'include': 'server,session' }
+        });
 
-function leerTrackers(){ 
-    try{ 
-        if(!fs.existsSync(trackersFile)) return []; 
-        return JSON.parse(fs.readFileSync(trackersFile, "utf8")); 
-    }catch(error){ 
-        return []; 
-    } 
-} 
+        const playerData = response.data?.data;
+        const incluidos = response.data?.included || [];
+        if (!playerData) return null;
 
-function guardarTrackers(trackers){ 
-    try{ 
-        fs.writeFileSync(trackersFile, JSON.stringify(trackers, null, 2)); 
-    }catch(error){} 
-} 
+        const nombre = playerData.attributes?.name || "Desconocido";
 
-async function obtenerServidor(serverId){ 
-    try { 
-        const idSana = String(serverId).trim(); 
-        // URL CORREGIDA: Agregado el subdominio api y la barra de ruta correcta
-        const response = await axios.get(`https://battlemetrics.com{idSana}`, bmHeaders()); 
-        return { nombre: response.data.data.attributes.name }; 
-    } catch(error) { 
-        return { nombre: "Servidor Rust" }; 
-    } 
-} 
+        // 3. Obtener la sesión más reciente (Primera en la lista de actividad de la web)
+        const ultimaSesion = incluidos.find(item => item.type === "session");
+        
+        let status = '🔴 Offline';
+        let playtime = 'Sin registros recientes';
+        let serverName = 'Ninguno detectado';
+        let isOnline = false;
 
-// ======================================================================= // 
-// 🔑 MEJORA: CONSULTA DIRECTA AL PERFIL DEL JUGADOR (NUNCA SE RECORTA)    // 
-// ======================================================================= // 
-async function obtenerJugadorServidor(serverId, playerId, intentos = 2){ 
-    try { 
-        const targetServerId = String(serverId).trim(); 
-        const targetPlayerId = String(playerId).trim(); 
+        if (ultimaSesion) {
+            // Buscar nombre del servidor asociado
+            const serverId = ultimaSesion.relationships?.server?.data?.id;
+            const serverInfo = incluidos.find(item => item.type === "server" && String(item.id) === String(serverId));
+            if (serverInfo?.attributes?.name) {
+                serverName = serverInfo.attributes.name;
+            }
 
-        // URL CORREGIDA: Apuntando al endpoint real de la API oficial
-        const response = await axios.get( 
-            `https://battlemetrics.com{targetPlayerId}`, 
-            { 
-                ...bmHeaders(), 
-                params: { include: "server,session" } 
-            } 
-        ); 
+            // Validar si está jugando ahora mismo (stop es null)
+            if (ultimaSesion.attributes?.stop === null) {
+                status = '🟢 Online';
+                isOnline = true;
+                
+                const start = new Date(ultimaSesion.attributes.start);
+                const diffMs = new Date() - start;
+                const horas = Math.floor(diffMs / (1000 * 60 * 60));
+                const minutos = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                playtime = `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
+            } else {
+                // Si está desconectado, calcular última fecha visto
+                const stopDate = new Date(ultimaSesion.attributes.stop).toLocaleString('es-ES');
+                playtime = `Última vez visto: ${stopDate}`;
+            }
+        }
 
-        const dataPlayer = response.data.data; 
-        const incluidos = response.data.included || []; 
-        const nombreRealPerfil = dataPlayer?.attributes?.name || `Jugador (${targetPlayerId})`; 
+        return {
+            id: battlemetricsId,
+            nombre,
+            status,
+            isOnline,
+            playtime,
+            serverName
+        };
 
-        const sesionActiva = incluidos.find(s => 
-            s.type === "session" && 
-            String(s.relationships?.server?.data?.id) === targetServerId && 
-            s.attributes?.stop === null 
-        ); 
+    } catch (error) {
+        console.error("[-] Error crítico en trackerService:", error.message);
+        return null;
+    }
+}
 
-        if (!sesionActiva) { 
-            return { online: false, playtime: "00:00", nombreReal: nombreRealPerfil, idInterno: targetPlayerId }; 
-        } 
-
-        // Calcular Play Time de la sesión activa en formato HH:MM
-        const horaConexion = new Date(sesionActiva.attributes.start); 
-        const diferenciaMs = new Date() - horaConexion; 
-        const horas = Math.floor(diferenciaMs / (1000 * 60 * 60)); 
-        const minutes = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60)); 
-        const tiempoFormateado = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`; 
-
-        return { online: true, playtime: tiempoFormateado, nombreReal: nombreRealPerfil, idInterno: targetPlayerId }; 
-    } catch(error) { 
-        if (intentos > 0) { 
-            await new Promise(resolve => setTimeout(resolve, 2000)); 
-            return await obtenerJugadorServidor(serverId, playerId, intentos - 1); 
-        } 
-        return { online: null, playtime: "00:00", nombreReal: `Jugador (${playerId})`, idInterno: playerId }; 
-    } 
-} 
-
-function tiempoRestante(expira){ 
-    const diferencia = expira - Date.now(); 
-    if(diferencia <= 0) return "Expirado"; 
-    const horas = Math.floor(diferencia / 3600000); 
-    const minutos = Math.floor((diferencia % 3600000) / 60000); 
-    return `${horas}h ${minutos}m`; 
-} 
-
-async function revisarTrackers(client){ 
-    let trackers = leerTrackers(); 
-    trackers = trackers.filter(tracker => tracker.expiresAt > Date.now()); 
-
-    for(const tracker of trackers){ 
-        const jugador = await obtenerJugadorServidor(tracker.serverId, tracker.playerId); 
-        if (jugador.online === null) continue; 
-
-        if (jugador.nombreReal && tracker.playerName !== jugador.nombreReal) { 
-            tracker.playerName = jugador.nombreReal; 
-        } 
-
-        const estado = jugador.online ? "ONLINE" : "OFFLINE"; 
-
-        if(tracker.lastState !== estado){ 
-            const servidor = await obtenerServidor(tracker.serverId); 
-            try { 
-                const guild = client.guilds.cache.get(tracker.guildId); 
-                if(!guild) continue; 
-                const canal = guild.channels.cache.get(tracker.channelId); 
-                if(!canal) continue; 
-
-                const embed = new EmbedBuilder() 
-                    .setTitle("🎮 Tracker BattleMetrics") 
-                    .setColor(estado === "ONLINE" ? "#57F287" : "#ED4245") 
-                    .setDescription(`👤 **${jugador.nombreReal || tracker.playerName}**`) 
-                    .addFields( 
-                        { name: "Estado", value: estado === "ONLINE" ? "🟢 ONLINE" : "🔴 OFFLINE" }, 
-                        { name: "⏱️ Play Time (Sesión)", value: `\`${jugador.playtime}\`` }, 
-                        { name: "📡 Servidor", value: `||${servidor.nombre}||` }, 
-                        { name: "⌛ Tracker restante", value: tiempoRestante(tracker.expiresAt) } 
-                    ) 
-                    .setTimestamp(); 
-
-                await canal.send({ embeds:[embed] }); 
-            } catch(error) {} 
-        } 
-        tracker.lastState = estado; 
-    } 
-    guardarTrackers(trackers); 
-} 
-
-module.exports = { revisarTrackers, obtenerJugadorServidor, obtenerServidor };
+module.exports = { getLivePlayerSession };
