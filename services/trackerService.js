@@ -28,7 +28,6 @@ function guardarTrackers(trackers){
 
 async function obtenerServidor(serverId){ 
   try { 
-    // REPARADO: Ahora usa el serverId dinámico real que configuraste en Discord
     const idSana = String(serverId).trim();
     const response = await axios.get(`https://battlemetrics.com{idSana}`, bmHeaders()); 
     return { nombre: response.data.data.attributes.name }; 
@@ -37,40 +36,54 @@ async function obtenerServidor(serverId){
   } 
 } 
 
+// ======================================================================= //
+// 🔑 MEJORA: CONSULTA DIRECTA AL PERFIL DEL JUGADOR (NUNCA SE RECORTA)    //
+// ======================================================================= //
 async function obtenerJugadorServidor(serverId, playerId, intentos = 2){ 
   try { 
-    // REPARADO: Ahora usa el serverId dinámico real que configuraste en Discord
-    const idSana = String(serverId).trim();
-    
+    const targetServerId = String(serverId).trim();
+    const targetPlayerId = String(playerId).trim();
+
+    // Consultamos directo al perfil del jugador incluyendo sus servidores activos y sesiones
     const response = await axios.get(
-      `https://battlemetrics.com{idSana}`, 
+      `https://battlemetrics.com{targetPlayerId}`, 
       { 
         ...bmHeaders(), 
-        params: { include: "session" } 
+        params: { include: "server,session" } 
       } 
     ); 
 
+    const dataPlayer = response.data.data;
     const incluidos = response.data.included || []; 
     
+    // Extraemos el nombre real del perfil de inmediato para guardarlo
+    const nombreRealPerfil = dataPlayer?.attributes?.name || `Jugador (${targetPlayerId})`;
+
+    // Buscamos la sesión que pertenezca a NUESTRO servidor configurado y esté activa (stop === null)
     const sesionActiva = incluidos.find(s => 
       s.type === "session" && 
-      s.relationships?.player?.data?.id === String(playerId) && 
+      String(s.relationships?.server?.data?.id) === targetServerId &&
       s.attributes?.stop === null 
     ); 
 
-    if (!sesionActiva) return { online: false, playtime: "0:00" }; 
+    if (!sesionActiva) {
+      return { online: false, playtime: "0:00", nombreReal: nombreRealPerfil }; 
+    }
 
+    // Calcular Play Time de la sesión activa
     const horaConexion = new Date(sesionActiva.attributes.start); 
     const diferenciaMs = new Date() - horaConexion; 
     const horas = Math.floor(diferenciaMs / (1000 * 60 * 60)); 
     const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60)); 
-    return { online: true, playtime: `${horas}:${minutos.toString().padStart(2, '0')}` }; 
+    const tiempoFormateado = `${horas}:${minutos.toString().padStart(2, '0')}`;
+
+    return { online: true, playtime: tiempoFormateado, nombreReal: nombreRealPerfil }; 
   } catch(error) { 
     if (intentos > 0) { 
       await new Promise(resolve => setTimeout(resolve, 2000)); 
       return await obtenerJugadorServidor(serverId, playerId, intentos - 1); 
     } 
-    return { online: null, playtime: "0:00" }; 
+    return { online: null, playtime: "0:00", nombreReal: `Jugador (${playerId})` }; 
   } 
 } 
 
@@ -90,6 +103,11 @@ async function revisarTrackers(client){
     const jugador = await obtenerJugadorServidor(tracker.serverId, tracker.playerId); 
     if (jugador.online === null) continue; 
 
+    // Actualizamos el nombre real en la base de datos si cambió
+    if (jugador.nombreReal && tracker.playerName !== jugador.nombreReal) {
+      tracker.playerName = jugador.nombreReal;
+    }
+
     const estado = jugador.online ? "ONLINE" : "OFFLINE"; 
 
     if(tracker.lastState !== estado){ 
@@ -103,7 +121,7 @@ async function revisarTrackers(client){
         const embed = new EmbedBuilder() 
           .setTitle("🎮 Tracker BattleMetrics") 
           .setColor(estado === "ONLINE" ? "#57F287" : "#ED4245") 
-          .setDescription(`👤 **${tracker.trackerName || tracker.playerName}**`) 
+          .setDescription(`👤 **${jugador.nombreReal || tracker.playerName}**`) 
           .addFields( 
             { name: "Estado", value: estado === "ONLINE" ? "🟢 ONLINE" : "🔴 OFFLINE" }, 
             { name: "⏱️ Play Time (Sesión)", value: jugador.playtime }, 
