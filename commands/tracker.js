@@ -9,7 +9,7 @@ const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN;
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('tracker')
-        .setDescription('Rastrea las estadísticas de un jugador en NUESTRO servidor de Rust')
+        .setDescription('Rastrea las estadísticas de un jugador de Rust en NUESTRO servidor')
         .addStringOption(option =>
             option.setName('steamid')
                 .setDescription('La SteamID64 de 17 dígitos del jugador')
@@ -21,7 +21,7 @@ module.exports = {
         const steamId = interaction.options.getString('steamid').trim();
         const guildId = interaction.guild.id; 
 
-        // 1. Cargar el servidor de Rust configurado desde el archivo JSON local
+        // 1. Cargar el ID del servidor de Rust configurado desde el config.json
         let battleMetricsServerId = null;
         try {
             if (fs.existsSync(file)) {
@@ -41,66 +41,80 @@ module.exports = {
 
         // Validación estricta del ID de Steam
         if (!/^\d{17}$/.test(steamId)) {
-            return interaction.editReply('❌ Por favor, introduce una SteamID64 válida de 17 dígitos (ej: 76561198083832145).');
+            return interaction.editReply('❌ Por favor, introduce una SteamID64 válida de 17 dígitos.');
         }
 
         try {
-            // STEP A: Buscar el identificador de Steam directamente en el motor de BattleMetrics
+            // Buscamos el jugador filtrando estrictamente dentro de tu servidor de Rust configurado
             const searchUrl = 'https://battlemetrics.com';
             const response = await axios.get(searchUrl, {
                 headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` },
                 params: {
-                    'filter[search]': steamId, // Pasamos el número directamente
+                    'filter[search]': steamId,
+                    'filter[servers]': battleMetricsServerId, 
                     'include': 'server,session'
                 }
             });
 
-            // Si no arroja ninguna coincidencia en la base de datos general
+            // Si el jugador nunca ha pisado tu servidor configurado
             if (!response.data || !response.data.data || response.data.data.length === 0) {
-                return interaction.editReply('❌ No se encontró registro de ese jugador en la base de datos global de BattleMetrics.');
+                return interaction.editReply('❌ No se encontró ningún registro de actividad de ese jugador en nuestro servidor de Rust.');
             }
 
-            // Tomamos los datos del jugador encontrado
-            const playerData = response.data.data[0]; 
+            const playerData = response.data.data[0]; // Tomamos el primer jugador que coincide en tu servidor
             const includedData = response.data.included || [];
             const playerName = playerData.attributes.name;
 
-            // STEP B: Filtrar las sesiones devueltas para ver si coinciden con tu servidor configurado
+            // Buscamos si el jugador tiene una sesión activa ejecutándose en este instante
             const targetSession = includedData.find(item => 
                 item.type === 'session' && 
                 item.relationships.server.data.id === battleMetricsServerId
             );
 
-            let status = '🔴 Desconectado de nuestro servidor';
-            let sessionTimeText = 'No está jugando actualmente aquí';
-            let embedColor = 0xe74c3c; // Rojo
+            let status = '🔴 Offline';
+            let sessionTimeText = '00:00'; // Formato por defecto si está desconectado
+            let serverName = 'Nuestro Servidor de Rust';
+            let embedColor = 0xe74c3c; // Rojo por defecto si está offline
+
+            // Buscar el nombre real del servidor en los datos incluidos para taparlo con spoiler
+            const serverInfo = includedData.find(item => item.type === 'server' && item.id === battleMetricsServerId);
+            if (serverInfo && serverInfo.attributes?.name) {
+                serverName = serverInfo.attributes.name;
+            }
 
             if (targetSession) {
-                // Si la sesión está activa (stop es nulo)
+                // Si la sesión no tiene fecha de parada ('stop'), significa que está ONLINE jugando ahora
                 if (targetSession.attributes.stop === null) {
-                    status = '🟢 Jugando ahora en nuestro servidor';
-                    embedColor = 0x2ecc71; // Verde
+                    status = '🟢 Online';
+                    embedColor = 0x2ecc71; // Cambia a verde
 
+                    // FORMATO EXCLUSIVO BATTLEMETRICS (Play time de la sesión actual: HH:MM)
                     const startTime = new Date(targetSession.attributes.start);
                     const currentTime = new Date();
                     const diffMs = currentTime - startTime;
                     const diffMinutes = Math.floor(diffMs / 1000 / 60);
+                    
                     const hours = Math.floor(diffMinutes / 60);
                     const minutes = diffMinutes % 60;
 
-                    sessionTimeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes} min`;
+                    // Añade un cero a la izquierda si el número es menor a 10 (ej: 02 en vez de 2)
+                    const formattedHours = String(hours).padStart(2, '0');
+                    const formattedMinutes = String(minutes).padStart(2, '0');
+
+                    sessionTimeText = `${formattedHours}:${formattedMinutes}`;
                 } else {
-                    // Si ya cerró sesión en tu servidor
-                    const lastTime = new Date(targetSession.attributes.stop).toLocaleString('es-ES');
-                    status = '⚪ Offline (Ha jugado en nuestro servidor antes)';
+                    // Si el jugador ya se desconectó, muestra su última hora de conexión
+                    const lastTime = new Date(targetSession.attributes.stop).toLocaleString('es-ES', { timeZone: 'America/Santiago' });
+                    status = '🔴 Offline';
                     sessionTimeText = `Última vez visto: ${lastTime}`;
-                    embedColor = 0x34495e; // Gris oscuro
+                    embedColor = 0xe74c3c; 
                 }
-            } else {
-                return interaction.editReply(`❌ El jugador **${playerName}** está registrado en BattleMetrics, pero jamás ha entrado a tu servidor configurado.`);
             }
 
-            // 3. Crear el diseño visual final del Embed
+            // Aplicamos el formato de Spoiler de Discord ||texto|| para tapar el servidor
+            const hiddenServerText = `||${serverName}||`;
+
+            // 3. Crear el diseño visual del Embed interactivo
             const trackerEmbed = new EmbedBuilder()
                 .setColor(embedColor)
                 .setTitle(`🎯 Monitoreo de Jugador: ${playerName}`)
@@ -108,8 +122,9 @@ module.exports = {
                 .addFields(
                     { name: '👤 Nombre detectado', value: playerName, inline: true },
                     { name: '🆔 SteamID64', value: `\`${steamId}\``, inline: true },
-                    { name: '📊 Estado en el Servidor', value: status, inline: false },
-                    { name: '⏱️ Tiempo de Sesión', value: sessionTimeText, inline: false }
+                    { name: '📊 Estado', value: status, inline: true },
+                    { name: '⏱️ Play time (Sesión)', value: `\`${sessionTimeText}\``, inline: true },
+                    { name: '🖥️ Servidor actual (Haz click para revelar)', value: hiddenServerText, inline: false }
                 )
                 .setTimestamp()
                 .setFooter({ text: `${interaction.guild.name} - Control Interno` });
@@ -117,8 +132,8 @@ module.exports = {
             await interaction.editReply({ embeds: [trackerEmbed] });
 
         } catch (error) {
-            console.error('ERROR CRÍTICO EN TRACKER NATIVO:', error.message);
-            await interaction.editReply('⚠️ Ocurrió un error interno al consultar el registro en BattleMetrics.');
+            console.error('ERROR EN TRACKER ENLAZADO:', error.message);
+            await interaction.editReply('⚠️ Ocurrió un error al procesar la solicitud en BattleMetrics filtrada por tu servidor.');
         }
     },
 };
