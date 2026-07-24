@@ -13,6 +13,7 @@ path.join(
 );
 
 
+
 // ======================
 // HEADERS BM
 // ======================
@@ -118,11 +119,11 @@ function guardarTrackers(trackers){
 
 async function obtenerServidor(serverId){
 
-
     try{
 
 
-        const response = await axios.get(
+        const response =
+        await axios.get(
 
             `https://api.battlemetrics.com/servers/${serverId}`,
 
@@ -131,9 +132,11 @@ async function obtenerServidor(serverId){
         );
 
 
+
         return {
 
             nombre:
+
             response.data.data.attributes.name
 
         };
@@ -168,9 +171,8 @@ async function obtenerServidor(serverId){
 
 
 
-
 // ======================
-// OBTENER JUGADOR ONLINE
+// OBTENER SESION JUGADOR
 // ======================
 
 async function obtenerJugadorServidor(
@@ -179,49 +181,56 @@ async function obtenerJugadorServidor(
     intentos = 2
 ){
 
-
     try{
 
 
         console.log(
 
-            `🔎 Revisando jugador ${playerId} en servidor ${serverId}`
+            `🔎 Revisando ${playerId} en ${serverId}`
 
         );
 
 
 
-        const response = await axios.get(
+        const response =
+        await axios.get(
 
-            `https://api.battlemetrics.com/servers/${serverId}/players`,
+            `https://api.battlemetrics.com/players/${playerId}/sessions`,
 
-            bmHeaders()
+            {
+
+                ...bmHeaders(),
+
+                params:{
+
+                    "filter[servers]":
+                    serverId
+
+                }
+
+            }
 
         );
 
 
 
-        const jugadores =
+        const sesiones =
         response.data.data || [];
 
 
 
-        const jugador =
-        jugadores.find(
+        const activa =
+        sesiones.find(
 
-            p =>
-            String(
-                p.relationships.player.data.id
-            )
-            ===
-            String(playerId)
+            s =>
+
+            s.attributes.stop === null
 
         );
 
 
 
-
-        if(!jugador){
+        if(!activa){
 
 
             return {
@@ -239,6 +248,46 @@ async function obtenerJugadorServidor(
 
 
 
+        const inicio =
+        new Date(
+
+            activa.attributes.start
+
+        );
+
+
+
+        const ahora =
+        new Date();
+
+
+
+        const diferencia =
+        ahora - inicio;
+
+
+
+        const horas =
+        Math.floor(
+
+            diferencia /
+            3600000
+
+        );
+
+
+
+        const minutos =
+        Math.floor(
+
+            (diferencia % 3600000)
+            /
+            60000
+
+        );
+
+
+
         return {
 
 
@@ -246,7 +295,8 @@ async function obtenerJugadorServidor(
 
 
             playtime:
-            "Activo"
+
+            `${horas}:${minutos.toString().padStart(2,"0")}`
 
 
         };
@@ -268,9 +318,11 @@ async function obtenerJugadorServidor(
             );
 
 
+
             await new Promise(
 
                 resolve =>
+
                 setTimeout(
                     resolve,
                     2000
@@ -297,8 +349,9 @@ async function obtenerJugadorServidor(
 
         console.log(
 
-            "❌ ERROR TRACKER:",
+            "❌ ERROR SESION BM:",
 
+            error.response?.data ||
             error.message
 
         );
@@ -315,7 +368,6 @@ async function obtenerJugadorServidor(
 
 
     }
-
 
 }
 
@@ -344,14 +396,20 @@ function tiempoRestante(expira){
 
     const horas =
     Math.floor(
+
         diferencia / 3600000
+
     );
 
 
 
     const minutos =
     Math.floor(
-        (diferencia % 3600000) / 60000
+
+        (diferencia % 3600000)
+        /
+        60000
+
     );
 
 
@@ -359,6 +417,8 @@ function tiempoRestante(expira){
     return `${horas}h ${minutos}m`;
 
 }
+
+
 
 
 
@@ -381,6 +441,7 @@ async function revisarTrackers(client){
     trackers.filter(
 
         tracker =>
+
         tracker.expiresAt > Date.now()
 
     );
@@ -396,11 +457,10 @@ async function revisarTrackers(client){
         if(
             tracker.playerName ===
             "Jugador desconocido"
-        ){
+        )
 
             continue;
 
-        }
 
 
 
@@ -414,7 +474,9 @@ async function revisarTrackers(client){
 
 
 
+
         const jugador =
+
         await obtenerJugadorServidor(
 
             tracker.serverId,
@@ -426,11 +488,11 @@ async function revisarTrackers(client){
 
 
 
-        if(jugador.online === null){
+
+        if(jugador.online === null)
 
             continue;
 
-        }
 
 
 
@@ -461,14 +523,16 @@ async function revisarTrackers(client){
 
 
 
-
         if(
+
             tracker.lastState !== estado
+
         ){
 
 
 
             const servidor =
+
             await obtenerServidor(
 
                 tracker.serverId
@@ -477,11 +541,13 @@ async function revisarTrackers(client){
 
 
 
+
             try{
 
 
 
                 const guild =
+
                 client.guilds.cache.get(
 
                     tracker.guildId
@@ -491,11 +557,13 @@ async function revisarTrackers(client){
 
 
                 if(!guild)
+
                     continue;
 
 
 
                 const canal =
+
                 guild.channels.cache.get(
 
                     tracker.channelId
@@ -505,6 +573,7 @@ async function revisarTrackers(client){
 
 
                 if(!canal)
+
                     continue;
 
 
@@ -512,11 +581,16 @@ async function revisarTrackers(client){
 
 
                 const embed =
+
                 new EmbedBuilder()
 
+
                 .setTitle(
+
                     "🎮 Tracker BattleMetrics"
+
                 )
+
 
                 .setColor(
 
@@ -531,6 +605,7 @@ async function revisarTrackers(client){
                     "#ED4245"
 
                 )
+
 
                 .setDescription(
 
@@ -562,9 +637,10 @@ async function revisarTrackers(client){
 
                     {
 
-                        name:"⏱️ Play Time",
+                        name:"⏱️ Play Time (Sesión)",
 
                         value:
+
                         jugador.playtime
 
                     },
@@ -575,6 +651,7 @@ async function revisarTrackers(client){
                         name:"📡 Servidor",
 
                         value:
+
                         servidor.nombre
 
                     },
@@ -585,6 +662,7 @@ async function revisarTrackers(client){
                         name:"⌛ Tracker restante",
 
                         value:
+
                         tiempoRestante(
                             tracker.expiresAt
                         )
@@ -599,12 +677,9 @@ async function revisarTrackers(client){
 
 
 
-
                 await canal.send({
 
-                    embeds:[
-                        embed
-                    ]
+                    embeds:[embed]
 
                 });
 
@@ -615,7 +690,6 @@ async function revisarTrackers(client){
                     `📢 Cambio enviado ${tracker.playerName}`
 
                 );
-
 
 
 
@@ -650,14 +724,13 @@ async function revisarTrackers(client){
 
 
 
-    guardarTrackers(
 
-        trackers
+    guardarTrackers(trackers);
 
-    );
 
 
 }
+
 
 
 
