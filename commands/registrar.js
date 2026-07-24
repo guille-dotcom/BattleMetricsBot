@@ -1,143 +1,43 @@
-const {
-    SlashCommandBuilder,
-    MessageFlags
-} = require("discord.js");
-
+const { SlashCommandBuilder } = require("discord.js");
 const fs = require("fs");
-const path = require("path");
-
-
-const file = path.join(
-    __dirname,
-    "..",
-    "data",
-    "users.json"
-);
-
+const { trackersFile } = require("../services/trackerService");
 
 module.exports = {
+    data: new SlashCommandBuilder()
+        .setName("registrar")
+        .setDescription("Añade un perfil de BattleMetrics al sistema de alertas automáticas de este canal")
+        .addStringOption(option => option.setName("link")
+            .setDescription("Link del perfil de BattleMetrics")
+            .setRequired(true)
+        ),
 
+    async execute(interaction) {
+        await interaction.deferReply();
+        const link = interaction.options.getString("link");
+        const channelId = interaction.channel.id;
 
-data: new SlashCommandBuilder()
+        const match = link.match(/players\/(\d+)/);
+        if (!match || !match[1]) {
+            return await interaction.editReply("❌ Link inválido. Proporciona un enlace válido de BattleMetrics.");
+        }
+        const battlemetricsId = match[1];
 
-.setName("registrar")
+        try {
+            const trackers = JSON.parse(fs.readFileSync(trackersFile, 'utf8'));
 
-.setDescription(
-"Registra tu SteamID"
-)
+            // Registrar con estado inicial offline por defecto (se calibrará en el primer escaneo a los 30s)
+            trackers[battlemetricsId] = {
+                canalId: channelId,
+                ultimoEstado: "offline",
+                registradoPor: interaction.user.tag
+            };
 
+            fs.writeFileSync(trackersFile, JSON.stringify(trackers, null, 4), 'utf8');
 
-.addStringOption(option =>
-    option
-    .setName("steamid")
-    .setDescription("SteamID64")
-    .setRequired(true)
-),
-
-
-
-async execute(interaction){
-
-
-try {
-
-
-await interaction.deferReply({
-    flags: MessageFlags.Ephemeral
-});
-
-
-
-const steamId =
-interaction.options.getString(
-"steamid"
-);
-
-
-
-let users = {};
-
-
-
-if(fs.existsSync(file)){
-
-
-users =
-JSON.parse(
-fs.readFileSync(
-file,
-"utf8"
-)
-);
-
-
-}
-
-
-
-users[interaction.user.id] = {
-
-
-steamId,
-
-
-discordId:
-interaction.user.id,
-
-
-username:
-interaction.user.username,
-
-
-registrado:
-new Date().toISOString()
-
-
-};
-
-
-
-fs.writeFileSync(
-file,
-JSON.stringify(
-users,
-null,
-2
-)
-);
-
-
-
-await interaction.editReply({
-
-content:
-`✅ Registrado correctamente\n\n🎮 SteamID: \`${steamId}\``
-
-});
-
-
-
-}catch(error){
-
-
-console.log(
-"ERROR REGISTRAR:",
-error
-);
-
-
-
-await interaction.editReply(
-"❌ Error guardando registro"
-);
-
-
-
-}
-
-
-
-}
-
-
+            await interaction.editReply(`✅ El perfil \`${battlemetricsId}\` ha sido registrado con éxito. Recibirás alertas en este canal únicamente cuando pase de **Online ↔ Offline**.`);
+        } catch (error) {
+            console.error(error);
+            await interaction.editReply("❌ Ocurrió un error al guardar el registro.");
+        }
+    }
 };
