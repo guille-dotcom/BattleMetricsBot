@@ -12,13 +12,21 @@ module.exports = {
     .setDescription("Comienza el seguimiento de un jugador BattleMetrics durante 24 horas") 
     .addStringOption(option => option 
       .setName("id") 
-      .setDescription("ID del jugador BattleMetrics") 
+      .setDescription("Enlace o ID del jugador BattleMetrics") 
       .setRequired(true) 
     ), 
 
   async execute(interaction) { 
     await interaction.deferReply(); 
-    const playerId = String(interaction.options.getString("id")); 
+    let inputId = interaction.options.getString("id"); 
+
+    // LIMPIEZA / EXTRACTOR: Si el usuario pasa un enlace completo, extraemos solo los números de la ID
+    const coincidenciaLink = inputId.match(/players\/(\d+)/);
+    const playerId = coincidenciaLink ? coincidenciaLink[1] : inputId.replace(/\D/g, "");
+
+    if (!playerId) {
+      return interaction.editReply("❌ La ID o el enlace de BattleMetrics que proporcionaste no es válido.");
+    }
 
     // ====================== // 
     // CONFIG BATTLEMETRICS // 
@@ -81,7 +89,7 @@ module.exports = {
     } 
 
     // ====================== // 
-    // CONSULTA INMEDIATA A BATTLEMETRICS (INDEPENDIENTE) // 
+    // CONSULTA INMEDIATA A BATTLEMETRICS // 
     // ====================== // 
     let nombreJugador = "Jugador desconocido"; 
     let estado = "OFFLINE";
@@ -96,7 +104,7 @@ module.exports = {
     };
 
     try { 
-      // Usamos comillas invertidas ` ` obligatorias para inyectar la ID real
+      // Consultamos de forma directa usando backticks perfectos ``
       const resBM = await axios.get(`https://battlemetrics.com{serverId}`, { headers, params: { include: "session" } }); 
       const incluidos = resBM.data.included || []; 
       
@@ -115,7 +123,6 @@ module.exports = {
         tiempoSesion = `${horas}:${minutos.toString().padStart(2, '0')}`;
       }
 
-      // Consulta directa al perfil del jugador
       const resPlayer = await axios.get(`https://battlemetrics.com{playerId}`, { headers });
       if(resPlayer.data?.data?.attributes?.name) {
         nombreJugador = resPlayer.data.data.attributes.name;
@@ -125,7 +132,7 @@ module.exports = {
         nombreServidor = resBM.data.data.attributes.name;
       }
     } catch(error) { 
-      console.log("❌ ERROR DIRECTO EN COMANDO:", error.message); 
+      console.log("❌ ERROR DENTRO DE LA CONSULTA API:", error.message); 
     } 
 
     // ====================== // 
