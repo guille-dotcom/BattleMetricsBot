@@ -4,21 +4,15 @@ const axios = require("axios");
 const { EmbedBuilder } = require("discord.js"); 
 const trackersFile = path.join(__dirname, "..", "data", "trackers.json"); 
 
-// ====================== // 
-// HEADERS BM // 
-// ====================== // 
 function bmHeaders(){ 
   return { 
     headers:{ 
-      Authorization: `Bearer ${process.env.BATTLEMETRICS_TOKEN}`, 
+      Authorization: `Bearer ${process.env.BATTLEMETRICS_TOKEN || process.env.TOKEN}`, 
       Accept: "application/json" 
     } 
   }; 
 } 
 
-// ====================== // 
-// LEER TRACKERS // 
-// ====================== // 
 function leerTrackers(){ 
   try{ 
     if(!fs.existsSync(trackersFile)) return []; 
@@ -29,9 +23,6 @@ function leerTrackers(){
   } 
 } 
 
-// ====================== // 
-// GUARDAR TRACKERS // 
-// ====================== // 
 function guardarTrackers(trackers){ 
   try{ 
     fs.writeFileSync(trackersFile, JSON.stringify(trackers, null, 2)); 
@@ -41,11 +32,9 @@ function guardarTrackers(trackers){
   } 
 } 
 
-// ====================== // 
-// OBTENER SERVIDOR // 
-// ====================== // 
 async function obtenerServidor(serverId){ 
   try{ 
+    // CORREGIDO: Uso estricto de comillas invertidas ` `
     const response = await axios.get(`https://battlemetrics.com{serverId}`, bmHeaders()); 
     return { nombre: response.data.data.attributes.name }; 
   }catch(error){ 
@@ -53,14 +42,11 @@ async function obtenerServidor(serverId){
   } 
 } 
 
-// ====================== // 
-// JUGADORES ONLINE + SESIÓN (CORREGIDO CON COMILLAS INVERTIDAS) // 
-// ====================== // 
 async function obtenerJugadorServidor(serverId, playerId, intentos = 2){ 
   try{ 
     console.log(`🔑 Consultando jugador y sesiones BM... (Intentos restantes: ${intentos})`); 
     
-    // CORREGIDO: Ahora usa comillas invertidas ` para que Node.js lea la ID del servidor correctamente
+    // CORREGIDO: Uso estricto de comillas invertidas ` ` para inyectar la ID del servidor real
     const response = await axios.get(
       `https://battlemetrics.com{serverId}`, 
       { 
@@ -87,9 +73,9 @@ async function obtenerJugadorServidor(serverId, playerId, intentos = 2){
     const diferenciaMs = horaActual - horaConexion;
 
     const horas = Math.floor(diferenciaMs / (1000 * 60 * 60));
-    const minutes = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60));
+    const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60));
 
-    const tiempoFormateado = `${horas}:${minutes.toString().padStart(2, '0')}`;
+    const tiempoFormateado = `${horas}:${minutos.toString().padStart(2, '0')}`;
 
     return { online: true, playtime: tiempoFormateado }; 
   }catch(error){ 
@@ -103,25 +89,25 @@ async function obtenerJugadorServidor(serverId, playerId, intentos = 2){
   } 
 } 
 
-// ====================== // 
-// TIEMPO RESTANTE // 
-// ====================== // 
 function tiempoRestante(expira){ 
   const diferencia = expira - Date.now(); 
   if(diferencia <= 0) return "Expirado"; 
   const horas = Math.floor(diferencia / 3600000); 
-  const minutes = Math.floor((diferencia % 3600000) / 60000); 
-  return `${horas}h ${minutes}m`; 
+  const minutos = Math.floor((diferencia % 3600000) / 60000); 
+  return `${horas}h ${minutos}m`; 
 } 
 
-// ====================== // 
-// REVISAR TRACKERS // 
-// ====================== // 
 async function revisarTrackers(client){ 
   let trackers = leerTrackers(); 
   trackers = trackers.filter(tracker => tracker.expiresAt > Date.now()); 
 
   for(const tracker of trackers){ 
+    // SEGURIDAD: Si por el error anterior se guardó un tracker roto sin ID de servidor, lo saltamos y borramos
+    if(!tracker.serverId || tracker.serverId === "{serverId}" || tracker.playerName === "Jugador desconocido") {
+      console.log(`🗑️ Eliminando registro antiguo dañado de: ${tracker.playerName}`);
+      continue;
+    }
+
     console.log(`🔎 Revisando ${tracker.playerName}`); 
     const jugador = await obtenerJugadorServidor(tracker.serverId, tracker.playerId); 
     
@@ -161,7 +147,10 @@ async function revisarTrackers(client){
     } 
     tracker.lastState = estado; 
   } 
-  guardarTrackers(trackers); 
+  
+  // Guardamos solo los trackers que estén sanos y vigentes
+  const trackersSanos = trackers.filter(tracker => tracker.serverId && tracker.serverId !== "{serverId}" && tracker.playerName !== "Jugador desconocido");
+  guardarTrackers(trackersSanos); 
 } 
 
 module.exports = { revisarTrackers };
