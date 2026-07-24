@@ -24,7 +24,7 @@ module.exports = {
     const coincidenciaLink = inputId.match(/players\/(\d+)/);
     const playerId = coincidenciaLink ? coincidenciaLink[1] : inputId.replace(/\D/g, "");
 
-    if (!playerId) {
+    if (!playerId || playerId.trim() === "") {
       return interaction.editReply("❌ La ID o el enlace de BattleMetrics que proporcionaste no es válido.");
     }
 
@@ -65,9 +65,10 @@ module.exports = {
     const headers = { Authorization: `Bearer ${apiToken}`, Accept: "application/json" };
 
     try { 
-      // 1. CORREGIDO: Uso estricto de comillas invertidas ` ` en la URL para el perfil del jugador
+      // 1. CLAVE FINAL: Forzamos la URL concatenando el string de forma clásica para que Node nunca busque {playerid} literal
       try {
-        const resPlayer = await axios.get(`https://battlemetrics.com{playerId}`, { headers });
+        const urlJugador = "https://battlemetrics.com" + playerId;
+        const resPlayer = await axios.get(urlJugador, { headers });
         if(resPlayer.data?.data?.attributes?.name) {
           nombreJugador = resPlayer.data.data.attributes.name;
         }
