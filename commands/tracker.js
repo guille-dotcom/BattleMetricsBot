@@ -1,15 +1,12 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js"); 
 const axios = require('axios'); 
-const fs = require("fs"); 
-const path = require("path"); 
 
-const configFile = path.join(__dirname, "..", "data", "config.json"); 
 const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN || process.env.TOKEN; 
 
 module.exports = { 
     data: new SlashCommandBuilder() 
         .setName("tracker") 
-        .setDescription("Rastrea a un jugador en nuestro servidor usando su link de BattleMetrics") 
+        .setDescription("Rastrea el estado del jugador en su servidor principal de BattleMetrics") 
         .addStringOption(option => option.setName("link") 
             .setDescription("Link del perfil de BattleMetrics") 
             .setRequired(true) 
@@ -18,33 +15,18 @@ module.exports = {
     async execute(interaction) { 
         await interaction.deferReply(); 
         const link = interaction.options.getString("link"); 
-        const guildId = interaction.guild.id; 
 
         try { 
-            // 1. Extraer la ID del link exactamente igual que en /horasbm 
+            // 1. Extraer la ID numérica del link de forma limpia
             const match = link.match(/players\/(\d+)/); 
             if (!match) { 
                 return await interaction.editReply( 
-                    "❌ Link inválido.\n\nEjemplo:\nhttps://battlemetrics.com" 
+                    "❌ Link inválido.\n\nEjemplo válido:\nhttps://www.battlemetrics.com/players/1192106538" 
                 ); 
             } 
             const battlemetricsId = match[1]; 
 
-            // 2. Leer servidor configurado (Soportando tu estructura por guildId) 
-            const config = JSON.parse(fs.readFileSync(configFile, "utf8")); 
-            let battlemetricsServerId = null; 
-            if (config[guildId] && config[guildId].battlemetricsServer) { 
-                battlemetricsServerId = config[guildId].battlemetricsServer; 
-            } else if (config.battlemetricsServer) { 
-                battlemetricsServerId = config.battlemetricsServer; 
-            } 
-
-            if (!battlemetricsServerId) { 
-                return interaction.editReply("❌ No hay ningún servidor de Rust configurado en esta comunidad."); 
-            } 
-
-            // 3. CONSULTA DE SESIÓN EN VIVO DIRECTA (URL CORREGIDA CON LA API OFICIAL) 
-            // CAMBIO AQUÍ: Se añadió "api.", la ruta "/players/" y el símbolo "$" con llaves correctamente
+            // 2. Consulta directa a la API de BattleMetrics
             const playerUrl = `https://battlemetrics.com{battlemetricsId}`; 
             const response = await axios.get(playerUrl, { 
                 headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` }, 
@@ -60,62 +42,56 @@ module.exports = {
 
             const nombreJugador = playerData.attributes?.name || "Desconocido"; 
 
-            // Buscamos si la sesión en tu servidor está activa en este instante (stop === null) 
-            const sesionActiva = incluidos.find(s => 
-                s.type === "session" && 
-                String(s.relationships?.server?.data?.id) === String(battlemetricsServerId) && 
-                s.attributes?.stop === null 
-            ); 
+            // 3. Obtener la sesión más reciente (La primera de la lista de actividad / arriba en la web)
+            const ultimaSesionFila = incluidos.find(s => s.type === "session");
 
             let statusText = '🔴 Offline'; 
             let embedColor = 0xe74c3c; 
             let playtimeFormateado = '00:00'; 
+            let serverName = "Ninguno detectado";
 
-            if (sesionActiva) { 
-                statusText = '🟢 Online'; 
-                embedColor = 0x2ecc71; 
-                const horaConexion = new Date(sesionActiva.attributes.start); 
-                const diferenciaMs = new Date() - horaConexion; 
-                const horas = Math.floor(diferenciaMs / (1000 * 60 * 60)); 
-                const minutes = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60)); 
-                
-                playtimeFormateado = `${String(horas).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`; 
-            } else { 
-                // Si está offline, buscamos su última sesión guardada en tu mapa 
-                const ultimaSesion = incluidos.find(s => 
-                    s.type === "session" && 
-                    String(s.relationships?.server?.data?.id) === String(battlemetricsServerId) 
-                ); 
-                if (ultimaSesion && ultimaSesion.attributes?.stop) { 
-                    const lastTime = new Date(ultimaSesion.attributes.stop).toLocaleString('es-ES'); 
+            if (ultimaSesionFila) {
+                // Buscamos el nombre del servidor asociado a esta sesión principal
+                const serverId = ultimaSesionFila.relationships?.server?.data?.id;
+                const serverInfo = incluidos.find(s => s.type === "server" && String(s.id) === String(serverId));
+                if (serverInfo && serverInfo.attributes?.name) {
+                    serverName = serverInfo.attributes.name;
+                }
+
+                // Si stop es null significa que está jugando EN ESTE MOMENTO en ese servidor específico
+                if (ultimaSesionFila.attributes?.stop === null) {
+                    statusText = '🟢 Online'; 
+                    embedColor = 0x2ecc71; 
+                    
+                    const horaConexion = new Date(ultimaSesionFila.attributes.start); 
+                    const diferenciaMs = new Date() - horaConexion; 
+                    const horas = Math.floor(diferenciaMs / (1000 * 60 * 60)); 
+                    const minutes = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60)); 
+                    playtimeFormateado = `${String(horas).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`; 
+                } else {
+                    // Si no es null, está offline y calculamos cuándo se le vio por última vez ahí
+                    const lastTime = new Date(ultimaSesionFila.attributes.stop).toLocaleString('es-ES'); 
                     playtimeFormateado = `Última vez visto: ${lastTime}`; 
-                } else { 
-                    playtimeFormateado = "Sin registros recientes en el servidor"; 
-                } 
-            } 
+                }
+            } else {
+                playtimeFormateado = "Sin registros de actividad recientes";
+            }
 
-            // Sacar el nombre del servidor para el spoiler 
-            let serverName = "Nuestro Servidor de Rust"; 
-            const serverInfo = incluidos.find(s => s.type === "server" && String(s.id) === String(battlemetricsServerId)); 
-            if (serverInfo && serverInfo.attributes?.name) { 
-                serverName = serverInfo.attributes.name; 
-            } 
             const hiddenServerText = `||${serverName}||`; 
 
-            // 4. Enviar la tarjeta visual con los datos formateados 
+            // 4. Enviar la tarjeta de monitoreo enfocada en el servidor principal
             const embed = new EmbedBuilder() 
-                .setTitle(`🎯 Monitoreo de Perfil BM`) 
+                .setTitle(`🎯 Monitoreo de Perfil`) 
                 .setColor(embedColor) 
                 .addFields( 
                     { name: "👤 Jugador", value: nombreJugador, inline: true }, 
                     { name: "🆔 BattleMetrics ID", value: `\`${battlemetricsId}\``, inline: true }, 
-                    { name: "📊 Estado", value: statusText, inline: true }, 
-                    // CAMBIO AQUÍ: Se eliminaron los códigos rotos %EF%B8%8F de los títulos para limpiar la interfaz
-                    { name: "⏱️ Play time (Sesión)", value: `\`${playtimeFormateado}\``, inline: true }, 
-                    { name: "🖥️ Servidor configurado (Revelar)", value: hiddenServerText, inline: false } 
+                    { name: "📊 Estado Actual", value: statusText, inline: true }, 
+                    { name: "⏱️ Tiempo de Juego", value: `\`${playtimeFormateado}\``, inline: true }, 
+                    { name: "🖥️ Servidor de Seguimiento (Revelar)", value: hiddenServerText, inline: false } 
                 ) 
                 .setTimestamp() 
-                .setFooter({ text: `${interaction.guild.name} - Control Interno` }); 
+                .setFooter({ text: `${interaction.guild.name} - Rastreador de Actividad` }); 
 
             await interaction.editReply({ embeds: [embed] }); 
 
