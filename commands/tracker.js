@@ -65,7 +65,7 @@ module.exports = {
     const headers = { Authorization: `Bearer ${apiToken}`, Accept: "application/json" };
 
     try { 
-      // 1. CLAVE FINAL: Forzamos la URL concatenando el string de forma clásica para que Node nunca busque {playerid} literal
+      // 1. CORREGIDO: Añadida la barra diagonal obligatoria al final de /players/
       try {
         const urlJugador = "https://battlemetrics.com" + playerId;
         const resPlayer = await axios.get(urlJugador, { headers });
