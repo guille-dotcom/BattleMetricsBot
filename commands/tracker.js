@@ -17,13 +17,12 @@ module.exports = {
     ), 
 
   async execute(interaction) { 
-    // Hacemos la respuesta pública para todo el chat
     await interaction.deferReply(); 
     let inputId = interaction.options.getString("id"); 
 
     // Extractor inteligente de la ID del jugador
     const coincidenciaLink = inputId.match(/players\/(\d+)/);
-    const playerId = coincidenciaLink ? coincidenciaLink : inputId.replace(/\D/g, "");
+    const playerId = coincidenciaLink ? coincidenciaLink[1] : inputId.replace(/\D/g, "");
 
     if (!playerId) {
       return interaction.editReply("❌ La ID o el enlace de BattleMetrics que proporcionaste no es válido.");
@@ -57,7 +56,7 @@ module.exports = {
     } 
 
     // Variables por defecto si falla la API
-    let nombreJugador = `Jugador (${playerId})`; 
+    let nombreJugador = "Jugador desconocido"; 
     let estado = "OFFLINE";
     let tiempoSesion = "0:00";
     let nombreServidor = "Servidor Rustafied";
@@ -65,9 +64,8 @@ module.exports = {
     const apiToken = process.env.BATTLEMETRICS_TOKEN || process.env.TOKEN;
     const headers = { Authorization: `Bearer ${apiToken}`, Accept: "application/json" };
 
-    // CONSULTA INMEDIATA Y SEGURA AL INSTANTE
     try { 
-      // 1. Consultar el perfil del jugador primero para asegurar el nombre real pase lo que pase
+      // 1. CORREGIDO: Uso estricto de comillas invertidas ` ` en la URL para el perfil del jugador
       try {
         const resPlayer = await axios.get(`https://battlemetrics.com{playerId}`, { headers });
         if(resPlayer.data?.data?.attributes?.name) {
@@ -77,7 +75,7 @@ module.exports = {
         console.log("Error consultando nombre del jugador en comando:", e.message);
       }
 
-      // 2. Consultar el servidor e incluir las sesiones para calcular el tiempo
+      // 2. Servidor e inclusión de sesiones activas
       const resBM = await axios.get("https://battlemetrics.com", { 
         headers, 
         params: { include: "session" } 
@@ -107,7 +105,7 @@ module.exports = {
       console.log("❌ FALLO DE API CONTROLADO EN ENTRADA:", error.message); 
     } 
 
-    // Guardar en la base de datos local (con el estado actual real para que el servicio de fondo no duplique)
+    // Guardar en la base de datos local
     const ahora = Date.now(); 
     const expira = ahora + (24 * 60 * 60 * 1000); 
 
@@ -117,7 +115,7 @@ module.exports = {
       serverId: serverId, 
       playerId: playerId, 
       playerName: nombreJugador, 
-      lastState: estado, // Al guardar ONLINE u OFFLINE real, el fondo no enviará nada hasta que cambie
+      lastState: estado, 
       createdAt: ahora, 
       expiresAt: expira 
     }; 
@@ -131,7 +129,7 @@ module.exports = {
       return interaction.editReply("❌ Error guardando el tracker."); 
     } 
 
-    // Renderizar un ÚNICO Embed público con todo resuelto
+    // Construir el Embed limpio
     const embed = new EmbedBuilder() 
       .setTitle("🎮 Tracker BattleMetrics") 
       .setColor(estado === "ONLINE" ? "#57F287" : "#ED4245") 
@@ -139,12 +137,11 @@ module.exports = {
       .addFields( 
         { name: "Estado", value: estado === "ONLINE" ? "🟢 ONLINE" : "🔴 OFFLINE" }, 
         { name: "⏱️ Play Time (Sesión)", value: tiempoSesion }, 
-        { name: "📡 Servidor", value: `||${nombreServidor}||` }, // Spoiler activado
+        { name: "📡 Servidor", value: `||${nombreServidor}||` }, 
         { name: "⌛ Tracker restante", value: "23h 59m" } 
       ) 
       .setTimestamp(); 
 
-    // Enviamos solo el recuadro limpio, eliminando textos de confirmación extra de arriba
     await interaction.editReply({ embeds: [embed] }); 
   } 
 };
