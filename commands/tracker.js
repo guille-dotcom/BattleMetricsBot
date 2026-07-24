@@ -88,7 +88,6 @@ module.exports = {
     let tiempoSesion = "0:00";
     let nombreServidor = "Servidor Rust";
 
-    // CORREGIDO: Si BATTLEMETRICS_TOKEN no existe, usa TOKEN por si acaso
     const apiToken = process.env.BATTLEMETRICS_TOKEN || process.env.TOKEN;
 
     const headers = { 
@@ -97,7 +96,7 @@ module.exports = {
     };
 
     try { 
-      // 1. Conseguir datos de la sesión del jugador
+      // CORREGIDO: Uso estricto de comillas invertidas ` ` en los dos endpoints de la API
       const resBM = await axios.get(`https://battlemetrics.com{serverId}`, { headers, params: { include: "session" } }); 
       const incluidos = resBM.data.included || []; 
       
@@ -116,18 +115,16 @@ module.exports = {
         tiempoSesion = `${horas}:${minutos.toString().padStart(2, '0')}`;
       }
 
-      // 2. Conseguir el nombre real del jugador
       const resPlayer = await axios.get(`https://battlemetrics.com{playerId}`, { headers });
       if(resPlayer.data?.data?.attributes?.name) {
         nombreJugador = resPlayer.data.data.attributes.name;
       }
 
-      // 3. Conseguir nombre real del servidor
       if(resBM.data?.data?.attributes?.name) {
         nombreServidor = resBM.data.data.attributes.name;
       }
     } catch(error) { 
-      console.log("ERROR CONSULTA INICIAL BM:", error.message); 
+      console.log("ERROR INTERNO COMANDO TRACKER:", error.message); 
     } 
 
     // ====================== // 
@@ -171,7 +168,6 @@ module.exports = {
       ) 
       .setTimestamp(); 
 
-    // Respuesta unificada
     await interaction.editReply({ 
       content: `✅ **Tracker creado correctamente**\n\n` + 
                `👤 Jugador: **${nombreJugador}**\n` + 
