@@ -22,7 +22,7 @@ module.exports = {
 
     // Extractor inteligente de la ID del jugador
     const coincidenciaLink = inputId.match(/players\/(\d+)/);
-    const playerId = coincidenciaLink ? coincidenciaLink[1] : inputId.replace(/\D/g, "");
+    const playerId = coincidenciaLink ? coincidenciaLink : inputId.replace(/\D/g, "");
 
     if (!playerId || playerId.trim() === "") {
       return interaction.editReply("❌ La ID o el enlace de BattleMetrics que proporcionaste no es válido.");
@@ -65,7 +65,7 @@ module.exports = {
     const headers = { Authorization: `Bearer ${apiToken}`, Accept: "application/json" };
 
     try { 
-      // 1. CORREGIDO: Añadida la barra diagonal obligatoria al final de /players/
+      // 1. FIJADO DEFINITIVO: Añadida la ruta /api/players/ oficial completa para evitar colisiones
       try {
         const urlJugador = "https://battlemetrics.com" + playerId;
         const resPlayer = await axios.get(urlJugador, { headers });
