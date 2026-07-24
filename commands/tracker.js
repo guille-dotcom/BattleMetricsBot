@@ -1,8 +1,8 @@
-require("dotenv").config(); 
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js"); 
 const fs = require("fs"); 
 const path = require("path"); 
-const axios = require("axios"); 
+// Importamos tu servicio original que funciona perfecto
+const { getBattleMetricsHours } = require("../services/battlemetricsHours"); 
 
 const file = path.join(__dirname, "..", "data", "trackers.json"); 
 
@@ -12,25 +12,52 @@ module.exports = {
     .setDescription("Comienza el seguimiento de un jugador BattleMetrics durante 24 horas") 
     .addStringOption(option => option 
       .setName("id") 
-      .setDescription("Enlace o ID del jugador BattleMetrics") 
+      .setDescription("ID del jugador BattleMetrics") 
       .setRequired(true) 
     ), 
 
   async execute(interaction) { 
+    // Respuesta pública para todo el chat
     await interaction.deferReply(); 
-    let inputId = interaction.options.getString("id"); 
+    const playerId = String(interaction.options.getString("id")); 
 
-    // Extractor inteligente de la ID del jugador
-    const coincidenciaLink = inputId.match(/players\/(\d+)/);
-    const playerId = coincidenciaLink ? coincidenciaLink : inputId.replace(/\D/g, "");
+    // ====================== // 
+    // CONFIG BATTLEMETRICS // 
+    // ====================== // 
+    const configFile = path.join(__dirname, "..", "data", "config.json"); 
+    let config = {}; 
+    try { 
+      if(fs.existsSync(configFile)) { 
+        config = JSON.parse(fs.readFileSync(configFile, "utf8")); 
+      } 
+    } catch(error) { 
+      console.log("ERROR LEYENDO CONFIG:", error.message); 
+    } 
 
-    if (!playerId || playerId.trim() === "") {
-      return interaction.editReply("❌ La ID o el enlace de BattleMetrics que proporcionaste no es válido.");
-    }
+    const guildId = String(interaction.guild.id); 
+    let serverId = null; 
 
-    const serverId = "433255"; 
+    if(config.battlemetricsServer) { 
+      serverId = config.battlemetricsServer; 
+    } 
 
-    // Leer trackers activos
+    if(!serverId && config[guildId]) { 
+      if(typeof config[guildId] === "object") { 
+        serverId = config[guildId].battlemetricsServer; 
+      } else { 
+        serverId = config[guildId]; 
+      } 
+    } 
+
+    if(!serverId) { 
+      return interaction.editReply("❌ Este servidor no tiene BattleMetrics configurado.\nUsa primero `/configurar-servidor`."); 
+    } 
+
+    serverId = String(serverId); 
+
+    // ====================== // 
+    // LEER TRACKERS // 
+    // ====================== // 
     let trackers = []; 
     try { 
       if(fs.existsSync(file)) { 
@@ -42,71 +69,49 @@ module.exports = {
 
     if(!Array.isArray(trackers)) trackers = []; 
 
-    // Límite de trackers
-    const guildId = String(interaction.guild.id);
+    // LIMITE 
     const activosServidor = trackers.filter(t => String(t.guildId) === guildId); 
     if(activosServidor.length >= 20) { 
       return interaction.editReply("❌ Este servidor ya tiene el límite de 20 jugadores en seguimiento."); 
     } 
 
-    // Duplicados
+    // DUPLICADOS 
     const existe = trackers.find(t => String(t.guildId) === guildId && String(t.playerId) === playerId); 
     if(existe) { 
       return interaction.editReply("⚠️ Este jugador ya está siendo monitoreado."); 
     } 
 
-    // Variables por defecto si falla la API
+    // ====================== // 
+    // CONSULTA CON TU MÉTODO ORIGINAL DE AYER // 
+    // ====================== // 
     let nombreJugador = "Jugador desconocido"; 
     let estado = "OFFLINE";
     let tiempoSesion = "0:00";
-    let nombreServidor = "Servidor Rustafied";
-
-    const apiToken = process.env.BATTLEMETRICS_TOKEN || process.env.TOKEN;
-    const headers = { Authorization: `Bearer ${apiToken}`, Accept: "application/json" };
+    let nombreServidor = "Servidor Rust";
 
     try { 
-      // 1. REPARACIÓN ABSOLUTA: Usamos comillas invertidas pero sin dejar espacio a que se borre la barra
-      try {
-        const urlJugador = `https://battlemetrics.com{playerId}`;
-        const resPlayer = await axios.get(urlJugador, { headers });
-        if(resPlayer.data?.data?.attributes?.name) {
-          nombreJugador = resPlayer.data.data.attributes.name;
-        }
-      } catch (e) {
-        console.log("Error consultando nombre del jugador en comando:", e.message);
-      }
-
-      // 2. Consulta limpia al servidor de Rustafied
-      const resBM = await axios.get(`https://battlemetrics.com`, { 
-        headers, 
-        params: { include: "session" } 
-      }); 
-
-      const incluidos = resBM.data.included || []; 
+      // Llamamos a tu servicio nativo que no tiene errores de URL
+      const data = await getBattleMetricsHours(playerId); 
       
-      const sesionActiva = incluidos.find(s => 
-        s.type === "session" && 
-        s.relationships?.player?.data?.id === String(playerId) && 
-        s.attributes?.stop === null 
-      );
-
-      if (sesionActiva && sesionActiva.attributes?.start) { 
-        estado = "ONLINE";
-        const horaConexion = new Date(sesionActiva.attributes.start); 
-        const diferenciaMs = new Date() - horaConexion; 
-        const horas = Math.floor(diferenciaMs / (1000 * 60 * 60));
-        const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60));
-        tiempoSesion = `${horas}:${minutos.toString().padStart(2, '0')}`;
+      if(data?.nombre) { 
+        nombreJugador = data.nombre; 
       }
-
-      if(resBM.data?.data?.attributes?.name) {
-        nombreServidor = resBM.data.data.attributes.name;
+      if(data?.tiempoSesion) {
+        tiempoSesion = data.tiempoSesion;
+      }
+      if(data?.online) {
+        estado = "ONLINE";
+      }
+      if(data?.servidorNombre) {
+        nombreServidor = data.servidorNombre;
       }
     } catch(error) { 
-      console.log("❌ FALLO DE API CONTROLADO EN ENTRADA:", error.message); 
+      console.log("ERROR USANDO TU SERVICIO NATIVO:", error.message); 
     } 
 
-    // Guardar en la base de datos local
+    // ====================== // 
+    // CREAR Y GUARDAR TRACKER // 
+    // ====================== // 
     const ahora = Date.now(); 
     const expira = ahora + (24 * 60 * 60 * 1000); 
 
@@ -130,7 +135,9 @@ module.exports = {
       return interaction.editReply("❌ Error guardando el tracker."); 
     } 
 
-    // Construir el Embed limpio con spoiler
+    // ====================== // 
+    // CONSTRUIR EMBED DE ESTADO // 
+    // ====================== // 
     const embed = new EmbedBuilder() 
       .setTitle("🎮 Tracker BattleMetrics") 
       .setColor(estado === "ONLINE" ? "#57F287" : "#ED4245") 
@@ -138,11 +145,12 @@ module.exports = {
       .addFields( 
         { name: "Estado", value: estado === "ONLINE" ? "🟢 ONLINE" : "🔴 OFFLINE" }, 
         { name: "⏱️ Play Time (Sesión)", value: tiempoSesion }, 
-        { name: "📡 Servidor", value: `||${nombreServidor}||` }, 
+        { name: "📡 Servidor", value: `||${nombreServidor}||` }, // Spoiler activado
         { name: "⌛ Tracker restante", value: "23h 59m" } 
       ) 
       .setTimestamp(); 
 
+    // Enviamos el recuadro limpio e instantáneo al canal
     await interaction.editReply({ embeds: [embed] }); 
   } 
 };
