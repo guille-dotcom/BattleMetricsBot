@@ -81,7 +81,7 @@ module.exports = {
     } 
 
     // ====================== // 
-    // CONSULTA INMEDIATA A BATTLEMETRICS // 
+    // CONSULTA INMEDIATA A BATTLEMETRICS (INDEPENDIENTE) // 
     // ====================== // 
     let nombreJugador = "Jugador desconocido"; 
     let estado = "OFFLINE";
@@ -96,7 +96,7 @@ module.exports = {
     };
 
     try { 
-      // CORREGIDO: Uso estricto de comillas invertidas ` ` en los dos endpoints de la API
+      // Usamos comillas invertidas ` ` obligatorias para inyectar la ID real
       const resBM = await axios.get(`https://battlemetrics.com{serverId}`, { headers, params: { include: "session" } }); 
       const incluidos = resBM.data.included || []; 
       
@@ -115,6 +115,7 @@ module.exports = {
         tiempoSesion = `${horas}:${minutos.toString().padStart(2, '0')}`;
       }
 
+      // Consulta directa al perfil del jugador
       const resPlayer = await axios.get(`https://battlemetrics.com{playerId}`, { headers });
       if(resPlayer.data?.data?.attributes?.name) {
         nombreJugador = resPlayer.data.data.attributes.name;
@@ -124,7 +125,7 @@ module.exports = {
         nombreServidor = resBM.data.data.attributes.name;
       }
     } catch(error) { 
-      console.log("ERROR INTERNO COMANDO TRACKER:", error.message); 
+      console.log("❌ ERROR DIRECTO EN COMANDO:", error.message); 
     } 
 
     // ====================== // 
