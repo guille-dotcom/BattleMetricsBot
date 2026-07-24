@@ -1,64 +1,49 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const fs = require("fs");
-const path = require("path");
-
-const file = path.join(__dirname, "..", "data", "trackers.json");
+const { trackersFile } = require("../services/trackerService");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("trackers-activos")
-    .setDescription("Muestra la lista de jugadores que están siendo monitoreados en este servidor"),
+    data: new SlashCommandBuilder()
+        .setName("trackers-activos")
+        .setDescription("Muestra la lista de perfiles de BattleMetrics que se están vigilando en este servidor"),
 
-  async execute(interaction) {
-    await interaction.deferReply();
-    const guildId = String(interaction.guild.id);
+    async execute(interaction) {
+        await interaction.deferReply();
 
-    // 1. Leer los trackers desde la base de datos local
-    let trackers = [];
-    try {
-      if (fs.existsSync(file)) {
-        trackers = JSON.parse(fs.readFileSync(file, "utf8"));
-      }
-    } catch (error) {
-      console.log("ERROR LEYENDO TRACKERS EN LISTA:", error.message);
+        try {
+            if (!fs.existsSync(trackersFile)) {
+                return await interaction.editReply("📋 No hay ningún jugador registrado en el sistema actualmente.");
+            }
+
+            const trackers = JSON.parse(fs.readFileSync(trackersFile, 'utf8'));
+            const playerIds = Object.keys(trackers);
+
+            // Filtrar solo los registrados en el canal actual para mantener orden
+            const filtrados = playerIds.filter(id => trackers[id].canalId === interaction.channel.id);
+
+            if (filtrados.length === 0) {
+                return await interaction.editReply("📋 No hay jugadores registrados para recibir alertas automáticas en este canal específico.");
+            }
+
+            const embed = new EmbedBuilder()
+                .setTitle("🔎 Lista de Seguimiento en Segundo Plano")
+                .setColor("#5865F2")
+                .setDescription("El bot escanea estos perfiles cada 30 segundos y alertará ante cambios de estado.")
+                .setTimestamp();
+
+            filtrados.forEach((id, index) => {
+                const data = trackers[id];
+                embed.addFields({
+                    name: `${index + 1}. ID: ${id}`,
+                    value: `• **Último Estado:** \`${data.ultimoEstado.toUpperCase()}\`\n• **Añadido por:** ${data.registradoPor}`,
+                    inline: false
+                });
+            });
+
+            await interaction.editReply({ embeds: [embed] });
+        } catch (error) {
+            console.error("ERROR EN TRACKERS ACTIVOS:", error);
+            await interaction.editReply("❌ Ocurrió un error al cargar la lista de monitoreo.");
+        }
     }
-
-    if (!Array.isArray(trackers)) trackers = [];
-
-    // 2. Filtrar solo los trackers que pertenezcan a este servidor de Discord
-    const activosServidor = trackers.filter(t => String(t.guildId) === guildId);
-
-    if (activosServidor.length === 0) {
-      return interaction.editReply("❌ Actualmente no hay ningún jugador bajo seguimiento en este servidor.");
-    }
-
-    // 3. Calcular cuánto tiempo le queda a cada uno para expirar
-    function obtenerTiempoRestante(expira) {
-      const diferencia = expira - Date.now();
-      if (diferencia <= 0) return "Expirando...";
-      const horas = Math.floor(diferencia / 3600000);
-      const minutos = Math.floor((diferencia % 3600000) / 60000);
-      return `${horas}h ${minutos}m`;
-    }
-
-    // 4. Construir el diseño de la lista en formato de texto ordenado
-    let listaTexto = "";
-    activosServidor.forEach((tracker, index) => {
-      const estadoEmoji = tracker.lastState === "ONLINE" ? "🟢 ONLINE" : "🔴 OFFLINE";
-      listaTexto += `**${index + 1}. ${tracker.playerName}**\n` +
-                    `• ID: \`${tracker.playerId}\`\n` +
-                    `• Estado actual: ${estadoEmoji}\n` +
-                    `• Tiempo restante: \`${obtenerTiempoRestante(tracker.expiresAt)}\`\n\n`;
-    });
-
-    // 5. Enviar el recuadro Embed con la lista al canal
-    const embed = new EmbedBuilder()
-      .setTitle("📋 Jugadores Bajo Monitoreo")
-      .setColor("#5865F2") // Color azul Discord institucional
-      .setDescription(listaTexto)
-      .setFooter({ text: `Total de trackers activos: ${activosServidor.length}/20` })
-      .setTimestamp();
-
-    await interaction.editReply({ embeds: [embed] });
-  }
 };
