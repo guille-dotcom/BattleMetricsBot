@@ -1,45 +1,142 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { getLivePlayerSession } = require("../services/trackerService");
+const {
+    SlashCommandBuilder,
+    EmbedBuilder
+} = require("discord.js");
+
+const {
+    obtenerBattleMetricsId,
+    registrarTracker
+} = require("../services/trackerService");
+
 
 module.exports = {
+
     data: new SlashCommandBuilder()
+
         .setName("tracker")
-        .setDescription("Monitorea la actividad de un jugador usando su enlace de BattleMetrics")
-        .addStringOption(option => option.setName("link")
-            .setDescription("Enlace del perfil (Ej: https://battlemetrics.com...)")
-            .setRequired(true)
+
+        .setDescription(
+            "Rastrea un jugador de BattleMetrics durante 24 horas"
+        )
+
+        .addStringOption(option =>
+            option
+                .setName("jugador")
+                .setDescription(
+                    "ID o link de BattleMetrics"
+                )
+                .setRequired(true)
         ),
 
+
+
     async execute(interaction) {
+
         await interaction.deferReply();
-        const link = interaction.options.getString("link");
 
-        // Llamar al servicio limpio desde cero
-        const player = await getLivePlayerSession(link);
 
-        if (!player) {
-            return await interaction.editReply(
-                "❌ No se pudo procesar el rastreo. Asegúrate de ingresar un enlace válido y público de BattleMetrics."
+        const jugador =
+            interaction.options.getString("jugador");
+
+
+        try {
+
+
+            const battlemetricsId =
+                obtenerBattleMetricsId(jugador);
+
+
+
+            if(!battlemetricsId){
+
+                return interaction.editReply(
+                    "❌ ID o link de BattleMetrics inválido."
+                );
+
+            }
+
+
+
+            const tracker =
+                registrarTracker({
+
+                    battlemetricsId,
+
+                    canalId: interaction.channel.id,
+
+                    guildId: interaction.guild.id,
+
+                    registradoPor:
+                    interaction.user.tag
+
+                });
+
+
+
+            const embed =
+                new EmbedBuilder()
+
+                .setTitle(
+                    "🎯 Tracker creado"
+                )
+
+                .setColor(
+                    "#57F287"
+                )
+
+                .addFields(
+
+                    {
+                        name:"🆔 BattleMetrics",
+                        value:`\`${battlemetricsId}\``,
+                        inline:true
+                    },
+
+                    {
+                        name:"⏱ Duración",
+                        value:"24 horas",
+                        inline:true
+                    },
+
+                    {
+                        name:"👤 Registrado por",
+                        value:interaction.user.tag,
+                        inline:false
+                    }
+
+                )
+
+                .setTimestamp();
+
+
+
+            await interaction.editReply({
+
+                embeds:[
+                    embed
+                ]
+
+            });
+
+
+
+        } catch(error){
+
+
+            console.error(
+                "ERROR TRACKER:",
+                error
             );
+
+
+            await interaction.editReply(
+                "❌ Error creando tracker."
+            );
+
+
         }
 
-        // Definir color del embed según su estado en vivo
-        const embedColor = player.isOnline ? 0x2ecc71 : 0xe74c3c;
-        const hiddenServerText = `||${player.serverName}||`;
 
-        const embed = new EmbedBuilder()
-            .setTitle("🎯 Monitoreo de Perfil en Vivo")
-            .setColor(embedColor)
-            .addFields(
-                { name: "👤 Jugador", value: player.nombre, inline: true },
-                { name: "🆔 BattleMetrics ID", value: `\`${player.id}\``, inline: true },
-                { name: "📊 Estado Actual", value: player.status, inline: true },
-                { name: "⏱️ Tiempo de Juego", value: `\`${player.playtime}\``, inline: true },
-                { name: "🖥️ Servidor Detectado (Revelar)", value: hiddenServerText, inline: false }
-            )
-            .setTimestamp()
-            .setFooter({ text: `${interaction.guild.name} - Sistema Interno de Control` });
-
-        await interaction.editReply({ embeds: [embed] });
     }
+
 };
