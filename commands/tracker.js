@@ -9,18 +9,19 @@ const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN;
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('tracker')
-        .setDescription('Rastrea las estadísticas de un jugador de Rust en NUESTRO servidor')
+        .setDescription('Rastrea las estadísticas de un jugador de Rust usando su ID o link de BattleMetrics')
         .addStringOption(option => 
-            option.setName('steamid')
-                .setDescription('La SteamID64 de 17 dígitos del jugador')
+            option.setName('jugador')
+                .setDescription('Introduce el ID numérico de BattleMetrics o el enlace completo al perfil del jugador')
                 .setRequired(true)),
 
     async execute(interaction) {
         await interaction.deferReply();
 
-        const steamId = interaction.options.getString('steamid').trim();
+        const jugadorInput = interaction.options.getString('jugador').trim();
         const guildId = interaction.guild.id; 
 
+        // 1. Cargar el servidor de Rust configurado desde config.json
         let battleMetricsServerId = null;
         try {
             if (fs.existsSync(configFile)) {
@@ -38,40 +39,49 @@ module.exports = {
             return interaction.editReply('❌ Este servidor de Discord aún no ha sido vinculado a un servidor de Rust. Usa primero `/configurar-servidor`.');
         }
 
-        if (!/^\d{17}$/.test(steamId)) {
-            return interaction.editReply('❌ Por favor, introduce una SteamID64 válida de 17 dígitos.');
+        // 2. EXTRACCIÓN INTELIGENTE DEL ID DE BATTLEMETRICS
+        let bmPlayerId = null;
+
+        // Si el usuario pegó un enlace completo de BattleMetrics
+        if (jugadorInput.includes('://battlemetrics.com')) {
+            const match = jugadorInput.match(/players\/(\d+)/);
+            if (match) {
+                bmPlayerId = match[1];
+            }
+        } else if (/^\d+$/.test(jugadorInput)) {
+            // Si el usuario introdujo directamente el número de ID puro
+            bmPlayerId = jugadorInput;
+        }
+
+        // Validación final de que obtuvimos un ID correcto
+        if (!bmPlayerId) {
+            return interaction.editReply('❌ Entrada inválida. Por favor, proporciona el ID numérico de BattleMetrics o la URL del perfil del jugador.');
         }
 
         try {
-            // URL limpia base de BattleMetrics
-            const url = 'https://battlemetrics.com';
+            // URL directa al perfil del jugador específico (Endpoint libre de bloqueo 403 global)
+            const url = `https://api.://battlemetrics.com${bmPlayerId}`;
             
-            // LA CORRECCIÓN MAESTRA: Añadimos 'User-Agent' e 'Accept' para saltarnos el bloqueo 403 de Cloudflare
             const response = await axios.get(url, {
                 headers: { 
                     'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}`,
                     'Accept': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
                 },
                 params: {
-                    'filter[search]': steamId,
-                    'filter[servers]': battleMetricsServerId,
                     'include': 'server,session'
                 }
             });
 
-            if (!response.data || !response.data.data || response.data.data.length === 0) {
-                return interaction.editReply('❌ No se encontró ningún registro de actividad de esa SteamID64 en nuestro servidor de Rust.');
+            if (!response.data || !response.data.data) {
+                return interaction.editReply('❌ No se encontró ningún registro para ese ID de jugador en BattleMetrics.');
             }
 
-            // Mapeamos el primer jugador que arroja la coincidencia
-            const playerData = response.data.data[0];
+            const playerData = response.data.data;
             const incluidos = response.data.included || [];
-            
             const playerName = playerData.attributes.name;
-            const bmPlayerId = playerData.id;
 
-            // Buscamos si tiene una sesión activa en los datos incluidos
+            // 3. BUSCAR SESIÓN ACTIVA EN TU SERVIDOR CONFIGURADO
             const sesionActiva = incluidos.find(s => 
                 s.type === "session" && 
                 String(s.relationships?.server?.data?.id) === battleMetricsServerId && 
@@ -92,18 +102,21 @@ module.exports = {
                 const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60));
                 playtimeFormateado = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
             } else {
-                // Si está offline, miramos las sesiones para ver su última conexión
+                // Si está offline, miramos en el paquete incluido para ver su última sesión histórica en tu mapa
                 const ultimaSesion = incluidos.find(s => 
                     s.type === "session" && 
                     String(s.relationships?.server?.data?.id) === battleMetricsServerId
                 );
                 if (ultimaSesion && ultimaSesion.attributes?.stop) {
-                    const lastTime = new Date(ultimaSesion.attributes.stop).toLocaleString('es-ES');
+                    const lastTime = new Date(ultimaSesion.attributes.stop).toLocaleString('es-ES', { timeZone: 'America/Santiago' });
                     playtimeFormateado = `Última vez visto: ${lastTime}`;
+                } else {
+                    // Si el jugador existe en BM pero nunca ha pisado tu servidor configurado en su historial reciente
+                    return interaction.editReply(`❌ El jugador **${playerName}** está registrado en BattleMetrics, pero no tiene historial de juego en tu servidor configurado.`);
                 }
             }
 
-            // Conseguir el nombre del servidor para el spoiler
+            // Conseguir el nombre del servidor para meterlo en el spoiler oculto
             let serverName = "Nuestro Servidor de Rust";
             const serverInfo = incluidos.find(s => s.type === "server" && String(s.id) === battleMetricsServerId);
             if (serverInfo && serverInfo.attributes?.name) {
@@ -112,13 +125,14 @@ module.exports = {
 
             const hiddenServerText = `||${serverName}||`;
 
+            // 4. DISEÑO DEL EMBED FINAL INTERACTIVO
             const trackerEmbed = new EmbedBuilder()
                 .setColor(embedColor)
                 .setTitle(`🎯 Monitoreo de Jugador: ${playerName}`)
-                .setURL(`https://battlemetrics.com{bmPlayerId}`)
+                .setURL(`https://www.://battlemetrics.com${bmPlayerId}`)
                 .addFields(
                     { name: '👤 Nombre detectado', value: playerName, inline: true },
-                    { name: '🆔 SteamID64', value: `\`${steamId}\``, inline: true },
+                    { name: '🆔 BattleMetrics ID', value: `\`${bmPlayerId}\``, inline: true },
                     { name: '📊 Estado', value: statusText, inline: true },
                     { name: '⏱️ Play time (Sesión)', value: `\`${playtimeFormateado}\``, inline: true },
                     { name: '🖥️ Servidor actual (Haz click para revelar)', value: hiddenServerText, inline: false }
@@ -129,8 +143,11 @@ module.exports = {
             await interaction.editReply({ embeds: [trackerEmbed] });
 
         } catch (error) {
-            console.error('ERROR EN COMANDO TRACKER SEGURO:', error.message);
-            await interaction.editReply('⚠️ Ocurrió un error inesperado al procesar la solicitud con el endpoint interno de BattleMetrics.');
+            console.error('ERROR EN COMANDO TRACKER DIRECTO:', error.message);
+            if (error.response && error.response.status === 404) {
+                return interaction.editReply('❌ El ID de jugador ingresado no existe en los registros de BattleMetrics.');
+            }
+            await interaction.editReply('⚠️ Ocurrió un error al procesar el perfil del jugador. Verifica que el ID sea correcto.');
         }
     },
 };
