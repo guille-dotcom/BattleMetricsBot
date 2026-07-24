@@ -5,6 +5,7 @@ const path = require('path');
 
 const file = path.join(__dirname, '..', 'data', 'config.json');
 const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN; 
+const STEAM_API_KEY = process.env.STEAM_API_KEY; 
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -16,6 +17,7 @@ module.exports = {
                 .setRequired(true)),
 
     async execute(interaction) {
+        // Evita el timeout de 3 segundos de Discord
         await interaction.deferReply();
 
         const steamId = interaction.options.getString('steamid').trim();
@@ -32,25 +34,51 @@ module.exports = {
             }
         } catch (error) {
             console.error('ERROR LEYENDO CONFIG EN TRACKER:', error.message);
-            return interaction.editReply('❌ Ocurrió un error al leer la configuración del servidor.');
+            return interaction.editReply('❌ Ocurrió un error al leer la configuración local del servidor.');
         }
 
         if (!battleMetricsServerId) {
             return interaction.editReply('❌ Este servidor de Discord aún no ha sido vinculado a un servidor de Rust. Usa primero `/configurar-servidor`.');
         }
 
-        // Validación estricta del ID de Steam
+        // Validación estricta del formato de Steam ID
         if (!/^\d{17}$/.test(steamId)) {
             return interaction.editReply('❌ Por favor, introduce una SteamID64 válida de 17 dígitos.');
         }
 
+        if (!STEAM_API_KEY) {
+            return interaction.editReply('⚠️ Error interno: Falta la variable STEAM_API_KEY en el entorno de Render.');
+        }
+
         try {
-            // Buscamos el jugador filtrando estrictamente dentro de tu servidor de Rust configurado
+            // STEP A: Consultar a la API oficial de Valve para resolver el nombre del perfil
+            const steamUrl = 'https://steampowered.com';
+            const steamResponse = await axios.get(steamUrl, {
+                params: {
+                    key: STEAM_API_KEY,
+                    steamids: steamId
+                }
+            });
+            
+            const players = steamResponse.data?.response?.players;
+            
+            if (!players || !Array.isArray(players) || players.length === 0) {
+                return interaction.editReply('❌ No se encontró ningún perfil de Steam válido asociado a esa SteamID64.');
+            }
+            
+            // Extraer el nombre de usuario de la primera cuenta devuelta
+            const steamName = players[0].personaname; 
+
+            if (!steamName) {
+                return interaction.editReply('❌ No se pudo determinar el nombre público de la cuenta de Steam.');
+            }
+
+            // STEP B: Buscar al jugador por su NOMBRE de forma legal dentro de tu servidor de BattleMetrics
             const searchUrl = 'https://battlemetrics.com';
             const response = await axios.get(searchUrl, {
                 headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` },
                 params: {
-                    'filter[search]': steamId,
+                    'filter[search]': steamName, // Buscamos por texto (Nombre), evitando el bloqueo 403
                     'filter[servers]': battleMetricsServerId, 
                     'include': 'server,session'
                 }
@@ -58,37 +86,36 @@ module.exports = {
 
             // Si el jugador nunca ha pisado tu servidor configurado
             if (!response.data || !response.data.data || response.data.data.length === 0) {
-                return interaction.editReply('❌ No se encontró ningún registro de actividad de ese jugador en nuestro servidor de Rust.');
+                return interaction.editReply(`❌ El jugador **${steamName}** no tiene ningún registro de actividad en nuestro servidor de Rust.`);
             }
 
-            const playerData = response.data.data[0]; // Tomamos el primer jugador que coincide en tu servidor
+            const playerData = response.data.data[0]; // Extraer el primer jugador del listado
             const includedData = response.data.included || [];
             const playerName = playerData.attributes.name;
 
-            // Buscamos si el jugador tiene una sesión activa ejecutándose en este instante
+            // Buscamos si el jugador posee una sesión de juego vinculada a tu servidor
             const targetSession = includedData.find(item => 
                 item.type === 'session' && 
                 item.relationships.server.data.id === battleMetricsServerId
             );
 
             let status = '🔴 Offline';
-            let sessionTimeText = '00:00'; // Formato por defecto si está desconectado
+            let sessionTimeText = '00:00'; 
             let serverName = 'Nuestro Servidor de Rust';
             let embedColor = 0xe74c3c; // Rojo por defecto si está offline
 
-            // Buscar el nombre real del servidor en los datos incluidos para taparlo con spoiler
+            // Obtener el nombre del servidor desde el paquete incluido
             const serverInfo = includedData.find(item => item.type === 'server' && item.id === battleMetricsServerId);
             if (serverInfo && serverInfo.attributes?.name) {
                 serverName = serverInfo.attributes.name;
             }
 
             if (targetSession) {
-                // Si la sesión no tiene fecha de parada ('stop'), significa que está ONLINE jugando ahora
+                // Si la sesión no tiene fecha 'stop', el jugador está ONLINE en este instante
                 if (targetSession.attributes.stop === null) {
                     status = '🟢 Online';
-                    embedColor = 0x2ecc71; // Cambia a verde
+                    embedColor = 0x2ecc71; // Verde
 
-                    // FORMATO EXCLUSIVO BATTLEMETRICS (Play time de la sesión actual: HH:MM)
                     const startTime = new Date(targetSession.attributes.start);
                     const currentTime = new Date();
                     const diffMs = currentTime - startTime;
@@ -97,24 +124,23 @@ module.exports = {
                     const hours = Math.floor(diffMinutes / 60);
                     const minutes = diffMinutes % 60;
 
-                    // Añade un cero a la izquierda si el número es menor a 10 (ej: 02 en vez de 2)
                     const formattedHours = String(hours).padStart(2, '0');
                     const formattedMinutes = String(minutes).padStart(2, '0');
 
                     sessionTimeText = `${formattedHours}:${formattedMinutes}`;
                 } else {
-                    // Si el jugador ya se desconectó, muestra su última hora de conexión
-                    const lastTime = new Date(targetSession.attributes.stop).toLocaleString('es-ES', { timeZone: 'America/Santiago' });
+                    // Si está offline, calculamos cuándo fue visto por última vez
+                    const lastTime = new Date(targetSession.attributes.stop).toLocaleString('es-ES');
                     status = '🔴 Offline';
                     sessionTimeText = `Última vez visto: ${lastTime}`;
                     embedColor = 0xe74c3c; 
                 }
             }
 
-            // Aplicamos el formato de Spoiler de Discord ||texto|| para tapar el servidor
+            // Aplicamos formato de Spoiler de Discord ||texto|| para tapar el nombre del servidor
             const hiddenServerText = `||${serverName}||`;
 
-            // 3. Crear el diseño visual del Embed interactivo
+            // 3. Construir el Embed visual interactivo
             const trackerEmbed = new EmbedBuilder()
                 .setColor(embedColor)
                 .setTitle(`🎯 Monitoreo de Jugador: ${playerName}`)
@@ -132,8 +158,8 @@ module.exports = {
             await interaction.editReply({ embeds: [trackerEmbed] });
 
         } catch (error) {
-            console.error('ERROR EN TRACKER ENLAZADO:', error.message);
-            await interaction.editReply('⚠️ Ocurrió un error al procesar la solicitud en BattleMetrics filtrada por tu servidor.');
+            console.error('ERROR EN COORDENADAS TRACKER:', error.message);
+            await interaction.editReply('⚠️ Ocurrió un error inesperado al procesar la solicitud en las APIs.');
         }
     },
 };
