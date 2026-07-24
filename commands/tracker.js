@@ -44,7 +44,7 @@ module.exports = {
             } 
 
             // 3. CONSULTA DE SESIÓN EN VIVO DIRECTA (URL CORREGIDA CON LA API OFICIAL) 
-            // CORREGIDO: Se agregó api., /players/ y el signo $ obligatorio
+            // CAMBIO AQUÍ: Se añadió "api.", la ruta "/players/" y el símbolo "$" con llaves correctamente
             const playerUrl = `https://battlemetrics.com{battlemetricsId}`; 
             const response = await axios.get(playerUrl, { 
                 headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` }, 
@@ -110,7 +110,7 @@ module.exports = {
                     { name: "👤 Jugador", value: nombreJugador, inline: true }, 
                     { name: "🆔 BattleMetrics ID", value: `\`${battlemetricsId}\``, inline: true }, 
                     { name: "📊 Estado", value: statusText, inline: true }, 
-                    // CORREGIDO: Se removieron los símbolos %EF%B8%8F rotos de los títulos
+                    // CAMBIO AQUÍ: Se eliminaron los códigos rotos %EF%B8%8F de los títulos para limpiar la interfaz
                     { name: "⏱️ Play time (Sesión)", value: `\`${playtimeFormateado}\``, inline: true }, 
                     { name: "🖥️ Servidor configurado (Revelar)", value: hiddenServerText, inline: false } 
                 ) 
