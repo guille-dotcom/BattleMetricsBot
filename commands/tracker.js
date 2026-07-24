@@ -1,10 +1,34 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const https = require('https'); // Cambiado a la librería nativa de Node.js
 
 const configFile = path.join(__dirname, '..', 'data', 'config.json');
 const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN;
+
+// Función auxiliar nativa para hacer peticiones GET limpias sin Axios
+function pedirDatos(urlCompleta) {
+    return new Promise((resolve, reject) => {
+        const opciones = {
+            headers: {
+                'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}`,
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+            }
+        };
+        https.get(urlCompleta, opciones, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                try {
+                    resolve(JSON.parse(data));
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }).on('error', (err) => { reject(err); });
+    });
+}
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -39,46 +63,33 @@ module.exports = {
             return interaction.editReply('❌ Este servidor de Discord aún no ha sido vinculado a un servidor de Rust. Usa primero `/configurar-servidor`.');
         }
 
-        // 2. EXTRACCIÓN INTELIGENTE DEL ID DE BATTLEMETRICS
+        // 2. EXTRACCIÓN DEL ID DE BATTLEMETRICS
         let bmPlayerId = null;
-
-        // Si el usuario pegó un enlace completo de BattleMetrics
         if (jugadorInput.includes('://battlemetrics.com')) {
             const match = jugadorInput.match(/players\/(\d+)/);
             if (match) {
                 bmPlayerId = match[1];
             }
         } else if (/^\d+$/.test(jugadorInput)) {
-            // Si el usuario introdujo directamente el número de ID puro
             bmPlayerId = jugadorInput;
         }
 
-        // Validación final de que obtuvimos un ID correcto
         if (!bmPlayerId) {
             return interaction.editReply('❌ Entrada inválida. Por favor, proporciona el ID numérico de BattleMetrics o la URL del perfil del jugador.');
         }
 
         try {
-            // URL CORREGIDA TOTALMENTE: Cadena de texto limpia y estática para Axios
-            const url = `https://api.://battlemetrics.com${bmPlayerId}`;
+            // URL limpia armada manualmente de forma nativa e infalible
+            const urlCompleta = `https://api.://battlemetrics.com${bmPlayerId}?include=server,session`;
             
-            const response = await axios.get(url, {
-                headers: { 
-                    'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}`,
-                    'Accept': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-                },
-                params: {
-                    'include': 'server,session'
-                }
-            });
+            const responseData = await pedirDatos(urlCompleta);
 
-            if (!response.data || !response.data.data) {
+            if (!responseData || !responseData.data) {
                 return interaction.editReply('❌ No se encontró ningún registro para ese ID de jugador en BattleMetrics.');
             }
 
-            const playerData = response.data.data;
-            const incluidos = response.data.included || [];
+            const playerData = responseData.data;
+            const incluidos = responseData.included || [];
             const playerName = playerData.attributes.name;
 
             // 3. BUSCAR SESIÓN ACTIVA EN TU SERVIDOR CONFIGURADO
@@ -102,7 +113,6 @@ module.exports = {
                 const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60));
                 playtimeFormateado = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
             } else {
-                // Si está offline, miramos en el paquete incluido para ver su última sesión histórica en tu mapa
                 const ultimaSesion = incluidos.find(s => 
                     s.type === "session" && 
                     String(s.relationships?.server?.data?.id) === battleMetricsServerId
@@ -111,12 +121,10 @@ module.exports = {
                     const lastTime = new Date(ultimaSesion.attributes.stop).toLocaleString('es-ES', { timeZone: 'America/Santiago' });
                     playtimeFormateado = `Última vez visto: ${lastTime}`;
                 } else {
-                    // Si el jugador existe en BM pero nunca ha pisado tu servidor configurado
                     return interaction.editReply(`❌ El jugador **${playerName}** está registrado en BattleMetrics, pero no tiene historial de juego en tu servidor configurado.`);
                 }
             }
 
-            // Conseguir el nombre del servidor para meterlo en el spoiler oculto
             let serverName = "Nuestro Servidor de Rust";
             const serverInfo = incluidos.find(s => s.type === "server" && String(s.id) === battleMetricsServerId);
             if (serverInfo && serverInfo.attributes?.name) {
@@ -125,7 +133,6 @@ module.exports = {
 
             const hiddenServerText = `||${serverName}||`;
 
-            // 4. DISEÑO DEL EMBED FINAL INTERACTIVO
             const trackerEmbed = new EmbedBuilder()
                 .setColor(embedColor)
                 .setTitle(`🎯 Monitoreo de Jugador: ${playerName}`)
@@ -143,11 +150,8 @@ module.exports = {
             await interaction.editReply({ embeds: [trackerEmbed] });
 
         } catch (error) {
-            console.error('ERROR EN COMANDO TRACKER DIRECTO:', error.message);
-            if (error.response && error.response.status === 404) {
-                return interaction.editReply('❌ El ID de jugador ingresado no existe en los registros de BattleMetrics.');
-            }
-            await interaction.editReply('⚠️ Ocurrió un error al procesar el perfil del jugador. Verifica que el ID sea correcto.');
+            console.error('ERROR EN TRACKER NATIVO:', error.message);
+            await interaction.editReply('⚠️ Ocurrió un error al procesar el perfil del jugador. Verifica el ID.');
         }
     },
 };
