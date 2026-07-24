@@ -26,7 +26,6 @@ module.exports = {
             if (fs.existsSync(configFile)) {
                 const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
                 if (config[guildId] && config[guildId].battlemetricsServer) {
-                    // Limpiamos cualquier espacio o salto de línea que se haya guardado en el ID
                     battleMetricsServerId = String(config[guildId].battlemetricsServer).trim();
                 }
             }
@@ -44,12 +43,16 @@ module.exports = {
         }
 
         try {
-            // URL BASE ESTÁTICA: Ya no lleva variables adentro, evitando el error de "Invalid URL"
+            // URL limpia base de BattleMetrics
             const url = 'https://battlemetrics.com';
             
-            // Pasamos los filtros de forma estructurada para que Axios arme la URL de forma nativa y segura
+            // LA CORRECCIÓN MAESTRA: Añadimos 'User-Agent' e 'Accept' para saltarnos el bloqueo 403 de Cloudflare
             const response = await axios.get(url, {
-                headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` },
+                headers: { 
+                    'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}`,
+                    'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                },
                 params: {
                     'filter[search]': steamId,
                     'filter[servers]': battleMetricsServerId,
@@ -61,14 +64,14 @@ module.exports = {
                 return interaction.editReply('❌ No se encontró ningún registro de actividad de esa SteamID64 en nuestro servidor de Rust.');
             }
 
-            // Al buscar de forma filtrada por servidor, BattleMetrics nos devuelve una lista. Tomamos el primer jugador.
+            // Mapeamos el primer jugador que arroja la coincidencia
             const playerData = response.data.data[0];
             const incluidos = response.data.included || [];
             
             const playerName = playerData.attributes.name;
             const bmPlayerId = playerData.id;
 
-            // Revisamos si tiene una sesión activa en los datos incluidos
+            // Buscamos si tiene una sesión activa en los datos incluidos
             const sesionActiva = incluidos.find(s => 
                 s.type === "session" && 
                 String(s.relationships?.server?.data?.id) === battleMetricsServerId && 
