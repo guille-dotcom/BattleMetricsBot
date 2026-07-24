@@ -1,4 +1,4 @@
-require("dotenv").config(); // <-- LÍNEA IMPORTANTE AÑADIDA PARA CARGAR EL TOKEN
+require("dotenv").config(); 
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js"); 
 const fs = require("fs"); 
 const path = require("path"); 
@@ -88,8 +88,11 @@ module.exports = {
     let tiempoSesion = "0:00";
     let nombreServidor = "Servidor Rust";
 
+    // CORREGIDO: Si BATTLEMETRICS_TOKEN no existe, usa TOKEN por si acaso
+    const apiToken = process.env.BATTLEMETRICS_TOKEN || process.env.TOKEN;
+
     const headers = { 
-      Authorization: `Bearer ${process.env.BATTLEMETRICS_TOKEN}`, 
+      Authorization: `Bearer ${apiToken}`, 
       Accept: "application/json" 
     };
 
@@ -163,7 +166,7 @@ module.exports = {
       .addFields( 
         { name: "Estado", value: estado === "ONLINE" ? "🟢 ONLINE" : "🔴 OFFLINE" }, 
         { name: "⏱️ Play Time (Sesión)", value: tiempoSesion }, 
-        { name: "📡 Servidor", value: `||${nombreServidor}||` }, // Spoiler negro activado
+        { name: "📡 Servidor", value: `||${nombreServidor}||` }, 
         { name: "⌛ Tracker restante", value: "23h 59m" } 
       ) 
       .setTimestamp(); 
