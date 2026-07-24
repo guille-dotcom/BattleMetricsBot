@@ -1,132 +1,109 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js"); 
-const fs = require("fs"); 
-const path = require("path"); 
-const { obtenerJugadorServidor, obtenerServidor } = require("../services/trackerService"); 
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const axios = require('axios');
 
-const file = path.join(__dirname, "..", "data", "trackers.json"); 
+// Lee el token directamente desde tus variables de entorno de forma segura
+const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN; 
 
-module.exports = { 
-  data: new SlashCommandBuilder() 
-    .setName("tracker") 
-    .setDescription("Comienza el seguimiento de un jugador BattleMetrics durante 24 horas") 
-    .addStringOption(option => option 
-      .setName("id") 
-      .setDescription("Enlace o ID del jugador BattleMetrics") 
-      .setRequired(true) 
-    ), 
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName('tracker')
+        .setDescription('Rastrea el perfil de un jugador de Rust mediante su SteamID64')
+        .addStringOption(option =>
+            option.setName('steamid')
+                .setDescription('La SteamID64 de 17 dígitos del jugador')
+                .setRequired(true)),
 
-  async execute(interaction) { 
-    await interaction.deferReply(); 
-    let inputId = interaction.options.getString("id"); 
+    async execute(interaction) {
+        // Evita el timeout de 3 segundos de Discord
+        await interaction.deferReply();
 
-    const coincidenciaLink = inputId.match(/players\/(\d+)/);
-    const playerId = coincidenciaLink ? coincidenciaLink : inputId.replace(/\D/g, "");
+        const steamId = interaction.options.getString('steamid');
 
-    if (!playerId || playerId.trim() === "") {
-      return interaction.editReply("❌ La ID o el enlace de BattleMetrics que proporcionaste no es válido.");
-    }
+        // Validación de que sea una SteamID64 válida (17 números)
+        if (!/^\d{17}$/.test(steamId)) {
+            return interaction.editReply('❌ Por favor, introduce una SteamID64 válida de 17 dígitos.');
+        }
 
-    // ======================================================= //
-    // LEER ID CONFIGURADA DEL SERVIDOR DINÁMICO DE TU DISCORD  //
-    // ======================================================= //
-    const configFile = path.join(__dirname, "..", "data", "config.json"); 
-    let config = {}; 
-    try { 
-      if(fs.existsSync(configFile)) { 
-        config = JSON.parse(fs.readFileSync(configFile, "utf8")); 
-      } 
-    } catch(error) { 
-      console.log("ERROR LEYENDO CONFIG:", error.message); 
-    } 
+        // Verificación de seguridad por si acaso no carga el token
+        if (!BATTLEMETRICS_TOKEN) {
+            return interaction.editReply('⚠️ Error interno: No se encontró el BATTLEMETRICS_TOKEN en la configuración.');
+        }
 
-    const guildId = String(interaction.guild.id); 
-    let serverId = config.battlemetricsServer || (config[guildId] && typeof config[guildId] === "object" ? config[guildId].battlemetricsServer : config[guildId]); 
+        try {
+            // Petición a BattleMetrics incluyendo servidores y sesiones
+            const url = `https://battlemetrics.com[search]=${steamId}&include=server,session`;
+            
+            const response = await axios.get(url, {
+                headers: {
+                    'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}`
+                }
+            });
 
-    // Si por alguna razón la base está vacía, usamos el por defecto que pusiste en la foto
-    if(!serverId || String(serverId).trim() === "") {
-      serverId = "1451019"; 
-    }
+            // Si el array de data viene vacío
+            if (!response.data.data || response.data.data.length === 0) {
+                return interaction.editReply('❌ No se encontró ningún registro de ese jugador en BattleMetrics.');
+            }
 
-    serverId = String(serverId); 
+            const playerData = response.data.data[0]; // Tomamos el primer resultado devuelto
+            const includedData = response.data.included || [];
 
-    // Leer trackers activos
-    let trackers = []; 
-    try { 
-      if(fs.existsSync(file)) { 
-        trackers = JSON.parse(fs.readFileSync(file, "utf8")); 
-      } 
-    } catch(error) { 
-      console.log("ERROR LEYENDO TRACKERS:", error.message); 
-    } 
+            const playerName = playerData.attributes.name;
+            
+            // Extraer horas de Rust (BattleMetrics las agrupa en positiveMatch para este juego)
+            const totalHours = Math.round(playerData.attributes.positiveMatch || 0);
 
-    if(!Array.isArray(trackers)) trackers = []; 
+            // Valores por defecto para el estado Offline
+            let status = '🔴 Offline';
+            let currentServer = 'Ninguno';
+            let sessionTimeText = 'No está jugando actualmente';
 
-    const activosServidor = trackers.filter(t => String(t.guildId) === guildId); 
-    if(activosServidor.length >= 20) { 
-      return interaction.editReply("❌ Este servidor ya tiene el límite de 20 jugadores en seguimiento."); 
-    } 
+            // Buscamos si hay una sesión activa (sin fecha de parada 'stop')
+            const activeSession = includedData.find(item => item.type === 'session' && item.attributes.stop === null);
 
-    const existe = trackers.find(t => String(t.guildId) === guildId && String(t.playerId) === playerId); 
-    if(existe) { 
-      return interaction.editReply("⚠️ Este jugador ya está siendo monitoreado."); 
-    } 
+            if (activeSession) {
+                status = '🟢 Online';
+                
+                // Calcular tiempo de la sesión actual
+                const startTime = new Date(activeSession.attributes.start);
+                const currentTime = new Date();
+                const diffMs = currentTime - startTime;
+                
+                const diffMinutes = Math.floor(diffMs / 1000 / 60);
+                const hours = Math.floor(diffMinutes / 60);
+                const minutes = diffMinutes % 60;
 
-    let nombreJugador = `Jugador (${playerId})`; 
-    let estado = "OFFLINE";
-    let tiempoSesion = "0:00";
-    let nombreServidor = "Servidor Rustafied";
+                sessionTimeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes} min`;
 
-    try { 
-      const jugadorData = await obtenerJugadorServidor(serverId, playerId); 
-      const servidorData = await obtenerServidor(serverId);
+                // Buscar el nombre del servidor activo
+                const serverId = activeSession.relationships.server.data.id;
+                const serverInfo = includedData.find(item => item.type === 'server' && item.id === serverId);
+                
+                if (serverInfo) {
+                    currentServer = serverInfo.attributes.name;
+                }
+            }
 
-      if (jugadorData && jugadorData.online) {
-        estado = "ONLINE";
-        tiempoSesion = jugadorData.playtime; 
-      }
-      
-      if (servidorData && servidorData.nombre) {
-        nombreServidor = servidorData.nombre;
-      }
-    } catch(error) { 
-      console.log("❌ ERROR EN RUTA DEL COMANDO INTERNO:", error.message); 
-    } 
+            // Diseño visual del Embed
+            const trackerEmbed = new EmbedBuilder()
+                .setColor(status === '🟢 Online' ? 0x2ecc71 : 0xe74c3c)
+                .setTitle(`🔎 Rastreo de Jugador: ${playerName}`)
+                .setURL(`https://battlemetrics.com{playerData.id}`)
+                .addFields(
+                    { name: '👤 Nombre de Steam', value: playerName, inline: true },
+                    { name: '🆔 SteamID64', value: `\`${steamId}\``, inline: true },
+                    { name: '⚡ Estado Actual', value: status, inline: false },
+                    { name: '🕒 Horas Totales (BM)', value: `${totalHours} horas`, inline: true },
+                    { name: '⏱️ Tiempo en la Sesión', value: sessionTimeText, inline: true },
+                    { name: '🖥️ Servidor Actual', value: currentServer, inline: false }
+                )
+                .setTimestamp()
+                .setFooter({ text: 'Rastreador de Rust - BattleMetrics API' });
 
-    const ahora = Date.now(); 
-    const expira = ahora + (24 * 60 * 60 * 1000); 
+            await interaction.editReply({ embeds: [trackerEmbed] });
 
-    const nuevoTracker = { 
-      guildId: guildId, 
-      channelId: String(interaction.channel.id), 
-      serverId: serverId, 
-      playerId: playerId, 
-      playerName: nombreJugador, 
-      lastState: estado, 
-      createdAt: ahora, 
-      expiresAt: expira 
-    }; 
-
-    trackers.push(nuevoTracker); 
-
-    try { 
-      fs.writeFileSync(file, JSON.stringify(trackers, null, 2)); 
-    } catch(error) { 
-      console.log("ERROR GUARDANDO TRACKER:", error.message); 
-      return interaction.editReply("❌ Error guardando el tracker."); 
-    } 
-
-    const embed = new EmbedBuilder() 
-      .setTitle("🎮 Tracker BattleMetrics") 
-      .setColor(estado === "ONLINE" ? "#57F287" : "#ED4245") 
-      .setDescription(`👤 **${nombreJugador}**`) 
-      .addFields( 
-        { name: "Estado", value: estado === "ONLINE" ? "🟢 ONLINE" : "🔴 OFFLINE" }, 
-        { name: "⏱️ Play Time (Sesión)", value: tiempoSesion }, 
-        { name: "📡 Servidor", value: `||${nombreServidor}||` }, 
-        { name: "⌛ Tracker restante", value: "23h 59m" } 
-      ) 
-      .setTimestamp(); 
-
-    await interaction.editReply({ embeds: [embed] }); 
-  } 
+        } catch (error) {
+            console.error(error);
+            await interaction.editReply('⚠️ Ocurrió un error al conectar con la API de BattleMetrics o procesar los datos.');
+        }
+    },
 };
