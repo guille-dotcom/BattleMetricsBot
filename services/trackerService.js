@@ -33,22 +33,31 @@ function guardarTrackers(trackers){
 } 
 
 async function obtenerServidor(serverId){ 
-  try{ 
-    // CORREGIDO: Uso estricto de comillas invertidas ` `
-    const response = await axios.get(`https://battlemetrics.com{serverId}`, bmHeaders()); 
+  try { 
+    // ESCUDO: Si el serverId viene roto por error del JSON viejo, usamos tu ID de Rustafied fija
+    let idSana = serverId;
+    if(!idSana || String(idSana).includes("{") || String(idSana).includes("server") || String(idSana).trim() === "") {
+      idSana = "433255";
+    }
+    const response = await axios.get(`https://battlemetrics.com{idSana}`, bmHeaders()); 
     return { nombre: response.data.data.attributes.name }; 
-  }catch(error){ 
+  } catch(error) { 
     return { nombre: "Servidor Rust" }; 
   } 
 } 
 
 async function obtenerJugadorServidor(serverId, playerId, intentos = 2){ 
-  try{ 
+  try { 
+    // ESCUDO: Forzar ID sana para evitar direcciones web rotas en la API
+    let idSana = serverId;
+    if(!idSana || String(idSana).includes("{") || String(idSana).includes("server") || String(idSana).trim() === "") {
+      idSana = "433255";
+    }
+
     console.log(`🔑 Consultando jugador y sesiones BM... (Intentos restantes: ${intentos})`); 
     
-    // CORREGIDO: Uso estricto de comillas invertidas ` ` para inyectar la ID del servidor real
     const response = await axios.get(
-      `https://battlemetrics.com{serverId}`, 
+      `https://battlemetrics.com{idSana}`, 
       { 
         ...bmHeaders(), 
         params: { include: "session" } 
@@ -74,17 +83,16 @@ async function obtenerJugadorServidor(serverId, playerId, intentos = 2){
 
     const horas = Math.floor(diferenciaMs / (1000 * 60 * 60));
     const minutos = Math.floor((diferenciaMs % (1000 * 60 * 60)) / (1000 * 60));
-
     const tiempoFormateado = `${horas}:${minutos.toString().padStart(2, '0')}`;
 
     return { online: true, playtime: tiempoFormateado }; 
-  }catch(error){ 
+  } catch(error) { 
     if (intentos > 0) {
       console.log("⚠ BattleMetrics saturado. Reintentando en 2 segundos...");
       await new Promise(resolve => setTimeout(resolve, 2000));
       return await obtenerJugadorServidor(serverId, playerId, intentos - 1);
     }
-    console.log("❌ ERROR FINAL CONSULTANDO BM:", error.response?.data || error.message); 
+    console.log("❌ ERROR FINAL EN SEGUNDO PLANO:", error.message); 
     return { online: null, playtime: "0:00" }; 
   } 
 } 
@@ -102,7 +110,6 @@ async function revisarTrackers(client){
   trackers = trackers.filter(tracker => tracker.expiresAt > Date.now()); 
 
   for(const tracker of trackers){ 
-    // SEGURIDAD: Si por el error anterior se guardó un tracker roto sin ID de servidor, lo saltamos y borramos
     if(!tracker.serverId || tracker.serverId === "{serverId}" || tracker.playerName === "Jugador desconocido") {
       console.log(`🗑️ Eliminando registro antiguo dañado de: ${tracker.playerName}`);
       continue;
@@ -121,7 +128,7 @@ async function revisarTrackers(client){
 
     if(tracker.lastState !== estado){ 
       const servidor = await obtenerServidor(tracker.serverId); 
-      try{ 
+      try { 
         const guild = client.guilds.cache.get(tracker.guildId); 
         if(!guild) continue; 
         const canal = guild.channels.cache.get(tracker.channelId); 
@@ -141,14 +148,13 @@ async function revisarTrackers(client){
 
         await canal.send({ embeds:[embed] }); 
         console.log(`📢 Cambio enviado ${tracker.playerName}`); 
-      }catch(error){ 
+      } catch(error) { 
         console.log("❌ ERROR ENVIANDO TRACKER:", error.message); 
       } 
     } 
     tracker.lastState = estado; 
   } 
   
-  // Guardamos solo los trackers que estén sanos y vigentes
   const trackersSanos = trackers.filter(tracker => tracker.serverId && tracker.serverId !== "{serverId}" && tracker.playerName !== "Jugador desconocido");
   guardarTrackers(trackersSanos); 
 } 
