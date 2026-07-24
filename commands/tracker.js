@@ -20,12 +20,7 @@ path.join(
 
 
 
-// ======================
-// COMANDO
-// ======================
-
 module.exports = {
-
 
 data: new SlashCommandBuilder()
 
@@ -36,7 +31,6 @@ data: new SlashCommandBuilder()
 )
 
 .addStringOption(option =>
-
     option
 
     .setName("id")
@@ -46,7 +40,6 @@ data: new SlashCommandBuilder()
     )
 
     .setRequired(true)
-
 ),
 
 
@@ -78,10 +71,7 @@ match
 ?
 match[1]
 :
-inputId.replace(
-    /\D/g,
-    ""
-);
+inputId.replace(/\D/g,"");
 
 
 
@@ -104,71 +94,52 @@ const serverId =
 
 
 
-console.log(
-    `📡 Tracker servidor ${serverId}`
-);
-
-
-
-
 // ======================
 // LEER TRACKERS
 // ======================
 
 let trackers = [];
 
-
 try{
 
+    if(fs.existsSync(file)){
 
-if(fs.existsSync(file)){
+        trackers =
+        JSON.parse(
+            fs.readFileSync(
+                file,
+                "utf8"
+            )
+        );
 
-
-trackers =
-JSON.parse(
-    fs.readFileSync(
-        file,
-        "utf8"
-    )
-);
-
-
-}
-
+    }
 
 }catch(error){
 
-
-console.log(
-    "ERROR LEYENDO TRACKERS:",
-    error.message
-);
-
+    console.log(
+        "ERROR LEYENDO TRACKERS:",
+        error.message
+    );
 
 }
-
 
 
 if(!Array.isArray(trackers))
 
-    trackers = [];
+trackers=[];
 
 
 
-
-
-// ======================
-// LIMITES
-// ======================
 
 const guildId =
 String(
-    interaction.guild.id
+interaction.guild.id
 );
 
 
 
-const activos =
+
+const activosServidor =
 trackers.filter(
 
 t =>
@@ -178,18 +149,13 @@ String(t.guildId) === guildId
 
 
 
-if(activos.length >= 20){
+if(activosServidor.length >= 20){
 
-
-return interaction.editReply(
-
-"❌ Límite de 20 trackers alcanzado."
-
-);
-
+    return interaction.editReply(
+        "❌ Este servidor ya tiene el límite de 20 trackers."
+    );
 
 }
-
 
 
 
@@ -209,23 +175,17 @@ String(t.playerId) === playerId
 
 if(existe){
 
-
-return interaction.editReply(
-
-"⚠️ Este jugador ya está siendo monitoreado."
-
-);
-
+    return interaction.editReply(
+        "⚠️ Este jugador ya está siendo monitoreado."
+    );
 
 }
 
 
 
 
-
-
 // ======================
-// CONSULTA BM
+// VARIABLES
 // ======================
 
 let nombreJugador =
@@ -249,17 +209,14 @@ const token =
 process.env.BATTLEMETRICS_TOKEN;
 
 
+
 const headers = {
 
+    Authorization:
+    `Bearer ${token}`,
 
-Authorization:
-
-`Bearer ${token}`,
-
-Accept:
-
-"application/json"
-
+    Accept:
+    "application/json"
 
 };
 
@@ -270,17 +227,18 @@ Accept:
 try{
 
 
-
-// jugador
+// ======================
+// DATOS JUGADOR
+// ======================
 
 const resPlayer =
 await axios.get(
 
-`https://api.battlemetrics.com/players/${playerId}`,
+    `https://api.battlemetrics.com/players/${playerId}`,
 
-{
-headers
-}
+    {
+        headers
+    }
 
 );
 
@@ -290,27 +248,26 @@ if(
 resPlayer.data?.data?.attributes?.name
 ){
 
-
-nombreJugador =
-resPlayer.data.data.attributes.name;
-
+    nombreJugador =
+    resPlayer.data.data.attributes.name;
 
 }
 
 
 
 
-
-// servidor
+// ======================
+// DATOS SERVIDOR
+// ======================
 
 const resServer =
 await axios.get(
 
-`https://api.battlemetrics.com/servers/${serverId}`,
+    `https://api.battlemetrics.com/servers/${serverId}`,
 
-{
-headers
-}
+    {
+        headers
+    }
 
 );
 
@@ -320,25 +277,110 @@ if(
 resServer.data?.data?.attributes?.name
 ){
 
-
-nombreServidor =
-resServer.data.data.attributes.name;
-
+    nombreServidor =
+    resServer.data.data.attributes.name;
 
 }
 
 
 
 
-console.log(
 
-"Jugador encontrado:",
+// ======================
+// PLAY TIME SESION ACTIVA
+// ======================
 
-nombreJugador
+
+const resSession =
+await axios.get(
+
+    `https://api.battlemetrics.com/players/${playerId}/sessions`,
+
+    {
+
+        headers,
+
+        params:{
+
+            "filter[servers]":
+            serverId
+
+        }
+
+    }
 
 );
 
 
+
+const sesiones =
+resSession.data.data || [];
+
+
+
+const sesionActiva =
+sesiones.find(
+
+    s =>
+    s.attributes.stop === null
+
+);
+
+
+
+if(
+sesionActiva &&
+sesionActiva.attributes.start
+){
+
+
+    estado =
+    "ONLINE";
+
+
+
+    const horaConexion =
+    new Date(
+        sesionActiva.attributes.start
+    );
+
+
+
+    const horaActual =
+    new Date();
+
+
+
+    const diferenciaMs =
+    horaActual -
+    horaConexion;
+
+
+
+    const horas =
+    Math.floor(
+        diferenciaMs /
+        (1000 * 60 * 60)
+    );
+
+
+
+    const minutos =
+    Math.floor(
+
+        (diferenciaMs %
+        (1000 * 60 * 60))
+        /
+        (1000 * 60)
+
+    );
+
+
+
+    tiempoSesion =
+    `${horas}:${minutos.toString().padStart(2,"0")}`;
+
+}
 
 
 
@@ -347,10 +389,10 @@ nombreJugador
 
 console.log(
 
-"ERROR CONSULTA BM:",
+    "❌ ERROR BATTLEMETRICS:",
 
-error.response?.data ||
-error.message
+    error.response?.data ||
+    error.message
 
 );
 
@@ -361,15 +403,13 @@ error.message
 
 
 
-
-
 // ======================
-// CREAR TRACKER
+// GUARDAR TRACKER
 // ======================
-
 
 const ahora =
 Date.now();
+
 
 
 const expira =
@@ -383,47 +423,33 @@ ahora +
 
 
 
+
 const nuevoTracker = {
 
+    guildId,
 
-guildId,
+    channelId:
+    String(
+        interaction.channel.id
+    ),
 
+    serverId,
 
-channelId:
+    playerId,
 
-String(
-interaction.channel.id
-),
+    playerName:
+    nombreJugador,
 
+    lastState:
+    estado,
 
-serverId,
+    createdAt:
+    ahora,
 
-
-playerId,
-
-
-playerName:
-
-nombreJugador,
-
-
-lastState:
-
-estado,
-
-
-createdAt:
-
-ahora,
-
-
-expiresAt:
-
-expira
-
+    expiresAt:
+    expira
 
 };
-
 
 
 
@@ -435,40 +461,17 @@ nuevoTracker
 
 
 
-
-try{
-
-
 fs.writeFileSync(
 
-file,
+    file,
 
-JSON.stringify(
-trackers,
-null,
-2
-)
-
-);
-
-
-}catch(error){
-
-
-console.log(
-"ERROR GUARDANDO:",
-error.message
-);
-
-
-return interaction.editReply(
-
-"❌ No se pudo guardar el tracker."
+    JSON.stringify(
+        trackers,
+        null,
+        2
+    )
 
 );
-
-
-}
 
 
 
@@ -479,73 +482,91 @@ return interaction.editReply(
 // EMBED
 // ======================
 
-
 const embed =
-
 new EmbedBuilder()
 
 
 .setTitle(
-
-"🎮 Tracker BattleMetrics"
-
+    "🎮 Tracker BattleMetrics"
 )
 
 
 .setColor(
 
-"#ED4245"
+    estado === "ONLINE"
+
+    ?
+
+    "#57F287"
+
+    :
+
+    "#ED4245"
 
 )
+
 
 
 .setDescription(
 
-`👤 **${nombreJugador}**`
+    `👤 **${nombreJugador}**`
 
 )
+
 
 
 .addFields(
 
-
 {
 
-name:"Estado",
+    name:"Estado",
 
-value:"🔴 OFFLINE"
+    value:
+
+    estado === "ONLINE"
+
+    ?
+
+    "🟢 ONLINE"
+
+    :
+
+    "🔴 OFFLINE"
 
 },
 
 
 {
 
-name:"⏱️ Play Time (Sesión)",
+    name:"⏱️ Play Time (Sesión)",
 
-value:tiempoSesion
-
-},
-
-
-{
-
-name:"📡 Servidor",
-
-value:`||${nombreServidor}||`
+    value:
+    tiempoSesion
 
 },
 
 
 {
 
-name:"⌛ Tracker restante",
+    name:"📡 Servidor",
 
-value:"24h 00m"
+    value:
+    `||${nombreServidor}||`
+
+},
+
+
+{
+
+    name:"⌛ Tracker restante",
+
+    value:
+    "24h 00m"
 
 }
 
-
 )
+
 
 
 .setTimestamp();
@@ -556,7 +577,6 @@ value:"24h 00m"
 
 
 await interaction.editReply({
-
 
 content:
 
@@ -570,14 +590,12 @@ content:
 
 `⏳ Duración: 24 horas\n\n` +
 
-`📋 Trackers activos: ${activos.length + 1}/20`,
+`📋 Trackers activos: ${activosServidor.length + 1}/20`,
 
 
 embeds:[embed]
 
-
 });
-
 
 
 }
