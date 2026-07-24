@@ -4,6 +4,9 @@ const axios = require("axios");
 const { EmbedBuilder } = require("discord.js"); 
 const trackersFile = path.join(__dirname, "..", "data", "trackers.json"); 
 
+// ====================== // 
+// HEADERS BM // 
+// ====================== // 
 function bmHeaders(){ 
   return { 
     headers:{ 
@@ -13,6 +16,9 @@ function bmHeaders(){
   }; 
 } 
 
+// ====================== // 
+// LEER TRACKERS // 
+// ====================== // 
 function leerTrackers(){ 
   try{ 
     if(!fs.existsSync(trackersFile)) return []; 
@@ -23,6 +29,9 @@ function leerTrackers(){
   } 
 } 
 
+// ====================== // 
+// GUARDAR TRACKERS // 
+// ====================== // 
 function guardarTrackers(trackers){ 
   try{ 
     fs.writeFileSync(trackersFile, JSON.stringify(trackers, null, 2)); 
@@ -32,13 +41,13 @@ function guardarTrackers(trackers){
   } 
 } 
 
+// ====================== // 
+// OBTENER SERVIDOR // 
+// ====================== // 
 async function obtenerServidor(serverId){ 
   try { 
-    // ESCUDO: Si el serverId viene roto por error del JSON viejo, usamos tu ID de Rustafied fija
-    let idSana = serverId;
-    if(!idSana || String(idSana).includes("{") || String(idSana).includes("server") || String(idSana).trim() === "") {
-      idSana = "433255";
-    }
+    // FORZADO MANUAL: Usamos tu ID de Rustafied fija por seguridad
+    const idSana = "433255";
     const response = await axios.get(`https://battlemetrics.com{idSana}`, bmHeaders()); 
     return { nombre: response.data.data.attributes.name }; 
   } catch(error) { 
@@ -46,14 +55,13 @@ async function obtenerServidor(serverId){
   } 
 } 
 
+// ====================== // 
+// JUGADORES ONLINE + SESIÓN (CON FORZADO DE ID REAL) // 
+// ====================== // 
 async function obtenerJugadorServidor(serverId, playerId, intentos = 2){ 
   try { 
-    // ESCUDO: Forzar ID sana para evitar direcciones web rotas en la API
-    let idSana = serverId;
-    if(!idSana || String(idSana).includes("{") || String(idSana).includes("server") || String(idSana).trim() === "") {
-      idSana = "433255";
-    }
-
+    // FORZADO MANUAL: Forzamos la ID real para evitar textos rotos en la URL
+    const idSana = "433255";
     console.log(`🔑 Consultando jugador y sesiones BM... (Intentos restantes: ${intentos})`); 
     
     const response = await axios.get(
@@ -97,6 +105,9 @@ async function obtenerJugadorServidor(serverId, playerId, intentos = 2){
   } 
 } 
 
+// ====================== // 
+// TIEMPO RESTANTE // 
+// ====================== // 
 function tiempoRestante(expira){ 
   const diferencia = expira - Date.now(); 
   if(diferencia <= 0) return "Expirado"; 
@@ -105,12 +116,16 @@ function tiempoRestante(expira){
   return `${horas}h ${minutos}m`; 
 } 
 
+// ====================== // 
+// REVISAR TRACKERS AUTO // 
+// ====================== // 
 async function revisarTrackers(client){ 
   let trackers = leerTrackers(); 
   trackers = trackers.filter(tracker => tracker.expiresAt > Date.now()); 
 
   for(const tracker of trackers){ 
-    if(!tracker.serverId || tracker.serverId === "{serverId}" || tracker.playerName === "Jugador desconocido") {
+    // Saltamos y limpiamos cualquier registro viejo guardado como desconocido o roto
+    if(tracker.playerName === "Jugador desconocido") {
       console.log(`🗑️ Eliminando registro antiguo dañado de: ${tracker.playerName}`);
       continue;
     }
@@ -141,7 +156,7 @@ async function revisarTrackers(client){
           .addFields( 
             { name: "Estado", value: estado === "ONLINE" ? "🟢 ONLINE" : "🔴 OFFLINE" }, 
             { name: "⏱️ Play Time (Sesión)", value: jugador.playtime }, 
-            { name: "📡 Servidor", value: `||${servidor.nombre}||` }, 
+            { name: "📡 Servidor", value: `||${servidor.nombre}||` }, // Caja negra de spoiler
             { name: "⌛ Tracker restante", value: tiempoRestante(tracker.expiresAt) } 
           ) 
           .setTimestamp(); 
@@ -155,7 +170,8 @@ async function revisarTrackers(client){
     tracker.lastState = estado; 
   } 
   
-  const trackersSanos = trackers.filter(tracker => tracker.serverId && tracker.serverId !== "{serverId}" && tracker.playerName !== "Jugador desconocido");
+  // Guardamos únicamente los registros que estén sanos
+  const trackersSanos = trackers.filter(tracker => tracker.playerName !== "Jugador desconocido");
   guardarTrackers(trackersSanos); 
 } 
 
