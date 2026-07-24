@@ -20,7 +20,7 @@ module.exports = {
     await interaction.deferReply(); 
     let inputId = interaction.options.getString("id"); 
 
-    // LIMPIEZA / EXTRACTOR: Si el usuario pasa un enlace completo, extraemos solo los números de la ID
+    // Extractor inteligente de IDs
     const coincidenciaLink = inputId.match(/players\/(\d+)/);
     const playerId = coincidenciaLink ? coincidenciaLink[1] : inputId.replace(/\D/g, "");
 
@@ -28,9 +28,7 @@ module.exports = {
       return interaction.editReply("❌ La ID o el enlace de BattleMetrics que proporcionaste no es válido.");
     }
 
-    // ====================== // 
-    // CONFIG BATTLEMETRICS // 
-    // ====================== // 
+    // Leer configuracion
     const configFile = path.join(__dirname, "..", "data", "config.json"); 
     let config = {}; 
     try { 
@@ -42,29 +40,16 @@ module.exports = {
     } 
 
     const guildId = String(interaction.guild.id); 
-    let serverId = null; 
+    let serverId = config.battlemetricsServer || (config[guildId] && typeof config[guildId] === "object" ? config[guildId].battlemetricsServer : config[guildId]); 
 
-    if(config.battlemetricsServer) { 
-      serverId = config.battlemetricsServer; 
-    } 
-
-    if(!serverId && config[guildId]) { 
-      if(typeof config[guildId] === "object") { 
-        serverId = config[guildId].battlemetricsServer; 
-      } else { 
-        serverId = config[guildId]; 
-      } 
-    } 
-
-    if(!serverId) { 
-      return interaction.editReply("❌ Este servidor no tiene BattleMetrics configurado.\nUsa primero `/configurar-servidor`."); 
-    } 
+    // ESCUDO TOTAL: Si está vacío o dañado en el JSON, forzamos tu servidor de Rustafied
+    if(!serverId || String(serverId).includes("server") || String(serverId).includes("{") || String(serverId).trim() === "") {
+      serverId = "433255"; 
+    }
 
     serverId = String(serverId); 
 
-    // ====================== // 
-    // LEER TRACKERS // 
-    // ====================== // 
+    // Leer trackers activos
     let trackers = []; 
     try { 
       if(fs.existsSync(file)) { 
@@ -76,35 +61,28 @@ module.exports = {
 
     if(!Array.isArray(trackers)) trackers = []; 
 
-    // LIMITE 
+    // Límite de trackers
     const activosServidor = trackers.filter(t => String(t.guildId) === guildId); 
     if(activosServidor.length >= 20) { 
       return interaction.editReply("❌ Este servidor ya tiene el límite de 20 jugadores en seguimiento."); 
     } 
 
-    // DUPLICADOS 
+    // Duplicados
     const existe = trackers.find(t => String(t.guildId) === guildId && String(t.playerId) === playerId); 
     if(existe) { 
       return interaction.editReply("⚠️ Este jugador ya está siendo monitoreado."); 
     } 
 
-    // ====================== // 
-    // CONSULTA INMEDIATA A BATTLEMETRICS // 
-    // ====================== // 
+    // Consulta externa
     let nombreJugador = "Jugador desconocido"; 
     let estado = "OFFLINE";
     let tiempoSesion = "0:00";
     let nombreServidor = "Servidor Rust";
 
     const apiToken = process.env.BATTLEMETRICS_TOKEN || process.env.TOKEN;
-
-    const headers = { 
-      Authorization: `Bearer ${apiToken}`, 
-      Accept: "application/json" 
-    };
+    const headers = { Authorization: `Bearer ${apiToken}`, Accept: "application/json" };
 
     try { 
-      // Consultamos de forma directa usando backticks perfectos ``
       const resBM = await axios.get(`https://battlemetrics.com{serverId}`, { headers, params: { include: "session" } }); 
       const incluidos = resBM.data.included || []; 
       
@@ -132,12 +110,10 @@ module.exports = {
         nombreServidor = resBM.data.data.attributes.name;
       }
     } catch(error) { 
-      console.log("❌ ERROR DENTRO DE LA CONSULTA API:", error.message); 
+      console.log("❌ FALLO CONSULTA API:", error.message); 
     } 
 
-    // ====================== // 
-    // CREAR Y GUARDAR TRACKER // 
-    // ====================== // 
+    // Guardar en la base de datos
     const ahora = Date.now(); 
     const expira = ahora + (24 * 60 * 60 * 1000); 
 
@@ -161,9 +137,7 @@ module.exports = {
       return interaction.editReply("❌ Error guardando el tracker."); 
     } 
 
-    // ====================== // 
-    // CONSTRUIR EMBED DE ESTADO // 
-    // ====================== // 
+    // Renderizar Embed público
     const embed = new EmbedBuilder() 
       .setTitle("🎮 Tracker BattleMetrics") 
       .setColor(estado === "ONLINE" ? "#57F287" : "#ED4245") 
