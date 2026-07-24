@@ -26,9 +26,30 @@ module.exports = {
       return interaction.editReply("❌ La ID o el enlace de BattleMetrics que proporcionaste no es válido.");
     }
 
-    const serverId = "433255"; 
-    const guildId = String(interaction.guild.id); 
+    // ======================================================= //
+    // LEER ID CONFIGURADA DEL SERVIDOR DINÁMICO DE TU DISCORD  //
+    // ======================================================= //
+    const configFile = path.join(__dirname, "..", "data", "config.json"); 
+    let config = {}; 
+    try { 
+      if(fs.existsSync(configFile)) { 
+        config = JSON.parse(fs.readFileSync(configFile, "utf8")); 
+      } 
+    } catch(error) { 
+      console.log("ERROR LEYENDO CONFIG:", error.message); 
+    } 
 
+    const guildId = String(interaction.guild.id); 
+    let serverId = config.battlemetricsServer || (config[guildId] && typeof config[guildId] === "object" ? config[guildId].battlemetricsServer : config[guildId]); 
+
+    // Si por alguna razón la base está vacía, usamos el por defecto que pusiste en la foto
+    if(!serverId || String(serverId).trim() === "") {
+      serverId = "1451019"; 
+    }
+
+    serverId = String(serverId); 
+
+    // Leer trackers activos
     let trackers = []; 
     try { 
       if(fs.existsSync(file)) { 

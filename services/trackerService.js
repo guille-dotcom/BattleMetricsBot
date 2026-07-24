@@ -28,8 +28,8 @@ function guardarTrackers(trackers){
 
 async function obtenerServidor(serverId){ 
   try { 
-    const idSana = "433255"; 
-    // CORREGIDO: URL oficial con api., ruta /servers/ y signo $ en la variable
+    // REPARADO: Ahora usa el serverId dinámico real que configuraste en Discord
+    const idSana = String(serverId).trim();
     const response = await axios.get(`https://battlemetrics.com{idSana}`, bmHeaders()); 
     return { nombre: response.data.data.attributes.name }; 
   } catch(error) { 
@@ -39,9 +39,17 @@ async function obtenerServidor(serverId){
 
 async function obtenerJugadorServidor(serverId, playerId, intentos = 2){ 
   try { 
-    const idSana = "433255"; 
-    // CORREGIDO: URL oficial con api., ruta /servers/ y signo $ en la variable
-    const response = await axios.get(`https://battlemetrics.com{idSana}`, { ...bmHeaders(), params: { include: "session" } }); 
+    // REPARADO: Ahora usa el serverId dinámico real que configuraste en Discord
+    const idSana = String(serverId).trim();
+    
+    const response = await axios.get(
+      `https://battlemetrics.com{idSana}`, 
+      { 
+        ...bmHeaders(), 
+        params: { include: "session" } 
+      } 
+    ); 
+
     const incluidos = response.data.included || []; 
     
     const sesionActiva = incluidos.find(s => 
@@ -84,7 +92,6 @@ async function revisarTrackers(client){
 
     const estado = jugador.online ? "ONLINE" : "OFFLINE"; 
 
-    // Alertas estrictas POR CAMBIO DE ESTADO REAL posterior al comando 
     if(tracker.lastState !== estado){ 
       const servidor = await obtenerServidor(tracker.serverId); 
       try { 
@@ -113,5 +120,4 @@ async function revisarTrackers(client){
   guardarTrackers(trackers); 
 } 
 
-// CORREGIDO: Exportamos las funciones individuales para que el comando tracker las pueda usar
 module.exports = { revisarTrackers, obtenerJugadorServidor, obtenerServidor };
