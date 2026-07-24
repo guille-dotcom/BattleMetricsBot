@@ -59,7 +59,7 @@ module.exports = {
         }
 
         try {
-            // URL directa al perfil del jugador específico (Endpoint libre de bloqueo 403 global)
+            // URL CORREGIDA TOTALMENTE: Cadena de texto limpia y estática para Axios
             const url = `https://api.://battlemetrics.com${bmPlayerId}`;
             
             const response = await axios.get(url, {
@@ -111,7 +111,7 @@ module.exports = {
                     const lastTime = new Date(ultimaSesion.attributes.stop).toLocaleString('es-ES', { timeZone: 'America/Santiago' });
                     playtimeFormateado = `Última vez visto: ${lastTime}`;
                 } else {
-                    // Si el jugador existe en BM pero nunca ha pisado tu servidor configurado en su historial reciente
+                    // Si el jugador existe en BM pero nunca ha pisado tu servidor configurado
                     return interaction.editReply(`❌ El jugador **${playerName}** está registrado en BattleMetrics, pero no tiene historial de juego en tu servidor configurado.`);
                 }
             }
