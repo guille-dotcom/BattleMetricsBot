@@ -26,7 +26,8 @@ module.exports = {
             if (fs.existsSync(configFile)) {
                 const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
                 if (config[guildId] && config[guildId].battlemetricsServer) {
-                    battleMetricsServerId = config[guildId].battlemetricsServer;
+                    // Limpiamos cualquier espacio o salto de línea que se haya guardado en el ID
+                    battleMetricsServerId = String(config[guildId].battlemetricsServer).trim();
                 }
             }
         } catch (error) {
@@ -43,14 +44,16 @@ module.exports = {
         }
 
         try {
-            // URL CORREGIDA PERFECTAMENTE: Apunta a ://battlemetrics.com y usa la variable con ${}
-            const url = `https://://battlemetrics.com/servers/${battleMetricsServerId}/relationships/players`;
+            // URL BASE ESTÁTICA: Ya no lleva variables adentro, evitando el error de "Invalid URL"
+            const url = 'https://battlemetrics.com';
             
+            // Pasamos los filtros de forma estructurada para que Axios arme la URL de forma nativa y segura
             const response = await axios.get(url, {
                 headers: { 'Authorization': `Bearer ${BATTLEMETRICS_TOKEN}` },
                 params: {
                     'filter[search]': steamId,
-                    'include': 'session' 
+                    'filter[servers]': battleMetricsServerId,
+                    'include': 'server,session'
                 }
             });
 
@@ -58,18 +61,17 @@ module.exports = {
                 return interaction.editReply('❌ No se encontró ningún registro de actividad de esa SteamID64 en nuestro servidor de Rust.');
             }
 
-            // Mapeamos los datos del jugador encontrado dentro de tu servidor
-            const serverPlayerData = response.data.data[0];
+            // Al buscar de forma filtrada por servidor, BattleMetrics nos devuelve una lista. Tomamos el primer jugador.
+            const playerData = response.data.data[0];
             const incluidos = response.data.included || [];
             
-            // Extraer nombre y el ID único del jugador
-            const playerName = serverPlayerData.attributes.name;
-            const bmPlayerId = serverPlayerData.id;
+            const playerName = playerData.attributes.name;
+            const bmPlayerId = playerData.id;
 
             // Revisamos si tiene una sesión activa en los datos incluidos
             const sesionActiva = incluidos.find(s => 
                 s.type === "session" && 
-                String(s.relationships?.server?.data?.id) === String(battleMetricsServerId) && 
+                String(s.relationships?.server?.data?.id) === battleMetricsServerId && 
                 s.attributes?.stop === null
             );
 
@@ -90,7 +92,7 @@ module.exports = {
                 // Si está offline, miramos las sesiones para ver su última conexión
                 const ultimaSesion = incluidos.find(s => 
                     s.type === "session" && 
-                    String(s.relationships?.server?.data?.id) === String(battleMetricsServerId)
+                    String(s.relationships?.server?.data?.id) === battleMetricsServerId
                 );
                 if (ultimaSesion && ultimaSesion.attributes?.stop) {
                     const lastTime = new Date(ultimaSesion.attributes.stop).toLocaleString('es-ES');
@@ -98,7 +100,15 @@ module.exports = {
                 }
             }
 
-            // Creamos el diseño visual final con el spoiler
+            // Conseguir el nombre del servidor para el spoiler
+            let serverName = "Nuestro Servidor de Rust";
+            const serverInfo = incluidos.find(s => s.type === "server" && String(s.id) === battleMetricsServerId);
+            if (serverInfo && serverInfo.attributes?.name) {
+                serverName = serverInfo.attributes.name;
+            }
+
+            const hiddenServerText = `||${serverName}||`;
+
             const trackerEmbed = new EmbedBuilder()
                 .setColor(embedColor)
                 .setTitle(`🎯 Monitoreo de Jugador: ${playerName}`)
@@ -108,7 +118,7 @@ module.exports = {
                     { name: '🆔 SteamID64', value: `\`${steamId}\``, inline: true },
                     { name: '📊 Estado', value: statusText, inline: true },
                     { name: '⏱️ Play time (Sesión)', value: `\`${playtimeFormateado}\``, inline: true },
-                    { name: '🖥️ Servidor actual (Haz click para revelar)', value: `||ID Servidor: ${battleMetricsServerId}||`, inline: false }
+                    { name: '🖥️ Servidor actual (Haz click para revelar)', value: hiddenServerText, inline: false }
                 )
                 .setTimestamp()
                 .setFooter({ text: `${interaction.guild.name} - Control Interno` });
