@@ -297,12 +297,21 @@ try {
 
                 canal.send({
 
-                    content:
-                    `🟢 **Jugador conectado**\n\n` +
-                    `👤 ${status.name}\n` +
-                    `🎮 Servidor: ${status.server || "Desconocido"}`
+    content:
+`🎯 **BattleMetrics Tracker**
 
-                });
+🟢 **JUGADOR ONLINE**
+
+👤 ${status.name}
+🆔 https://www.battlemetrics.com/players/${tracker.battlemetricsId}
+
+🎮 **Servidor**
+${status.server || "Desconocido"}
+
+📡 Estado actualizado
+hace unos segundos`
+
+});
 
             }
 
@@ -340,11 +349,21 @@ try {
 
                 canal.send({
 
-                    content:
-                    `🔴 **Jugador desconectado**\n\n` +
-                    `👤 ${status.name}`
+    content:
+`🎯 **BattleMetrics Tracker**
 
-                });
+🔴 **JUGADOR OFFLINE**
+
+👤 ${status.name}
+🆔 https://www.battlemetrics.com/players/${tracker.battlemetricsId}
+
+🎮 **Último servidor**
+${tracker.ultimoServidor || "Desconocido"}
+
+📡 Estado actualizado
+hace unos segundos`
+
+});
 
             }
 
