@@ -9,6 +9,11 @@ const {
 } = require("../services/trackerService");
 
 
+const {
+    getBattleMetricsPlayerStatus
+} = require("../services/battlemetricsSearch");
+
+
 module.exports = {
 
     data: new SlashCommandBuilder()
@@ -54,23 +59,30 @@ module.exports = {
                 );
 
             }
+const status =
+await getBattleMetricsPlayerStatus(
+    battlemetricsId
+);
+
+const nombre =
+status?.name || "Desconocido";
 
 
+const tracker =
+    registrarTracker({
 
-            const tracker =
-                registrarTracker({
+        battlemetricsId,
 
-                    battlemetricsId,
+        nombre,
 
-                    canalId: interaction.channel.id,
+        canalId: interaction.channel.id,
 
-                    guildId: interaction.guild.id,
+        guildId: interaction.guild.id,
 
-                    registradoPor:
-                    interaction.user.tag
+        registradoPor:
+        interaction.user.tag
 
-                });
-
+    });
 
 
             const embed =
