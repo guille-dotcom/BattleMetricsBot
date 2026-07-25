@@ -97,46 +97,59 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
         const response =
-        await axios.get(
+await axios.get(
 
-            `https://api.battlemetrics.com/players/${playerId}`,
+    `https://api.battlemetrics.com/players/${playerId}`,
 
-            {
+    {
 
-                headers:{
-                    Authorization:
-                    `Bearer ${token}`
-                },
+        headers:{
+            Authorization:
+            `Bearer ${token}`
+        },
 
-
-                params:{
-
-                    include:"server"
-
-                }
-
-            }
-
-        );
-
-
-
-
-        const player =
-        response.data.data;
-
-
-
-        if(!player){
-
-            console.log(
-                "NO EXISTE PLAYER:",
-                playerId
-            );
-
-            return null;
-
+        params:{
+            include:"server"
         }
+
+    }
+
+);
+
+
+const player =
+response.data.data;
+
+
+
+const sessionResponse = await axios.get(
+    `https://api.battlemetrics.com/players/${playerId}/relationships/sessions`,
+    {
+        headers:{
+            Authorization:`Bearer ${token}`
+        }
+    }
+);
+
+
+console.log(
+    "SESIONES BM:",
+    JSON.stringify(sessionResponse.data, null, 2)
+);
+
+
+
+if(!player){
+
+    console.log(
+        "NO EXISTE PLAYER:",
+        playerId
+    );
+
+    return null;
+
+}
+
 
 
 
