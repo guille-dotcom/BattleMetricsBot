@@ -154,10 +154,78 @@ function formatoTiempo(inicio) {
 
 
     return `${horas
-    .toString()
-    .padStart(2,"0")}h ${minutosRestantes
-    .toString()
-    .padStart(2,"0")}m`;
+.toString()
+.padStart(2,"0")}h ${minutosRestantes
+.toString()
+.padStart(2,"0")}m`;
+
+}
+
+
+
+// ============================
+// CREAR EMBED ONLINE
+// ============================
+
+function crearEmbedOnline(status, tracker) {
+
+    return new EmbedBuilder()
+
+    .setTitle("🎯 BattleMetrics Tracker")
+
+    .setDescription(
+`🟢 **JUGADOR ONLINE**
+
+👤 **${status.name}**
+
+🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${tracker.battlemetricsId})
+
+🎮 **Servidor**
+||${status.server || "Desconocido"}||
+
+⏱ **Jugando**
+${status.jugando || "0m"}
+
+📡 Estado actualizado`
+    )
+
+    .setColor(0x00ff00)
+
+    .setTimestamp();
+
+}
+
+
+
+// ============================
+// CREAR EMBED OFFLINE
+// ============================
+
+function crearEmbedOffline(status, tracker, tiempo) {
+
+    return new EmbedBuilder()
+
+    .setTitle("🎯 BattleMetrics Tracker")
+
+    .setDescription(
+`🔴 **JUGADOR OFFLINE**
+
+👤 **${status.name}**
+
+🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${tracker.battlemetricsId})
+
+🎮 **Último servidor**
+${tracker.ultimoServidor || "Desconocido"}
+
+⏱ **Tiempo jugando**
+${tiempo}
+
+📡 Estado actualizado`
+    )
+
+    .setColor(0xff0000)
+
+    .setTimestamp();
 
 }
 
@@ -201,30 +269,21 @@ function registrarTracker({
         Date.now(),
 
 
-
         expiraEn:
         Date.now()
         +
         (24 * 60 * 60 * 1000),
 
 
-
         ultimoEstado:
-        "offline",
-
+        "desconocido",
 
 
         inicioSesion:
         null,
 
 
-
         ultimoServidor:
-        null,
-
-
-
-        mensajeId:
         null
 
     };
@@ -251,15 +310,13 @@ async function revisarTrackers(client) {
     );
 
 
-
     const trackers =
     leerTrackers();
 
 
-
     console.log(
         "📋 TRACKERS ACTUALES:",
-        JSON.stringify(trackers, null, 4)
+        JSON.stringify(trackers,null,4)
     );
 
 
@@ -272,7 +329,6 @@ async function revisarTrackers(client) {
 
 
 
-        // Expiración 24 horas
         if(Date.now() > tracker.expiraEn) {
 
 
@@ -298,29 +354,22 @@ async function revisarTrackers(client) {
 
 
 
-        if(!status) {
-
-            console.log(
-                "No se pudo revisar:",
-                id
-            );
-
+        if(!status)
             continue;
-
-        }
 
 
 
         console.log(
-    "🎯 TRACKER:",
-    status.name,
-    "| ONLINE:",
-    status.online,
-    "| SERVER:",
-    status.server,
-    "| JUGANDO:",
-    status.jugando
-);
+            "🎯 TRACKER:",
+            status.name,
+            "| ONLINE:",
+            status.online,
+            "| SERVER:",
+            status.server,
+            "| JUGANDO:",
+            status.jugando
+        );
+
 
 
         const canal =
@@ -332,33 +381,57 @@ async function revisarTrackers(client) {
 
         if(!canal)
             continue;
-                  // ============================
-        // JUGADOR ONLINE
-        // ============================
-
-        if(status.online) {
+        
 
 
-            tracker.ultimoServidor =
-            status.server;
+// ============================
+// PRIMERA REVISION DEL TRACKER
+// ============================
+
+
+if(tracker.ultimoEstado === "desconocido"){
+
+
+    if(status.online){
+
+
+        tracker.ultimoEstado =
+        "online";
+
+
+        tracker.inicioSesion =
+        Date.now();
+
+
+        tracker.ultimoServidor =
+        status.server;
 
 
 
-            // Primera detección ONLINE
+        await canal.send({
 
-            if(tracker.ultimoEstado === "offline") {
+            embeds:[
+                crearEmbedOnline(
+                    status,
+                    tracker
+                )
+            ]
 
-
-                tracker.ultimoEstado =
-                "online";
-
-
-                tracker.inicioSesion =
-                Date.now();
-
+        });
 
 
-                const embed =
+    } else {
+
+
+
+        tracker.ultimoEstado =
+        "offline";
+
+
+
+        await canal.send({
+
+            embeds:[
                 new EmbedBuilder()
 
                 .setTitle(
@@ -366,263 +439,157 @@ async function revisarTrackers(client) {
                 )
 
                 .setDescription(
-`🟢 **JUGADOR ONLINE**
-
-👤 **${status.name}**
-
-🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${tracker.battlemetricsId})
-
-🎮 **Servidor**
-||${status.server || "Desconocido"}||
-
-⏱ **Jugando**
-${status.jugando || "0m"}
-
-📡 Estado actualizado
-hace unos segundos`
-)
-
-                .setColor(0x00ff00)
-
-                .setTimestamp();
-
-
-
-                const mensaje =
-                await canal.send({
-                    embeds:[embed]
-                });
-
-
-
-                tracker.mensajeId =
-                mensaje.id;
-
-
-            }
-
-
-
-            // Actualizar mensaje mientras está online
-
-            else if(tracker.mensajeId) {
-
-
-                try {
-
-
-                    const mensaje =
-                    await canal.messages.fetch(
-                        tracker.mensajeId
-                    );
-
-
-
-                    const embed =
-                    new EmbedBuilder()
-
-                    .setTitle(
-                        "🎯 BattleMetrics Tracker"
-                    )
-
-                    .setDescription(
-`🟢 **JUGADOR ONLINE**
-
-👤 **${status.name}**
-
-🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${tracker.battlemetricsId})
-
-🎮 **Servidor**
-||${status.server || "Desconocido"}||
-
-⏱ **Jugando**
-${status.jugando || "0m"}
-
-📡 Estado actualizado
-hace unos segundos`
-                    )
-
-                    .setColor(0x00ff00)
-
-                    .setTimestamp();
-
-
-
-                    await mensaje.edit({
-                        embeds:[embed]
-                    });
-
-
-
-                } catch(error) {
-
-
-                    console.log(
-                        "Error actualizando online:",
-                        error.message
-                    );
-
-                }
-
-
-            }
-
-
-        }
-
-
-
-
-
-
-
-        // ============================
-        // JUGADOR OFFLINE
-        // ============================
-
-        if(
-            !status.online &&
-            tracker.ultimoEstado === "online"
-        ) {
-
-
-
-            tracker.ultimoEstado =
-            "offline";
-
-
-
-            const tiempoJugado =
-status.jugando || formatoTiempo(tracker.inicioSesion);
-
-
-
-            try {
-
-
-                if(tracker.mensajeId) {
-
-
-                    const mensaje =
-                    await canal.messages.fetch(
-                        tracker.mensajeId
-                    );
-
-
-
-                    const embed =
-                    new EmbedBuilder()
-
-                    .setTitle(
-                        "🎯 BattleMetrics Tracker"
-                    )
-
-                    .setDescription(
 `🔴 **JUGADOR OFFLINE**
 
 👤 **${status.name}**
 
 🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${tracker.battlemetricsId})
 
-🎮 **Último servidor**
-${tracker.ultimoServidor || "Desconocido"}
+⏳ Esperando conexión...
 
-⏱ **Tiempo jugando**
-${tiempoJugado}
+📡 Tracker activo`
+                )
 
-📡 Estado actualizado
-hace unos segundos`
-                    )
+                .setColor(0xff0000)
 
-                    .setColor(0xff0000)
+                .setTimestamp()
+            ]
 
-                    .setTimestamp();
-
-
-
-                    await mensaje.edit({
-                        embeds:[embed]
-                    });
-
-
-
-                } else {
-
-
-                    const embed =
-                    new EmbedBuilder()
-
-                    .setTitle(
-                        "🎯 BattleMetrics Tracker"
-                    )
-
-                    .setDescription(
-`🔴 **JUGADOR OFFLINE**
-
-👤 **${status.name}**
-
-⏱ **Tiempo jugando**
-${tiempoJugado}`
-                    )
-
-                    .setColor(0xff0000);
-
-
-
-                    await canal.send({
-                        embeds:[embed]
-                    });
-
-
-                }
-
-
-
-            } catch(error) {
-
-
-                console.log(
-                    "Error enviando offline:",
-                    error.message
-                );
-
-
-            }
-
-
-
-            tracker.inicioSesion =
-            null;
-
-
-
-            tracker.ultimoServidor =
-            null;
-
-
-
-            tracker.mensajeId =
-            null;
-
-
-        }
-
+        });
 
 
     }
 
 
+    continue;
 
-    guardarTrackers(trackers);
+}
+
+
+
+// ============================
+// CAMBIO OFFLINE -> ONLINE
+// ============================
+
+
+if(
+    status.online &&
+    tracker.ultimoEstado === "offline"
+){
+
+
+    tracker.ultimoEstado =
+    "online";
+
+
+    tracker.inicioSesion =
+    Date.now();
+
+
+    tracker.ultimoServidor =
+    status.server;
+
+
+
+    await canal.send({
+
+        content:
+        `🔔 **${status.name} volvió a entrar al servidor**`,
+
+        embeds:[
+            crearEmbedOnline(
+                status,
+                tracker
+            )
+        ]
+
+    });
 
 
 }
 
 
 
+// ============================
+// SIGUE ONLINE
+// ============================
 
 
-// Exportar
+else if(
+    status.online &&
+    tracker.ultimoEstado === "online"
+){
+
+
+    tracker.ultimoServidor =
+    status.server;
+
+
+}
+
+
+
+// ============================
+// CAMBIO ONLINE -> OFFLINE
+// ============================
+
+
+if(
+    !status.online &&
+    tracker.ultimoEstado === "online"
+){
+
+
+    const tiempoJugado =
+    status.jugando ||
+    formatoTiempo(
+        tracker.inicioSesion
+    );
+
+
+
+    tracker.ultimoEstado =
+    "offline";
+
+
+
+    await canal.send({
+
+        content:
+        `🔔 **${status.name} salió del servidor**`,
+
+        embeds:[
+            crearEmbedOffline(
+                status,
+                tracker,
+                tiempoJugado
+            )
+        ]
+
+    });
+
+
+
+    tracker.inicioSesion =
+    null;
+
+
+}
+
+
+
+// ============================
+// GUARDAR ESTADO
+// ============================
+
+
+guardarTrackers(trackers);
+
+
+}
+// ============================
+// EXPORTAR
+// ============================
 
 module.exports = {
 
