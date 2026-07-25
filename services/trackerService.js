@@ -204,8 +204,7 @@ function registrarTracker({
         ultimoServidor:
 null,
 
-mensajeId:
-null
+
 };
 
 
@@ -288,106 +287,104 @@ async function revisarTrackers(client) {
 
 
         // ============================
-        // JUGADOR ONLINE
-        // ============================
+// JUGADOR ONLINE
+// ============================
 
-        if(
-            status.online &&
-            tracker.ultimoEstado === "offline"
-        ) {
-
-
-            tracker.ultimoEstado =
-            "online";
+if(
+    status.online &&
+    tracker.ultimoEstado === "offline"
+) {
 
 
-            tracker.ultimoServidor =
-            status.server;
+    tracker.ultimoEstado = "online";
 
+    tracker.ultimoServidor = status.server;
 
-
-            tracker.inicioSesion =
-            Date.now();
+    tracker.inicioSesion = Date.now();
 
 
 
-            const canal =
-            await client.channels.fetch(
-                tracker.canalId
-            );
+    const canal =
+    await client.channels.fetch(
+        tracker.canalId
+    );
+
+
+    if(canal) {
+
+        await canal.send({
+
+content:
+
+`🎯 **BattleMetrics Tracker**
+
+🟢 **JUGADOR ONLINE**
+
+👤 ${status.name}
+
+🆔 https://www.battlemetrics.com/players/${tracker.battlemetricsId}
+
+🎮 **Servidor**
+${status.server || "Desconocido"}
+
+⏱ **Tiempo jugando**
+00h 00m
+
+📡 Estado actualizado
+hace unos segundos`
+
+        });
+
+    }
+
+}
 
 
 
             
 
 
-               if(canal) {
-
-   await canal.send({
-
-content:
-
-`🎯 **BattleMetrics Tracker**
-
-🔴 **JUGADOR OFFLINE**
-
-👤 ${status.name}
-
-🆔 https://www.battlemetrics.com/players/${tracker.battlemetricsId}
-
-🎮 **Último servidor**
-${tracker.ultimoServidor || "Desconocido"}
-
-⏱ **Tiempo jugado**
-${horas.toString().padStart(2,"0")}h ${minutosRestantes.toString().padStart(2,"0")}m
-
-📡 Estado actualizado
-hace unos segundos`
-
-});
-
-
-tracker.inicioSesion = null;
-tracker.ultimoServidor = null;
-
-      
-// ============================
+   // ============================
 // JUGADOR OFFLINE
 // ============================
+
 if(
     !status.online &&
     tracker.ultimoEstado === "online"
 ) {
 
+
     tracker.ultimoEstado = "offline";
 
 
-
-            try {
-
-
-                const canal =
-                await client.channels.fetch(
-                    tracker.canalId
-                );
+    const minutos =
+    Math.floor(
+        (Date.now() - tracker.inicioSesion) / 60000
+    );
 
 
+    const horas =
+    Math.floor(
+        minutos / 60
+    );
 
-                if(canal) {
 
-const minutos =
-Math.floor(
-    (Date.now() - tracker.inicioSesion) / 60000
-);
+    const minutosRestantes =
+    minutos % 60;
 
-const horas =
-Math.floor(
-    minutos / 60
-);
 
-const minutosRestantes =
-minutos % 60;
-                   await canal.send({
+
+    try {
+
+        const canal =
+        await client.channels.fetch(
+            tracker.canalId
+        );
+
+
+        if(canal) {
+
+            await canal.send({
 
 content:
 
@@ -408,41 +405,37 @@ ${horas.toString().padStart(2,"0")}h ${minutosRestantes.toString().padStart(2,"0
 📡 Estado actualizado
 hace unos segundos`
 
-});
-
-
-tracker.inicioSesion = null;
-
-
-                }
-
-
-
-            } catch(error) {
-
-
-                console.log(
-                    "Error enviando offline:",
-                    error.message
-                );
-
-
-            }
-
-
+            });
 
         }
 
 
+    } catch(error) {
+
+        console.log(
+            "Error enviando offline:",
+            error.message
+        );
 
     }
 
 
-
-    guardarTrackers(trackers);
+    tracker.inicioSesion = null;
+    tracker.ultimoServidor = null;
 
 }
+      
 
+
+                
+
+
+
+
+
+       guardarTrackers(trackers);
+
+}
 
 
 // ----------------------------
@@ -451,23 +444,16 @@ tracker.inicioSesion = null;
 
 module.exports = {
 
-
     trackersFile,
-
 
     leerTrackers,
 
-
     guardarTrackers,
-
 
     obtenerBattleMetricsId,
 
-
     registrarTracker,
 
-
     revisarTrackers
-
 
 };
