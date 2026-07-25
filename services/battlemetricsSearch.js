@@ -23,7 +23,6 @@ async function searchBattleMetricsPlayer(playerName, serverId){
         );
 
 
-
         const response =
         await axios.get(
 
@@ -81,7 +80,6 @@ async function searchBattleMetricsPlayer(playerName, serverId){
         );
 
 
-
         return players[0];
 
 
@@ -106,7 +104,7 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
 
 // ----------------------------
-// Obtener estado del jugador
+// Obtener estado jugador
 // ----------------------------
 async function getBattleMetricsPlayerStatus(playerId){
 
@@ -150,16 +148,29 @@ async function getBattleMetricsPlayerStatus(playerId){
 
         if(!player){
 
-
             console.log(
                 "BM no devolvió jugador:",
                 playerId
             );
 
-
             return null;
 
         }
+
+
+
+        // DEBUG TEMPORAL
+        console.log(
+            "RESPUESTA COMPLETA BM:"
+        );
+
+        console.log(
+            JSON.stringify(
+                response.data,
+                null,
+                4
+            )
+        );
 
 
 
@@ -169,23 +180,23 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
 
-        // Revisar si BattleMetrics tiene servidor activo
-        const serverRelation =
-        player.relationships?.server?.data;
+        let online = false;
 
 
 
-        if(serverRelation){
+        // Revisar included servers
+
+        if(
+            response.data.included &&
+            Array.isArray(response.data.included)
+        ){
 
 
             const serverData =
-            response.data.included?.find(
+            response.data.included.find(
 
                 item =>
-
-                item.type === "server" &&
-
-                item.id === serverRelation.id
+                item.type === "server"
 
             );
 
@@ -193,10 +204,16 @@ async function getBattleMetricsPlayerStatus(playerId){
 
             if(serverData){
 
+
                 servidor =
                 serverData.attributes.name;
 
+
+                online = true;
+
+
             }
+
 
         }
 
@@ -204,14 +221,39 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
 
-        const online =
-        !!serverRelation;
+        // Revisar otros campos posibles
+
+        if(
+            player.attributes.online === true
+        ){
+
+            online = true;
+
+        }
+
+
+
+        if(
+            player.attributes.status === "online"
+        ){
+
+            online = true;
+
+        }
+
 
 
 
         console.log(
-            "SERVER RELATION:",
-            serverRelation
+            "SERVIDOR DETECTADO:",
+            servidor
+        );
+
+
+
+        console.log(
+            "ONLINE DETECTADO:",
+            online
         );
 
 
@@ -233,14 +275,11 @@ async function getBattleMetricsPlayerStatus(playerId){
             player.id,
 
 
-
             name:
             player.attributes.name,
 
 
-
             online,
-
 
 
             server:
