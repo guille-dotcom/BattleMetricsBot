@@ -109,12 +109,14 @@ function obtenerBattleMetricsId(texto) {
     texto = texto.trim();
 
 
+
     if(/^\d+$/.test(texto))
         return texto;
 
 
 
-    const match = texto.match(
+    const match =
+    texto.match(
         /players\/(\d+)/
     );
 
@@ -123,7 +125,41 @@ function obtenerBattleMetricsId(texto) {
         return match[1];
 
 
+
     return null;
+
+}
+
+
+
+// Formato tiempo
+function formatoTiempo(inicio) {
+
+    if(!inicio)
+        return "00h 00m";
+
+
+    const minutos =
+    Math.floor(
+        (Date.now() - inicio) / 60000
+    );
+
+
+    const horas =
+    Math.floor(
+        minutos / 60
+    );
+
+
+    const minutosRestantes =
+    minutos % 60;
+
+
+    return `${horas
+    .toString()
+    .padStart(2,"0")}h ${minutosRestantes
+    .toString()
+    .padStart(2,"0")}m`;
 
 }
 
@@ -133,32 +169,44 @@ function obtenerBattleMetricsId(texto) {
 function registrarTracker({
 
     battlemetricsId,
+
     nombre = "Desconocido",
+
     canalId,
+
     guildId,
+
     registradoPor
 
 }) {
 
 
-    const trackers = leerTrackers();
+    const trackers =
+    leerTrackers();
 
 
 
     trackers[battlemetricsId] = {
 
+
         battlemetricsId,
+
 
         nombre,
 
+
         canalId,
+
 
         guildId,
 
+
         registradoPor,
+
 
         registradoEn:
         Date.now(),
+
 
 
         expiraEn:
@@ -167,16 +215,25 @@ function registrarTracker({
         (24 * 60 * 60 * 1000),
 
 
+
         ultimoEstado:
         "offline",
+
 
 
         inicioSesion:
         null,
 
 
+
         ultimoServidor:
+        null,
+
+
+
+        mensajeId:
         null
+
 
     };
 
@@ -189,10 +246,6 @@ function registrarTracker({
     return trackers[battlemetricsId];
 
 }
-
-
-
-
 // Revisar trackers
 async function revisarTrackers(client) {
 
@@ -202,19 +255,20 @@ async function revisarTrackers(client) {
     );
 
 
-
-    const trackers = leerTrackers();
+    const trackers =
+    leerTrackers();
 
 
 
     for(const id in trackers) {
 
 
-        const tracker = trackers[id];
+        const tracker =
+        trackers[id];
 
 
 
-        // Expira después de 24 horas
+        // Expiración 24 horas
         if(Date.now() > tracker.expiraEn) {
 
 
@@ -253,12 +307,15 @@ async function revisarTrackers(client) {
 
 
 
-        console.log(
-            "TRACKER:",
-            status.name,
-            status.online
+        const canal =
+        await client.channels.fetch(
+            tracker.canalId
         );
 
+
+
+        if(!canal)
+            continue;
 
 
 
@@ -267,33 +324,26 @@ async function revisarTrackers(client) {
         // JUGADOR ONLINE
         // ============================
 
-        if(
-            status.online &&
-            tracker.ultimoEstado === "offline"
-        ) {
-
-
-
-            tracker.ultimoEstado = "online";
+        if(status.online) {
 
 
             tracker.ultimoServidor =
             status.server;
 
 
-            tracker.inicioSesion =
-            Date.now();
+
+            // Primera vez online
+
+            if(tracker.ultimoEstado === "offline") {
 
 
-
-            const canal =
-            await client.channels.fetch(
-                tracker.canalId
-            );
+                tracker.ultimoEstado =
+                "online";
 
 
+                tracker.inicioSesion =
+                Date.now();
 
-            if(canal) {
 
 
                 const embed =
@@ -326,12 +376,85 @@ hace unos segundos`
 
 
 
+                const mensaje =
                 await canal.send({
                     embeds:[embed]
                 });
 
 
+
+                tracker.mensajeId =
+                mensaje.id;
+
+
+
             }
+
+
+
+            // Actualizar mensaje existente
+
+            else if(tracker.mensajeId) {
+
+
+                try {
+
+
+                    const mensaje =
+                    await canal.messages.fetch(
+                        tracker.mensajeId
+                    );
+
+
+
+                    const embed =
+                    new EmbedBuilder()
+
+                    .setTitle(
+                        "🎯 BattleMetrics Tracker"
+                    )
+
+                    .setDescription(
+`🟢 **JUGADOR ONLINE**
+
+👤 **${status.name}**
+
+🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${tracker.battlemetricsId})
+
+🎮 **Servidor**
+${status.server || "Desconocido"}
+
+⏱ **Tiempo jugando**
+${formatoTiempo(tracker.inicioSesion)}
+
+📡 Estado actualizado
+hace unos segundos`
+                    )
+
+                    .setColor(0x00ff00)
+
+                    .setTimestamp();
+
+
+
+                    await mensaje.edit({
+                        embeds:[embed]
+                    });
+
+
+
+                } catch(error) {
+
+                    console.log(
+                        "Error actualizando online:",
+                        error.message
+                    );
+
+                }
+
+
+            }
+
 
 
         }
@@ -358,40 +481,23 @@ hace unos segundos`
 
 
 
-            const minutos =
-            Math.floor(
-                (Date.now() - tracker.inicioSesion)
-                /
-                60000
+            const tiempoJugado =
+            formatoTiempo(
+                tracker.inicioSesion
             );
-
-
-
-            const horas =
-            Math.floor(
-                minutos / 60
-            );
-
-
-
-            const minutosRestantes =
-            minutos % 60;
-
-
 
 
 
             try {
 
 
-                const canal =
-                await client.channels.fetch(
-                    tracker.canalId
-                );
+                if(tracker.mensajeId) {
 
 
-
-                if(canal) {
+                    const mensaje =
+                    await canal.messages.fetch(
+                        tracker.mensajeId
+                    );
 
 
 
@@ -413,7 +519,7 @@ hace unos segundos`
 ${tracker.ultimoServidor || "Desconocido"}
 
 ⏱ **Tiempo jugado**
-${horas.toString().padStart(2,"0")}h ${minutosRestantes.toString().padStart(2,"0")}m
+${tiempoJugado}
 
 📡 Estado actualizado
 hace unos segundos`
@@ -422,6 +528,35 @@ hace unos segundos`
                     .setColor(0xff0000)
 
                     .setTimestamp();
+
+
+
+                    await mensaje.edit({
+                        embeds:[embed]
+                    });
+
+
+
+                } else {
+
+
+                    const embed =
+                    new EmbedBuilder()
+
+                    .setTitle(
+                        "🎯 BattleMetrics Tracker"
+                    )
+
+                    .setDescription(
+`🔴 **JUGADOR OFFLINE**
+
+👤 **${status.name}**
+
+⏱ **Tiempo jugado**
+${tiempoJugado}`
+                    )
+
+                    .setColor(0xff0000);
 
 
 
@@ -447,9 +582,18 @@ hace unos segundos`
 
 
 
-            tracker.inicioSesion = null;
+            tracker.inicioSesion =
+            null;
 
-            tracker.ultimoServidor = null;
+
+
+            tracker.ultimoServidor =
+            null;
+
+
+
+            tracker.mensajeId =
+            null;
 
 
         }
@@ -468,7 +612,7 @@ hace unos segundos`
 
 
 
-
+// Exportar
 
 module.exports = {
 
