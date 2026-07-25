@@ -14,40 +14,36 @@ async function searchBattleMetricsPlayer(playerName, serverId){
         const token =
         process.env.BATTLEMETRICS_TOKEN;
 
+const response =
+    await axios.get(
+        "https://api.battlemetrics.com/players",
+        {
+            headers:{
+                Authorization:
+                `Bearer ${token}`
+            },
 
-        const response =
-        await axios.get(
-
-            "https://api.battlemetrics.com/players",
-
-            {
-
-                headers:{
-                    Authorization:
-                    `Bearer ${token}`
-                },
-
-
-                params:{
-
-                    "filter[search]": playerName,
-
-                    "filter[servers]": serverId,
-
-                    include:"server"
-
-                }
-
+            params:{
+                "filter[search]": playerName,
+                "filter[servers]": serverId,
+                include:"server"
             }
-
-        );
-
-
-
-        const players =
-        response.data.data;
+        }
+    );
 
 
+const fs = require("fs");
+
+fs.writeFileSync(
+    "bm_response.json",
+    JSON.stringify(response.data, null, 4)
+);
+
+console.log("✅ BM RESPONSE GUARDADA");
+
+
+const players =
+    response.data.data;
 
         if(!players || players.length === 0){
 
