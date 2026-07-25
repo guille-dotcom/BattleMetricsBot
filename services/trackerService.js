@@ -383,7 +383,6 @@ async function revisarTrackers(client) {
             continue;
         
 
-
 // ============================
 // PRIMERA REVISION DEL TRACKER
 // ============================
@@ -418,7 +417,18 @@ if(tracker.ultimoEstado === "desconocido"){
             ]
 
         });
+console.log(
+    "GUARDANDO ESTADO:",
+    tracker.battlemetricsId,
+    tracker.ultimoEstado
+);
 
+guardarTrackers(trackers);
+
+console.log(
+    "JSON DESPUES DE GUARDAR:",
+    JSON.stringify(leerTrackers(), null, 4)
+);
 
     } else {
 
@@ -457,8 +467,11 @@ if(tracker.ultimoEstado === "desconocido"){
 
         });
 
-
     }
+
+
+    // GUARDAR EL ESTADO ANTES DE SALTAR
+    guardarTrackers(trackers);
 
 
     continue;
@@ -467,44 +480,48 @@ if(tracker.ultimoEstado === "desconocido"){
 
 
 
-// ============================
-// CAMBIO OFFLINE -> ONLINE
-// ============================
+    // ============================
+    // CAMBIO OFFLINE -> ONLINE
+    // ============================
 
 
-if(
-    status.online &&
-    tracker.ultimoEstado === "offline"
-){
+    if(
+        status.online &&
+        tracker.ultimoEstado === "offline"
+    ){
 
 
-    tracker.ultimoEstado =
-    "online";
+        tracker.ultimoEstado =
+        "online";
 
 
-    tracker.inicioSesion =
-    Date.now();
+        tracker.inicioSesion =
+        Date.now();
 
 
-    tracker.ultimoServidor =
-    status.server;
+        tracker.ultimoServidor =
+        status.server;
 
 
 
     await canal.send({
 
-        content:
-        `🔔 **${status.name} volvió a entrar al servidor**`,
+    content:
+    `🔔 **${status.name} volvió a entrar al servidor**`,
 
-        embeds:[
-            crearEmbedOnline(
-                status,
-                tracker
-            )
-        ]
+    embeds:[
+        crearEmbedOnline(
+            status,
+            tracker
+        )
+    ]
 
-    });
+});
+
+
 guardarTrackers(trackers);
+
+continue;
 
 }
 
