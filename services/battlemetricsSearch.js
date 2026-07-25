@@ -101,6 +101,7 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
 
 
+
 // ----------------------------
 // Obtener estado del jugador
 // ----------------------------
@@ -108,8 +109,10 @@ async function getBattleMetricsPlayerStatus(playerId){
 
     try{
 
+
         const token =
         process.env.BATTLEMETRICS_TOKEN;
+
 
 
         const response =
@@ -124,6 +127,7 @@ async function getBattleMetricsPlayerStatus(playerId){
                     `Bearer ${token}`
                 },
 
+
                 params:{
                     include:"server"
                 }
@@ -133,8 +137,10 @@ async function getBattleMetricsPlayerStatus(playerId){
         );
 
 
+
         const player =
         response.data.data;
+
 
 
         if(!player){
@@ -150,44 +156,74 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
 
-        const server =
-        response.data.included?.find(
-            item =>
-            item.type === "server"
-        );
+        const attributes =
+        player.attributes;
+
+
+
+        // BattleMetrics real online status
+        const online =
+        attributes.online === true;
+
+
+
+        let server = null;
+
+
+
+        // Solo buscamos servidor si realmente está online
+        if(
+            online &&
+            response.data.included
+        ){
+
+            const serverData =
+            response.data.included.find(
+                item =>
+                item.type === "server"
+            );
+
+
+            if(serverData){
+
+                server =
+                serverData.attributes.name;
+
+            }
+
+        }
 
 
 
         console.log(
             "ESTADO BM:",
-            player.attributes.name,
-            server ? "ONLINE" : "OFFLINE"
+            attributes.name,
+            online ? "ONLINE" : "OFFLINE"
         );
 
 
 
         return {
 
-            id: player.id,
+            id:
+            player.id,
+
 
             name:
-            player.attributes.name,
+            attributes.name,
 
 
-            online:
-            !!server,
+            online,
 
 
-            server:
-            server ?
-            server.attributes.name :
-            null
+            server
 
         };
 
 
 
     }catch(error){
+
 
         console.log(
             "ERROR STATUS BM:",
@@ -200,6 +236,8 @@ async function getBattleMetricsPlayerStatus(playerId){
     }
 
 }
+
+
 
 
 
