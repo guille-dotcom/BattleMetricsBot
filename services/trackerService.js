@@ -504,7 +504,7 @@ if(
         ]
 
     });
-
+guardarTrackers(trackers);
 
 }
 
@@ -520,10 +520,8 @@ else if(
     tracker.ultimoEstado === "online"
 ){
 
-
     tracker.ultimoServidor =
     status.server;
-
 
 }
 
