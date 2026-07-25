@@ -321,9 +321,104 @@ async (guild)=>{
     ); 
 
 
-    await registrarComandos(guild); 
+    await registrarComandos(guild);
 
-}); 
+
+
+    // ======================
+    // MENSAJE BIENVENIDA
+    // ======================
+
+    try {
+
+
+        const canal =
+        guild.channels.cache.find(
+            channel =>
+            channel.isTextBased() &&
+            channel.permissionsFor(guild.members.me)
+            .has("SendMessages")
+        );
+
+
+
+        if(canal){
+
+
+            await canal.send({
+
+                embeds:[
+
+                    {
+                        title:
+                        "🎯 Bienvenido a BattleMetricsBot",
+
+                        description:
+`Gracias por agregar BattleMetricsBot 🤖
+
+⚙️ **Primer paso obligatorio**
+
+Ejecuta:
+
+⚙️ \`/configurar-servidor\`
+
+para configurar el servidor de Rust que utilizará el bot.
+
+
+Después podrás usar:
+
+🖥️ **Comandos del servidor**
+⏱️ \`/horas\`
+🏆 \`/ranking\`
+
+
+🎯 **Sistema Tracker**
+🎮 \`/tracker\`
+📋 \`/trackers-activos\`
+
+
+🔎 **Consultas BattleMetrics**
+🔎 \`/horasbm\`
+
+
+📚 Usa:
+
+\`/help\`
+
+para ver todos los comandos disponibles.`,
+
+                        color:
+                        0x3498DB,
+
+                        footer:{
+                            text:
+                            "BattleMetricsBot"
+                        },
+
+                        timestamp:
+                        new Date()
+
+                    }
+
+                ]
+
+            });
+
+
+        }
+
+
+    } catch(error){
+
+        console.log(
+            "❌ Error enviando bienvenida:",
+            error.message
+        );
+
+    }
+
+
+});
 
 
 
