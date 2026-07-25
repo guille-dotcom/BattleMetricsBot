@@ -6,7 +6,6 @@ const {
 
 module.exports = {
 
-
     data: new SlashCommandBuilder()
 
         .setName("help")
@@ -20,90 +19,114 @@ module.exports = {
     async execute(interaction) {
 
 
-        const embed =
+        const configuracion =
         new EmbedBuilder()
 
         .setTitle(
-            "🎯 BattleMetricsBot - Ayuda"
+            "⚙️ CONFIGURACIÓN INICIAL"
         )
-
 
         .setDescription(
-`⚠️ **Antes de usar comandos de servidor ejecuta:**
+`⚙️ **/configurar-servidor**
 
-⚙️ \`/configurar-servidor\`
+Configura el servidor de Rust que utilizará BattleMetricsBot.
 
-Configura el servidor de Rust que usará el bot para consultas y estadísticas.`
+⚠️ Ejecuta este comando primero para habilitar los comandos del servidor.`
         )
 
+        .setColor(0x3498DB);
 
-        .addFields(
 
-            {
-                name:"🎯 Sistema Tracker",
 
-                value:
+        const tracker =
+        new EmbedBuilder()
+
+        .setTitle(
+            "🎯 SISTEMA TRACKER"
+        )
+
+        .setDescription(
 `🎮 **/tracker**
-Crea un seguimiento de un jugador BattleMetrics durante 24 horas.
+
+Crea seguimiento de un jugador BattleMetrics durante 24 horas.
+
 
 📋 **/trackers-activos**
+
 Muestra los jugadores actualmente bajo vigilancia.
 
+
 🗑️ **/limpiar-trackers**
+
 Elimina trackers individuales.`
-            },
+        )
+
+        .setColor(0x57F287);
 
 
-            {
-                name:"⏱️ Horas y estadísticas",
 
-                value:
-`⏱️ **/horas**
+        const servidor =
+        new EmbedBuilder()
+
+        .setTitle(
+            "🖥️ COMANDOS DEL SERVIDOR"
+        )
+
+        .setDescription(
+`⚠️ Estos comandos requieren:
+
+⚙️ **/configurar-servidor**
+
+
+⏱️ **/horas**
+
 Muestra las horas de jugadores del servidor configurado.
 
-🔎 **/horasbm**
-Consulta horas directamente desde BattleMetrics.
 
 🏆 **/ranking**
+
 Muestra el ranking de jugadores del servidor configurado.`
-            },
+        )
+
+        .setColor(0xFEE75C);
 
 
-            {
-                name:"⚙️ Configuración",
 
-                value:
-`⚙️ **/configurar-servidor**
-Configura el servidor de Rust.
+        const battlemetrics =
+        new EmbedBuilder()
 
-📝 **/registrar**
-Registra jugadores en el sistema.`
-            },
+        .setTitle(
+            "🔎 CONSULTAS BATTLEMETRICS"
+        )
+
+        .setDescription(
+`🔎 **/horasbm**
+
+Consulta estadísticas directamente desde BattleMetrics.`
+        )
+
+        .setColor(0x9B59B6);
 
 
-            {
-                name:"📡 Información",
 
-                value:
+        const informacion =
+        new EmbedBuilder()
+
+        .setTitle(
+            "📡 INFORMACIÓN"
+        )
+
+        .setDescription(
 `📡 **/ping**
-Muestra el estado del bot.`
-            }
 
+Muestra el estado actual del bot.`
         )
 
-
-        .setColor(
-            0x5865F2
-        )
-
+        .setColor(0x95A5A6)
 
         .setFooter({
-
-            text:
-            "BattleMetricsBot"
-
+            text:"BattleMetricsBot"
         })
-
 
         .setTimestamp();
 
@@ -112,13 +135,16 @@ Muestra el estado del bot.`
         await interaction.reply({
 
             embeds:[
-                embed
+                configuracion,
+                tracker,
+                servidor,
+                battlemetrics,
+                informacion
             ]
 
         });
 
 
     }
-
 
 };
