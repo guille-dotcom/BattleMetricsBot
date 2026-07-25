@@ -122,19 +122,32 @@ response.data.data;
 
 
 
-const sessionResponse = await axios.get(
-    `https://api.battlemetrics.com/players/${playerId}/relationships/sessions`,
-    {
-        headers:{
-            Authorization:`Bearer ${token}`
+try {
+
+    const sessionResponse = await axios.get(
+        `https://api.battlemetrics.com/players/${playerId}/relationships/sessions`,
+        {
+            headers:{
+                Authorization:`Bearer ${token}`
+            }
         }
-    }
-);
+    );
 
 
-console.log(
-    "SESIONES BM:",
-    JSON.stringify(sessionResponse.data, null, 2)
+    console.log(
+        "SESIONES BM:",
+        JSON.stringify(sessionResponse.data, null, 2)
+    );
+
+
+} catch(error){
+
+    console.log(
+        "ERROR SESIONES BM:",
+        error.response?.data || error.message
+    );
+
+}
 );
 
 
