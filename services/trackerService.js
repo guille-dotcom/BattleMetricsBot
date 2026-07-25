@@ -312,14 +312,15 @@ async function revisarTrackers(client) {
 
 
         console.log(
-            "🎯 TRACKER:",
-            status.name,
-            "| ONLINE:",
-            status.online,
-            "| SERVER:",
-            status.server
-        );
-
+    "🎯 TRACKER:",
+    status.name,
+    "| ONLINE:",
+    status.online,
+    "| SERVER:",
+    status.server,
+    "| JUGANDO:",
+    status.jugando
+);
 
 
         const canal =
@@ -374,12 +375,12 @@ async function revisarTrackers(client) {
 🎮 **Servidor**
 ${status.server || "Desconocido"}
 
-⏱ **Tiempo jugando**
-${formatoTiempo(tracker.inicioSesion)}
+⏱ **Jugando**
+${status.jugando || "0m"}
 
 📡 Estado actualizado
 hace unos segundos`
-                )
+)
 
                 .setColor(0x00ff00)
 
@@ -434,8 +435,8 @@ hace unos segundos`
 🎮 **Servidor**
 ${status.server || "Desconocido"}
 
-⏱ **Tiempo jugando**
-${formatoTiempo(tracker.inicioSesion)}
+⏱ **Jugando**
+${status.jugando || "0m"}
 
 📡 Estado actualizado
 hace unos segundos`
@@ -492,9 +493,7 @@ hace unos segundos`
 
 
             const tiempoJugado =
-            formatoTiempo(
-                tracker.inicioSesion
-            );
+status.jugando || formatoTiempo(tracker.inicioSesion);
 
 
 
