@@ -3,6 +3,9 @@ require("dotenv").config();
 const axios = require("axios");
 
 
+// ----------------------------
+// Buscar jugador BattleMetrics
+// ----------------------------
 async function searchBattleMetricsPlayer(playerName, serverId){
 
     try{
@@ -97,6 +100,7 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
 
 
+
 // ----------------------------
 // Obtener estado del jugador
 // ----------------------------
@@ -129,16 +133,21 @@ async function getBattleMetricsPlayerStatus(playerId){
         );
 
 
-       if(!player){
-    return null;
-}
+        const player =
+        response.data.data;
 
 
         if(!player){
 
+            console.log(
+                "BM no devolvió jugador:",
+                playerId
+            );
+
             return null;
 
         }
+
 
 
         const server =
@@ -146,6 +155,15 @@ async function getBattleMetricsPlayerStatus(playerId){
             item =>
             item.type === "server"
         );
+
+
+
+        console.log(
+            "ESTADO BM:",
+            player.attributes.name,
+            server ? "ONLINE" : "OFFLINE"
+        );
+
 
 
         return {
@@ -168,6 +186,7 @@ async function getBattleMetricsPlayerStatus(playerId){
         };
 
 
+
     }catch(error){
 
         console.log(
@@ -185,6 +204,9 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
 module.exports = {
+
     searchBattleMetricsPlayer,
+
     getBattleMetricsPlayerStatus
+
 };
