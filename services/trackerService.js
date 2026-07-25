@@ -6,8 +6,7 @@ const {
 } = require("./battlemetricsSearch");
 
 
-const trackersFile =
-path.join(
+const trackersFile = path.join(
     __dirname,
     "..",
     "data",
@@ -15,30 +14,24 @@ path.join(
 );
 
 
-// Crear carpeta y archivo si no existen
+// Crear carpeta y archivo
 if (!fs.existsSync(path.dirname(trackersFile))) {
-
     fs.mkdirSync(
         path.dirname(trackersFile),
         { recursive: true }
     );
-
 }
 
 
 if (!fs.existsSync(trackersFile)) {
-
     fs.writeFileSync(
         trackersFile,
         JSON.stringify({}, null, 4)
     );
-
 }
 
 
-// ----------------------------
 // Leer trackers
-// ----------------------------
 function leerTrackers() {
 
     try {
@@ -49,7 +42,6 @@ function leerTrackers() {
                 "utf8"
             )
         );
-
 
     } catch(error) {
 
@@ -65,10 +57,7 @@ function leerTrackers() {
 }
 
 
-
-// ----------------------------
 // Guardar trackers
-// ----------------------------
 function guardarTrackers(trackers) {
 
     try {
@@ -83,11 +72,9 @@ function guardarTrackers(trackers) {
             "utf8"
         );
 
-
         console.log(
             "✅ trackers.json actualizado"
         );
-
 
     } catch(error) {
 
@@ -101,12 +88,8 @@ function guardarTrackers(trackers) {
 }
 
 
-
-// ----------------------------
 // Obtener ID BattleMetrics
-// ----------------------------
 function obtenerBattleMetricsId(texto) {
-
 
     if(!texto)
         return null;
@@ -115,14 +98,11 @@ function obtenerBattleMetricsId(texto) {
     texto = texto.trim();
 
 
-
     if(/^\d+$/.test(texto))
         return texto;
 
 
-
-    const match =
-    texto.match(
+    const match = texto.match(
         /players\/(\d+)/
     );
 
@@ -131,93 +111,62 @@ function obtenerBattleMetricsId(texto) {
         return match[1];
 
 
-
     return null;
 
 }
 
 
-
-// ----------------------------
 // Registrar tracker
-// ----------------------------
 function registrarTracker({
 
     battlemetricsId,
-
     nombre = "Desconocido",
-
     canalId,
-
     guildId,
-
     registradoPor
 
 }) {
 
 
-    const trackers =
-    leerTrackers();
-
+    const trackers = leerTrackers();
 
 
     trackers[battlemetricsId] = {
 
-
         battlemetricsId,
-
 
         nombre,
 
-
         canalId,
-
 
         guildId,
 
-
         registradoPor,
 
-
-        registradoEn:
-        Date.now(),
-
-
+        registradoEn: Date.now(),
 
         expiraEn:
-        Date.now()
-        +
-        (24 * 60 * 60 * 1000),
+            Date.now() +
+            (24 * 60 * 60 * 1000),
 
+        ultimoEstado: "offline",
 
+        inicioSesion: null,
 
-        ultimoEstado:
-        "offline",
+        ultimoServidor: null
 
-
-
-        inicioSesion:
-        null,
-
-
-
-        ultimoServidor:
-null,
-
-
-};
+    };
 
 
     guardarTrackers(trackers);
 
 
-
     return trackers[battlemetricsId];
 
 }
-// ----------------------------
+
+
 // Revisar trackers
-// ----------------------------
 async function revisarTrackers(client) {
 
 
@@ -226,20 +175,17 @@ async function revisarTrackers(client) {
     );
 
 
-    const trackers =
-    leerTrackers();
+    const trackers = leerTrackers();
 
 
 
     for(const id in trackers) {
 
 
-        const tracker =
-        trackers[id];
+        const tracker = trackers[id];
 
 
 
-        // Expiración 24 horas
         if(Date.now() > tracker.expiraEn) {
 
 
@@ -259,9 +205,9 @@ async function revisarTrackers(client) {
 
 
         const status =
-        await getBattleMetricsPlayerStatus(
-            tracker.battlemetricsId
-        );
+            await getBattleMetricsPlayerStatus(
+                tracker.battlemetricsId
+            );
 
 
 
@@ -286,35 +232,35 @@ async function revisarTrackers(client) {
 
 
 
-        // ============================
-// JUGADOR ONLINE
-// ============================
+        // ONLINE
 
-if(
-    status.online &&
-    tracker.ultimoEstado === "offline"
-) {
+        if(
+            status.online &&
+            tracker.ultimoEstado === "offline"
+        ) {
 
 
-    tracker.ultimoEstado = "online";
+            tracker.ultimoEstado = "online";
 
-    tracker.ultimoServidor = status.server;
+            tracker.ultimoServidor =
+                status.server;
 
-    tracker.inicioSesion = Date.now();
-
-
-
-    const canal =
-    await client.channels.fetch(
-        tracker.canalId
-    );
+            tracker.inicioSesion =
+                Date.now();
 
 
-    if(canal) {
 
-        await canal.send({
+            const canal =
+                await client.channels.fetch(
+                    tracker.canalId
+                );
 
-content:
+
+            if(canal) {
+
+                await canal.send({
+
+                    content:
 
 `🎯 **BattleMetrics Tracker**
 
@@ -333,60 +279,59 @@ ${status.server || "Desconocido"}
 📡 Estado actualizado
 hace unos segundos`
 
-        });
+                });
 
-    }
+            }
 
-}
-
-
-
-            
-
-
-   // ============================
-// JUGADOR OFFLINE
-// ============================
-
-if(
-    !status.online &&
-    tracker.ultimoEstado === "online"
-) {
-
-
-    tracker.ultimoEstado = "offline";
-
-
-    const minutos =
-    Math.floor(
-        (Date.now() - tracker.inicioSesion) / 60000
-    );
-
-
-    const horas =
-    Math.floor(
-        minutos / 60
-    );
-
-
-    const minutosRestantes =
-    minutos % 60;
+        }
 
 
 
-    try {
 
-        const canal =
-        await client.channels.fetch(
-            tracker.canalId
-        );
+        // OFFLINE
+
+        if(
+            !status.online &&
+            tracker.ultimoEstado === "online"
+        ) {
 
 
-        if(canal) {
+            tracker.ultimoEstado = "offline";
 
-            await canal.send({
 
-content:
+            const minutos =
+                Math.floor(
+                    (Date.now() - tracker.inicioSesion) / 60000
+                );
+
+
+            const horas =
+                Math.floor(
+                    minutos / 60
+                );
+
+
+            const minutosRestantes =
+                minutos % 60;
+
+
+
+            try {
+
+
+                const canal =
+                    await client.channels.fetch(
+                        tracker.canalId
+                    );
+
+
+
+                if(canal) {
+
+
+                    await canal.send({
+
+                        content:
 
 `🎯 **BattleMetrics Tracker**
 
@@ -405,42 +350,39 @@ ${horas.toString().padStart(2,"0")}h ${minutosRestantes.toString().padStart(2,"0
 📡 Estado actualizado
 hace unos segundos`
 
-            });
+                    });
+
+                }
+
+
+            } catch(error) {
+
+
+                console.log(
+                    "Error enviando offline:",
+                    error.message
+                );
+
+            }
+
+
+            tracker.inicioSesion = null;
+
+            tracker.ultimoServidor = null;
 
         }
 
 
-    } catch(error) {
-
-        console.log(
-            "Error enviando offline:",
-            error.message
-        );
-
     }
 
 
-    tracker.inicioSesion = null;
-    tracker.ultimoServidor = null;
-
-}
-      
-
-
-                
-
-
-
-
-
-       guardarTrackers(trackers);
+    guardarTrackers(trackers);
 
 }
 
 
-// ----------------------------
+
 // Exportar
-// ----------------------------
 
 module.exports = {
 
