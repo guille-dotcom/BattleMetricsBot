@@ -201,6 +201,11 @@ function registrarTracker({
 // Revisar trackers
 // ----------------------------
 async function revisarTrackers(client) {
+  async function revisarTrackers(client) {
+
+    console.log("🔎 EJECUTANDO REVISION DE TRACKERS");
+
+    const trackers = leerTrackers();
 
     const trackers = leerTrackers();
 
