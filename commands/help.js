@@ -38,33 +38,6 @@ Configura el servidor de Rust que utilizará BattleMetricsBot.
 
 
 
-        const tracker =
-        new EmbedBuilder()
-
-        .setTitle(
-            "🎯 SISTEMA TRACKER"
-        )
-
-        .setDescription(
-`🎮 **/tracker**
-
-Crea seguimiento de un jugador BattleMetrics durante 24 horas.
-
-
-📋 **/trackers-activos**
-
-Muestra los jugadores actualmente bajo vigilancia.
-
-
-🗑️ **/limpiar-trackers**
-
-Elimina trackers individuales.`
-        )
-
-        .setColor(0x57F287);
-
-
-
         const servidor =
         new EmbedBuilder()
 
@@ -89,6 +62,33 @@ Muestra el ranking de jugadores del servidor configurado.`
         )
 
         .setColor(0xFEE75C);
+
+
+
+        const tracker =
+        new EmbedBuilder()
+
+        .setTitle(
+            "🎯 SISTEMA TRACKER"
+        )
+
+        .setDescription(
+`🎮 **/tracker**
+
+Crea seguimiento de un jugador BattleMetrics durante 24 horas.
+
+
+📋 **/trackers-activos**
+
+Muestra los jugadores actualmente bajo vigilancia.
+
+
+🗑️ **/limpiar-trackers**
+
+Elimina trackers individuales.`
+        )
+
+        .setColor(0x57F287);
 
 
 
@@ -135,11 +135,13 @@ Muestra el estado actual del bot.`
         await interaction.reply({
 
             embeds:[
+
                 configuracion,
-                tracker,
                 servidor,
+                tracker,
                 battlemetrics,
                 informacion
+
             ]
 
         });
