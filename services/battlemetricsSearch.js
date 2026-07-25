@@ -164,32 +164,29 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
 
-        const attributes =
-        player.attributes;
-
-
-
-        console.log(
-            "ONLINE RAW:",
-            attributes.online
-        );
-
-
 
         let servidor = null;
 
 
 
-        if(
-            attributes.online === true &&
-            response.data.included
-        ){
+        // Revisar si BattleMetrics tiene servidor activo
+        const serverRelation =
+        player.relationships?.server?.data;
+
+
+
+        if(serverRelation){
 
 
             const serverData =
-            response.data.included.find(
+            response.data.included?.find(
+
                 item =>
-                item.type === "server"
+
+                item.type === "server" &&
+
+                item.id === serverRelation.id
+
             );
 
 
@@ -207,11 +204,25 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
 
+        const online =
+        !!serverRelation;
+
+
+
+        console.log(
+            "SERVER RELATION:",
+            serverRelation
+        );
+
+
+
         console.log(
             "ESTADO BM:",
-            attributes.name,
-            attributes.online ? "ONLINE" : "OFFLINE"
+            player.attributes.name,
+            online ? "ONLINE" : "OFFLINE"
         );
+
+
 
 
 
@@ -224,12 +235,11 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
             name:
-            attributes.name,
+            player.attributes.name,
 
 
 
-            online:
-            attributes.online === true,
+            online,
 
 
 
@@ -239,6 +249,7 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
         };
+
 
 
 
