@@ -266,11 +266,17 @@ async function revisarTrackers(client) {
         if(status.online && tracker.ultimoEstado === "offline"){
 
 
-            tracker.ultimoEstado = "online";
+   tracker.ultimoEstado = "online";
 
 
-            tracker.ultimoServidor =
-            status.server;
+tracker.ultimoServidor =
+status.server;
+
+
+// Guardar inicio de sesión solo si no existe
+if(!tracker.inicioSesion){
+    tracker.inicioSesion = Date.now();
+}
 
 
 
@@ -291,13 +297,22 @@ try {
     );
 
 }
+const minutos =
+Math.floor(
+    (Date.now() - tracker.inicioSesion) / 60000
+);
 
+const horas =
+Math.floor(minutos / 60);
+
+const minutosRestantes =
+minutos % 60;
 
             if(canal){
 
                 canal.send({
 
-    content:
+content:
 `🎯 **BattleMetrics Tracker**
 
 🟢 **JUGADOR ONLINE**
@@ -308,11 +323,13 @@ try {
 🎮 **Servidor**
 ${status.server || "Desconocido"}
 
+⏱ **Tiempo jugando**
+${horas.toString().padStart(2,"0")}h ${minutosRestantes.toString().padStart(2,"0")}m
+
 📡 Estado actualizado
 hace unos segundos`
 
 });
-
             }
 
 
