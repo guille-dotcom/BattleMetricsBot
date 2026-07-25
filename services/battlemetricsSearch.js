@@ -177,9 +177,9 @@ if(!player){
 
 
 
-        let servidor = null;
-
-        let online = false;
+       let servidor = null;
+let online = false;
+let tiempoJugando = "0m";
 
 // ----------------------------
 // Detectar online por sesiones BM
@@ -202,7 +202,36 @@ if(sesionActiva){
 
     const serverId =
     sesionActiva.relationships?.server?.data?.id;
+    const inicio =
+    new Date(
+        sesionActiva.attributes.start
+    );
 
+
+    const ahora =
+    new Date();
+
+
+    const segundos =
+    Math.floor(
+        (ahora - inicio) / 1000
+    );
+
+
+    const horas =
+    Math.floor(segundos / 3600);
+
+
+    const minutos =
+    Math.floor(
+        (segundos % 3600) / 60
+    );
+
+
+    tiempoJugando =
+    horas > 0
+    ? `${horas}h ${minutos}m`
+    : `${minutos}m`;
 
     if(serverId){
 
@@ -381,23 +410,27 @@ if(sesionActiva){
         return {
 
 
-            id:
-            player.id,
+    id:
+    player.id,
 
 
-            name:
-            player.attributes.name,
+    name:
+    player.attributes.name,
 
 
-            online,
+    online,
 
 
-            server:
-            servidor
+    server:
+    servidor,
+
+
+    jugando:
+    tiempoJugando
 
 
 
-        };
+};
 
 
 
