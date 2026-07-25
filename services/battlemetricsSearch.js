@@ -3,6 +3,7 @@ require("dotenv").config();
 const axios = require("axios");
 
 
+
 // ----------------------------
 // Buscar jugador BattleMetrics
 // ----------------------------
@@ -20,6 +21,7 @@ async function searchBattleMetricsPlayer(playerName, serverId){
             "SERVIDOR:",
             serverId
         );
+
 
 
         const response =
@@ -79,6 +81,7 @@ async function searchBattleMetricsPlayer(playerName, serverId){
         );
 
 
+
         return players[0];
 
 
@@ -87,7 +90,7 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
 
         console.log(
-            "ERROR BM:",
+            "ERROR BUSCANDO BM:",
             error.response?.data || error.message
         );
 
@@ -129,7 +132,9 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
                 params:{
+
                     include:"server"
+
                 }
 
             }
@@ -145,14 +150,17 @@ async function getBattleMetricsPlayerStatus(playerId){
 
         if(!player){
 
+
             console.log(
                 "BM no devolvió jugador:",
                 playerId
             );
 
+
             return null;
 
         }
+
 
 
 
@@ -161,21 +169,22 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
 
-        // BattleMetrics real online status
-        const online =
-        attributes.online === true;
+        console.log(
+            "ONLINE RAW:",
+            attributes.online
+        );
 
 
 
-        let server = null;
+        let servidor = null;
 
 
 
-        // Solo buscamos servidor si realmente está online
         if(
-            online &&
+            attributes.online === true &&
             response.data.included
         ){
+
 
             const serverData =
             response.data.included.find(
@@ -184,9 +193,10 @@ async function getBattleMetricsPlayerStatus(playerId){
             );
 
 
+
             if(serverData){
 
-                server =
+                servidor =
                 serverData.attributes.name;
 
             }
@@ -195,30 +205,41 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
 
+
+
         console.log(
             "ESTADO BM:",
             attributes.name,
-            online ? "ONLINE" : "OFFLINE"
+            attributes.online ? "ONLINE" : "OFFLINE"
         );
 
 
 
         return {
 
+
             id:
             player.id,
+
 
 
             name:
             attributes.name,
 
 
-            online,
+
+            online:
+            attributes.online === true,
 
 
-            server
+
+            server:
+            servidor
+
+
 
         };
+
 
 
 
@@ -243,8 +264,11 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 module.exports = {
 
+
     searchBattleMetricsPlayer,
 
+
     getBattleMetricsPlayerStatus
+
 
 };
