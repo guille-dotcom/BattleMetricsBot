@@ -49,11 +49,19 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
 
 
-        if(players.length === 0){
+        if(!players || players.length === 0){
 
             return null;
 
         }
+
+
+
+        console.log(
+            "JUGADOR ENCONTRADO:",
+            players[0].attributes.name,
+            players[0].id
+        );
 
 
 
@@ -62,6 +70,7 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
 
     }catch(error){
+
 
         console.log(
             "ERROR BUSCANDO BM:",
@@ -74,6 +83,9 @@ async function searchBattleMetricsPlayer(playerName, serverId){
     }
 
 }
+
+
+
 
 
 
@@ -117,6 +129,7 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
 
+
         const player =
         response.data.data;
 
@@ -124,9 +137,35 @@ async function getBattleMetricsPlayerStatus(playerId){
 
         if(!player){
 
+            console.log(
+                "NO EXISTE PLAYER:",
+                playerId
+            );
+
             return null;
 
         }
+
+
+
+        // DEBUG TEMPORAL
+        console.log(
+            "========== BM RAW =========="
+        );
+
+        console.log(
+            JSON.stringify(
+                response.data,
+                null,
+                4
+            )
+        );
+
+        console.log(
+            "============================"
+        );
+
+
 
 
 
@@ -136,11 +175,12 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
 
-        /*
-        BattleMetrics guarda el servidor actual
-        en relationships.server
-        */
 
+
+        // ----------------------------
+        // Método 1:
+        // relationships.server
+        // ----------------------------
 
         const serverRelation =
         player.relationships?.server?.data;
@@ -180,6 +220,84 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
 
+
+        // ----------------------------
+        // Método 2:
+        // attributes.online
+        // ----------------------------
+
+        if(
+            player.attributes?.online === true
+        ){
+
+            online = true;
+
+        }
+
+
+
+
+
+        // ----------------------------
+        // Método 3:
+        // attributes.server
+        // ----------------------------
+
+        if(
+            player.attributes?.server
+        ){
+
+            online = true;
+
+
+            servidor =
+            player.attributes.server.name ||
+            player.attributes.server;
+
+        }
+
+
+
+
+
+        // ----------------------------
+        // Método 4:
+        // Buscar servidor en included
+        // solo si parece online
+        // ----------------------------
+
+        if(
+            online &&
+            !servidor &&
+            Array.isArray(response.data.included)
+        ){
+
+
+            const server =
+            response.data.included.find(
+
+                item =>
+                item.type === "server"
+
+            );
+
+
+
+            if(server){
+
+                servidor =
+                server.attributes.name;
+
+            }
+
+
+        }
+
+
+
+
+
+
         console.log(
             "JUGADOR:",
             player.attributes.name
@@ -187,15 +305,17 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
         console.log(
-            "ONLINE:",
+            "ONLINE DETECTADO:",
             online
         );
 
 
         console.log(
-            "SERVIDOR ACTUAL:",
+            "SERVIDOR DETECTADO:",
             servidor
         );
+
+
 
 
 
@@ -224,6 +344,8 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
 
+
+
     }catch(error){
 
 
@@ -238,6 +360,8 @@ async function getBattleMetricsPlayerStatus(playerId){
     }
 
 }
+
+
 
 
 
