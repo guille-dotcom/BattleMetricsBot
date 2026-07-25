@@ -33,8 +33,7 @@ const response =
 
 
 console.log(
-    "PLAYER RESPONSE:",
-    JSON.stringify(response.data.data, null, 2)
+    "PLAYER RESPONSE OK"
 );
 
 
@@ -121,10 +120,12 @@ const player =
 response.data.data;
 
 
+let sessionResponse = null;
+
 
 try {
 
-    const sessionResponse = await axios.get(
+    sessionResponse = await axios.get(
         `https://api.battlemetrics.com/players/${playerId}/relationships/sessions`,
         {
             headers:{
@@ -135,9 +136,11 @@ try {
 
 
     console.log(
-        "SESIONES BM:",
-        JSON.stringify(sessionResponse.data, null, 2)
-    );
+    "SESION ACTIVA BM:",
+    sessionResponse.data.data?.some(
+        s => s.attributes.stop === null
+    ) ? "ONLINE" : "OFFLINE"
+);
 
 
 } catch(error){
@@ -166,22 +169,10 @@ if(!player){
 
 
 
-       console.log(
-    "========== BM PLAYER RAW =========="
+ console.log(
+    "PLAYER:",
+    player.attributes.name
 );
-
-console.log(
-    JSON.stringify(
-        player,
-        null,
-        2
-    )
-);
-
-console.log(
-    "=================================="
-);
-
 
 
 
@@ -190,7 +181,57 @@ console.log(
 
         let online = false;
 
+// ----------------------------
+// Detectar online por sesiones BM
+// ----------------------------
 
+let sesiones =
+    sessionResponse?.data?.data || [];
+
+
+const sesionActiva =
+    sesiones.find(
+        s => s.attributes.stop === null
+    );
+
+
+if(sesionActiva){
+
+    online = true;
+
+
+    const serverId =
+    sesionActiva.relationships?.server?.data?.id;
+
+
+    if(serverId){
+
+        try{
+
+            const serverResponse = await axios.get(
+                `https://api.battlemetrics.com/servers/${serverId}`,
+                {
+                    headers:{
+                        Authorization:`Bearer ${token}`
+                    }
+                }
+            );
+
+
+            servidor =
+            serverResponse.data.data.attributes.name;
+
+
+        }catch(error){
+
+            servidor =
+            `Servidor ID ${serverId}`;
+
+        }
+
+    }
+
+}
 
 
 
