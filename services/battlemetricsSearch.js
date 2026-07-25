@@ -15,14 +15,6 @@ async function searchBattleMetricsPlayer(playerName, serverId){
         process.env.BATTLEMETRICS_TOKEN;
 
 
-        console.log(
-            "BUSCANDO EN BM:",
-            playerName,
-            "SERVIDOR:",
-            serverId
-        );
-
-
         const response =
         await axios.get(
 
@@ -57,13 +49,6 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
 
 
-        console.log(
-            "RESULTADOS:",
-            players.length
-        );
-
-
-
         if(players.length === 0){
 
             return null;
@@ -72,20 +57,11 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
 
 
-        console.log(
-            "ENCONTRADO:",
-            players[0].attributes.name,
-            "ID:",
-            players[0].id
-        );
-
-
         return players[0];
 
 
 
     }catch(error){
-
 
         console.log(
             "ERROR BUSCANDO BM:",
@@ -148,55 +124,44 @@ async function getBattleMetricsPlayerStatus(playerId){
 
         if(!player){
 
-            console.log(
-                "BM no devolvió jugador:",
-                playerId
-            );
-
             return null;
 
         }
 
 
 
-        // DEBUG TEMPORAL
-        console.log(
-            "RESPUESTA COMPLETA BM:"
-        );
-
-        console.log(
-            JSON.stringify(
-                response.data,
-                null,
-                4
-            )
-        );
-
-
-
-
-
         let servidor = null;
-
-
 
         let online = false;
 
 
 
-        // Revisar included servers
+        /*
+        BattleMetrics guarda el servidor actual
+        en relationships.server
+        */
 
-        if(
-            response.data.included &&
-            Array.isArray(response.data.included)
-        ){
+
+        const serverRelation =
+        player.relationships?.server?.data;
+
+
+
+        if(serverRelation){
+
+
+            online = true;
+
 
 
             const serverData =
-            response.data.included.find(
+            response.data.included?.find(
 
                 item =>
-                item.type === "server"
+
+                item.type === "server" &&
+
+                item.id === serverRelation.id
 
             );
 
@@ -204,13 +169,8 @@ async function getBattleMetricsPlayerStatus(playerId){
 
             if(serverData){
 
-
                 servidor =
                 serverData.attributes.name;
-
-
-                online = true;
-
 
             }
 
@@ -220,50 +180,22 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
 
-
-        // Revisar otros campos posibles
-
-        if(
-            player.attributes.online === true
-        ){
-
-            online = true;
-
-        }
-
-
-
-        if(
-            player.attributes.status === "online"
-        ){
-
-            online = true;
-
-        }
-
-
-
-
         console.log(
-            "SERVIDOR DETECTADO:",
-            servidor
+            "JUGADOR:",
+            player.attributes.name
         );
 
 
-
         console.log(
-            "ONLINE DETECTADO:",
+            "ONLINE:",
             online
         );
 
 
-
         console.log(
-            "ESTADO BM:",
-            player.attributes.name,
-            online ? "ONLINE" : "OFFLINE"
+            "SERVIDOR ACTUAL:",
+            servidor
         );
-
 
 
 
@@ -288,7 +220,6 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
         };
-
 
 
 
