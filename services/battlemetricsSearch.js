@@ -32,14 +32,10 @@ const response =
     );
 
 
-const fs = require("fs");
-
-fs.writeFileSync(
-    "bm_response.json",
-    JSON.stringify(response.data, null, 4)
+console.log(
+    "PLAYER RESPONSE:",
+    JSON.stringify(response.data.data, null, 2)
 );
-
-console.log("✅ BM RESPONSE GUARDADA");
 
 
 const players =
@@ -144,22 +140,21 @@ async function getBattleMetricsPlayerStatus(playerId){
 
 
 
-        // DEBUG TEMPORAL
-        console.log(
-            "========== BM RAW =========="
-        );
+       console.log(
+    "========== BM PLAYER RAW =========="
+);
 
-        console.log(
-            JSON.stringify(
-                response.data,
-                null,
-                4
-            )
-        );
+console.log(
+    JSON.stringify(
+        player,
+        null,
+        2
+    )
+);
 
-        console.log(
-            "============================"
-        );
+console.log(
+    "=================================="
+);
 
 
 
