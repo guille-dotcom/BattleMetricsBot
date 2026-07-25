@@ -16,7 +16,16 @@ module.exports = {
         .setName("tracker-limpiar")
 
         .setDescription(
-            "Elimina todos los trackers activos de este servidor"
+            "Elimina trackers activos de este servidor"
+        )
+
+        .addBooleanOption(option =>
+            option
+                .setName("confirmar")
+                .setDescription(
+                    "Confirma el borrado de todos los trackers"
+                )
+                .setRequired(true)
         ),
 
 
@@ -29,6 +38,25 @@ module.exports = {
 
 
         try {
+
+
+            const confirmar =
+            interaction.options.getBoolean(
+                "confirmar"
+            );
+
+
+
+            if(!confirmar) {
+
+
+                return interaction.editReply(
+                    "❌ Cancelado. Debes usar `/tracker-limpiar confirmar:true` para borrar los trackers."
+                );
+
+
+            }
+
 
 
             const trackers =
@@ -71,7 +99,9 @@ module.exports = {
             )
 
             .setDescription(
-                `Se eliminaron **${eliminados}** trackers activos de este servidor.`
+`Se eliminaron **${eliminados}** trackers activos.
+
+📡 El sistema seguirá funcionando normalmente.`
             )
 
             .setColor(

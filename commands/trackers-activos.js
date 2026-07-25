@@ -1,8 +1,20 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const {
+    SlashCommandBuilder,
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle
+} = require("discord.js");
+
 const fs = require("fs");
-const { trackersFile } = require("../services/trackerService");
+
+const {
+    trackersFile
+} = require("../services/trackerService");
+
 
 module.exports = {
+
 
     data: new SlashCommandBuilder()
 
@@ -16,19 +28,25 @@ module.exports = {
 
     async execute(interaction) {
 
+
         await interaction.deferReply();
+
 
 
         try {
 
 
+
             if(!fs.existsSync(trackersFile)) {
+
 
                 return await interaction.editReply(
                     "📋 No hay ningún tracker activo actualmente."
                 );
 
+
             }
+
 
 
 
@@ -42,26 +60,38 @@ module.exports = {
 
 
 
+
+
             const playerIds =
             Object.keys(trackers);
 
 
 
+
+
             const filtrados =
             playerIds.filter(
+
                 id =>
                 trackers[id].canalId === interaction.channel.id
+
             );
+
+
 
 
 
             if(filtrados.length === 0) {
 
+
                 return await interaction.editReply(
                     "📋 No hay jugadores siendo trackeados en este canal."
                 );
 
+
             }
+
+
 
 
 
@@ -84,11 +114,20 @@ module.exports = {
 
 
 
+
+            const botones = [];
+
+
+
+
+
             filtrados.forEach((id, index) => {
+
 
 
                 const data =
                 trackers[id];
+
 
 
 
@@ -100,10 +139,12 @@ module.exports = {
 
 
 
+
                 const horas =
                 Math.floor(
                     tiempoRestante / 3600000
                 );
+
 
 
 
@@ -114,40 +155,109 @@ module.exports = {
 
 
 
+
+
                 embed.addFields({
+
 
                     name:
                     `${index + 1}. 👤 ${data.nombre || "Desconocido"}`,
+
 
 
                     value:
 `🔗 **Perfil BattleMetrics**
 https://www.battlemetrics.com/players/${data.battlemetricsId}
 
-📡 **Estado:** ${data.ultimoEstado.toUpperCase()}
+📡 **Estado:** ${(data.ultimoEstado || "desconocido").toUpperCase()}
 
 ⏳ **Tracker restante:** ${horas}h ${minutos}m`,
 
+
                     inline:false
+
 
                 });
 
 
+
+
+
+                botones.push(
+
+
+                    new ButtonBuilder()
+
+                    .setCustomId(
+                        `eliminar_tracker_${id}`
+                    )
+
+                    .setLabel(
+                        `❌ Eliminar ${data.nombre || id}`
+                    )
+
+                    .setStyle(
+                        ButtonStyle.Danger
+                    )
+
+
+                );
+
+
+
             });
+
+
+
+
+
+            const componentes = [];
+
+
+
+            for(let i = 0; i < botones.length; i += 5){
+
+
+                componentes.push(
+
+                    new ActionRowBuilder()
+
+                    .addComponents(
+                        botones.slice(i, i + 5)
+                    )
+
+                );
+
+
+            }
+
+
 
 
 
             await interaction.editReply({
 
+
                 embeds:[
+
                     embed
-                ]
+
+                ],
+
+
+                components:
+
+                componentes
+
 
             });
 
 
 
+
+
         } catch(error) {
+
 
 
             console.error(
@@ -156,12 +266,17 @@ https://www.battlemetrics.com/players/${data.battlemetricsId}
             );
 
 
+
             await interaction.editReply(
                 "❌ Ocurrió un error al cargar los trackers activos."
             );
 
+
+
         }
 
+
     }
+
 
 };
