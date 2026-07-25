@@ -373,7 +373,7 @@ async function revisarTrackers(client) {
 🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${tracker.battlemetricsId})
 
 🎮 **Servidor**
-${status.server || "Desconocido"}
+||${status.server || "Desconocido"}||
 
 ⏱ **Jugando**
 ${status.jugando || "0m"}
@@ -433,7 +433,7 @@ hace unos segundos`
 🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${tracker.battlemetricsId})
 
 🎮 **Servidor**
-${status.server || "Desconocido"}
+||${status.server || "Desconocido"}||
 
 ⏱ **Jugando**
 ${status.jugando || "0m"}
