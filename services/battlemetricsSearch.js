@@ -97,6 +97,94 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
 
 
+// ----------------------------
+// Obtener estado del jugador
+// ----------------------------
+async function getBattleMetricsPlayerStatus(playerId){
+
+    try{
+
+        const token =
+        process.env.BATTLEMETRICS_TOKEN;
+
+
+        const response =
+        await axios.get(
+
+            `https://api.battlemetrics.com/players/${playerId}`,
+
+            {
+
+                headers:{
+                    Authorization:
+                    `Bearer ${token}`
+                },
+
+                params:{
+                    include:"server"
+                }
+
+            }
+
+        );
+
+
+       if(!player){
+    return null;
+}
+
+
+        if(!player){
+
+            return null;
+
+        }
+
+
+        const server =
+        response.data.included?.find(
+            item =>
+            item.type === "server"
+        );
+
+
+        return {
+
+            id: player.id,
+
+            name:
+            player.attributes.name,
+
+
+            online:
+            !!server,
+
+
+            server:
+            server ?
+            server.attributes.name :
+            null
+
+        };
+
+
+    }catch(error){
+
+        console.log(
+            "ERROR STATUS BM:",
+            error.response?.data || error.message
+        );
+
+
+        return null;
+
+    }
+
+}
+
+
+
 module.exports = {
-    searchBattleMetricsPlayer
+    searchBattleMetricsPlayer,
+    getBattleMetricsPlayerStatus
 };

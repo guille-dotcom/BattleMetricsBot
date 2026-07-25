@@ -228,7 +228,7 @@ async function registrarComandos(guild) {
 // ======================
 
 
-client.once("clientReady", async () => {
+client.once("ready", async () => {
 
 
     console.log(
@@ -318,70 +318,79 @@ client.once("clientReady", async () => {
 
 
 
-    // ======================
-    // TRACKER AUTOMÁTICO
-    // ======================
+   // ======================
+// TRACKER AUTOMÁTICO
+// ======================
 
+console.log(
+    "🔎 Tracker iniciado cada 30 segundos"
+);
+
+
+let trackerRevisando = false;
+
+
+// Revisión inmediata
+
+try {
+
+    await revisarTrackers(client);
+
+} catch(error) {
 
     console.log(
-
-        "🔎 Tracker iniciado cada 30 segundos"
-
+        "❌ Error revisión inicial tracker:",
+        error.message
     );
 
+}
 
 
-    // Revisión inmediata
 
-    try {
+// Revisión cada 30 segundos
 
-        await revisarTrackers(client);
+setInterval(async () => {
 
-    } catch(error) {
+
+    if(trackerRevisando){
 
         console.log(
-
-            "❌ Error revisión inicial tracker:",
-
-            error.message
-
+            "⏳ Tracker anterior todavía ejecutándose..."
         );
+
+        return;
 
     }
 
 
+    trackerRevisando = true;
 
 
-
-    // Revisión cada 30 segundos
-
-    setInterval(async () => {
+    try {
 
 
-        try {
+        await revisarTrackers(client);
 
 
-            await revisarTrackers(client);
+    } catch(error) {
 
 
-        } catch(error) {
+        console.log(
+            "❌ Error tracker automático:",
+            error.message
+        );
 
 
-            console.log(
-
-                "❌ Error tracker automático:",
-
-                error.message
-
-            );
+    } finally {
 
 
-        }
+        trackerRevisando = false;
 
 
-    }, 30 * 1000);
+    }
 
 
+}, 30 * 1000);
 
 });
 
