@@ -109,7 +109,6 @@ function obtenerBattleMetricsId(texto) {
     texto = texto.trim();
 
 
-
     if(/^\d+$/.test(texto))
         return texto;
 
@@ -123,7 +122,6 @@ function obtenerBattleMetricsId(texto) {
 
     if(match)
         return match[1];
-
 
 
     return null;
@@ -188,18 +186,13 @@ function registrarTracker({
 
     trackers[battlemetricsId] = {
 
-
         battlemetricsId,
-
 
         nombre,
 
-
         canalId,
 
-
         guildId,
-
 
         registradoPor,
 
@@ -234,7 +227,6 @@ function registrarTracker({
         mensajeId:
         null
 
-
     };
 
 
@@ -246,6 +238,10 @@ function registrarTracker({
     return trackers[battlemetricsId];
 
 }
+
+
+
+
 // Revisar trackers
 async function revisarTrackers(client) {
 
@@ -255,8 +251,16 @@ async function revisarTrackers(client) {
     );
 
 
+
     const trackers =
     leerTrackers();
+
+
+
+    console.log(
+        "📋 TRACKERS ACTUALES:",
+        JSON.stringify(trackers, null, 4)
+    );
 
 
 
@@ -307,6 +311,17 @@ async function revisarTrackers(client) {
 
 
 
+        console.log(
+            "🎯 TRACKER:",
+            status.name,
+            "| ONLINE:",
+            status.online,
+            "| SERVER:",
+            status.server
+        );
+
+
+
         const canal =
         await client.channels.fetch(
             tracker.canalId
@@ -316,11 +331,7 @@ async function revisarTrackers(client) {
 
         if(!canal)
             continue;
-
-
-
-
-        // ============================
+                  // ============================
         // JUGADOR ONLINE
         // ============================
 
@@ -332,7 +343,7 @@ async function revisarTrackers(client) {
 
 
 
-            // Primera vez online
+            // Primera detección ONLINE
 
             if(tracker.ultimoEstado === "offline") {
 
@@ -364,7 +375,7 @@ async function revisarTrackers(client) {
 ${status.server || "Desconocido"}
 
 ⏱ **Tiempo jugando**
-00h 00m
+${formatoTiempo(tracker.inicioSesion)}
 
 📡 Estado actualizado
 hace unos segundos`
@@ -387,12 +398,11 @@ hace unos segundos`
                 mensaje.id;
 
 
-
             }
 
 
 
-            // Actualizar mensaje existente
+            // Actualizar mensaje mientras está online
 
             else if(tracker.mensajeId) {
 
@@ -445,6 +455,7 @@ hace unos segundos`
 
                 } catch(error) {
 
+
                     console.log(
                         "Error actualizando online:",
                         error.message
@@ -454,7 +465,6 @@ hace unos segundos`
 
 
             }
-
 
 
         }
@@ -518,7 +528,7 @@ hace unos segundos`
 🎮 **Último servidor**
 ${tracker.ultimoServidor || "Desconocido"}
 
-⏱ **Tiempo jugado**
+⏱ **Tiempo jugando**
 ${tiempoJugado}
 
 📡 Estado actualizado
@@ -552,7 +562,7 @@ hace unos segundos`
 
 👤 **${status.name}**
 
-⏱ **Tiempo jugado**
+⏱ **Tiempo jugando**
 ${tiempoJugado}`
                     )
 
@@ -608,6 +618,7 @@ ${tiempoJugado}`
 
 
 }
+
 
 
 
