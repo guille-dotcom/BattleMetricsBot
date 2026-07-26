@@ -6,6 +6,7 @@ const axios = require("axios");
 
 // ----------------------------
 // Buscar jugador BattleMetrics
+// SOLO dentro del servidor configurado
 // ----------------------------
 async function searchBattleMetricsPlayer(playerName, serverId){
 
@@ -14,116 +15,97 @@ async function searchBattleMetricsPlayer(playerName, serverId){
         const token =
         process.env.BATTLEMETRICS_TOKEN;
 
-const response =
-    await axios.get(
-        "https://api.battlemetrics.com/players",
-        {
-            headers:{
-                Authorization:
-                `Bearer ${token}`
-            },
 
-            params:{
-                "filter[search]": playerName,
-                include:"server"
+        const response =
+        await axios.get(
+            `https://api.battlemetrics.com/servers/${serverId}/relationships/players`,
+            {
+                headers:{
+                    Authorization:
+                    `Bearer ${token}`
+                }
             }
-        }
-    );
-
-
-console.log(
-    "PLAYER RESPONSE OK"
-);
-
-
-const players =
-    response.data.data;
-
-
-if(!players || players.length === 0){
-
-    return null;
-
-}
-
-
-console.log(
-    "JUGADORES ENCONTRADOS:",
-    players.map(p => ({
-        id: p.id,
-        nombre: p.attributes.name
-    }))
-);
-
-
-for(const player of players){
-
-    console.log(
-        "REVISANDO PERFIL:",
-        player.attributes.name,
-        player.id
-    );
-
-
-    const sessions =
-    await axios.get(
-        `https://api.battlemetrics.com/players/${player.id}/relationships/sessions`,
-        {
-            headers:{
-                Authorization:
-                `Bearer ${token}`
-            }
-        }
-    );
-
-
-  const estaEnServidor =
-(sessions.data.data || []).some(
-    session => {
-
-        const sessionServer =
-        session.relationships?.server?.data?.id ||
-        session.attributes?.serverId;
-
-
-        console.log(
-            "SESION SERVER:",
-            sessionServer
         );
 
 
-        return sessionServer == serverId;
+        console.log(
+            "JUGADORES DEL SERVIDOR OK"
+        );
 
-    }
-);
+
+        const players =
+        response.data.data || [];
 
 
-    if(estaEnServidor){
+        console.log(
+            "JUGADORES ONLINE SERVIDOR:",
+            players.length
+        );
+
+
+        const nombreBuscado =
+        playerName.toLowerCase().trim();
+
+
+
+        const encontrados =
+        players.filter(player => {
+
+            const nombreBM =
+            player.attributes.name
+            ?.toLowerCase()
+            .trim();
+
+
+            return nombreBM === nombreBuscado;
+
+        });
+
+
+
+        console.log(
+            "COINCIDENCIAS:",
+            encontrados.map(p => ({
+                id:p.id,
+                nombre:p.attributes.name
+            }))
+        );
+
+
+
+        // No está conectado
+        if(encontrados.length === 0){
+
+            console.log(
+                "JUGADOR NO ESTA EN SERVIDOR"
+            );
+
+            return null;
+
+        }
+
+
+
+        // Hay más de uno con el mismo nombre
+        if(encontrados.length > 1){
+
+            console.log(
+                "NOMBRE DUPLICADO"
+            );
+
+            return "DUPLICADO";
+
+        }
+
+
 
         console.log(
             "JUGADOR CORRECTO EN SERVIDOR:",
-            player.id
+            encontrados[0].id
         );
 
 
-        return player;
-
-    }
-
-
-}
-
-
-console.log(
-    "NINGUN PERFIL ESTA EN EL SERVIDOR"
-);
-
-
-return null;
-
-
-
-        
+        return encontrados[0];
 
 
 

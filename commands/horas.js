@@ -116,16 +116,28 @@ console.log(
 
 
 
-   if (!player) {
+if(player === "DUPLICADO"){
 
     return interaction.editReply(
-`❌ El jugador que estás buscando se desconectó del servidor.
+`⚠️ **Nombre duplicado**
 
-Si quieres consultar sus horas totales usa:
-/horasbm
+Hay más de un jugador con ese nombre dentro del servidor configurado.
 
-Ejemplo:
-https://www.battlemetrics.com/players/XXXXXXXXXX`
+Usa:
+\`/horasbm\`
+
+con el enlace del perfil exacto de BattleMetrics.`
+    );
+
+}
+
+
+if (!player) {
+
+    return interaction.editReply(
+`❌ **Jugador no encontrado**
+
+El jugador no está conectado actualmente al servidor configurado.`
     );
 
 }
