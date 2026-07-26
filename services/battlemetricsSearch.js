@@ -48,17 +48,88 @@ if(!players || players.length === 0){
 }
 
 
-const player = players[0];
-
-
 console.log(
-    "JUGADOR ENCONTRADO:",
-    player.attributes.name,
-    player.id
+    "JUGADORES ENCONTRADOS:",
+    players.map(p => ({
+        id: p.id,
+        nombre: p.attributes.name
+    }))
 );
 
 
-return player;
+for(const player of players){
+
+
+    console.log(
+        "REVISANDO PERFIL:",
+        player.attributes.name,
+        player.id
+    );
+
+
+    try {
+
+
+        const sessions =
+await axios.get(
+    `https://api.battlemetrics.com/players/${player.id}/relationships/sessions`,
+    {
+        headers:{
+            Authorization:
+            `Bearer ${token}`
+        },
+        params:{
+            include:"server"
+        }
+    }
+);
+
+
+const estaEnServidor =
+sessions.data.data.some(
+    session =>
+    session.attributes.stop === null &&
+    (
+        session.relationships?.server?.data?.id == serverId ||
+        session.attributes.serverId == serverId
+    )
+);
+
+
+        if(estaEnServidor){
+
+
+            console.log(
+                "JUGADOR CORRECTO EN SERVIDOR:",
+                player.id
+            );
+
+
+            return player;
+
+
+        }
+
+
+    }catch(error){
+
+        console.log(
+            "ERROR REVISANDO PERFIL:",
+            player.id
+        );
+
+    }
+
+
+}
+
+
+console.log(
+    "NINGUN PERFIL ESTA EN EL SERVIDOR"
+);
+
+
+return null;
 
 
 
