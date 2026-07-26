@@ -111,13 +111,19 @@ try {
 
 
 
-    if(!player){
+    if (!player) {
 
-        return interaction.editReply(
-            `❌ No se encontró a **${steam.name}** en el servidor`
-        );
+    return interaction.editReply(
+`❌ El jugador que estás buscando se desconectó del servidor o tiene BattleMetrics Premium.
 
-    }
+Si el jugador no tiene BattleMetrics Premium, puedes consultar sus horas totales usando el comando:
+/horasbm
+
+Ejemplo:
+https://www.battlemetrics.com/players/XXXXXXXXXX`
+    );
+
+}
 
 
 
