@@ -65,17 +65,22 @@ try {
     // Obtener perfil Steam
 
     const steam =
-    await getSteamProfile(steamId);
+await getSteamProfile(steamId);
 
+if(!steam){
 
+    return interaction.editReply(
+        "❌ No se encontró ese Steam ID"
+    );
 
-    if(!steam){
+}
 
-        return interaction.editReply(
-            "❌ No se encontró ese Steam ID"
-        );
+console.log(
+    "HORAS STEAM:",
+    steam.rustHours
+);
 
-    }
+    
 
 
 
@@ -137,9 +142,21 @@ https://www.battlemetrics.com/players/XXXXXXXXXX`
 
 
     const horas =
-    Number(
-        data.totalHoras || 0
-    );
+Number(
+    data.totalHoras || 0
+);
+
+// Horas de Steam
+const steamHoras =
+    steam.rustHours !== null
+        ? Number(steam.rustHours)
+        : null;
+
+// Diferencia entre Steam y BattleMetrics
+const diferencia =
+    steamHoras !== null
+        ? (steamHoras - horas).toFixed(2)
+        : "Privado";
 
 
 
@@ -174,19 +191,37 @@ https://www.battlemetrics.com/players/${player.id}`
 
     .addFields(
 
-        {
-            name:"⏱️ Horas totales",
-            value:`**${horas.toFixed(2)} horas**`,
-            inline:true
-        },
+    {
+        name:"⏱️ Horas BattleMetrics",
+        value:`**${horas.toFixed(2)} horas**`,
+        inline:true
+    },
 
-        {
-            name:"🖥️ Servidores",
-            value:`\`${data.servidores.rust.datos.servidoresEncontrados || 0}\``,
-            inline:true
-        }
+    {
+        name:"🎮 Horas Steam",
+        value:
+            steamHoras !== null
+                ? `**${steamHoras.toFixed(2)} horas**`
+                : "**Privado**",
+        inline:true
+    },
 
-    )
+    {
+        name:"📉 Diferencia",
+        value:
+            steamHoras !== null
+                ? `**${diferencia} horas**`
+                : "**Privado**",
+        inline:true
+    },
+
+    {
+        name:"🖥️ Servidores",
+        value:`\`${data.servidores.rust.datos.servidoresEncontrados || 0}\``,
+        inline:true
+    }
+
+)
 
     .setTimestamp();
 
