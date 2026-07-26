@@ -8,7 +8,7 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
         const response = await axios.get(
             `https://api.battlemetrics.com/servers/${serverId}`,
             {
-                headers: { Authorization: `Bearer ${token}` },
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
                 params: { include: "player" }
             }
         );
@@ -33,53 +33,51 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
     }
 }
 
-// 2. Obtener perfil completo, tiempo de sesión actual Y HORAS TOTALES de todos los servidores
+// 2. Obtener estado, sesión actual Y HORAS TOTALES exactas como las saca horasbm
 async function getBattleMetricsPlayerStatus(playerId) {
     try {
         const token = process.env.BATTLEMETRICS_TOKEN;
+        const headers = {
+            "Content-Type": "application/json"
+        };
+        if (token) {
+            headers["Authorization"] = `Bearer ${token}`;
+        }
 
-        // Pedimos la información del jugador incluyendo su relación con los servidores
-        const response = await axios.get(
-            `https://api.battlemetrics.com/players/${playerId}`,
-            {
-                headers: { Authorization: `Bearer ${token}` },
-                params: { include: "server" }
-            }
-        );
+        // Peticiones paralelas: Perfil con servidores e Historial de Sesiones
+        const [playerRes, sessionRes] = await Promise.all([
+            axios.get(`https://api.battlemetrics.com/players/${playerId}?include=server`, { headers }),
+            axios.get(`https://api.battlemetrics.com/players/${playerId}/relationships/sessions`, { 
+                headers, 
+                params: { "page[size]": 10 } 
+            }).catch(() => null)
+        ]);
 
-        const player = response.data.data;
+        const player = playerRes.data.data;
         if (!player) return null;
 
-        // 1. Sumar el tiempo jugado (timePlayed en segundos) en TODOS los servidores registrados en BM
-        let segundosTotalesBM = 0;
-        const relacionesServidores = response.data.included?.filter(item => item.type === "server") || [];
+        // --- LÓGICA DE HORASBM PARA HORAS TOTALES ---
+        const servidores = playerRes.data.included || [];
+        let segundosTotales = 0;
+        const servidoresContados = new Set();
 
-        // Si la relación "server" viene dentro del payload del objeto player
-        if (player.relationships?.servers?.data) {
-            player.relationships.servers.data.forEach(srv => {
-                if (srv.meta && srv.meta.timePlayed) {
-                    segundosTotalesBM += srv.meta.timePlayed;
-                }
-            });
+        for (const servidor of servidores) {
+            if (servidor.type !== "server") continue;
+
+            const servidorId = servidor.id;
+            if (servidoresContados.has(servidorId)) continue;
+
+            servidoresContados.add(servidorId);
+            const tiempo = servidor.meta?.timePlayed || 0;
+            segundosTotales += tiempo;
         }
 
-        const horasTotalesBM = Math.floor(segundosTotalesBM / 3600);
+        const horasTotalesCalculadas = Math.floor(segundosTotales / 3600);
 
-        // 2. Obtener el tiempo de la SESIÓN ACTIVA actual
-        let sessionResponse = null;
-        try {
-            sessionResponse = await axios.get(
-                `https://api.battlemetrics.com/players/${playerId}/relationships/sessions`,
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-        } catch (error) {
-            console.error("Error al obtener sesiones BM:", error.response?.data || error.message);
-        }
-
+        // --- CÁLCULO DE TIEMPO DE LA SESIÓN ACTUALL ---
         let online = false;
         let tiempoJugando = "0m";
-
-        const sesiones = sessionResponse?.data?.data || [];
+        const sesiones = sessionRes?.data?.data || [];
         const sesionActiva = sesiones.find(s => s.attributes.stop === null);
 
         if (sesionActiva) {
@@ -87,18 +85,19 @@ async function getBattleMetricsPlayerStatus(playerId) {
             const inicio = new Date(sesionActiva.attributes.start);
             const ahora = new Date();
             const segundos = Math.floor((ahora - inicio) / 1000);
-            const horas = Math.floor(segundos / 3600);
-            const minutos = Math.floor((segundos % 3600) / 60);
-            tiempoJugando = horas > 0 ? `${horas}h ${minutos}m` : `${minutos}m`;
+            const h = Math.floor(segundos / 3600);
+            const m = Math.floor((segundos % 3600) / 60);
+            tiempoJugando = h > 0 ? `${h}h ${m}m` : `${m}m`;
         }
 
         return {
             id: player.id,
-            name: player.attributes.name,
+            name: player.attributes.name || "Desconocido",
             online: online || player.attributes?.online === true,
             jugando: tiempoJugando,
-            horasTotalesBM: horasTotalesBM
+            horasTotalesBM: horasTotalesCalculadas
         };
+
     } catch (error) {
         console.error("Error obteniendo status BM:", error.response?.data || error.message);
         return null;
