@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 const { getSteamProfile } = require("../services/steam.js"); 
 const { searchBattleMetricsPlayer, getBattleMetricsPlayerStatus } = require("../services/battlemetrics.js"); 
 const fs = require("fs");
@@ -65,7 +65,16 @@ module.exports = {
 
         } catch (error) { 
             console.error("Error en comando /horas:", error); 
-            return await interaction.editReply("❌ Error interno al procesar el comando."); 
+            
+            // Responder manejando la posible expiración o estado de la interacción
+            if (interaction.deferred || interaction.replied) {
+                return await interaction.editReply("❌ Error interno al procesar el comando.");
+            } else {
+                return await interaction.reply({
+                    content: "❌ Error interno al procesar el comando.",
+                    flags: MessageFlags.Ephemeral
+                });
+            }
         } 
     } 
 };

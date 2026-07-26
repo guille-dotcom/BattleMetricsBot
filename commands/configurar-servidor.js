@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
 
@@ -24,7 +24,7 @@ module.exports = {
     if (!cleanServerId) {
       return await interaction.reply({
         content: "❌ No se pudo encontrar un ID de servidor válido en el enlace o texto ingresado.",
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
 
@@ -52,14 +52,14 @@ module.exports = {
 
       return await interaction.reply({
         content: `✅ Servidor de BattleMetrics configurado correctamente. ID guardado: \`${cleanServerId}\``,
-        ephemeral: true // Solo lo ve quien ejecuta el comando
+        flags: MessageFlags.Ephemeral // Solo lo ve quien ejecuta el comando
       });
 
     } catch (error) {
       console.error("Error al guardar la configuración:", error);
       return await interaction.reply({
         content: "❌ Ocurrió un error al intentar guardar la configuración del servidor.",
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   }

@@ -1,6 +1,7 @@
 const {
     SlashCommandBuilder,
-    EmbedBuilder
+    EmbedBuilder,
+    MessageFlags
 } = require("discord.js");
 
 const {
@@ -32,13 +33,7 @@ module.exports = {
 
     async execute(interaction) {
 
-
-        await interaction.deferReply();
-
-
-
         try {
-
 
             const confirmar =
             interaction.options.getBoolean(
@@ -46,17 +41,17 @@ module.exports = {
             );
 
 
-
             if(!confirmar) {
 
-
-                return interaction.editReply(
-                    "❌ Cancelado. Debes usar `/tracker-limpiar confirmar:true` para borrar los trackers."
-                );
-
+                return await interaction.reply({
+                    content: "❌ Cancelado. Debes usar `/tracker-limpiar confirmar:true` para borrar los trackers.",
+                    flags: MessageFlags.Ephemeral
+                });
 
             }
 
+
+            await interaction.deferReply();
 
 
             const trackers =
@@ -131,9 +126,20 @@ module.exports = {
             );
 
 
-            await interaction.editReply(
-                "❌ Error limpiando trackers."
-            );
+            if (interaction.deferred || interaction.replied) {
+
+                await interaction.editReply(
+                    "❌ Error limpiando trackers."
+                );
+
+            } else {
+
+                await interaction.reply({
+                    content: "❌ Error limpiando trackers.",
+                    flags: MessageFlags.Ephemeral
+                });
+
+            }
 
 
         }

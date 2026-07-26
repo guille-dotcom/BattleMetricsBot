@@ -3,7 +3,8 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
-    ButtonStyle
+    ButtonStyle,
+    MessageFlags
 } = require("discord.js");
 
 const fs = require("fs");
@@ -15,7 +16,6 @@ const {
 
 module.exports = {
 
-
     data: new SlashCommandBuilder()
 
         .setName("trackers-activos")
@@ -25,145 +25,105 @@ module.exports = {
         ),
 
 
-
     async execute(interaction) {
-
-
-        await interaction.deferReply();
-
-
 
         try {
 
+            await interaction.deferReply();
 
-
-            if(!fs.existsSync(trackersFile)) {
-
+            if (!fs.existsSync(trackersFile)) {
 
                 return await interaction.editReply(
                     "📋 No hay ningún tracker activo actualmente."
                 );
 
-
             }
 
 
-
-
             const trackers =
-            JSON.parse(
-                fs.readFileSync(
-                    trackersFile,
-                    "utf8"
-                )
-            );
-
-
-
+                JSON.parse(
+                    fs.readFileSync(
+                        trackersFile,
+                        "utf8"
+                    )
+                );
 
 
             const playerIds =
-            Object.keys(trackers);
-
-
-
+                Object.keys(trackers);
 
 
             const filtrados =
-            playerIds.filter(
+                playerIds.filter(
 
-                id =>
-                trackers[id].canalId === interaction.channel.id
+                    id =>
+                        trackers[id].canalId === interaction.channel.id
 
-            );
-
-
+                );
 
 
-
-            if(filtrados.length === 0) {
-
+            if (filtrados.length === 0) {
 
                 return await interaction.editReply(
                     "📋 No hay jugadores siendo trackeados en este canal."
                 );
 
-
             }
 
 
-
-
-
             const embed =
-            new EmbedBuilder()
+                new EmbedBuilder()
 
-            .setTitle(
-                "🎯 Trackers Activos"
-            )
+                    .setTitle(
+                        "🎯 Trackers Activos"
+                    )
 
-            .setDescription(
-                "Perfiles BattleMetrics actualmente bajo vigilancia."
-            )
+                    .setDescription(
+                        "Perfiles BattleMetrics actualmente bajo vigilancia."
+                    )
 
-            .setColor(
-                0x5865F2
-            )
+                    .setColor(
+                        0x5865F2
+                    )
 
-            .setTimestamp();
-
-
+                    .setTimestamp();
 
 
             const botones = [];
 
+            // Discord permite un máximo de 25 botones por mensaje (5 ActionRows de 5 botones)
+            const limiteFiltrados = filtrados.slice(0, 25);
 
 
-
-
-            filtrados.forEach((id, index) => {
-
-
+            limiteFiltrados.forEach((id, index) => {
 
                 const data =
-                trackers[id];
-
-
+                    trackers[id];
 
 
                 const tiempoRestante =
-                Math.max(
-                    0,
-                    data.expiraEn - Date.now()
-                );
-
-
+                    Math.max(
+                        0,
+                        data.expiraEn - Date.now()
+                    );
 
 
                 const horas =
-                Math.floor(
-                    tiempoRestante / 3600000
-                );
-
-
+                    Math.floor(
+                        tiempoRestante / 3600000
+                    );
 
 
                 const minutos =
-                Math.floor(
-                    (tiempoRestante % 3600000) / 60000
-                );
-
-
-
+                    Math.floor(
+                        (tiempoRestante % 3600000) / 60000
+                    );
 
 
                 embed.addFields({
 
-
                     name:
-                    `${index + 1}. 👤 ${data.nombre || "Desconocido"}`,
-
-
+                        `${index + 1}. 👤 ${data.nombre || "Desconocido"}`,
 
                     value:
 `🔗 **Perfil BattleMetrics**
@@ -173,110 +133,89 @@ https://www.battlemetrics.com/players/${data.battlemetricsId}
 
 ⏳ **Tracker restante:** ${horas}h ${minutos}m`,
 
-
-                    inline:false
-
+                    inline: false
 
                 });
 
 
-
-
-
                 botones.push(
-
 
                     new ButtonBuilder()
 
-                    .setCustomId(
-                        `eliminar_tracker_${id}`
-                    )
+                        .setCustomId(
+                            `eliminar_tracker_${id}`
+                        )
 
-                    .setLabel(
-                        `❌ Eliminar ${data.nombre || id}`
-                    )
+                        .setLabel(
+                            `❌ Eliminar ${data.nombre || id}`.slice(0, 80) // Limite de 80 caracteres en etiqueta
+                        )
 
-                    .setStyle(
-                        ButtonStyle.Danger
-                    )
-
+                        .setStyle(
+                            ButtonStyle.Danger
+                        )
 
                 );
 
-
-
             });
-
-
-
 
 
             const componentes = [];
 
 
-
-            for(let i = 0; i < botones.length; i += 5){
-
+            for (let i = 0; i < botones.length; i += 5) {
 
                 componentes.push(
 
                     new ActionRowBuilder()
 
-                    .addComponents(
-                        botones.slice(i, i + 5)
-                    )
+                        .addComponents(
+                            botones.slice(i, i + 5)
+                        )
 
                 );
-
 
             }
 
 
-
-
-
             await interaction.editReply({
 
-
-                embeds:[
+                embeds: [
 
                     embed
 
                 ],
 
-
                 components:
 
-                componentes
-
+                    componentes
 
             });
 
 
-
-
-
-        } catch(error) {
-
-
+        } catch (error) {
 
             console.error(
                 "ERROR EN TRACKERS ACTIVOS:",
                 error
             );
 
+            if (interaction.deferred || interaction.replied) {
 
+                await interaction.editReply(
+                    "❌ Ocurrió un error al cargar los trackers activos."
+                );
 
-            await interaction.editReply(
-                "❌ Ocurrió un error al cargar los trackers activos."
-            );
+            } else {
 
+                await interaction.reply({
+                    content: "❌ Ocurrió un error al cargar los trackers activos.",
+                    flags: MessageFlags.Ephemeral
+                });
 
+            }
 
         }
 
-
     }
-
 
 };

@@ -1,6 +1,7 @@
 const {
     SlashCommandBuilder,
-    EmbedBuilder
+    EmbedBuilder,
+    MessageFlags
 } = require("discord.js");
 
 const {
@@ -181,8 +182,8 @@ module.exports = {
                         content:
                             "❌ Ocurrió un error ejecutando el comando.",
 
-                        ephemeral:
-                            true
+                        flags:
+                            MessageFlags.Ephemeral
 
                     });
 

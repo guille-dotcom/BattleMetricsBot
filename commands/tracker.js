@@ -1,13 +1,13 @@
 const {
     SlashCommandBuilder,
-    EmbedBuilder
+    EmbedBuilder,
+    MessageFlags
 } = require("discord.js");
 
 const {
     obtenerBattleMetricsId,
     registrarTracker
 } = require("../services/trackerService");
-
 
 const {
     getBattleMetricsPlayerStatus
@@ -34,120 +34,127 @@ module.exports = {
         ),
 
 
-
     async execute(interaction) {
-
-        await interaction.deferReply();
-
-
-        const jugador =
-            interaction.options.getString("jugador");
-
 
         try {
 
+            await interaction.deferReply();
+
+            const jugador =
+                interaction.options.getString("jugador");
 
             const battlemetricsId =
                 obtenerBattleMetricsId(jugador);
 
 
+            if (!battlemetricsId) {
 
-            if(!battlemetricsId){
-
-                return interaction.editReply(
+                return await interaction.editReply(
                     "❌ ID o link de BattleMetrics inválido."
                 );
 
             }
-const status =
-await getBattleMetricsPlayerStatus(
-    battlemetricsId
-);
 
-const nombre =
-status?.name || "Desconocido";
+            const status =
+                await getBattleMetricsPlayerStatus(
+                    battlemetricsId
+                );
+
+            const nombre =
+                status?.name || "Desconocido";
 
 
-const tracker =
-    registrarTracker({
+            const tracker =
+                registrarTracker({
 
-        battlemetricsId,
+                    battlemetricsId,
 
-        nombre,
+                    nombre,
 
-        canalId: interaction.channel.id,
+                    canalId: interaction.channel.id,
 
-        guildId: interaction.guild.id,
+                    guildId: interaction.guild.id,
 
-        registradoPor:
-        interaction.user.tag
+                    registradoPor:
+                        interaction.user.tag
 
-    });
+                });
 
 
             const embed =
                 new EmbedBuilder()
 
-                .setTitle(
-                    "🎯 Tracker creado"
-                )
+                    .setTitle(
+                        "🎯 Tracker creado"
+                    )
 
-                .setColor(
-                    "#57F287"
-                )
+                    .setColor(
+                        "#57F287"
+                    )
 
-                .addFields(
+                    .addFields(
 
-                    {
-                        name:"🆔 BattleMetrics",
-                        value:`\`${battlemetricsId}\``,
-                        inline:true
-                    },
+                        {
+                            name: "👤 Jugador",
+                            value: `\`${nombre}\``,
+                            inline: false
+                        },
 
-                    {
-                        name:"⏱ Duración",
-                        value:"24 horas",
-                        inline:true
-                    },
+                        {
+                            name: "🆔 BattleMetrics",
+                            value: `\`${battlemetricsId}\``,
+                            inline: true
+                        },
 
-                    {
-                        name:"👤 Registrado por",
-                        value:interaction.user.tag,
-                        inline:false
-                    }
+                        {
+                            name: "⏱ Duración",
+                            value: "24 horas",
+                            inline: true
+                        },
 
-                )
+                        {
+                            name: "👤 Registrado por",
+                            value: interaction.user.tag,
+                            inline: false
+                        }
 
-                .setTimestamp();
+                    )
 
+                    .setTimestamp();
 
 
             await interaction.editReply({
 
-                embeds:[
+                embeds: [
                     embed
                 ]
 
             });
 
 
-
-        } catch(error){
-
+        } catch (error) {
 
             console.error(
                 "ERROR TRACKER:",
                 error
             );
 
+            if (interaction.deferred || interaction.replied) {
 
-            await interaction.editReply(
-                "❌ Error creando tracker."
-            );
+                await interaction.editReply(
+                    "❌ Error creando tracker."
+                );
 
+            } else {
+
+                await interaction.reply({
+                    content: "❌ Error creando tracker.",
+                    flags: MessageFlags.Ephemeral
+                });
+
+            }
 
         }
-
 
     }
 
