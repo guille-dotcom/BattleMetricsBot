@@ -16,17 +16,12 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
 const response =
     await axios.get(
-        "https://api.battlemetrics.com/players",
+        `https://api.battlemetrics.com/servers/${serverId}/players`,
         {
             headers:{
                 Authorization:
                 `Bearer ${token}`
-            },
-
-            params:{
-    "filter[search]": playerName,
-    include:"server"
-}
+            }
         }
     );
 
@@ -58,7 +53,6 @@ console.log(
 
 for(const player of players){
 
-
     console.log(
         "REVISANDO PERFIL:",
         player.attributes.name,
@@ -66,75 +60,14 @@ for(const player of players){
     );
 
 
-    try {
+    console.log(
+        "JUGADOR EN SERVIDOR ENCONTRADO:",
+        player.attributes.name,
+        player.id
+    );
 
 
-        const sessions =
-await axios.get(
-    `https://api.battlemetrics.com/players/${player.id}/relationships/sessions`,
-    {
-        headers:{
-            Authorization:
-            `Bearer ${token}`
-        },
-        params:{
-            include:"server"
-        }
-    }
-);
-
-
-console.log(
-    "SESIONES ENCONTRADAS:",
-    sessions.data.data.length
-);
-
-
-console.log(
-    "SERVER BUSCADO:",
-    serverId
-);
-
-console.log(
-    "SERVIDORES SESIONES:",
-    sessions.data.data.map(
-        s => s.relationships?.server?.data?.id
-    ).join(", ")
-);
-
-
-const estaEnServidor =
-sessions.data.data.some(
-    session =>
-    session.attributes.stop === null &&
-    session.relationships?.server?.data?.id == serverId
-);
-
-
-        if(estaEnServidor){
-
-
-            console.log(
-                "JUGADOR CORRECTO EN SERVIDOR:",
-                player.id
-            );
-
-
-            return player;
-
-
-        }
-
-
-    }catch(error){
-
-        console.log(
-            "ERROR REVISANDO PERFIL:",
-            player.id
-        );
-
-    }
-
+    return player;
 
 }
 
