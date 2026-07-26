@@ -187,7 +187,7 @@ client.once("ready", async () => {
 
             activities:[
                 {
-                    name:"BattleMetrics",
+                    name:"chivando siempre 👀",
                     type:0
                 }
             ]
@@ -333,12 +333,13 @@ async (guild)=>{
 
 
         const canal =
-        guild.channels.cache.find(
-            channel =>
-            channel.isTextBased() &&
-            channel.permissionsFor(guild.members.me)
-            .has("SendMessages")
-        );
+guild.channels.cache.find(
+    channel =>
+    channel.isTextBased() &&
+    channel.permissionsFor(
+        guild.members.me
+    )?.has("SendMessages")
+);
 
 
 
