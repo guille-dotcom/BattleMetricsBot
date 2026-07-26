@@ -152,9 +152,19 @@ try {
         steam.avatar
     )
 
-    .setDescription(
-        `👤 **${steam.name}**\n\n🆔 Steam ID:\n\`${steamId}\`\n\n🔗 BattleMetrics:\n\`${player.id}\``
-    )
+          .setDescription(
+`👤 **${steam.name}**
+
+🆔 **Steam ID:**
+\`${steamId}\`
+
+🔗 **BattleMetrics:**
+https://www.battlemetrics.com/players/${player.id}`
+)
+
+
+
+
 
     .addFields(
 
