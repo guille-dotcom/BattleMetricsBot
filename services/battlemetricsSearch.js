@@ -18,38 +18,57 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
         const response =
         await axios.get(
-            `https://api.battlemetrics.com/servers/${serverId}/relationships/players`,
+
+            `https://api.battlemetrics.com/servers/${serverId}`,
+
             {
                 headers:{
                     Authorization:
                     `Bearer ${token}`
+                },
+
+                params:{
+                    include:"players"
                 }
             }
+
         );
 
 
         console.log(
-            "JUGADORES DEL SERVIDOR OK"
+            "SERVIDOR BM CONSULTADO"
         );
 
 
-        const players =
-        response.data.data || [];
+        console.log(
+    "RESPUESTA SERVIDOR:",
+    JSON.stringify(response.data, null, 2)
+);
 
+
+const players =
+response.data.included || [];
 
         console.log(
-            "JUGADORES ONLINE SERVIDOR:",
+            "JUGADORES ENCONTRADOS:",
             players.length
         );
 
 
         const nombreBuscado =
-        playerName.toLowerCase().trim();
+        playerName
+        .toLowerCase()
+        .trim();
 
 
 
         const encontrados =
         players.filter(player => {
+
+
+            if(player.type !== "player")
+                return false;
+
 
             const nombreBM =
             player.attributes.name
@@ -59,13 +78,14 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
             return nombreBM === nombreBuscado;
 
+
         });
 
 
 
         console.log(
             "COINCIDENCIAS:",
-            encontrados.map(p => ({
+            encontrados.map(p=>({
                 id:p.id,
                 nombre:p.attributes.name
             }))
@@ -73,12 +93,7 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
 
 
-        // No está conectado
         if(encontrados.length === 0){
-
-            console.log(
-                "JUGADOR NO ESTA EN SERVIDOR"
-            );
 
             return null;
 
@@ -86,12 +101,7 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
 
 
-        // Hay más de uno con el mismo nombre
         if(encontrados.length > 1){
-
-            console.log(
-                "NOMBRE DUPLICADO"
-            );
 
             return "DUPLICADO";
 
