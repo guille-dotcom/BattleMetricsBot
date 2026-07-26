@@ -33,10 +33,12 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
     }
 }
 
-// 2. Obtener estado y sesiones del jugador por su ID de BM
+// 2. Obtener perfil completo, tiempo de sesión actual Y HORAS TOTALES de todos los servidores
 async function getBattleMetricsPlayerStatus(playerId) {
     try {
         const token = process.env.BATTLEMETRICS_TOKEN;
+
+        // Pedimos la información del jugador incluyendo su relación con los servidores
         const response = await axios.get(
             `https://api.battlemetrics.com/players/${playerId}`,
             {
@@ -48,6 +50,22 @@ async function getBattleMetricsPlayerStatus(playerId) {
         const player = response.data.data;
         if (!player) return null;
 
+        // 1. Sumar el tiempo jugado (timePlayed en segundos) en TODOS los servidores registrados en BM
+        let segundosTotalesBM = 0;
+        const relacionesServidores = response.data.included?.filter(item => item.type === "server") || [];
+
+        // Si la relación "server" viene dentro del payload del objeto player
+        if (player.relationships?.servers?.data) {
+            player.relationships.servers.data.forEach(srv => {
+                if (srv.meta && srv.meta.timePlayed) {
+                    segundosTotalesBM += srv.meta.timePlayed;
+                }
+            });
+        }
+
+        const horasTotalesBM = Math.floor(segundosTotalesBM / 3600);
+
+        // 2. Obtener el tiempo de la SESIÓN ACTIVA actual
         let sessionResponse = null;
         try {
             sessionResponse = await axios.get(
@@ -78,7 +96,8 @@ async function getBattleMetricsPlayerStatus(playerId) {
             id: player.id,
             name: player.attributes.name,
             online: online || player.attributes?.online === true,
-            jugando: tiempoJugando
+            jugando: tiempoJugando,
+            horasTotalesBM: horasTotalesBM
         };
     } catch (error) {
         console.error("Error obteniendo status BM:", error.response?.data || error.message);

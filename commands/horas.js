@@ -45,7 +45,7 @@ module.exports = {
                 return await interaction.editReply(`❌ El jugador **${perfilSteam.name}** no está online en el servidor \`${serverId}\`.`); 
             }
 
-            // 4. Obtener datos y tiempo usando el BM Player ID obtenido
+            // 4. Obtener datos, tiempo de sesión y suma total usando el BM Player ID
             const datosFinales = await getBattleMetricsPlayerStatus(jugadorBM.id); 
             if (!datosFinales) {
                 return await interaction.editReply("❌ Error al obtener datos detallados de BattleMetrics."); 
@@ -56,7 +56,8 @@ module.exports = {
                 `🔍 **Resultado para:** ${perfilSteam.name}`, 
                 `🖥️ **Servidor ID:** \`${serverId}\``,
                 `🆔 **BattleMetrics ID:** \`${datosFinales.id}\``, 
-                `⏱️ **Tiempo jugando esta sesión:** ${datosFinales.jugando}`, 
+                `⏱️ **Sesión actual:** ${datosFinales.jugando}`, 
+                `📈 **Horas totales (BattleMetrics):** ${datosFinales.horasTotalesBM}h`,
                 `📊 **Horas Rust (Steam):** ${perfilSteam.rustHours ? `${perfilSteam.rustHours}h` : "Perfil Privado"}` 
             ].join("\n"); 
 
