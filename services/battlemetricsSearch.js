@@ -77,11 +77,25 @@ for(const player of players){
     );
 
 
-    const estaEnServidor =
-    sessions.data.data.some(
-        session =>
-        session.relationships?.server?.data?.id == serverId
-    );
+  const estaEnServidor =
+(sessions.data.data || []).some(
+    session => {
+
+        const sessionServer =
+        session.relationships?.server?.data?.id ||
+        session.attributes?.serverId;
+
+
+        console.log(
+            "SESION SERVER:",
+            sessionServer
+        );
+
+
+        return sessionServer == serverId;
+
+    }
+);
 
 
     if(estaEnServidor){
