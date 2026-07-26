@@ -19,16 +19,12 @@ async function searchBattleMetricsPlayer(playerName, serverId){
         const response =
         await axios.get(
 
-            `https://api.battlemetrics.com/servers/${serverId}`,
+            `https://api.battlemetrics.com/servers/${serverId}/relationships/players`,
 
             {
                 headers:{
                     Authorization:
                     `Bearer ${token}`
-                },
-
-                params:{
-                    include:"players"
                 }
             }
 
@@ -36,21 +32,16 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
 
         console.log(
-            "SERVIDOR BM CONSULTADO"
+            "JUGADORES DEL SERVIDOR OBTENIDOS"
         );
 
 
-        console.log(
-    "RESPUESTA SERVIDOR:",
-    JSON.stringify(response.data, null, 2)
-);
+        const players =
+        response.data.data || [];
 
-
-const players =
-response.data.included || [];
 
         console.log(
-            "JUGADORES ENCONTRADOS:",
+            "TOTAL ONLINE:",
             players.length
         );
 
@@ -63,20 +54,16 @@ response.data.included || [];
 
 
         const encontrados =
-        players.filter(player => {
+        players.filter(player=>{
 
 
-            if(player.type !== "player")
-                return false;
-
-
-            const nombreBM =
-            player.attributes.name
+            const nombre =
+            player.attributes?.name
             ?.toLowerCase()
             .trim();
 
 
-            return nombreBM === nombreBuscado;
+            return nombre === nombreBuscado;
 
 
         });
