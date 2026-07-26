@@ -16,11 +16,16 @@ async function searchBattleMetricsPlayer(playerName, serverId){
 
 const response =
     await axios.get(
-        `https://api.battlemetrics.com/servers/${serverId}/players`,
+        "https://api.battlemetrics.com/players",
         {
             headers:{
                 Authorization:
                 `Bearer ${token}`
+            },
+
+            params:{
+                "filter[search]": playerName,
+                include:"server"
             }
         }
     );
@@ -60,14 +65,37 @@ for(const player of players){
     );
 
 
-    console.log(
-        "JUGADOR EN SERVIDOR ENCONTRADO:",
-        player.attributes.name,
-        player.id
+    const sessions =
+    await axios.get(
+        `https://api.battlemetrics.com/players/${player.id}/relationships/sessions`,
+        {
+            headers:{
+                Authorization:
+                `Bearer ${token}`
+            }
+        }
     );
 
 
-    return player;
+    const estaEnServidor =
+    sessions.data.data.some(
+        session =>
+        session.relationships?.server?.data?.id == serverId
+    );
+
+
+    if(estaEnServidor){
+
+        console.log(
+            "JUGADOR CORRECTO EN SERVIDOR:",
+            player.id
+        );
+
+
+        return player;
+
+    }
+
 
 }
 
