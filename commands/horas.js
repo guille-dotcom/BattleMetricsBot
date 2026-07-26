@@ -15,7 +15,7 @@ module.exports = {
         ),
     
     async execute(interaction) { 
-        const steamId = interaction.options.getString("steamid"); 
+        const steamId = interaction.options.getString("steamid").trim(); 
         await interaction.deferReply();
 
         // 1. LEER EL SERVIDOR CONFIGURADO EN config.json
@@ -33,13 +33,14 @@ module.exports = {
         }
 
         try { 
-            // 2. Obtener Perfil y Horas de Steam
+            // 2. Obtener Perfil, Avatar y Horas de Steam
             const perfilSteam = await getSteamProfile(steamId); 
             if (!perfilSteam || !perfilSteam.name) {
                 return await interaction.editReply("❌ ID no encontrado en Steam."); 
             }
 
-            const horasSteamTexto = perfilSteam.rustHours ? `${perfilSteam.rustHours}h` : "Perfil Privado / Oculto";
+            const horasSteamNum = parseFloat(perfilSteam.rustHours) || 0;
+            const horasSteamTexto = perfilSteam.rustHours ? `${perfilSteam.rustHours}h` : "Perfil Privado";
 
             // 3. Buscar jugador online en el servidor configurado
             const jugadorBM = await searchBattleMetricsPlayer(perfilSteam.name, serverId); 
@@ -49,12 +50,18 @@ module.exports = {
                 const embedOffline = new EmbedBuilder()
                     .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
                     .setColor("#FF0000") // Rojo indicando offline
-                    .setDescription(`⚠️ El jugador **no está online** actualmente en el servidor \`${serverId}\`.`)
+                    .setDescription(`⚠️ El jugador **no está online** actualmente en el servidor ||\`${serverId}\`||.`)
                     .addFields(
+                        { name: "🆔 Steam ID", value: `\`${steamId}\``, inline: true },
                         { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
                         { name: "🖥️ Estado", value: "🔴 Desconectado", inline: true }
                     )
                     .setTimestamp();
+
+                // Añadir foto de perfil si está disponible
+                if (perfilSteam.avatar || perfilSteam.avatarfull) {
+                    embedOffline.setThumbnail(perfilSteam.avatarfull || perfilSteam.avatar);
+                }
 
                 return await interaction.editReply({ embeds: [embedOffline] });
             }
@@ -65,18 +72,34 @@ module.exports = {
                 return await interaction.editReply("❌ Error al obtener datos detallados de BattleMetrics."); 
             }
 
-            // 5. Responder en formato Embed cuando está online
+            // 5. Calcular diferencia de horas
+            const horasBMNum = parseFloat(datosFinales.horasTotalesBM) || 0;
+            let diferenciaTexto = "N/A (Perfil Privado)";
+
+            if (perfilSteam.rustHours) {
+                const diff = Math.abs(horasSteamNum - horasBMNum);
+                diferenciaTexto = `${diff.toFixed(0)}h`;
+            }
+
+            // 6. Responder en formato Embed cuando está online
             const embedOnline = new EmbedBuilder()
                 .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
                 .setColor("#57F287") // Verde indicando online
                 .addFields(
-                    { name: "🖥️ Servidor ID", value: `\`${serverId}\``, inline: true },
-                    { name: "🆔 BattleMetrics ID", value: `\`${datosFinales.id}\``, inline: true },
+                    { name: "🖥️ Servidor ID", value: `||\`${serverId}\`||`, inline: true },
+                    { name: "🆔 BattleMetrics ID", value: `[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})`, inline: true },
+                    { name: "🆔 Steam ID", value: `\`${steamId}\``, inline: true },
                     { name: "⏱️ Sesión actual", value: `${datosFinales.jugando}`, inline: true },
-                    { name: "📈 Horas totales (BattleMetrics)", value: `${datosFinales.horasTotalesBM}h`, inline: true },
-                    { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true }
+                    { name: "📈 Horas totales (BM)", value: `${datosFinales.horasTotalesBM}h`, inline: true },
+                    { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
+                    { name: "⚖️ Diferencia de horas", value: diferenciaTexto, inline: true }
                 )
                 .setTimestamp();
+
+            // Añadir foto de perfil de Steam
+            if (perfilSteam.avatar || perfilSteam.avatarfull) {
+                embedOnline.setThumbnail(perfilSteam.avatarfull || perfilSteam.avatar);
+            }
 
             return await interaction.editReply({ embeds: [embedOnline] }); 
 
