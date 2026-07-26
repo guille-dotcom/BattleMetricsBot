@@ -1,14 +1,25 @@
+const { SlashCommandBuilder } = require("discord.js");
 const { getSteamProfile } = require("../services/steam.js"); 
 const { searchBattleMetricsPlayer, getBattleMetricsPlayerStatus } = require("../services/battlemetrics.js"); 
 const fs = require("fs");
 const path = require("path");
 
 module.exports = { 
-    name: "horas", 
-    description: "Ejecuta el flujo estricto del diagrama para obtener las horas de BattleMetrics", 
-    async execute(message, args) { 
-        const steamId = args[0]; // Recibe SteamID (Ej: 76561198818187993) 
-        if (!steamId) return message.reply("❌ Pon un SteamID."); 
+    // Cambiamos a la estructura que lee tu bot para comandos "/"
+    data: new SlashCommandBuilder()
+        .setName("horas")
+        .setDescription("Ejecuta el flujo estricto del diagrama para obtener las horas de BattleMetrics")
+        .addStringOption(option => 
+            option.setName("steamid")
+                .setDescription("El SteamID del jugador (Ej: 76561198818187993)")
+                .setRequired(true)
+        ),
+    async execute(interaction) { 
+        // En comandos "/" se usa interaction.options en lugar de args
+        const steamId = interaction.options.getString("steamid"); 
+
+        // El bot primero le avisa a Discord que está procesando
+        await interaction.deferReply();
 
         // LEER EL SERVIDOR CONFIGURADO POR TU COMANDO /CONFIGURAR-SERVIDOR
         let serverId = null;
@@ -16,33 +27,36 @@ module.exports = {
             const configPath = path.join(__dirname, "../data/config.json");
             if (fs.existsSync(configPath)) {
                 const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-                serverId = config.serverId; // Lee el ID real guardado (Ej: 14154340)
+                serverId = config.serverId; 
             }
         } catch (error) {
             console.log("Error leyendo data/config.json:", error.message);
         }
 
-        // Si no hay configuración guardada todavía, usa el del diagrama original como respaldo
         if (!serverId) {
             serverId = "433255";
         }
 
-        const msgProgreso = await message.reply("⏳ Procesando flujo..."); 
-
         try { 
             // 1. Obtener Nombre Steam (Ej: GONE) usando tu servicio 
             const perfilSteam = await getSteamProfile(steamId); 
-            if (!perfilSteam || !perfilSteam.name) return msgProgreso.edit("❌ ID no encontrado en Steam."); 
+            if (!perfilSteam || !perfilSteam.name) {
+                return await interaction.editReply("❌ ID no encontrado en Steam."); 
+            }
 
             // 2. Buscar jugador online POR NOMBRE en el servidor configurado dinámicamente
             const jugadorBM = await searchBattleMetricsPlayer(perfilSteam.name, serverId); 
-            if (!jugadorBM) return msgProgreso.edit(`❌ El jugador **${perfilSteam.name}** no está en el servidor.`); 
+            if (!jugadorBM) {
+                return await interaction.editReply(`❌ El jugador **${perfilSteam.name}** no está en el servidor.`); 
+            }
 
             // 3. Obtener BM Player ID y consultar horas finales 
             const datosFinales = await getBattleMetricsPlayerStatus(jugadorBM.id); 
-            if (!datosFinales) return msgProgreso.edit("❌ Error al obtener datos de BattleMetrics."); 
+            if (!datosFinales) {
+                return await interaction.editReply("❌ Error al obtener datos de BattleMetrics."); 
+            }
 
-            // Resultado final en Discord con el emoji corregido
+            // Resultado final en Discord
             const respuesta = [ 
                 `🔍 **Resultado para:** ${perfilSteam.name}`, 
                 `🆔 **BattleMetrics ID:** \`${datosFinales.id}\``, 
@@ -50,11 +64,11 @@ module.exports = {
                 `📊 **Horas Rust (Steam):** ${perfilSteam.rustHours ? `${perfilSteam.rustHours}h` : "Perfil Privado"}` 
             ].join("\n"); 
 
-            return msgProgreso.edit(respuesta); 
+            return await interaction.editReply(respuesta); 
 
         } catch (error) { 
             console.error(error); 
-            return msgProgreso.edit("❌ Error al procesar el comando."); 
+            return await interaction.editReply("❌ Error al procesar el comando."); 
         } 
     } 
 };
