@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
 const { getSteamProfile } = require("../services/steam.js"); 
 const { searchBattleMetricsPlayer, getBattleMetricsPlayerStatus } = require("../services/battlemetrics.js"); 
 const fs = require("fs");
@@ -18,8 +18,8 @@ module.exports = {
         const steamId = interaction.options.getString("steamid"); 
         await interaction.deferReply();
 
-        // 1. LEER EL SERVIDOR CONFIGURADO EN config.json (battlemetricsServer)
-        let serverId = "433255"; // Valor fallback
+        // 1. LEER EL SERVIDOR CONFIGURADO EN config.json
+        let serverId = "433255"; 
         try {
             const configPath = path.join(__dirname, "../data/config.json");
             if (fs.existsSync(configPath)) {
@@ -33,40 +33,56 @@ module.exports = {
         }
 
         try { 
-            // 2. Obtener Nombre Steam desde el servicio
+            // 2. Obtener Perfil y Horas de Steam
             const perfilSteam = await getSteamProfile(steamId); 
             if (!perfilSteam || !perfilSteam.name) {
                 return await interaction.editReply("❌ ID no encontrado en Steam."); 
             }
 
-            // 3. Buscar jugador online POR NOMBRE directamente en el servidor configurado
+            const horasSteamTexto = perfilSteam.rustHours ? `${perfilSteam.rustHours}h` : "Perfil Privado / Oculto";
+
+            // 3. Buscar jugador online en el servidor configurado
             const jugadorBM = await searchBattleMetricsPlayer(perfilSteam.name, serverId); 
+
+            // Si NO ESTÁ ONLINE en el servidor:
             if (!jugadorBM) {
-                return await interaction.editReply(`❌ El jugador **${perfilSteam.name}** no está online en el servidor \`${serverId}\`.`); 
+                const embedOffline = new EmbedBuilder()
+                    .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
+                    .setColor("#FF0000") // Rojo indicando offline
+                    .setDescription(`⚠️ El jugador **no está online** actualmente en el servidor \`${serverId}\`.`)
+                    .addFields(
+                        { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
+                        { name: "🖥️ Estado", value: "🔴 Desconectado", inline: true }
+                    )
+                    .setTimestamp();
+
+                return await interaction.editReply({ embeds: [embedOffline] });
             }
 
-            // 4. Obtener datos, tiempo de sesión y suma total usando el BM Player ID
+            // 4. Si SÍ ESTÁ ONLINE: Obtener datos de BattleMetrics
             const datosFinales = await getBattleMetricsPlayerStatus(jugadorBM.id); 
             if (!datosFinales) {
                 return await interaction.editReply("❌ Error al obtener datos detallados de BattleMetrics."); 
             }
 
-            // 5. Responder en el canal
-            const respuesta = [ 
-                `🔍 **Resultado para:** ${perfilSteam.name}`, 
-                `🖥️ **Servidor ID:** \`${serverId}\``,
-                `🆔 **BattleMetrics ID:** \`${datosFinales.id}\``, 
-                `⏱️ **Sesión actual:** ${datosFinales.jugando}`, 
-                `📈 **Horas totales (BattleMetrics):** ${datosFinales.horasTotalesBM}h`,
-                `📊 **Horas Rust (Steam):** ${perfilSteam.rustHours ? `${perfilSteam.rustHours}h` : "Perfil Privado"}` 
-            ].join("\n"); 
+            // 5. Responder en formato Embed cuando está online
+            const embedOnline = new EmbedBuilder()
+                .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
+                .setColor("#57F287") // Verde indicando online
+                .addFields(
+                    { name: "🖥️ Servidor ID", value: `\`${serverId}\``, inline: true },
+                    { name: "🆔 BattleMetrics ID", value: `\`${datosFinales.id}\``, inline: true },
+                    { name: "⏱️ Sesión actual", value: `${datosFinales.jugando}`, inline: true },
+                    { name: "📈 Horas totales (BattleMetrics)", value: `${datosFinales.horasTotalesBM}h`, inline: true },
+                    { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true }
+                )
+                .setTimestamp();
 
-            return await interaction.editReply(respuesta); 
+            return await interaction.editReply({ embeds: [embedOnline] }); 
 
         } catch (error) { 
             console.error("Error en comando /horas:", error); 
             
-            // Responder manejando la posible expiración o estado de la interacción
             if (interaction.deferred || interaction.replied) {
                 return await interaction.editReply("❌ Error interno al procesar el comando.");
             } else {
