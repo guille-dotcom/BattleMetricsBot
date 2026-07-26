@@ -50,31 +50,11 @@ const players =
 
         const player = players[0];
 
-
 console.log(
     "JUGADOR ENCONTRADO:",
     player.attributes.name,
     player.id
 );
-
-
-// Revisar si está conectado actualmente
-const status =
-    await getBattleMetricsPlayerStatus(
-        player.id
-    );
-
-
-if(!status || !status.online){
-
-    console.log(
-        "JUGADOR NO ESTA ONLINE"
-    );
-
-    return null;
-
-}
-
 
 return player;
 
