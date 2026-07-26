@@ -1,38 +1,54 @@
+const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
 
 module.exports = {
-    name: "configurar-servidor",
-    description: "Configura el ID del servidor de BattleMetrics",
-    async execute(message, args) {
-        // 1. Validar que el usuario pase el ID del servidor
-        const serverId = args[0];
-        if (!serverId) {
-            return message.reply("❌ Por favor, proporciona un ID de servidor válido. Ejemplo: `!configurar-servidor 433255`");
-        }
+  data: new SlashCommandBuilder()
+    .setName("configurar-servidor")
+    .setDescription("Configura el ID del servidor de BattleMetrics")
+    .addStringOption((option) =>
+      option
+        .setName("serverid")
+        .setDescription("El ID del servidor de BattleMetrics (Ej: 433255)")
+        .setRequired(true)
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator), // Solo administradores pueden usarlo
 
-        // 2. Ruta hacia tu carpeta data/config.json
-        const configPath = path.join(__dirname, "../data/config.json");
+  async execute(interaction) {
+    const serverId = interaction.options.getString("serverid");
+    const configPath = path.join(__dirname, "../data/config.json");
 
-        try {
-            let config = {};
+    try {
+      // 1. Validar/crear la carpeta data si no existe
+      const dirPath = path.dirname(configPath);
+      if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+      }
 
-            // Si el archivo ya existe, lee lo que tiene para no borrar otras configuraciones
-            if (fs.existsSync(configPath)) {
-                config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-            }
+      let config = {};
 
-            // Actualiza o inserta el serverId
-            config.serverId = serverId;
+      // 2. Leer configuración previa
+      if (fs.existsSync(configPath)) {
+        config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      }
 
-            // Guarda los cambios en el archivo JSON formateado
-            fs.writeFileSync(configPath, JSON.stringify(config, null, 4), "utf-8");
+      // 3. Guardar con la clave exacta que lee tu /horas
+      config.battlemetricsServer = serverId;
 
-            return message.reply(`✅ Servidor de BattleMetrics configurado correctamente con el ID: \`${serverId}\``);
+      // 4. Escribir en el JSON
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 4), "utf-8");
 
-        } catch (error) {
-            console.error("Error al guardar la configuración:", error);
-            return message.reply("❌ Ocurrió un error al intentar guardar la configuración del servidor.");
-        }
+      return await interaction.reply({
+        content: `✅ Servidor de BattleMetrics configurado correctamente con el ID: \`${serverId}\``,
+        ephemeral: true // Solo lo ve quien ejecuta el comando
+      });
+
+    } catch (error) {
+      console.error("Error al guardar la configuración:", error);
+      return await interaction.reply({
+        content: "❌ Ocurrió un error al intentar guardar la configuración del servidor.",
+        ephemeral: true
+      });
     }
+  }
 };
