@@ -5,60 +5,56 @@ const fs = require("fs");
 const path = require("path");
 
 module.exports = { 
-    // Cambiamos a la estructura que lee tu bot para comandos "/"
     data: new SlashCommandBuilder()
         .setName("horas")
-        .setDescription("Ejecuta el flujo estricto del diagrama para obtener las horas de BattleMetrics")
+        .setDescription("Obtiene las horas de BattleMetrics buscando al usuario de Steam en el servidor")
         .addStringOption(option => 
             option.setName("steamid")
                 .setDescription("El SteamID del jugador (Ej: 76561198818187993)")
                 .setRequired(true)
         ),
+    
     async execute(interaction) { 
-        // En comandos "/" se usa interaction.options en lugar de args
         const steamId = interaction.options.getString("steamid"); 
-
-        // El bot primero le avisa a Discord que está procesando
         await interaction.deferReply();
 
-        // LEER EL SERVIDOR CONFIGURADO POR TU COMANDO /CONFIGURAR-SERVIDOR
-        let serverId = null;
+        // 1. LEER EL SERVIDOR CONFIGURADO EN config.json (battlemetricsServer)
+        let serverId = "433255"; // Valor fallback
         try {
             const configPath = path.join(__dirname, "../data/config.json");
             if (fs.existsSync(configPath)) {
                 const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-                serverId = config.serverId; 
+                if (config.battlemetricsServer) {
+                    serverId = config.battlemetricsServer; 
+                }
             }
         } catch (error) {
             console.log("Error leyendo data/config.json:", error.message);
         }
 
-        if (!serverId) {
-            serverId = "433255";
-        }
-
         try { 
-            // 1. Obtener Nombre Steam (Ej: GONE) usando tu servicio 
+            // 2. Obtener Nombre Steam desde tu servicio (Ej: GONE)
             const perfilSteam = await getSteamProfile(steamId); 
             if (!perfilSteam || !perfilSteam.name) {
                 return await interaction.editReply("❌ ID no encontrado en Steam."); 
             }
 
-            // 2. Buscar jugador online POR NOMBRE en el servidor configurado dinámicamente
+            // 3. Buscar jugador online POR NOMBRE directamente en el servidor configurado
             const jugadorBM = await searchBattleMetricsPlayer(perfilSteam.name, serverId); 
             if (!jugadorBM) {
-                return await interaction.editReply(`❌ El jugador **${perfilSteam.name}** no está en el servidor.`); 
+                return await interaction.editReply(`❌ El jugador **${perfilSteam.name}** no está online en el servidor \`${serverId}\`.`); 
             }
 
-            // 3. Obtener BM Player ID y consultar horas finales 
+            // 4. Obtener datos y tiempo usando el BM Player ID obtenido
             const datosFinales = await getBattleMetricsPlayerStatus(jugadorBM.id); 
             if (!datosFinales) {
-                return await interaction.editReply("❌ Error al obtener datos de BattleMetrics."); 
+                return await interaction.editReply("❌ Error al obtener datos detallados de BattleMetrics."); 
             }
 
-            // Resultado final en Discord
+            // 5. Responder en el canal
             const respuesta = [ 
                 `🔍 **Resultado para:** ${perfilSteam.name}`, 
+                `🖥️ **Servidor ID:** \`${serverId}\``,
                 `🆔 **BattleMetrics ID:** \`${datosFinales.id}\``, 
                 `⏱️ **Tiempo jugando esta sesión:** ${datosFinales.jugando}`, 
                 `📊 **Horas Rust (Steam):** ${perfilSteam.rustHours ? `${perfilSteam.rustHours}h` : "Perfil Privado"}` 
@@ -67,8 +63,8 @@ module.exports = {
             return await interaction.editReply(respuesta); 
 
         } catch (error) { 
-            console.error(error); 
-            return await interaction.editReply("❌ Error al procesar el comando."); 
+            console.error("Error en comando /horas:", error); 
+            return await interaction.editReply("❌ Error interno al procesar el comando."); 
         } 
     } 
 };

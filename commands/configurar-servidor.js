@@ -1,129 +1,38 @@
-const {
-    SlashCommandBuilder
-} = require("discord.js");
-
 const fs = require("fs");
 const path = require("path");
 
-const file = path.join(
-    __dirname,
-    "..",
-    "data",
-    "config.json"
-);
-
 module.exports = {
-
-    data: new SlashCommandBuilder()
-
-        .setName("configurar-servidor")
-
-        .setDescription("Configura el servidor BattleMetrics")
-
-        .addStringOption(option =>
-            option
-                .setName("link")
-                .setDescription("Link del servidor BattleMetrics")
-                .setRequired(true)
-        ),
-
-    async execute(interaction) {
-
-        const link =
-            interaction.options.getString("link");
-
-        const match =
-            link.match(/servers\/rust\/(\d+)/);
-
-        if (!match) {
-
-            return interaction.reply({
-
-                content:
-                    "❌ Link de BattleMetrics inválido",
-
-                flags: 64
-
-            });
-
+    name: "configurar-servidor",
+    description: "Configura el ID del servidor de BattleMetrics",
+    async execute(message, args) {
+        // 1. Validar que el usuario pase el ID del servidor
+        const serverId = args[0];
+        if (!serverId) {
+            return message.reply("❌ Por favor, proporciona un ID de servidor válido. Ejemplo: `!configurar-servidor 433255`");
         }
 
-        const servidorId = match[1];
-
-        let config = {};
+        // 2. Ruta hacia tu carpeta data/config.json
+        const configPath = path.join(__dirname, "../data/config.json");
 
         try {
+            let config = {};
 
-            if (fs.existsSync(file)) {
-
-                config = JSON.parse(
-                    fs.readFileSync(
-                        file,
-                        "utf8"
-                    )
-                );
-
+            // Si el archivo ya existe, lee lo que tiene para no borrar otras configuraciones
+            if (fs.existsSync(configPath)) {
+                config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
             }
 
-        } catch (error) {
+            // Actualiza o inserta el serverId
+            config.serverId = serverId;
 
-            console.log(
-                "ERROR LEYENDO CONFIG:",
-                error.message
-            );
+            // Guarda los cambios en el archivo JSON formateado
+            fs.writeFileSync(configPath, JSON.stringify(config, null, 4), "utf-8");
 
-        }
-
-        // Crear configuración para este servidor de Discord
-        if (!config[interaction.guild.id]) {
-
-            config[interaction.guild.id] = {};
-
-        }
-
-        config[interaction.guild.id].battlemetricsServer = servidorId;
-
-        try {
-
-            fs.writeFileSync(
-                file,
-                JSON.stringify(
-                    config,
-                    null,
-                    2
-                )
-            );
+            return message.reply(`✅ Servidor de BattleMetrics configurado correctamente con el ID: \`${serverId}\``);
 
         } catch (error) {
-
-            console.log(
-                "ERROR GUARDANDO CONFIG:",
-                error.message
-            );
-
-            return interaction.reply({
-
-                content:
-                    "❌ Error guardando configuración",
-
-                flags: 64
-
-            });
-
+            console.error("Error al guardar la configuración:", error);
+            return message.reply("❌ Ocurrió un error al intentar guardar la configuración del servidor.");
         }
-
-        await interaction.reply({
-
-            content:
-                `✅ Servidor BattleMetrics configurado correctamente.
-
-🌐 BattleMetrics ID: ${servidorId}
-🖥️ Servidor Discord: ${interaction.guild.name}`,
-
-            flags: 64
-
-        });
-
     }
-
 };
