@@ -50,7 +50,7 @@ module.exports = {
                 const embedOffline = new EmbedBuilder()
                     .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
                     .setColor("#FF0000") // Rojo indicando offline
-                    .setDescription(`⚠️ El jugador **no está online** actualmente en el servidor ||\`${serverId}\`||.`)
+                    .setDescription(`⚠️ El jugador **no está online** actualmente en el servidor.`)
                     .addFields(
                         { name: "🆔 Steam ID", value: `[${steamId}](https://steamcommunity.com/profiles/${steamId})`, inline: true },
                         { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
@@ -86,7 +86,7 @@ module.exports = {
                 .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
                 .setColor("#57F287") // Verde indicando online
                 .addFields(
-                    { name: "🖥️ Servidor ID", value: `[${serverId}](https://steamcommunity.com/profiles/${steamId})`, inline: true },
+                    { name: "🎮 Servidor", value: `||${datosFinales.server || "Desconocido"}||`, inline: false },
                     { name: "🆔 BattleMetrics ID", value: `[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})`, inline: true },
                     { name: "🆔 Steam ID", value: `[${steamId}](https://steamcommunity.com/profiles/${steamId})`, inline: true },
                     { name: "⏱️ Sesión actual", value: `${datosFinales.jugando}`, inline: true },
