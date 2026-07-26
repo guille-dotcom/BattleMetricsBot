@@ -24,10 +24,9 @@ const response =
             },
 
             params:{
-                "filter[search]": playerName,
-                "filter[servers]": serverId,
-                include:"server"
-            }
+    "filter[search]": playerName,
+    include:"server"
+}
         }
     );
 
@@ -86,13 +85,21 @@ await axios.get(
 
 
 console.log(
-    "SESIONES DE",
-    player.id,
-    JSON.stringify(
-        sessions.data.data,
-        null,
-        2
-    )
+    "SESIONES ENCONTRADAS:",
+    sessions.data.data.length
+);
+
+
+console.log(
+    "SERVER BUSCADO:",
+    serverId
+);
+
+console.log(
+    "SERVIDORES SESIONES:",
+    sessions.data.data.map(
+        s => s.relationships?.server?.data?.id
+    ).join(", ")
 );
 
 
@@ -100,10 +107,7 @@ const estaEnServidor =
 sessions.data.data.some(
     session =>
     session.attributes.stop === null &&
-    (
-        session.relationships?.server?.data?.id == serverId ||
-        session.attributes.serverId == serverId
-    )
+    session.relationships?.server?.data?.id == serverId
 );
 
 
