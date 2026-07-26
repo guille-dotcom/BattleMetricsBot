@@ -109,8 +109,8 @@ module.exports = {
                     .setColor("#57F287")
 
                     .setDescription(
-                        `**ID BattleMetrics**\n\`${battlemetricsId}\``
-                    )
+    `🔗 **BattleMetrics**\nhttps://www.battlemetrics.com/players/${battlemetricsId}`
+)
 
                     .addFields(
 
