@@ -8,7 +8,8 @@ const {
 } = require("../services/steam");
 
 const {
-    searchBattleMetricsPlayer
+    searchBattleMetricsPlayer,
+    getBattleMetricsPlayerStatus
 } = require("../services/battlemetricsSearch");
 
 const {
@@ -114,7 +115,7 @@ try {
     if (!player) {
 
     return interaction.editReply(
-`❌ El jugador que estás buscando se desconectó del servidor o tiene BattleMetrics Premium.
+`❌ El jugador que estás buscando no se encuentra en el servidor configurado o tiene BattleMetrics Premium.
 
 Si el jugador no tiene BattleMetrics Premium, puedes consultar sus horas totales usando el comando:
 /horasbm
