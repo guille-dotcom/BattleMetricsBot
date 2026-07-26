@@ -422,16 +422,18 @@ if(sesionActiva){
 
 
         console.log(
-            "SERVIDOR DETECTADO:",
-            servidor
-        );
+    "SERVIDOR DETECTADO:",
+    servidor
+);
+
+
+console.log(
+    JSON.stringify(player, null, 2)
+);
 
 
 
-
-
-
-        return {
+return {
 
 
     id:
