@@ -85,6 +85,17 @@ await axios.get(
 );
 
 
+console.log(
+    "SESIONES DE",
+    player.id,
+    JSON.stringify(
+        sessions.data.data,
+        null,
+        2
+    )
+);
+
+
 const estaEnServidor =
 sessions.data.data.some(
     session =>
