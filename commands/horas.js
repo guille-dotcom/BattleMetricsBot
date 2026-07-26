@@ -33,7 +33,7 @@ module.exports = {
         }
 
         try { 
-            // 2. Obtener Nombre Steam desde tu servicio (Ej: GONE)
+            // 2. Obtener Nombre Steam desde el servicio
             const perfilSteam = await getSteamProfile(steamId); 
             if (!perfilSteam || !perfilSteam.name) {
                 return await interaction.editReply("❌ ID no encontrado en Steam."); 
