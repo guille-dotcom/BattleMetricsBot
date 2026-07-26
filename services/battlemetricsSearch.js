@@ -56,9 +56,21 @@ response.data.included?.filter(
 
 
         const nombreBuscado =
-        playerName
-        .toLowerCase()
-        .trim();
+playerName
+.toLowerCase()
+.trim();
+
+
+console.log(
+    "NOMBRE STEAM RECIBIDO:",
+    playerName
+);
+
+
+console.log(
+    "NOMBRES BM ONLINE:",
+    players.map(p => p.attributes.name)
+);
 
 
 
