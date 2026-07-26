@@ -80,7 +80,7 @@ return player;
 
 
 
-        return players[0];
+        
 
 
 
