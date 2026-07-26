@@ -40,21 +40,23 @@ console.log(
 const players =
     response.data.data;
 
-        if(!players || players.length === 0){
 
-            return null;
+if(!players || players.length === 0){
 
-        }
+    return null;
+
+}
 
 
+const player = players[0];
 
-        const player = players[0];
 
 console.log(
     "JUGADOR ENCONTRADO:",
     player.attributes.name,
     player.id
 );
+
 
 return player;
 
@@ -402,18 +404,16 @@ if(sesionActiva){
 
 
         console.log(
-    "SERVIDOR DETECTADO:",
-    servidor
-);
-
-
-console.log(
-    JSON.stringify(player, null, 2)
-);
+            "SERVIDOR DETECTADO:",
+            servidor
+        );
 
 
 
-return {
+
+
+
+        return {
 
 
     id:
