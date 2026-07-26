@@ -61,15 +61,16 @@ async function getBattleMetricsPlayerStatus(playerId) {
         const servidoresContados = new Set();
         let nombreServidorActual = "Desconocido";
 
+        // Obtener el ID del servidor actual directamente desde la relación del jugador en BattleMetrics
+        const activeServerId = player.relationships?.server?.data?.id;
+
         for (const servidor of servidores) {
             if (servidor.type !== "server") continue;
 
             const servidorId = servidor.id;
             
-            // Intentar detectar si este servidor es en el que está jugando actualmente (basado en la relación o el estado)
-            // BattleMetrics suele poner metadatos o podemos revisar si coincide con la sesión activa
-            const relServer = player.relationships?.server?.data;
-            if (relServer && relServer.id === servidorId) {
+            // Si este servidor coincide con el ID actual en el que está jugando, guardamos su nombre
+            if (activeServerId && servidorId === activeServerId) {
                 nombreServidorActual = servidor.attributes?.name || "Desconocido";
             }
 
@@ -78,14 +79,6 @@ async function getBattleMetricsPlayerStatus(playerId) {
             
             const tiempo = servidor.meta?.timePlayed || 0;
             segundosTotales += tiempo;
-        }
-
-        // Si por alguna razón no se encontró por relación directa, buscar el primer servidor con sesión activa o el último conocido
-        if (nombreServidorActual === "Desconocido" && servidores.length > 0) {
-            const serverItem = servidores.find(s => s.type === "server");
-            if (serverItem) {
-                nombreServidorActual = serverItem.attributes?.name || "Desconocido";
-            }
         }
 
         const horasTotalesCalculadas = Math.floor(segundosTotales / 3600);
@@ -104,6 +97,17 @@ async function getBattleMetricsPlayerStatus(playerId) {
             const h = Math.floor(segundos / 3600);
             const m = Math.floor((segundos % 3600) / 60);
             tiempoJugando = h > 0 ? `${h}h ${m}m` : `${m}m`;
+
+            // Si por alguna razón la relación directa no lo tomó, intentamos rescatarlo de la sesión activa
+            if (nombreServidorActual === "Desconocido") {
+                const sessionServerId = sesionActiva.relationships?.server?.data?.id;
+                if (sessionServerId) {
+                    const servidorSesion = servidores.find(s => s.type === "server" && s.id === sessionServerId);
+                    if (servidorSesion) {
+                        nombreServidorActual = servidorSesion.attributes?.name || "Desconocido";
+                    }
+                }
+            }
         }
 
         return {
@@ -112,7 +116,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
             online: online || player.attributes?.online === true,
             jugando: tiempoJugando,
             horasTotalesBM: horasTotalesCalculadas,
-            server: nombreServidorActual // <--- ¡Aquí devolvemos el nombre real del servidor!
+            server: nombreServidorActual
         };
 
     } catch (error) {
