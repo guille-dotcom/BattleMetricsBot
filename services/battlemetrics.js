@@ -33,7 +33,7 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
     }
 }
 
-// 2. Obtener estado, sesión actual, servidor y horas totales
+// 2. Obtener estado, sesión actual, servidor, horas totales e historial de nombres
 async function getBattleMetricsPlayerStatus(playerId) {
     try {
         const token = process.env.BATTLEMETRICS_TOKEN;
@@ -44,9 +44,9 @@ async function getBattleMetricsPlayerStatus(playerId) {
             headers["Authorization"] = `Bearer ${token}`;
         }
 
-        // Peticiones paralelas: Perfil con servidores e Historial de Sesiones
+        // Peticiones paralelas: Perfil con servidores e identifiers (para el historial de nombres), más el Historial de Sesiones
         const [playerRes, sessionRes] = await Promise.all([
-            axios.get(`https://api.battlemetrics.com/players/${playerId}?include=server`, { headers }),
+            axios.get(`https://api.battlemetrics.com/players/${playerId}?include=server,identifier`, { headers }),
             axios.get(`https://api.battlemetrics.com/players/${playerId}/relationships/sessions`, { 
                 headers, 
                 params: { "page[size]": 10 } 
@@ -56,29 +56,38 @@ async function getBattleMetricsPlayerStatus(playerId) {
         const player = playerRes.data.data;
         if (!player) return null;
 
-        const servidores = playerRes.data.included || [];
+        const incluidos = playerRes.data.included || [];
         let segundosTotales = 0;
         const servidoresContados = new Set();
         let nombreServidorActual = "Desconocido";
+        const historialNombresSet = new Set();
 
         // Obtener el ID del servidor actual directamente desde la relación del jugador en BattleMetrics
         const activeServerId = player.relationships?.server?.data?.id;
 
-        for (const servidor of servidores) {
-            if (servidor.type !== "server") continue;
+        for (const item of incluidos) {
+            // Procesar Servidores y Horas
+            if (item.type === "server") {
+                const servidorId = item.id;
+                
+                if (activeServerId && servidorId === activeServerId) {
+                    nombreServidorActual = item.attributes?.name || "Desconocido";
+                }
 
-            const servidorId = servidor.id;
-            
-            // Si este servidor coincide con el ID actual en el que está jugando, guardamos su nombre
-            if (activeServerId && servidorId === activeServerId) {
-                nombreServidorActual = servidor.attributes?.name || "Desconocido";
+                if (servidoresContados.has(servidorId)) continue;
+                servidoresContados.add(servidorId);
+                
+                const tiempo = item.meta?.timePlayed || 0;
+                segundosTotales += tiempo;
             }
 
-            if (servidoresContados.has(servidorId)) continue;
-            servidoresContados.add(servidorId);
-            
-            const tiempo = servidor.meta?.timePlayed || 0;
-            segundosTotales += tiempo;
+            // Procesar Identificadores / Historial de Nombres en Steam
+            if (item.type === "identifier" && item.attributes?.type === "steamID") {
+                const nombreSteam = item.attributes?.metadata?.name;
+                if (nombreSteam) {
+                    historialNombresSet.add(nombreSteam);
+                }
+            }
         }
 
         const horasTotalesCalculadas = Math.floor(segundosTotales / 3600);
@@ -98,11 +107,10 @@ async function getBattleMetricsPlayerStatus(playerId) {
             const m = Math.floor((segundos % 3600) / 60);
             tiempoJugando = h > 0 ? `${h}h ${m}m` : `${m}m`;
 
-            // Si por alguna razón la relación directa no lo tomó, intentamos rescatarlo de la sesión activa
             if (nombreServidorActual === "Desconocido") {
                 const sessionServerId = sesionActiva.relationships?.server?.data?.id;
                 if (sessionServerId) {
-                    const servidorSesion = servidores.find(s => s.type === "server" && s.id === sessionServerId);
+                    const servidorSesion = incluidos.find(s => s.type === "server" && s.id === sessionServerId);
                     if (servidorSesion) {
                         nombreServidorActual = servidorSesion.attributes?.name || "Desconocido";
                     }
@@ -110,13 +118,17 @@ async function getBattleMetricsPlayerStatus(playerId) {
             }
         }
 
+        // Convertir el Set de nombres a un Array limpio (excluyendo el nombre actual si prefieres, o dejándolos todos)
+        const historialNombres = Array.from(historialNombresSet);
+
         return {
             id: player.id,
             name: player.attributes.name || "Desconocido",
             online: online || player.attributes?.online === true,
             jugando: tiempoJugando,
             horasTotalesBM: horasTotalesCalculadas,
-            server: nombreServidorActual
+            server: nombreServidorActual,
+            historialNombres: historialNombres
         };
 
     } catch (error) {
