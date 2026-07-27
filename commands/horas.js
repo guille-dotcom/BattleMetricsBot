@@ -13,7 +13,7 @@ module.exports = {
                 .setDescription("El SteamID del jugador (Ej: 76561198818187993)")
                 .setRequired(true)
         ),
-  
+ 
   async execute(interaction) { 
         const steamId = interaction.options.getString("steamid").trim(); 
         await interaction.deferReply();
@@ -50,7 +50,7 @@ module.exports = {
                 const embedOffline = new EmbedBuilder()
                     .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
                     .setColor("#FF0000") // Rojo indicando offline
-                    .setDescription(`⚠️ El jugador **no está online** actualmente en el servidor.`)
+                    .setDescription(`⚠️ El jugador **no está online** actualmente en el servidor o usa suscripción de BattleMetrics.`)
                     .addFields(
                         { name: "🆔 Steam ID", value: `||[${steamId}](https://steamcommunity.com/profiles/${steamId})||`, inline: true },
                         { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },

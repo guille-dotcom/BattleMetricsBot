@@ -34,7 +34,7 @@ module.exports = {
             .setDescription(
                 "🎮 **/tracker** — Inicia el seguimiento de un jugador.\n" +
                 "📋 **/trackers-activos** — Lista los jugadores bajo vigilancia.\n" +
-                "🗑️ **/limpiar-trackers** — Elimina trackers activos."
+                "🗑️ **/tracker-limpiar** — Elimina trackers activos."
             )
             .setColor(0x57F287);
 
@@ -46,11 +46,12 @@ module.exports = {
             )
             .setColor(0x9B59B6);
 
-        // 5. Utilidades / Información (Lleva el Footer de RustLogix y el timestamp al final)
+        // 5. Utilidades / Información
         const informacion = new EmbedBuilder()
             .setTitle("📡 Utilidades")
             .setDescription(
-                "📡 **/ping** — Comprueba el estado de latencia del bot."
+                "📡 **/ping** — Comprueba el estado de latencia del bot.\n" +
+                "🤖 **/donde-estoy** — Muestra los servidores donde está conectado el bot."
             )
             .setColor(0x95A5A6)
             .setFooter({
