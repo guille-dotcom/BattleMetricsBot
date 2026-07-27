@@ -40,7 +40,7 @@ module.exports = {
             }
 
             const horasSteamNum = parseFloat(perfilSteam.rustHours) || 0;
-            const horasSteamTexto = perfilSteam.rustHours ? `${perfilSteam.rustHours}h` : "Perfil Privado";
+            const horasSteamTexto = perfilSteam.rustHours ? `${perfilSteam.rustHours}h` : "🔒 Perfil / Juegos Privados";
 
             // 3. Buscar jugador online en el servidor configurado
             const jugadorBM = await searchBattleMetricsPlayer(perfilSteam.name, serverId); 
