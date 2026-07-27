@@ -33,7 +33,7 @@ module.exports = {
         }
 
         try { 
-            // 2. Obtener Perfil, Avatar y Horas de Steam
+            // 2. Obtener Perfil, Avatar, Horas, País y Baneos de Steam
             const perfilSteam = await getSteamProfile(steamId); 
             if (!perfilSteam || !perfilSteam.name) {
                 return await interaction.editReply("❌ ID no encontrado en Steam."); 
@@ -42,6 +42,10 @@ module.exports = {
             const horasSteamNum = parseFloat(perfilSteam.rustHours) || 0;
             const horasSteamTexto = horasSteamNum > 0 ? `${horasSteamNum}h` : "🔒 Perfil / Juegos Privados";
 
+            // Datos adicionales de Steam
+            const paisTexto = perfilSteam.loccountrycode ? `:flag_${perfilSteam.loccountrycode.toLowerCase()}: (${perfilSteam.loccountrycode})` : "Desconocido";
+            const vacTexto = perfilSteam.vacBanned ? "⚠️ Con Baneo VAC" : "✅ Sin Baneos VAC";
+
             // 3. Buscar jugador online en el servidor configurado
             const jugadorBM = await searchBattleMetricsPlayer(perfilSteam.name, serverId); 
 
@@ -49,17 +53,18 @@ module.exports = {
             if (!jugadorBM) {
                 const embedOffline = new EmbedBuilder()
                     .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
-                    .setColor("#FF0000") // Rojo indicando offline
+                    .setColor("#FF0000")
                     .setDescription(`⚠️ El jugador **no está online** actualmente en el servidor o usa suscripción de BattleMetrics.`)
                     .addFields(
                         { name: "🆔 Steam ID", value: `||[${steamId}](https://steamcommunity.com/profiles/${steamId})||`, inline: true },
                         { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
-                        { name: "🖥️ Estado", value: "🔴 Desconectado", inline: true }
+                        { name: "🖥️ Estado", value: "🔴 Desconectado", inline: true },
+                        { name: "🌍 País", value: paisTexto, inline: true },
+                        { name: "🛡️ Estado VAC", value: vacTexto, inline: true }
                     )
                     .setTimestamp()
                     .setFooter({ text: "RustLogix" });
 
-                // Añadir foto de perfil si está disponible
                 if (perfilSteam.avatar || perfilSteam.avatarfull) {
                     embedOffline.setThumbnail(perfilSteam.avatarfull || perfilSteam.avatar);
                 }
@@ -82,10 +87,10 @@ module.exports = {
                 diferenciaTexto = `${diff.toFixed(0)}h`;
             }
 
-            // 6. Responder en formato Embed cuando está online (Con IDs ocultos en spoiler)
+            // 6. Responder en formato Embed cuando está online
             const embedOnline = new EmbedBuilder()
                 .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
-                .setColor("#57F287") // Verde indicando online
+                .setColor("#57F287")
                 .addFields(
                     { name: "🎮 Servidor", value: `||${datosFinales.server || "Desconocido"}||`, inline: false },
                     { name: "🆔 BattleMetrics ID", value: `||[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})||`, inline: true },
@@ -93,12 +98,13 @@ module.exports = {
                     { name: "⏱️ Sesión actual", value: `${datosFinales.jugando}`, inline: true },
                     { name: "📈 Horas totales (BM)", value: `${datosFinales.horasTotalesBM}h`, inline: true },
                     { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
-                    { name: "⚖️ Diferencia de horas", value: diferenciaTexto, inline: true }
+                    { name: "⚖️ Diferencia de horas", value: diferenciaTexto, inline: true },
+                    { name: "🌍 País", value: paisTexto, inline: true },
+                    { name: "🛡️ Estado VAC", value: vacTexto, inline: true }
                 )
                 .setTimestamp()
                 .setFooter({ text: "RustLogix" });
 
-            // Añadir foto de perfil de Steam
             if (perfilSteam.avatar || perfilSteam.avatarfull) {
                 embedOnline.setThumbnail(perfilSteam.avatarfull || perfilSteam.avatar);
             }

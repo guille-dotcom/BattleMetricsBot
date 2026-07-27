@@ -1,49 +1,57 @@
 require("dotenv").config();
-
 const axios = require("axios");
 
 async function getSteamProfile(steamId){
-
-    try{
-
+    try {
         // ----------------------------
-        // Perfil Steam
+        // 1. Perfil de Steam (Resumen y País)
         // ----------------------------
-
-        const profileResponse =
-        await axios.get(
+        const profileResponse = await axios.get(
             "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/",
             {
-                params:{
+                params: {
                     key: process.env.STEAM_API_KEY,
                     steamids: steamId
                 }
             }
         );
 
-
-        const player =
-        profileResponse.data.response.players[0];
-
-
+        const player = profileResponse.data.response.players[0];
         if(!player){
             return null;
         }
 
+        // ----------------------------
+        // 2. Baneos de Steam (VAC / Comunidad)
+        // ----------------------------
+        let vacBanned = false;
+        try {
+            const bansResponse = await axios.get(
+                "https://api.steampowered.com/ISteamUser/GetPlayerBans/v1/",
+                {
+                    params: {
+                        key: process.env.STEAM_API_KEY,
+                        steamids: steamId
+                    }
+                }
+            );
+            const banData = bansResponse.data.players[0];
+            if (banData) {
+                vacBanned = banData.VACBanned || false;
+            }
+        } catch (e) {
+            console.log("No se pudieron obtener los baneos:", e.message);
+        }
 
         // ----------------------------
-        // Horas de Rust
+        // 3. Horas de Rust
         // ----------------------------
-
         let rustHours = null;
-
-        try{
-
-            const gamesResponse =
-            await axios.get(
+        try {
+            const gamesResponse = await axios.get(
                 "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/",
                 {
-                    params:{
+                    params: {
                         key: process.env.STEAM_API_KEY,
                         steamid: steamId,
                         include_appinfo: true
@@ -51,66 +59,32 @@ async function getSteamProfile(steamId){
                 }
             );
 
-
-            const games =
-            gamesResponse.data.response.games || [];
-
-
-            const rust =
-            games.find(
-                game => game.appid === 252490
-            );
-
+            const games = gamesResponse.data.response.games || [];
+            const rust = games.find(game => game.appid === 252490);
 
             if(rust){
-
-                rustHours =
-                (
-                    rust.playtime_forever / 60
-                ).toFixed(2);
-
+                rustHours = (rust.playtime_forever / 60).toFixed(2);
             }
-
-        }catch{
-
-            // Perfil privado
+        } catch {
+            // Perfil privado o juegos ocultos
             rustHours = null;
-
         }
 
-
         return {
-
-            name:
-            player.personaname,
-
-            avatar:
-            player.avatarfull,
-
-            profile:
-            player.profileurl,
-
+            name: player.personaname,
+            avatar: player.avatarfull,
+            profile: player.profileurl,
+            loccountrycode: player.loccountrycode || null, // País (ej: "CL", "ES", "US")
+            vacBanned: vacBanned,                          // true o false
             rustHours
-
         };
 
-
-    }catch(error){
-
-        console.log(
-            "ERROR STEAM:",
-            error.message
-        );
-
+    } catch(error) {
+        console.log("ERROR STEAM:", error.message);
         return null;
-
     }
-
 }
 
-
 module.exports = {
-
     getSteamProfile
-
 };
