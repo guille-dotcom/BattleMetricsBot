@@ -3,150 +3,70 @@ const {
     EmbedBuilder
 } = require("discord.js");
 
-
 module.exports = {
-
     data: new SlashCommandBuilder()
-
         .setName("help")
-
-        .setDescription(
-            "Muestra la lista de comandos del BattleMetricsBot"
-        ),
-
-
+        .setDescription("Muestra la lista de comandos del BattleMetricsBot"),
 
     async execute(interaction) {
+        // 1. Configuración Inicial
+        const configuracion = new EmbedBuilder()
+            .setTitle("⚙️ Configuración Inicial")
+            .setDescription(
+                "Antes de usar los comandos del servidor, debes configurar el servidor de Rust predeterminado.\n\n" +
+                "👉 **/configurar-servidor** — Establece el servidor activo."
+            )
+            .setColor(0x3498DB);
 
+        // 2. Comandos del Servidor
+        const servidor = new EmbedBuilder()
+            .setTitle("🖥️ Comandos del Servidor")
+            .setDescription(
+                "*Requieren haber ejecutado `/configurar-servidor` previamente.*\n\n" +
+                "⏱️ **/horas** — Muestra las horas de un usuario en el servidor.\n" +
+                "🏆 **/ranking** — Muestra el top de jugadores del servidor."
+            )
+            .setColor(0xFEE75C);
 
-        const configuracion =
-        new EmbedBuilder()
+        // 3. Sistema Tracker
+        const tracker = new EmbedBuilder()
+            .setTitle("🎯 Sistema Tracker (24h)")
+            .setDescription(
+                "🎮 **/tracker** — Inicia el seguimiento de un jugador.\n" +
+                "📋 **/trackers-activos** — Lista los jugadores bajo vigilancia.\n" +
+                "🗑️ **/limpiar-trackers** — Elimina trackers activos."
+            )
+            .setColor(0x57F287);
 
-        .setTitle(
-            "⚙️ CONFIGURACIÓN INICIAL"
-        )
+        // 4. Consultas Externas
+        const battlemetrics = new EmbedBuilder()
+            .setTitle("🔎 Consultas BattleMetrics")
+            .setDescription(
+                "🔎 **/horasbm** — Consulta estadísticas globales mediante un enlace de perfil."
+            )
+            .setColor(0x9B59B6);
 
-        .setDescription(
-`⚙️ **/configurar-servidor**
+        // 5. Utilidades / Información
+        const informacion = new EmbedBuilder()
+            .setTitle("📡 Utilidades")
+            .setDescription(
+                "📡 **/ping** — Comprueba el estado de latencia del bot."
+            )
+            .setColor(0x95A5A6)
+            .setFooter({
+                text: "BattleMetricsBot • Ayuda de comandos"
+            })
+            .setTimestamp();
 
-Configura el servidor de Rust que utilizará BattleMetricsBot.
-
-⚠️ Ejecuta este comando primero para habilitar los comandos del servidor.`
-        )
-
-        .setColor(0x3498DB);
-
-
-
-        const servidor =
-        new EmbedBuilder()
-
-        .setTitle(
-            "🖥️ COMANDOS DEL SERVIDOR"
-        )
-
-        .setDescription(
-`⚠️ Estos comandos requieren:
-
-⚙️ **/configurar-servidor**
-
-
-⏱️ **/horas**
-
-Muestra las horas de jugadores del servidor configurado.
-
-
-🏆 **/ranking**
-
-Muestra el ranking de jugadores del servidor configurado.`
-        )
-
-        .setColor(0xFEE75C);
-
-
-
-        const tracker =
-        new EmbedBuilder()
-
-        .setTitle(
-            "🎯 SISTEMA TRACKER"
-        )
-
-        .setDescription(
-`🎮 **/tracker**
-
-Crea seguimiento de un jugador BattleMetrics durante 24 horas.
-
-
-📋 **/trackers-activos**
-
-Muestra los jugadores actualmente bajo vigilancia.
-
-
-🗑️ **/limpiar-trackers**
-
-Elimina trackers individuales.`
-        )
-
-        .setColor(0x57F287);
-
-
-
-        const battlemetrics =
-        new EmbedBuilder()
-
-        .setTitle(
-            "🔎 CONSULTAS BATTLEMETRICS"
-        )
-
-        .setDescription(
-`🔎 **/horasbm**
-
-Consulta estadísticas directamente desde BattleMetrics.`
-        )
-
-        .setColor(0x9B59B6);
-
-
-
-        const informacion =
-        new EmbedBuilder()
-
-        .setTitle(
-            "📡 INFORMACIÓN"
-        )
-
-        .setDescription(
-`📡 **/ping**
-
-Muestra el estado actual del bot.`
-        )
-
-        .setColor(0x95A5A6)
-
-        .setFooter({
-            text:"BattleMetricsBot"
-        })
-
-        .setTimestamp();
-
-
-
+        // Enviar todos los embeds juntos en la respuesta
         await interaction.reply({
-
-            embeds:[
-
+            embeds: [
                 configuracion,
                 servidor,
                 tracker,
                 battlemetrics,
                 informacion
-
             ]
-
         });
-
-
     }
-
 };
