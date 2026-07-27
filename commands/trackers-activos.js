@@ -86,7 +86,10 @@ module.exports = {
                         0x5865F2
                     )
 
-                    .setTimestamp();
+                    .setTimestamp()
+                    .setFooter({
+                        text: "RustLogix"
+                    });
 
 
             const botones = [];

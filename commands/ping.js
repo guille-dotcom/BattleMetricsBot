@@ -24,7 +24,7 @@ module.exports = {
 
             .setColor("#57F287")
 
-            .setTitle("🛰️ BattleMetrics Bot")
+            .setTitle("🛰️ RustLogix")
 
             .setDescription(
                 "🟢 **Estado:** Operativo"
@@ -53,7 +53,7 @@ module.exports = {
             )
 
             .setFooter({
-                text: "BattleMetrics Bot"
+                text: "RustLogix"
             })
 
             .setTimestamp();

@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 
 module.exports = { 
-    data: new SlashCommandBuilder()
+  data: new SlashCommandBuilder()
         .setName("horas")
         .setDescription("Obtiene las horas de BattleMetrics buscando al usuario de Steam en el servidor")
         .addStringOption(option => 
@@ -13,8 +13,8 @@ module.exports = {
                 .setDescription("El SteamID del jugador (Ej: 76561198818187993)")
                 .setRequired(true)
         ),
-    
-    async execute(interaction) { 
+  
+  async execute(interaction) { 
         const steamId = interaction.options.getString("steamid").trim(); 
         await interaction.deferReply();
 
@@ -56,7 +56,8 @@ module.exports = {
                         { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
                         { name: "🖥️ Estado", value: "🔴 Desconectado", inline: true }
                     )
-                    .setTimestamp();
+                    .setTimestamp()
+                    .setFooter({ text: "RustLogix" });
 
                 // Añadir foto de perfil si está disponible
                 if (perfilSteam.avatar || perfilSteam.avatarfull) {
@@ -94,7 +95,8 @@ module.exports = {
                     { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
                     { name: "⚖️ Diferencia de horas", value: diferenciaTexto, inline: true }
                 )
-                .setTimestamp();
+                .setTimestamp()
+                .setFooter({ text: "RustLogix" });
 
             // Añadir foto de perfil de Steam
             if (perfilSteam.avatar || perfilSteam.avatarfull) {

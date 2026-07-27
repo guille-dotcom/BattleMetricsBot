@@ -59,7 +59,7 @@ module.exports = {
                 servidoresEncontrados = 0;
             }
 
-            // Diseño mejorado del Embed
+            // Diseño mejorado del Embed con el nombre de tu bot en el footer
             const embed = new EmbedBuilder()
                 .setTitle("🎮 Perfil BattleMetrics")
                 .setColor("#57F287")
@@ -82,7 +82,7 @@ module.exports = {
                 )
                 .setTimestamp()
                 .setFooter({
-                    text: "BattleMetrics Bot"
+                    text: "RustLogix"
                 });
 
             console.log("ENVIANDO EMBED...");

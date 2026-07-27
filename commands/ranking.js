@@ -34,7 +34,11 @@ module.exports = {
   const embed=new EmbedBuilder()
    .setTitle("🏆 Ranking BattleMetrics")
    .setDescription(text || "Sin datos")
-   .setColor("Gold");
+   .setColor("Gold")
+   .setTimestamp()
+   .setFooter({
+       text: "RustLogix"
+   });
 
   interaction.editReply({embeds:[embed]});
  }

@@ -46,7 +46,7 @@ module.exports = {
             )
             .setColor(0x9B59B6);
 
-        // 5. Utilidades / Información
+        // 5. Utilidades / Información (Lleva el Footer de RustLogix y el timestamp al final)
         const informacion = new EmbedBuilder()
             .setTitle("📡 Utilidades")
             .setDescription(

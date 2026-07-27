@@ -120,7 +120,10 @@ module.exports = {
 
                     )
 
-                    .setTimestamp();
+                    .setTimestamp()
+                    .setFooter({
+                        text: "RustLogix"
+                    });
 
 
             await interaction.editReply({

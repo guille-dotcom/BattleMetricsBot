@@ -70,7 +70,6 @@ module.exports = {
                     trackers[id].guildId === interaction.guild.id
                 ) {
 
-
                     delete trackers[id];
 
                     eliminados++;
@@ -103,7 +102,10 @@ module.exports = {
                 0xff0000
             )
 
-            .setTimestamp();
+            .setTimestamp()
+            .setFooter({
+                text: "RustLogix"
+            });
 
 
 
