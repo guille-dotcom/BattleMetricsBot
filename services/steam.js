@@ -22,9 +22,10 @@ async function getSteamProfile(steamId){
         }
 
         // ----------------------------
-        // 2. Baneos de Steam (VAC / Comunidad)
+        // 2. Baneos de Steam (VAC / Game Bans)
         // ----------------------------
         let vacBanned = false;
+        let gameBansCount = 0;
         try {
             const bansResponse = await axios.get(
                 "https://api.steampowered.com/ISteamUser/GetPlayerBans/v1/",
@@ -38,6 +39,7 @@ async function getSteamProfile(steamId){
             const banData = bansResponse.data.players[0];
             if (banData) {
                 vacBanned = banData.VACBanned || false;
+                gameBansCount = banData.NumberOfGameBans || 0;
             }
         } catch (e) {
             console.log("No se pudieron obtener los baneos:", e.message);
@@ -74,8 +76,9 @@ async function getSteamProfile(steamId){
             name: player.personaname,
             avatar: player.avatarfull,
             profile: player.profileurl,
-            loccountrycode: player.loccountrycode || null, // País (ej: "CL", "ES", "US")
-            vacBanned: vacBanned,                          // true o false
+            loccountrycode: player.loccountrycode || null,
+            vacBanned: vacBanned,
+            gameBansCount: gameBansCount, // Cantidad de bloqueos de juego
             rustHours
         };
 

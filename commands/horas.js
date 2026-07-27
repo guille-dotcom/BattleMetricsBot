@@ -44,7 +44,16 @@ module.exports = {
 
             // Datos adicionales de Steam
             const paisTexto = perfilSteam.loccountrycode ? `:flag_${perfilSteam.loccountrycode.toLowerCase()}: (${perfilSteam.loccountrycode})` : "Desconocido";
-            const vacTexto = perfilSteam.vacBanned ? "⚠️ Con Baneo VAC" : "✅ Sin Baneos VAC";
+            
+            // Lógica detallada para diferenciar VAC Ban y Game Ban
+            let vacTexto = "✅ Sin Baneos";
+            if (perfilSteam.vacBanned && perfilSteam.gameBansCount > 0) {
+                vacTexto = "⚠️ VAC & Game Ban";
+            } else if (perfilSteam.vacBanned) {
+                vacTexto = "⚠️ Con Baneo VAC";
+            } else if (perfilSteam.gameBansCount > 0) {
+                vacTexto = `⚠️ ${perfilSteam.gameBansCount} Game Ban(s)`;
+            }
 
             // 3. Buscar jugador online en el servidor configurado
             const jugadorBM = await searchBattleMetricsPlayer(perfilSteam.name, serverId); 
@@ -60,7 +69,7 @@ module.exports = {
                         { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
                         { name: "🖥️ Estado", value: "🔴 Desconectado", inline: true },
                         { name: "🌍 País", value: paisTexto, inline: true },
-                        { name: "🛡️ Estado VAC", value: vacTexto, inline: true },
+                        { name: "🛡️ Estado de Baneos", value: vacTexto, inline: true },
                         { name: "\u200b", value: "\u200b", inline: true } // Campo invisible para cerrar los 3 espacios de la fila
                     )
                     .setTimestamp()
@@ -106,7 +115,7 @@ module.exports = {
                     { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
                     { name: "⚖️ Diferencia de horas", value: diferenciaTexto, inline: true },
                     { name: "🌍 País", value: paisTexto, inline: true },
-                    { name: "🛡️ Estado VAC", value: vacTexto, inline: true },
+                    { name: "🛡️ Estado de Baneos", value: vacTexto, inline: true },
                     { name: "\u200b", value: "\u200b", inline: true }, // Rellena el 3er hueco para alinear perfecto
                     { name: "📝 Historial de nombres", value: historialTexto, inline: false }
                 )
