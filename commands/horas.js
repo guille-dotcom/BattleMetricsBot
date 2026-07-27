@@ -52,7 +52,7 @@ module.exports = {
                     .setColor("#FF0000") // Rojo indicando offline
                     .setDescription(`⚠️ El jugador **no está online** actualmente en el servidor.`)
                     .addFields(
-                        { name: "🆔 Steam ID", value: `[${steamId}](https://steamcommunity.com/profiles/${steamId})`, inline: true },
+                        { name: "🆔 Steam ID", value: `||[${steamId}](https://steamcommunity.com/profiles/${steamId})||`, inline: true },
                         { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
                         { name: "🖥️ Estado", value: "🔴 Desconectado", inline: true }
                     )
@@ -81,14 +81,14 @@ module.exports = {
                 diferenciaTexto = `${diff.toFixed(0)}h`;
             }
 
-            // 6. Responder en formato Embed cuando está online
+            // 6. Responder en formato Embed cuando está online (Con IDs ocultos en spoiler)
             const embedOnline = new EmbedBuilder()
                 .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
                 .setColor("#57F287") // Verde indicando online
                 .addFields(
                     { name: "🎮 Servidor", value: `||${datosFinales.server || "Desconocido"}||`, inline: false },
-                    { name: "🆔 BattleMetrics ID", value: `[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})`, inline: true },
-                    { name: "🆔 Steam ID", value: `[${steamId}](https://steamcommunity.com/profiles/${steamId})`, inline: true },
+                    { name: "🆔 BattleMetrics ID", value: `||[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})||`, inline: true },
+                    { name: "🆔 Steam ID", value: `||[${steamId}](https://steamcommunity.com/profiles/${steamId})||`, inline: true },
                     { name: "⏱️ Sesión actual", value: `${datosFinales.jugando}`, inline: true },
                     { name: "📈 Horas totales (BM)", value: `${datosFinales.horasTotalesBM}h`, inline: true },
                     { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
