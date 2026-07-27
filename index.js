@@ -120,53 +120,6 @@ for (const file of commandFiles) {
 
 
 // ====================== // 
-// REGISTRAR COMANDOS     // 
-// ====================== // 
-
-async function registrarComandos(guild) { 
-
-    try { 
-
-        const rest = new REST({
-            version:"10"
-        }).setToken(
-            process.env.TOKEN
-        ); 
-
-
-        await rest.put( 
-
-            Routes.applicationGuildCommands(
-                client.user.id,
-                guild.id
-            ), 
-
-            { 
-                body: commands 
-            } 
-
-        ); 
-
-
-        console.log(
-            `✅ Comandos registrados en: ${guild.name}`
-        ); 
-
-
-    } catch(error) { 
-
-        console.log(
-            `❌ Error registrando comandos en ${guild.name}:`,
-            error.message
-        ); 
-
-    } 
-
-} 
-
-
-
-// ====================== // 
 // BOT READY              // 
 // ====================== // 
 
@@ -208,27 +161,6 @@ client.once("ready", async () => {
         ); 
 
     } 
-
-
-
-
-    console.log(
-        "🔄 Registrando comandos en servidores..."
-    ); 
-
-
-
-    for(const guild of client.guilds.cache.values()) { 
-
-        await registrarComandos(guild); 
-
-    } 
-
-
-
-    console.log(
-        "✅ Registro de comandos finalizado"
-    ); 
 
 
 
@@ -319,9 +251,6 @@ async (guild)=>{
     console.log(
         `📥 Nuevo servidor: ${guild.name}`
     ); 
-
-
-    await registrarComandos(guild);
 
 
 
