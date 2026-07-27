@@ -281,10 +281,10 @@ guild.channels.cache.find(
 
                     {
                         title:
-                        "🎯 Bienvenido a BattleMetricsBot",
+                        "🎯 Bienvenido a RustLogix",
 
                         description:
-`Gracias por agregar BattleMetricsBot 🤖
+`Gracias por agregar RustLogix 🤖
 
 ⚙️ **Primer paso obligatorio**
 
@@ -322,7 +322,7 @@ para ver todos los comandos disponibles.`,
 
                         footer:{
                             text:
-                            "BattleMetricsBot"
+                            "RustLogix"
                         },
 
                         timestamp:

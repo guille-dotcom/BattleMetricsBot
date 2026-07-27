@@ -6,7 +6,7 @@ const {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("help")
-        .setDescription("Muestra la lista de comandos del BattleMetricsBot"),
+        .setDescription("Muestra la lista de comandos del RustLogix"),
 
     async execute(interaction) {
         // 1. Configuración Inicial
@@ -54,7 +54,7 @@ module.exports = {
             )
             .setColor(0x95A5A6)
             .setFooter({
-                text: "BattleMetricsBot • Ayuda de comandos"
+                text: "RustLogix • Ayuda de comandos"
             })
             .setTimestamp();
 

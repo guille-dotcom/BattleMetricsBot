@@ -37,7 +37,7 @@ module.exports = {
         const embed =
             new EmbedBuilder()
 
-                .setTitle("🤖 BattleMetricsBot")
+                .setTitle("🤖 RustLogix")
 
                 .setColor("#57F287")
 
