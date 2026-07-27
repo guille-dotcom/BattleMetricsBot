@@ -66,7 +66,7 @@ function formatoTiempo(inicio) {
 function crearEmbedOnline(status, tracker, servidorActual) {
     const serverToShow = servidorActual || status.server || "Desconocido";
     return new EmbedBuilder()
-        .setTitle("🎯 BattleMetrics Tracker")
+        .setTitle("🎯 RustLogix")
         .setDescription(
 `🟢 **JUGADOR ONLINE**
 
@@ -92,7 +92,7 @@ ${status.jugando || "0m"}
 function crearEmbedOffline(status, tracker, tiempo, ultimoServidor) {
     const serverToShow = ultimoServidor || tracker.ultimoServidor || "Desconocido";
     return new EmbedBuilder()
-        .setTitle("🎯 BattleMetrics Tracker")
+        .setTitle("🎯 RustLogix")
         .setDescription(
 `🔴 **JUGADOR OFFLINE**
 
@@ -180,7 +180,7 @@ async function revisarTrackers(client) {
                 await canal.send({
                     embeds: [
                         new EmbedBuilder()
-                            .setTitle("🎯 BattleMetrics Tracker")
+                            .setTitle("🎯 RustLogix")
                             .setDescription(
 `🔴 **JUGADOR OFFLINE**
 
