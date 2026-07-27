@@ -50,8 +50,7 @@ module.exports = {
         const informacion = new EmbedBuilder()
             .setTitle("📡 Utilidades")
             .setDescription(
-                "📡 **/ping** — Comprueba el estado de latencia del bot.\n" +
-                "🤖 **/donde-estoy** — Muestra los servidores donde está conectado el bot."
+                "📡 **/ping** — Comprueba el estado de latencia del bot."
             )
             .setColor(0x95A5A6)
             .setFooter({
