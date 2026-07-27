@@ -1,7 +1,7 @@
 require("dotenv").config();
 
 const fs = require("fs");
-const path = path = require("path");
+const path = require("path");
 const { REST, Routes } = require("discord.js");
 
 const commands = [];
@@ -44,10 +44,9 @@ const rest = new REST({
             "🔄 Actualizando comandos globales de Discord..."
         );
 
-        // MODIFICACIÓN AQUÍ: Cambiado a applicationCommands para que sea global
         await rest.put(
             Routes.applicationCommands(
-                "1528900517781045298" // Esta es tu CLIENT_ID (o application id)
+                "1528900517781045298"
             ),
             {
                 body: commands
