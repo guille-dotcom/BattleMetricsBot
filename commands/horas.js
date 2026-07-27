@@ -60,7 +60,8 @@ module.exports = {
                         { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
                         { name: "🖥️ Estado", value: "🔴 Desconectado", inline: true },
                         { name: "🌍 País", value: paisTexto, inline: true },
-                        { name: "🛡️ Estado VAC", value: vacTexto, inline: true }
+                        { name: "🛡️ Estado VAC", value: vacTexto, inline: true },
+                        { name: "\u200b", value: "\u200b", inline: true } // Campo invisible para cerrar los 3 espacios de la fila
                     )
                     .setTimestamp()
                     .setFooter({ text: "RustLogix" });
@@ -87,7 +88,7 @@ module.exports = {
                 diferenciaTexto = `${diff.toFixed(0)}h`;
             }
 
-            // Historial de nombres (si BattleMetrics devuelve un array/string de nombres)
+            // Historial de nombres
             const historialTexto = datosFinales.historialNombres && datosFinales.historialNombres.length > 0 
                 ? datosFinales.historialNombres.slice(0, 3).join(", ") 
                 : "No disponible";
@@ -106,6 +107,7 @@ module.exports = {
                     { name: "⚖️ Diferencia de horas", value: diferenciaTexto, inline: true },
                     { name: "🌍 País", value: paisTexto, inline: true },
                     { name: "🛡️ Estado VAC", value: vacTexto, inline: true },
+                    { name: "\u200b", value: "\u200b", inline: true }, // Rellena el 3er hueco para alinear perfecto
                     { name: "📝 Historial de nombres", value: historialTexto, inline: false }
                 )
                 .setTimestamp()
