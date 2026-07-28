@@ -37,13 +37,15 @@ async function getBattleMetricsHours(playerId) {
                 segundosTotales += tiempo;
 
                 const lastSeen = item.meta?.lastSeen || item.attributes?.updatedAt || "";
+                const online = item.meta?.online || false;
 
                 listaServidores.push({
                     id: servidorId,
                     nombre: item.attributes.name,
                     segundos: tiempo,
                     horas: (tiempo / 3600).toFixed(2),
-                    lastSeen: lastSeen
+                    lastSeen: lastSeen,
+                    online: online
                 });
             }
         }
@@ -56,56 +58,21 @@ async function getBattleMetricsHours(playerId) {
         let rawWipeDate = null;
         let horasDesdeWipe = "0.00";
 
+        // Verificamos si el servidor más reciente tiene al usuario online actualmente (o fue visto hace menos de 10 min)
         if (listaServidores.length > 0 && listaServidores[0].nombre) {
             const servidorPrincipal = listaServidores[0];
-            estadoServidorActual = servidorPrincipal.nombre;
-            servidorActualId = servidorPrincipal.id;
+            const now = new Date();
+            const lastSeenDate = new Date(servidorPrincipal.lastSeen);
+            const diffMinutes = (now - lastSeenDate) / (1000 * 60);
 
-            try {
-                console.log(`CONSULTANDO DETALLES DEL SERVIDOR ID: ${servidorActualId}...`);
-                const serverResponse = await axios.get(
-                    `https://api.battlemetrics.com/servers/${servidorActualId}`,
-                    {
-                        headers: {
-                            "Authorization": `Bearer ${token}`,
-                            "Content-Type": "application/json"
-                        }
-                    }
-                );
+            if (servidorPrincipal.online || diffMinutes <= 10) {
+                estadoServidorActual = servidorPrincipal.nombre;
+                servidorActualId = servidorPrincipal.id;
 
-                const serverAttributes = serverResponse.data.data.attributes;
-                const details = serverAttributes.details || {};
-                
-                const wipeDetails = details.rust_last_wipe || details.rust_lastWipe || details.lastWipe || null;
-                const serverUpdatedAt = serverAttributes.updatedAt || null;
-
-                // Usamos directamente el campo oficial de wipe si existe; si no, recurrimos al updatedAt del servidor
-                rawWipeDate = wipeDetails || serverUpdatedAt;
-
-                if (rawWipeDate) {
-                    const fechaWipe = new Date(rawWipeDate);
-                    if (!isNaN(fechaWipe.getTime())) {
-                        ultimoWipeServidor = fechaWipe.toLocaleDateString("es-ES", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit"
-                        });
-                    }
-                }
-            } catch (err) {
-                console.log("No se pudieron obtener los detalles específicos del servidor:", err.message);
-            }
-
-            // Consultamos las sesiones generales del jugador para filtrar por el servidor actual
-            if (rawWipeDate) {
                 try {
-                    console.log(`CONSULTANDO SESIONES GENERALES DEL JUGADOR ${playerId}...`);
-                    const wipeTimeObj = new Date(rawWipeDate);
-
-                    const sessionsResponse = await axios.get(
-                        `https://api.battlemetrics.com/players/${playerId}/relationships/sessions?page[size]=50`,
+                    console.log(`CONSULTANDO DETALLES DEL SERVIDOR ID: ${servidorActualId}...`);
+                    const serverResponse = await axios.get(
+                        `https://api.battlemetrics.com/servers/${servidorActualId}`,
                         {
                             headers: {
                                 "Authorization": `Bearer ${token}`,
@@ -114,33 +81,74 @@ async function getBattleMetricsHours(playerId) {
                         }
                     );
 
-                    const sessions = sessionsResponse.data.data || [];
+                    const serverAttributes = serverResponse.data.data.attributes;
+                    const details = serverAttributes.details || {};
                     
-                    let segundosDesdeWipe = 0;
+                    const wipeDetails = details.rust_last_wipe || details.rust_lastWipe || details.lastWipe || null;
+                    const serverUpdatedAt = serverAttributes.updatedAt || null;
 
-                    for (const session of sessions) {
-                        const relServer = session.relationships?.server?.data;
-                        if (!relServer || relServer.id !== servidorActualId) continue;
+                    rawWipeDate = wipeDetails || serverUpdatedAt;
 
-                        const attributes = session.attributes || {};
-                        const start = new Date(attributes.start);
-                        const stop = attributes.stop ? new Date(attributes.stop) : new Date();
-
-                        if (stop >= wipeTimeObj) {
-                            const effectiveStart = start < wipeTimeObj ? wipeTimeObj : start;
-                            const diffSeconds = (stop - effectiveStart) / 1000;
-                            if (diffSeconds > 0) {
-                                segundosDesdeWipe += diffSeconds;
-                            }
+                    if (rawWipeDate) {
+                        const fechaWipe = new Date(rawWipeDate);
+                        if (!isNaN(fechaWipe.getTime())) {
+                            ultimoWipeServidor = fechaWipe.toLocaleDateString("es-ES", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit"
+                            });
                         }
                     }
-
-                    horasDesdeWipe = (segundosDesdeWipe / 3600).toFixed(2);
-                    console.log(`HORAS DESDE EL WIPE CALCULADAS: ${horasDesdeWipe}h`);
-
-                } catch (sessionErr) {
-                    console.log("No se pudieron obtener las sesiones del jugador:", sessionErr.message);
+                } catch (err) {
+                    console.log("No se pudieron obtener los detalles específicos del servidor:", err.message);
                 }
+
+                if (rawWipeDate) {
+                    try {
+                        console.log(`CONSULTANDO SESIONES GENERALES DEL JUGADOR ${playerId}...`);
+                        const wipeTimeObj = new Date(rawWipeDate);
+
+                        const sessionsResponse = await axios.get(
+                            `https://api.battlemetrics.com/players/${playerId}/relationships/sessions?page[size]=50`,
+                            {
+                                headers: {
+                                    "Authorization": `Bearer ${token}`,
+                                    "Content-Type": "application/json"
+                                }
+                            }
+                        );
+
+                        const sessions = sessionsResponse.data.data || [];
+                        let segundosDesdeWipe = 0;
+
+                        for (const session of sessions) {
+                            const relServer = session.relationships?.server?.data;
+                            if (!relServer || relServer.id !== servidorActualId) continue;
+
+                            const attributes = session.attributes || {};
+                            const start = new Date(attributes.start);
+                            const stop = attributes.stop ? new Date(attributes.stop) : new Date();
+
+                            if (stop >= wipeTimeObj) {
+                                const effectiveStart = start < wipeTimeObj ? wipeTimeObj : start;
+                                const diffSeconds = (stop - effectiveStart) / 1000;
+                                if (diffSeconds > 0) {
+                                    segundosDesdeWipe += diffSeconds;
+                                }
+                            }
+                        }
+
+                        horasDesdeWipe = (segundosDesdeWipe / 3600).toFixed(2);
+                        console.log(`HORAS DESDE EL WIPE CALCULADAS: ${horasDesdeWipe}h`);
+
+                    } catch (sessionErr) {
+                        console.log("No se pudieron obtener las sesiones del jugador:", sessionErr.message);
+                    }
+                }
+            } else {
+                console.log("El jugador se encuentra desconectado actualmente.");
             }
         }
 
