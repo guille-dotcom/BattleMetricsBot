@@ -131,22 +131,19 @@ async function getBattleMetricsPlayerStatus(playerId) {
                 const wipeDetails = details.rust_last_wipe || details.rust_lastWipe || details.lastWipe || null;
                 const serverUpdatedAt = serverAttributes.updatedAt || null;
 
-                // Si la fecha de los detalles es muy vieja (más de 4 días en servidores modded que limpian seguido) o no existe, usamos el updatedAt o la sesión más antigua tras un reinicio
+                // Forzamos validación estricta: Si el wipe reportado por details tiene más de 2 días, lo descartamos de inmediato
                 if (wipeDetails) {
                     const parsedWipe = new Date(wipeDetails);
                     const now = new Date();
                     const diffDays = (now - parsedWipe) / (1000 * 60 * 60 * 24);
 
-                    // Si el servidor es modded/bedwars y la fecha guardada tiene más de 4 días, ignoramos el dato erróneo de la API y usamos la fecha de actualización o buscamos en sesiones
-                    if (diffDays > 4) {
-                        rawWipeDate = null;
-                    } else {
+                    if (!isNaN(parsedWipe.getTime()) && diffDays <= 2) {
                         rawWipeDate = wipeDetails;
                     }
                 }
 
+                // Si no hay un wipe válido reciente en details, usamos obligatoriamente la fecha de actualización del servidor (updatedAt)
                 if (!rawWipeDate) {
-                    // Buscar en las sesiones la primera sesión que coincida con el reinicio o usar el updatedAt del servidor
                     rawWipeDate = serverUpdatedAt;
                 }
 
