@@ -94,14 +94,14 @@ async function getBattleMetricsHours(playerId) {
                 console.log("No se pudieron obtener los detalles específicos del servidor:", err.message);
             }
 
-            // Consultamos las sesiones del jugador en este servidor específico para calcular horas desde el wipe
+            // Consultamos las sesiones generales del jugador para filtrar por el servidor actual
             if (rawWipeDate) {
                 try {
-                    console.log(`CONSULTANDO SESIONES DEL JUGADOR PARA EL SERVIDOR ${servidorActualId}...`);
+                    console.log(`CONSULTANDO SESIONES GENERALES DEL JUGADOR ${playerId}...`);
                     const wipeTimeObj = new Date(rawWipeDate);
 
                     const sessionsResponse = await axios.get(
-                        `https://api.battlemetrics.com/players/${playerId}/relationships/sessions?filter[server]=${servidorActualId}&page[size]=50`,
+                        `https://api.battlemetrics.com/players/${playerId}/relationships/sessions?page[size]=50`,
                         {
                             headers: {
                                 "Authorization": `Bearer ${token}`,
@@ -111,14 +111,19 @@ async function getBattleMetricsHours(playerId) {
                     );
 
                     const sessions = sessionsResponse.data.data || [];
+                    const includedSessions = sessionsResponse.data.included || [];
+                    
+                    // Mapeamos las relaciones de servidor para cada sesión
                     let segundosDesdeWipe = 0;
 
                     for (const session of sessions) {
+                        const relServer = session.relationships?.server?.data;
+                        if (!relServer || relServer.id !== servidorActualId) continue; // Solo nos interesa el servidor actual
+
                         const attributes = session.attributes || {};
                         const start = new Date(attributes.start);
-                        const stop = attributes.stop ? new Date(attributes.stop) : new Date(); // Si sigue activo, cuenta hasta ahora
+                        const stop = attributes.stop ? new Date(attributes.stop) : new Date();
 
-                        // Si la sesión empezó o terminó después del wipe
                         if (stop >= wipeTimeObj) {
                             const effectiveStart = start < wipeTimeObj ? wipeTimeObj : start;
                             const diffSeconds = (stop - effectiveStart) / 1000;
@@ -144,7 +149,7 @@ async function getBattleMetricsHours(playerId) {
             totalHoras: horasTotales,
             primerServidor: estadoServidorActual,
             ultimoWipe: ultimoWipeServidor,
-            horasDesdeWipe: horasDesdeWipe, // Añadido para que lo puedas mostrar en el embed si gustas
+            horasDesdeWipe: horasDesdeWipe,
             servidores: {
                 rust: {
                     horas: horasTotales,
