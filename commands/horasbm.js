@@ -52,6 +52,7 @@ module.exports = {
             const totalHoras = Number(data.totalHoras || 0);
             const nombreJugador = data.nombre || "Desconocido";
             const primerServidor = data.primerServidor || "Desconocido";
+            const ultimoWipe = data.ultimoWipe || "Desconocido";
 
             let servidoresEncontrados = 0;
             try {
@@ -72,6 +73,11 @@ module.exports = {
                     {
                         name: "🌐 Servidor Actual",
                         value: `${primerServidor}`,
+                        inline: false
+                    },
+                    {
+                        name: "🛠️ Último Wipe",
+                        value: `\`${ultimoWipe}\``,
                         inline: false
                     },
                     {
