@@ -25,17 +25,13 @@ const {
 const PORT = process.env.PORT || 3000; 
 
 const server = http.createServer((req, res) => { 
-
     res.writeHead(200, { 
         "Content-Type": "text/plain", 
         "Content-Length": "2",
         "Connection": "close" 
     }); 
-
     res.end("OK"); 
-
 }); 
-
 
 server.listen(PORT, "0.0.0.0", () => { 
     console.log(`🌐 Servidor web activo en puerto ${PORT}`); 
@@ -48,73 +44,37 @@ server.listen(PORT, "0.0.0.0", () => {
 // ====================== // 
 
 const client = new Client({ 
-
     intents: [
         GatewayIntentBits.Guilds
     ] 
-
 }); 
-
 
 client.commands = new Collection(); 
 
 
 
 // ====================== // 
-// CARGAR COMANDOS        // 
+// CARGAR Y REGISTRAR     // 
 // ====================== // 
 
-const commandsPath = path.join(
-    __dirname, 
-    "commands"
-); 
+const commandsPath = path.join(__dirname, "commands"); 
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith(".js"));
 
-
-const commandFiles = fs
-.readdirSync(commandsPath)
-.filter(
-    file => file.endsWith(".js")
-);
-
-
-const commands = []; 
-
-
+const commandsArray = []; 
 
 for (const file of commandFiles) { 
-
     try { 
-
-        const command = require(
-            `./commands/${file}`
-        ); 
-
-
-        client.commands.set(
-            command.data.name, 
-            command
-        ); 
-
-
-        commands.push(
-            command.data.toJSON()
-        ); 
-
-
-        console.log(
-            `✅ Comando cargado: ${command.data.name}`
-        ); 
-
-
+        const command = require(`./commands/${file}`); 
+        if ('data' in command && 'execute' in command) {
+            client.commands.set(command.data.name, command); 
+            commandsArray.push(command.data.toJSON()); 
+            console.log(`✅ Comando cargado: ${command.data.name}`); 
+        } else {
+            console.log(`⚠️ El comando en ${file} le falta la propiedad 'data' o 'execute'.`);
+        }
     } catch(error) { 
-
-        console.log(
-            `❌ Error cargando comando ${file}:`,
-            error.message
-        ); 
-
+        console.log(`❌ Error cargando comando ${file}:`, error.message); 
     } 
-
 } 
 
 
@@ -124,118 +84,67 @@ for (const file of commandFiles) {
 // ====================== // 
 
 client.once("ready", async () => { 
+    console.log(`✅ Bot conectado como ${client.user.tag}`); 
 
+    // REGISTRO GLOBAL DE COMANDOS (Limpia duplicados automáticamente)
+    try {
+        const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+        console.log('🔄 Actualizando comandos en la API de Discord...');
 
-    console.log(
-        `✅ Bot conectado como ${client.user.tag}`
-    ); 
+        await rest.put(
+            Routes.applicationCommands(client.user.id),
+            { body: commandsArray },
+        );
 
-
+        console.log('✨ ¡Comandos registrados y sincronizados globalmente con éxito!');
+    } catch (error) {
+        console.error('❌ Error al registrar comandos globalmente:', error);
+    }
 
     try { 
-
         await client.user.setPresence({ 
-
-            status:"online", 
-
-            activities:[
+            status: "online", 
+            activities: [
                 {
-                    name:"chivando siempre 👀",
-                    type:0
+                    name: "chivando siempre 👀",
+                    type: 0
                 }
             ]
-
         }); 
-
-
-        console.log(
-            "🟢 Estado ONLINE establecido"
-        ); 
-
-
+        console.log("🟢 Estado ONLINE establecido"); 
     } catch(error) { 
-
-        console.log(
-            "⚠️ Error presencia:",
-            error.message
-        ); 
-
+        console.log("⚠️ Error presencia:", error.message); 
     } 
-
-
-
 
     // ====================== //
     // TRACKER AUTOMÁTICO     //
     // ====================== //
 
-    console.log(
-        "🔎 Tracker iniciado cada 30 segundos"
-    ); 
-
-
+    console.log("🔎 Tracker iniciado cada 30 segundos"); 
     let trackerRevisando = false; 
 
-
-
     try { 
-
         await revisarTrackers(client); 
-
     } catch(error) { 
-
-        console.log(
-            "❌ Error revisión inicial tracker:",
-            error.message
-        ); 
-
+        console.log("❌ Error revisión inicial tracker:", error.message); 
     } 
 
-
-
-
     setInterval(async () => { 
-
-
-        if(trackerRevisando){ 
-
-            console.log(
-                "⏳ Tracker anterior todavía ejecutándose..."
-            ); 
-
+        if (trackerRevisando) { 
+            console.log("⏳ Tracker anterior todavía ejecutándose..."); 
             return; 
-
         } 
-
-
 
         trackerRevisando = true; 
 
-
-
         try { 
-
             await revisarTrackers(client); 
-
-
         } catch(error) { 
-
-            console.log(
-                "❌ Error tracker automático:",
-                error.message
-            ); 
-
-
+            console.log("❌ Error tracker automático:", error.message); 
         } finally { 
-
             trackerRevisando = false; 
-
         } 
-
-
     }, 30 * 1000); 
-
-
 }); 
 
 
@@ -244,112 +153,31 @@ client.once("ready", async () => {
 // NUEVOS SERVIDORES      // 
 // ====================== // 
 
-client.on(
-"guildCreate", 
-async (guild)=>{ 
-
-    console.log(
-        `📥 Nuevo servidor: ${guild.name}`
-    ); 
-
-
-
-    // ======================
-    // MENSAJE BIENVENIDA
-    // ======================
+client.on("guildCreate", async (guild) => { 
+    console.log(`📥 Nuevo servidor: ${guild.name}`); 
 
     try {
-
-
-        const canal =
-guild.channels.cache.find(
-    channel =>
-    channel.isTextBased() &&
-    channel.permissionsFor(
-        guild.members.me
-    )?.has("SendMessages")
-);
-
-
-
-        if(canal){
-
-
-            await canal.send({
-
-                embeds:[
-
-                    {
-                        title:
-                        "🎯 Bienvenido a RustLogix",
-
-                        description:
-`Gracias por agregar RustLogix 🤖
-
-⚙️ **Primer paso obligatorio**
-
-Ejecuta:
-
-⚙️ \`/configurar-servidor\`
-
-para configurar el servidor de Rust que utilizará el bot.
-
-
-Después podrás usar:
-
-🖥️ **Comandos del servidor**
-⏱️ \`/horas\`
-🏆 \`/ranking\`
-
-
-🎯 **Sistema Tracker**
-🎮 \`/tracker\`
-📋 \`/trackers-activos\`
-
-
-🔎 **Consultas BattleMetrics**
-🔎 \`/horasbm\`
-
-
-📚 Usa:
-
-\`/help\`
-
-para ver todos los comandos disponibles.`,
-
-                        color:
-                        0x3498DB,
-
-                        footer:{
-                            text:
-                            "RustLogix"
-                        },
-
-                        timestamp:
-                        new Date()
-
-                    }
-
-                ]
-
-            });
-
-
-        }
-
-
-    } catch(error){
-
-        console.log(
-            "❌ Error enviando bienvenida:",
-            error.message
+        const canal = guild.channels.cache.find(
+            channel => channel.isTextBased() && channel.permissionsFor(guild.members.me)?.has("SendMessages")
         );
 
+        if (canal) {
+            await canal.send({
+                embeds: [
+                    {
+                        title: "🎯 Bienvenido a RustLogix",
+                        description: `Gracias por agregar RustLogix 🤖\n\n⚙️ **Primer paso obligatorio**\n\nEjecuta:\n\n⚙️ \`/configurar-servidor\`\n\npara configurar el servidor de Rust que utilizará el bot.\n\n\nDespués podrás usar:\n\n🖥️ **Comandos del servidor**\n⏱️ \`/horas\`\n🏆 \`/ranking\`\n\n\n🎯 **Sistema Tracker**\n🎮 \`/tracker\`\n📋 \`/trackers-activos\`\n\n\n🔎 **Consultas BattleMetrics**\n🔎 \`/horasbm\`\n\n\n📚 Usa:\n\n\`/help\`\n\npara ver todos los comandos disponibles.`,
+                        color: 0x3498DB,
+                        footer: { text: "RustLogix" },
+                        timestamp: new Date()
+                    }
+                ]
+            });
+        }
+    } catch(error) {
+        console.log("❌ Error enviando bienvenida:", error.message);
     }
-
-
 });
-
 
 
 
@@ -357,193 +185,61 @@ para ver todos los comandos disponibles.`,
 // INTERACCIONES          // 
 // ====================== // 
 
-client.on(
-"interactionCreate", 
-async interaction=>{
-
-
+client.on("interactionCreate", async interaction => {
 
     // ======================
     // BOTONES TRACKER
     // ======================
+    if (interaction.isButton()) {
+        if (interaction.customId.startsWith("eliminar_tracker_")) {
+            const id = interaction.customId.replace("eliminar_tracker_", "");
+            const { leerTrackers, guardarTrackers } = require("./services/trackerService");
+            const trackers = leerTrackers();
 
-    if(interaction.isButton()){
-
-
-
-        if(
-            interaction.customId.startsWith(
-                "eliminar_tracker_"
-            )
-        ){
-
-
-
-            const id =
-            interaction.customId.replace(
-                "eliminar_tracker_",
-                ""
-            );
-
-
-
-            const {
-                leerTrackers,
-                guardarTrackers
-            } = require("./services/trackerService");
-
-
-
-            const trackers =
-            leerTrackers();
-
-
-
-            if(!trackers[id]){
-
-
+            if (!trackers[id]) {
                 return interaction.reply({
-
-                    content:
-                    "❌ Ese tracker ya no existe.",
-
-                    ephemeral:true
-
+                    content: "❌ Ese tracker ya no existe.",
+                    ephemeral: true
                 });
-
-
             }
 
-
-
-            const nombre =
-            trackers[id].nombre ||
-            id;
-
-
-
+            const nombre = trackers[id].nombre || id;
             delete trackers[id];
-
-
-
-            guardarTrackers(
-                trackers
-            );
-
-
+            guardarTrackers(trackers);
 
             return interaction.update({
-
-                content:
-                `🗑️ Tracker eliminado: **${nombre}**`,
-
-                embeds:[],
-
-                components:[]
-
+                content: `🗑️ Tracker eliminado: **${nombre}**`,
+                embeds: [],
+                components: []
             });
-
-
-
         }
-
-
         return;
-
     }
-
-
-
 
     // ======================
     // COMANDOS SLASH
     // ======================
+    if (!interaction.isChatInputCommand()) return;
 
-
-    if(!interaction.isChatInputCommand()) return;
-
-
-
-    const command =
-    client.commands.get(
-        interaction.commandName
-    );
-
-
-
-    if(!command) return;
-
-
+    const command = client.commands.get(interaction.commandName);
+    if (!command) return;
 
     try { 
-
-
-        await command.execute(
-            interaction
-        ); 
-
-
+        await command.execute(interaction); 
     } catch(error) { 
-
-
-        console.log(
-            "ERROR EJECUTANDO COMANDO:",
-            error
-        ); 
-
-
+        console.log("ERROR EJECUTANDO COMANDO:", error); 
 
         try { 
-
-
-            if(
-                interaction.deferred ||
-                interaction.replied
-            ){ 
-
-
-                await interaction.editReply({ 
-
-                    content:
-                    "❌ Error ejecutando comando"
-
-                }); 
-
-
+            if (interaction.deferred || interaction.replied) { 
+                await interaction.editReply({ content: "❌ Error ejecutando comando" }); 
             } else { 
-
-
-                await interaction.reply({ 
-
-                    content:
-                    "❌ Error ejecutando comando",
-
-                    ephemeral:true
-
-                }); 
-
-
+                await interaction.reply({ content: "❌ Error ejecutando comando", ephemeral: true }); 
             } 
-
-
-
-        } catch(err){ 
-
-
-            console.log(
-                "ERROR RESPONDIENDO DISCORD:",
-                err.message
-            ); 
-
-
+        } catch(err) { 
+            console.log("ERROR RESPONDIENDO DISCORD:", err.message); 
         } 
-
-
     } 
-
-
 }); 
-
 
 
 
@@ -551,43 +247,17 @@ async interaction=>{
 // ERRORES                // 
 // ====================== // 
 
-client.on(
-"error",
-error=>{ 
-
-    console.error(
-        "❌ Error Discord:",
-        error
-    ); 
-
+client.on("error", error => { 
+    console.error("❌ Error Discord:", error); 
 }); 
 
-
-
-process.on(
-"unhandledRejection",
-(reason)=>{ 
-
-    console.error(
-        "❌ Unhandled Promise:",
-        reason
-    ); 
-
+process.on("unhandledRejection", (reason) => { 
+    console.error("❌ Unhandled Promise:", reason); 
 }); 
 
-
-
-process.on(
-"uncaughtException",
-(error)=>{ 
-
-    console.error(
-        "❌ Uncaught Exception:",
-        error
-    ); 
-
+process.on("uncaughtException", (error) => { 
+    console.error("❌ Uncaught Exception:", error); 
 }); 
-
 
 
 
@@ -595,6 +265,4 @@ process.on(
 // LOGIN                  // 
 // ====================== // 
 
-client.login(
-    process.env.TOKEN
-);
+client.login(process.env.TOKEN);
