@@ -60,7 +60,6 @@ module.exports = {
                 servidoresEncontrados = 0;
             }
 
-            // Diseño mejorado del Embed con el servidor actual incluido
             const embed = new EmbedBuilder()
                 .setTitle("🎮 Perfil BattleMetrics")
                 .setColor("#57F287")
@@ -81,7 +80,7 @@ module.exports = {
                         inline: true
                     },
                     {
-                        name: "⏱️ Horas",
+                        name: "⏱️ Horas battlemetrics totales",
                         value: `${totalHoras.toFixed(2)}h`,
                         inline: true
                     }
