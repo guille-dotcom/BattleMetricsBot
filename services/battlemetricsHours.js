@@ -38,9 +38,11 @@ async function getBattleMetricsHours(playerId) {
 
                 const lastSeen = item.meta?.lastSeen || item.attributes?.updatedAt || "";
                 
-                // Extraemos la fecha del último wipe del servidor
+                // Inspeccionamos los detalles del servidor
                 const details = item.attributes?.details || {};
-                const rustWipe = details.rust_lastWipe || details.lastWipe || null;
+                
+                // Buscamos en todas las posibles variantes que usa BattleMetrics para el wipe
+                const rawWipe = details.rust_lastWipe || details.rustLastWipe || details.lastWipe || details.wipe || null;
 
                 listaServidores.push({
                     id: servidorId,
@@ -48,7 +50,7 @@ async function getBattleMetricsHours(playerId) {
                     segundos: tiempo,
                     horas: (tiempo / 3600).toFixed(2),
                     lastSeen: lastSeen,
-                    rustWipe: rustWipe
+                    rustWipe: rawWipe
                 });
             }
         }
@@ -58,20 +60,24 @@ async function getBattleMetricsHours(playerId) {
 
         let estadoServidorActual = "🔴 Offline / Desconectado de Rust";
 
-        // Si hay servidores en la lista, cogemos el más reciente y su fecha de wipe
         if (listaServidores.length > 0 && listaServidores[0].nombre) {
-            estadoServidorActual = listaServidores[0].nombre;
+            const servidorPrincipal = listaServidores[0];
+            estadoServidorActual = servidorPrincipal.nombre;
             
-            if (listaServidores[0].rustWipe) {
-                const fechaWipe = new Date(listaServidores[0].rustWipe);
-                // Formateamos la fecha de forma legible (ej. Día/Mes/Año)
-                ultimoWipeServidor = fechaWipe.toLocaleDateString("es-ES", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit"
-                });
+            console.log("DETALLES DEL SERVIDOR ACTUAL:", servidorPrincipal.nombre);
+            console.log("WIPE ENCONTRADO (RAW):", servidorPrincipal.rustWipe);
+
+            if (servidorPrincipal.rustWipe) {
+                const fechaWipe = new Date(servidorPrincipal.rustWipe);
+                if (!isNaN(fechaWipe.getTime())) {
+                    ultimoWipeServidor = fechaWipe.toLocaleDateString("es-ES", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit"
+                    });
+                }
             }
         }
 
