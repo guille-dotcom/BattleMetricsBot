@@ -51,6 +51,7 @@ module.exports = {
 
             const totalHoras = Number(data.totalHoras || 0);
             const nombreJugador = data.nombre || "Desconocido";
+            const primerServidor = data.primerServidor || "Desconocido";
 
             let servidoresEncontrados = 0;
             try {
@@ -59,7 +60,7 @@ module.exports = {
                 servidoresEncontrados = 0;
             }
 
-            // Diseño mejorado del Embed con el nombre de tu bot en el footer
+            // Diseño mejorado del Embed con el servidor actual incluido
             const embed = new EmbedBuilder()
                 .setTitle("🎮 Perfil BattleMetrics")
                 .setColor("#57F287")
@@ -67,6 +68,11 @@ module.exports = {
                     {
                         name: "👤 Jugador",
                         value: `[${nombreJugador}](https://www.battlemetrics.com/players/${battlemetricsId})`,
+                        inline: false
+                    },
+                    {
+                        name: "🌐 Servidor Actual",
+                        value: `${primerServidor}`,
                         inline: false
                     },
                     {

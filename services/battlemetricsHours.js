@@ -25,17 +25,12 @@ async function getBattleMetricsHours(playerId) {
         let segundosTotales = 0;
         let listaServidores = [];
         const servidoresContados = new Set();
-        let primerServidorActual = "Ninguno / Desconectado";
 
+        // Buscamos si el jugador tiene servidores en las relaciones o en los datos del jugador
         for (const servidor of servidores) {
             if (servidor.type !== "server") continue;
 
             const servidorId = servidor.id;
-
-            // Guarda el primer servidor que aparece en el perfil
-            if (primerServidorActual === "Ninguno / Desconectado") {
-                primerServidorActual = servidor.attributes.name;
-            }
 
             if (servidoresContados.has(servidorId)) {
                 continue;
@@ -46,20 +41,30 @@ async function getBattleMetricsHours(playerId) {
             const tiempo = servidor.meta?.timePlayed || 0;
             segundosTotales += tiempo;
 
+            // Extraemos la fecha de última vez visto si existe
+            const lastSeen = servidor.attributes?.updatedAt || servidor.meta?.lastSeen || "";
+
             listaServidores.push({
                 id: servidorId,
                 nombre: servidor.attributes.name,
                 segundos: tiempo,
-                horas: (tiempo / 3600).toFixed(2)
+                horas: (tiempo / 3600).toFixed(2),
+                lastSeen: lastSeen
             });
         }
+
+        // Ordenamos los servidores para que el más reciente/actual quede primero
+        // BattleMetrics suele incluir un campo de metadatos o fecha en las relaciones
+        listaServidores.sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
+
+        const primerServidorActual = listaServidores.length > 0 ? listaServidores[0].nombre : "Ninguno / Desconectado";
 
         const horasTotales = (segundosTotales / 3600).toFixed(2);
 
         return {
             nombre: nombreJugador,
             totalHoras: horasTotales,
-            primerServidor: primerServidorActual,
+            primerServidor: primerServidorActual, // Este será ahora el verdadero primer servidor
             servidores: {
                 rust: {
                     horas: horasTotales,
