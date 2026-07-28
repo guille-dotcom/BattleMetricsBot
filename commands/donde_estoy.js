@@ -13,7 +13,7 @@ module.exports = {
     async execute(interaction) {
         const USUARIOS_AUTORIZADOS = [
             "585618134447161373",
-            "73780201913896993"
+            "737802401913896993"
         ];
 
         if (!USUARIOS_AUTORIZADOS.includes(interaction.user.id)) {
