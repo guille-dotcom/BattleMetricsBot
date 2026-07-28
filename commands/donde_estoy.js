@@ -11,6 +11,15 @@ module.exports = {
         ),
 
     async execute(interaction) {
+        const MI_ID = "585618134447161373";
+
+        if (interaction.user.id !== MI_ID) {
+            return interaction.reply({
+                content: "❌ No tienes permiso para usar este comando.",
+                ephemeral: true
+            });
+        }
+
         const guilds = interaction.client.guilds.cache;
 
         let lista = "";
@@ -38,7 +47,8 @@ module.exports = {
             });
 
         await interaction.reply({
-            embeds: [embed]
+            embeds: [embed],
+            ephemeral: true
         });
     }
 };
