@@ -53,6 +53,8 @@ async function getBattleMetricsHours(playerId) {
 
         let estadoServidorActual = "🔴 Offline / Desconectado de Rust";
         let ultimoWipeServidor = "Desconocido";
+        let rawWipeDate = null;
+        let horasDesdeWipe = "0.00";
 
         if (listaServidores.length > 0 && listaServidores[0].nombre) {
             const servidorPrincipal = listaServidores[0];
@@ -74,11 +76,10 @@ async function getBattleMetricsHours(playerId) {
                 const serverAttributes = serverResponse.data.data.attributes;
                 const details = serverAttributes.details || {};
                 
-                // Extraemos exactamente rust_last_wipe que viene en los detalles
-                const rawWipe = details.rust_last_wipe || details.rust_lastWipe || details.lastWipe || null;
+                rawWipeDate = details.rust_last_wipe || details.rust_lastWipe || details.lastWipe || null;
 
-                if (rawWipe) {
-                    const fechaWipe = new Date(rawWipe);
+                if (rawWipeDate) {
+                    const fechaWipe = new Date(rawWipeDate);
                     if (!isNaN(fechaWipe.getTime())) {
                         ultimoWipeServidor = fechaWipe.toLocaleDateString("es-ES", {
                             day: "2-digit",
@@ -92,6 +93,48 @@ async function getBattleMetricsHours(playerId) {
             } catch (err) {
                 console.log("No se pudieron obtener los detalles específicos del servidor:", err.message);
             }
+
+            // Consultamos las sesiones del jugador en este servidor específico para calcular horas desde el wipe
+            if (rawWipeDate) {
+                try {
+                    console.log(`CONSULTANDO SESIONES DEL JUGADOR PARA EL SERVIDOR ${servidorActualId}...`);
+                    const wipeTimeObj = new Date(rawWipeDate);
+
+                    const sessionsResponse = await axios.get(
+                        `https://api.battlemetrics.com/players/${playerId}/relationships/sessions?filter[server]=${servidorActualId}&page[size]=50`,
+                        {
+                            headers: {
+                                "Authorization": `Bearer ${token}`,
+                                "Content-Type": "application/json"
+                            }
+                        }
+                    );
+
+                    const sessions = sessionsResponse.data.data || [];
+                    let segundosDesdeWipe = 0;
+
+                    for (const session of sessions) {
+                        const attributes = session.attributes || {};
+                        const start = new Date(attributes.start);
+                        const stop = attributes.stop ? new Date(attributes.stop) : new Date(); // Si sigue activo, cuenta hasta ahora
+
+                        // Si la sesión empezó o terminó después del wipe
+                        if (stop >= wipeTimeObj) {
+                            const effectiveStart = start < wipeTimeObj ? wipeTimeObj : start;
+                            const diffSeconds = (stop - effectiveStart) / 1000;
+                            if (diffSeconds > 0) {
+                                segundosDesdeWipe += diffSeconds;
+                            }
+                        }
+                    }
+
+                    horasDesdeWipe = (segundosDesdeWipe / 3600).toFixed(2);
+                    console.log(`HORAS DESDE EL WIPE CALCULADAS: ${horasDesdeWipe}h`);
+
+                } catch (sessionErr) {
+                    console.log("No se pudieron obtener las sesiones del jugador:", sessionErr.message);
+                }
+            }
         }
 
         const horasTotales = (segundosTotales / 3600).toFixed(2);
@@ -101,6 +144,7 @@ async function getBattleMetricsHours(playerId) {
             totalHoras: horasTotales,
             primerServidor: estadoServidorActual,
             ultimoWipe: ultimoWipeServidor,
+            horasDesdeWipe: horasDesdeWipe, // Añadido para que lo puedas mostrar en el embed si gustas
             servidores: {
                 rust: {
                     horas: horasTotales,
@@ -120,6 +164,7 @@ async function getBattleMetricsHours(playerId) {
             totalHoras: "0.00",
             primerServidor: "🔴 Offline / Desconectado de Rust",
             ultimoWipe: "Desconocido",
+            horasDesdeWipe: "0.00",
             servidores: {
                 rust: {
                     horas: "0.00",
