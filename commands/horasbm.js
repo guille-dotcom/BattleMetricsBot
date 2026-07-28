@@ -60,6 +60,7 @@ module.exports = {
                 servidoresEncontrados = 0;
             }
 
+            // Diseño limpio y estructurado
             const embed = new EmbedBuilder()
                 .setTitle("🎮 Perfil BattleMetrics")
                 .setColor("#57F287")
@@ -75,13 +76,13 @@ module.exports = {
                         inline: false
                     },
                     {
-                        name: "🖥️ Servidores",
-                        value: `${servidoresEncontrados}`,
+                        name: "🖥️ Servidores Jugados",
+                        value: `\`${servidoresEncontrados}\``,
                         inline: true
                     },
                     {
-                        name: "⏱️ Horas battlemetrics totales",
-                        value: `${totalHoras.toFixed(2)}h`,
+                        name: "⏱️ Horas Totales",
+                        value: `\`${totalHoras.toFixed(2)}h\``,
                         inline: true
                     }
                 )
