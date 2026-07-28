@@ -18,7 +18,6 @@ module.exports = {
         const steamId = interaction.options.getString("steamid").trim(); 
         await interaction.deferReply();
 
-        // 1. LEER EL SERVIDOR CONFIGURADO EN config.json
         let serverId = "433255"; 
         try {
             const configPath = path.join(__dirname, "../data/config.json");
@@ -33,43 +32,38 @@ module.exports = {
         }
 
         try { 
-            // 2. Obtener Perfil, Avatar, Horas, País y Baneos de Steam
             const perfilSteam = await getSteamProfile(steamId); 
             if (!perfilSteam || !perfilSteam.name) {
                 return await interaction.editReply("❌ ID no encontrado en Steam."); 
             }
 
             const horasSteamNum = parseFloat(perfilSteam.rustHours) || 0;
-            const horasSteamTexto = horasSteamNum > 0 ? `${horasSteamNum}h` : "🔒 Perfil / Juegos Privados";
+            const horasSteamTexto = horasSteamNum > 0 ? `${horasSteamNum}h` : "🔒 Privado";
 
-            // Datos adicionales de Steam
             const paisTexto = perfilSteam.loccountrycode ? `:flag_${perfilSteam.loccountrycode.toLowerCase()}: (${perfilSteam.loccountrycode})` : "Desconocido";
             
-            // Lógica detallada para diferenciar VAC Ban y Game Ban
             let vacTexto = "✅ Sin Baneos";
             if (perfilSteam.vacBanned && perfilSteam.gameBansCount > 0) {
-                vacTexto = "⚠️ VAC & Game Ban";
+                vacTexto = "⚠️ VAC & Game";
             } else if (perfilSteam.vacBanned) {
-                vacTexto = "⚠️ Con Baneo VAC";
+                vacTexto = "⚠️ Baneo VAC";
             } else if (perfilSteam.gameBansCount > 0) {
-                vacTexto = `⚠️ ${perfilSteam.gameBansCount} Game Ban(s)`;
+                vacTexto = `⚠️ ${perfilSteam.gameBansCount} Game Ban`;
             }
 
-            // 3. Buscar jugador online en el servidor configurado
             const jugadorBM = await searchBattleMetricsPlayer(perfilSteam.name, serverId); 
 
-            // Si NO ESTÁ ONLINE en el servidor:
             if (!jugadorBM) {
                 const embedOffline = new EmbedBuilder()
                     .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
                     .setColor("#FF0000")
-                    .setDescription(`⚠️ El jugador **no está online** actualmente en el servidor o usa suscripción de BattleMetrics.`)
+                    .setDescription(`⚠️ El jugador **no está online** actualmente en el servidor.`)
                     .addFields(
                         { name: "🆔 Steam ID", value: `||[${steamId}](https://steamcommunity.com/profiles/${steamId})||`, inline: true },
-                        { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
+                        { name: "📊 Horas Steam", value: horasSteamTexto, inline: true },
                         { name: "🖥️ Estado", value: "🔴 Desconectado", inline: true },
                         { name: "🌍 País", value: paisTexto, inline: true },
-                        { name: "🛡️ Estado de Baneos", value: vacTexto, inline: true },
+                        { name: "🛡️ Baneos", value: vacTexto, inline: true },
                         { name: "\u200b", value: "\u200b", inline: true }
                     )
                     .setTimestamp()
@@ -82,22 +76,19 @@ module.exports = {
                 return await interaction.editReply({ embeds: [embedOffline] });
             }
 
-            // 4. Si SÍ ESTÁ ONLINE: Obtener datos detallados de BattleMetrics
             const datosFinales = await getBattleMetricsPlayerStatus(jugadorBM.id); 
             if (!datosFinales) {
                 return await interaction.editReply("❌ Error al obtener datos detallados de BattleMetrics."); 
             }
 
-            // 5. Calcular diferencia de horas
             const horasBMNum = parseFloat(datosFinales.horasTotalesBM) || 0;
-            let diferenciaTexto = "N/A (Perfil Privado)";
+            let diferenciaTexto = "N/A";
 
             if (horasSteamNum > 0) {
                 const diff = Math.abs(horasSteamNum - horasBMNum);
                 diferenciaTexto = `${diff.toFixed(0)}h`;
             }
 
-            // Historial de nombres
             const historialTexto = datosFinales.historialNombres && datosFinales.historialNombres.length > 0 
                 ? datosFinales.historialNombres.slice(0, 3).join(", ") 
                 : "No disponible";
@@ -105,23 +96,25 @@ module.exports = {
             const ultimoWipe = datosFinales.ultimoWipe || "Desconocido";
             const horasDesdeWipe = datosFinales.horasDesdeWipe || "0.00";
 
-            // 6. Responder en formato Embed cuando está online
+            // Diseño optimizado y simétrico en 3 columnas
             const embedOnline = new EmbedBuilder()
                 .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
                 .setColor("#57F287")
                 .addFields(
                     { name: "🎮 Servidor", value: `||${datosFinales.server || "Desconocido"}||`, inline: false },
-                    { name: "🆔 BattleMetrics ID", value: `||[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})||`, inline: true },
+                    { name: "🆔 BattleMetrics", value: `||[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})||`, inline: true },
                     { name: "🆔 Steam ID", value: `||[${steamId}](https://steamcommunity.com/profiles/${steamId})||`, inline: true },
-                    { name: "⏱️ Sesión actual", value: `${datosFinales.jugando}`, inline: true },
-                    { name: "🛠️ Último Wipe", value: `\`${ultimoWipe}\``, inline: false },
-                    { name: "⏱️ Horas desde el Wipe", value: `\`${horasDesdeWipe}h\``, inline: true },
-                    { name: "📈 Horas totales (BM)", value: `${datosFinales.horasTotalesBM}h`, inline: true },
-                    { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
-                    { name: "⚖️ Diferencia de horas", value: diferenciaTexto, inline: true },
+                    { name: "⏱️ Sesión Actual", value: `${datosFinales.jugando}`, inline: true },
+                    { name: "🛠️ Último Wipe", value: `\`${ultimoWipe}\``, inline: true },
+                    { name: "⏱️ Desde el Wipe", value: `\`${horasDesdeWipe}h\``, inline: true },
                     { name: "🌍 País", value: paisTexto, inline: true },
-                    { name: "🛡️ Estado de Baneos", value: vacTexto, inline: true },
-                    { name: "📝 Historial de nombres", value: historialTexto, inline: false }
+                    { name: "📈 Horas (BM)", value: `${datosFinales.horasTotalesBM}h`, inline: true },
+                    { name: "📊 Horas (Steam)", value: horasSteamTexto, inline: true },
+                    { name: "⚖️ Diferencia", value: diferenciaTexto, inline: true },
+                    { name: "🛡️ Estado Baneos", value: vacTexto, inline: true },
+                    { name: "\u200b", value: "\u200b", inline: true },
+                    { name: "\u200b", value: "\u200b", inline: true },
+                    { name: "📝 Historial de Nombres", value: historialTexto, inline: false }
                 )
                 .setTimestamp()
                 .setFooter({ text: "RustLogix" });
