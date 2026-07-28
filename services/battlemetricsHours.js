@@ -18,53 +18,61 @@ async function getBattleMetricsHours(playerId) {
         );
 
         const player = response.data.data;
-        const servidores = response.data.included || [];
+        const included = response.data.included || [];
 
         const nombreJugador = player.attributes.name || "Desconocido";
+
+        // Mapear los servidores del array included
+        const servidoresMap = new Map();
+        for (const item of included) {
+            if (item.type === "server") {
+                servidoresMap.set(item.id, item);
+            }
+        }
 
         let segundosTotales = 0;
         let listaServidores = [];
         const servidoresContados = new Set();
 
-        // Buscamos si el jugador tiene servidores en las relaciones o en los datos del jugador
-        for (const servidor of servidores) {
-            if (servidor.type !== "server") continue;
+        for (const item of included) {
+            if (item.type === "server") {
+                const servidorId = item.id;
+                if (servidoresContados.has(servidorId)) continue;
+                servidoresContados.add(servidorId);
 
-            const servidorId = servidor.id;
+                const tiempo = item.meta?.timePlayed || 0;
+                segundosTotales += tiempo;
 
-            if (servidoresContados.has(servidorId)) {
-                continue;
+                listaServidores.push({
+                    id: servidorId,
+                    nombre: item.attributes.name,
+                    segundos: tiempo,
+                    horas: (tiempo / 3600).toFixed(2)
+                });
             }
-
-            servidoresContados.add(servidorId);
-
-            const tiempo = servidor.meta?.timePlayed || 0;
-            segundosTotales += tiempo;
-
-            // Extraemos la fecha de última vez visto si existe
-            const lastSeen = servidor.attributes?.updatedAt || servidor.meta?.lastSeen || "";
-
-            listaServidores.push({
-                id: servidorId,
-                nombre: servidor.attributes.name,
-                segundos: tiempo,
-                horas: (tiempo / 3600).toFixed(2),
-                lastSeen: lastSeen
-            });
         }
 
-        // Ordenamos los servidores para que el más reciente/actual quede primero
-        // BattleMetrics suele incluir un campo de metadatos o fecha en las relaciones
-        listaServidores.sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
-
-        const primerServidorActual = listaServidores.length > 0 ? listaServidores[0].nombre : "Ninguno / Desconectado";
+        // Comprobamos si está en una sesión activa (Current Server)
+        let estadoServidorActual = "🔴 Offline / Desconectado de Rust";
+        
+        const relationships = player.relationships?.server?.data;
+        if (relationships) {
+            const relArray = Array.isArray(relationships) ? relationships : [relationships];
+            if (relArray.length > 0 && relArray[0].id) {
+                const currentServerId = relArray[0].id;
+                const servidorActualObj = servidoresMap.get(currentServerId);
+                if (servidorActualObj) {
+                    estadoServidorActual = servidorActualObj.attributes.name;
+                }
+            }
+        }
 
         const horasTotales = (segundosTotales / 3600).toFixed(2);
 
         return {
             nombre: nombreJugador,
             totalHoras: horasTotales,
-            primerServidor: primerServidorActual, // Este será ahora el verdadero primer servidor
+            primerServidor: estadoServidorActual,
             servidores: {
                 rust: {
                     horas: horasTotales,
@@ -82,7 +90,7 @@ async function getBattleMetricsHours(playerId) {
         return {
             nombre: "Desconocido",
             totalHoras: "0.00",
-            primerServidor: "Desconocido",
+            primerServidor: "🔴 Offline / Desconectado de Rust",
             servidores: {
                 rust: {
                     horas: "0.00",
