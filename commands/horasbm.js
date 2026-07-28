@@ -81,6 +81,12 @@ module.exports = {
                         value: `\`${ultimoWipe}\``,
                         inline: false
                     },
+                    // Movido arriba, en grande (inline: false) para que destaque a la izquierda
+                    {
+                        name: "⏱️ Horas battlemetrics",
+                        value: `### \`${totalHoras.toFixed(2)}h\``,
+                        inline: false
+                    },
                     {
                         name: "⏱️ Horas desde el Wipe",
                         value: `\`${horasDesdeWipe}h\``,
@@ -89,11 +95,6 @@ module.exports = {
                     {
                         name: "🖥️ Servidores Jugados",
                         value: `\`${servidoresEncontrados}\``,
-                        inline: true
-                    },
-                    {
-                        name: "⏱️ Horas battlemetrics",
-                        value: `\`${totalHoras.toFixed(2)}h\``,
                         inline: true
                     }
                 )
