@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 
 module.exports = { 
-  data: new SlashCommandBuilder()
+    data: new SlashCommandBuilder()
         .setName("horas")
         .setDescription("Obtiene las horas de BattleMetrics buscando al usuario de Steam en el servidor")
         .addStringOption(option => 
@@ -14,7 +14,7 @@ module.exports = {
                 .setRequired(true)
         ),
  
-  async execute(interaction) { 
+    async execute(interaction) { 
         const steamId = interaction.options.getString("steamid").trim(); 
         await interaction.deferReply();
 
@@ -70,7 +70,7 @@ module.exports = {
                         { name: "🖥️ Estado", value: "🔴 Desconectado", inline: true },
                         { name: "🌍 País", value: paisTexto, inline: true },
                         { name: "🛡️ Estado de Baneos", value: vacTexto, inline: true },
-                        { name: "\u200b", value: "\u200b", inline: true } // Campo invisible para cerrar los 3 espacios de la fila
+                        { name: "\u200b", value: "\u200b", inline: true }
                     )
                     .setTimestamp()
                     .setFooter({ text: "RustLogix" });
@@ -82,7 +82,7 @@ module.exports = {
                 return await interaction.editReply({ embeds: [embedOffline] });
             }
 
-            // 4. Si SÍ ESTÁ ONLINE: Obtener datos de BattleMetrics
+            // 4. Si SÍ ESTÁ ONLINE: Obtener datos detallados de BattleMetrics
             const datosFinales = await getBattleMetricsPlayerStatus(jugadorBM.id); 
             if (!datosFinales) {
                 return await interaction.editReply("❌ Error al obtener datos detallados de BattleMetrics."); 
@@ -102,6 +102,9 @@ module.exports = {
                 ? datosFinales.historialNombres.slice(0, 3).join(", ") 
                 : "No disponible";
 
+            const ultimoWipe = datosFinales.ultimoWipe || "Desconocido";
+            const horasDesdeWipe = datosFinales.horasDesdeWipe || "0.00";
+
             // 6. Responder en formato Embed cuando está online
             const embedOnline = new EmbedBuilder()
                 .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
@@ -111,12 +114,13 @@ module.exports = {
                     { name: "🆔 BattleMetrics ID", value: `||[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})||`, inline: true },
                     { name: "🆔 Steam ID", value: `||[${steamId}](https://steamcommunity.com/profiles/${steamId})||`, inline: true },
                     { name: "⏱️ Sesión actual", value: `${datosFinales.jugando}`, inline: true },
+                    { name: "🛠️ Último Wipe", value: `\`${ultimoWipe}\``, inline: false },
+                    { name: "⏱️ Horas desde el Wipe", value: `\`${horasDesdeWipe}h\``, inline: true },
                     { name: "📈 Horas totales (BM)", value: `${datosFinales.horasTotalesBM}h`, inline: true },
                     { name: "📊 Horas Rust (Steam)", value: horasSteamTexto, inline: true },
                     { name: "⚖️ Diferencia de horas", value: diferenciaTexto, inline: true },
                     { name: "🌍 País", value: paisTexto, inline: true },
                     { name: "🛡️ Estado de Baneos", value: vacTexto, inline: true },
-                    { name: "\u200b", value: "\u200b", inline: true }, // Rellena el 3er hueco para alinear perfecto
                     { name: "📝 Historial de nombres", value: historialTexto, inline: false }
                 )
                 .setTimestamp()

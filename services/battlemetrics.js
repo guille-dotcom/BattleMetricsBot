@@ -33,7 +33,7 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
     }
 }
 
-// 2. Obtener estado, sesión actual, servidor, horas totales e historial de nombres
+// 2. Obtener estado, sesión actual, servidor, horas totales, historial de nombres, último wipe y horas desde el wipe
 async function getBattleMetricsPlayerStatus(playerId) {
     try {
         const token = process.env.BATTLEMETRICS_TOKEN;
@@ -44,12 +44,12 @@ async function getBattleMetricsPlayerStatus(playerId) {
             headers["Authorization"] = `Bearer ${token}`;
         }
 
-        // Peticiones paralelas: Perfil con servidores e identifiers (para el historial de nombres), más el Historial de Sesiones
+        // Peticiones paralelas: Perfil con servidores e identifiers, más el Historial de Sesiones (traemos más páginas/registros para calcular bien el wipe)
         const [playerRes, sessionRes] = await Promise.all([
             axios.get(`https://api.battlemetrics.com/players/${playerId}?include=server,identifier`, { headers }),
             axios.get(`https://api.battlemetrics.com/players/${playerId}/relationships/sessions`, { 
                 headers, 
-                params: { "page[size]": 10 } 
+                params: { "page[size]": 50 } 
             }).catch(() => null)
         ]);
 
@@ -60,10 +60,8 @@ async function getBattleMetricsPlayerStatus(playerId) {
         let segundosTotales = 0;
         const servidoresContados = new Set();
         let nombreServidorActual = "Desconocido";
+        let activeServerId = player.relationships?.server?.data?.id;
         const historialNombresSet = new Set();
-
-        // Obtener el ID del servidor actual directamente desde la relación del jugador en BattleMetrics
-        const activeServerId = player.relationships?.server?.data?.id;
 
         for (const item of incluidos) {
             // Procesar Servidores y Horas
@@ -110,6 +108,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
             if (nombreServidorActual === "Desconocido") {
                 const sessionServerId = sesionActiva.relationships?.server?.data?.id;
                 if (sessionServerId) {
+                    activeServerId = sessionServerId; // Aseguramos el ID para los wipes
                     const servidorSesion = incluidos.find(s => s.type === "server" && s.id === sessionServerId);
                     if (servidorSesion) {
                         nombreServidorActual = servidorSesion.attributes?.name || "Desconocido";
@@ -118,7 +117,67 @@ async function getBattleMetricsPlayerStatus(playerId) {
             }
         }
 
-        // Convertir el Set de nombres a un Array limpio (excluyendo el nombre actual si prefieres, o dejándolos todos)
+        // --- CÁLCULO DE ÚLTIMO WIPE Y HORAS DESDE EL WIPE ---
+        let ultimoWipeServidor = "Desconocido";
+        let horasDesdeWipe = "0.00";
+        let rawWipeDate = null;
+
+        if (activeServerId) {
+            try {
+                const serverResponse = await axios.get(
+                    `https://api.battlemetrics.com/servers/${activeServerId}`,
+                    { headers }
+                );
+
+                const serverAttributes = serverResponse.data.data.attributes;
+                const details = serverAttributes.details || {};
+                rawWipeDate = details.rust_last_wipe || details.rust_lastWipe || details.lastWipe || null;
+
+                if (rawWipeDate) {
+                    const fechaWipe = new Date(rawWipeDate);
+                    if (!isNaN(fechaWipe.getTime())) {
+                        ultimoWipeServidor = fechaWipe.toLocaleDateString("es-ES", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                        });
+                    }
+                }
+            } catch (err) {
+                console.log("No se pudieron obtener los detalles del servidor actual:", err.message);
+            }
+
+            if (rawWipeDate) {
+                try {
+                    const wipeTimeObj = new Date(rawWipeDate);
+                    let segundosDesdeWipe = 0;
+
+                    for (const session of sesiones) {
+                        const relServer = session.relationships?.server?.data;
+                        if (!relServer || relServer.id !== activeServerId) continue;
+
+                        const attributes = session.attributes || {};
+                        const start = new Date(attributes.start);
+                        const stop = attributes.stop ? new Date(attributes.stop) : new Date();
+
+                        if (stop >= wipeTimeObj) {
+                            const effectiveStart = start < wipeTimeObj ? wipeTimeObj : start;
+                            const diffSeconds = (stop - effectiveStart) / 1000;
+                            if (diffSeconds > 0) {
+                                segundosDesdeWipe += diffSeconds;
+                            }
+                        }
+                    }
+
+                    horasDesdeWipe = (segundosDesdeWipe / 3600).toFixed(2);
+                } catch (sessionErr) {
+                    console.log("No se pudieron calcular las horas desde el wipe:", sessionErr.message);
+                }
+            }
+        }
+
         const historialNombres = Array.from(historialNombresSet);
 
         return {
@@ -128,6 +187,8 @@ async function getBattleMetricsPlayerStatus(playerId) {
             jugando: tiempoJugando,
             horasTotalesBM: horasTotalesCalculadas,
             server: nombreServidorActual,
+            ultimoWipe: ultimoWipeServidor,
+            horasDesdeWipe: horasDesdeWipe,
             historialNombres: historialNombres
         };
 
