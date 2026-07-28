@@ -35,7 +35,6 @@ async function getBattleMetricsHours(playerId) {
                 const tiempo = item.meta?.timePlayed || 0;
                 segundosTotales += tiempo;
 
-                // Capturamos la fecha de la última vez visto en este servidor
                 const lastSeen = item.meta?.lastSeen || item.attributes?.updatedAt || "";
 
                 listaServidores.push({
@@ -48,17 +47,26 @@ async function getBattleMetricsHours(playerId) {
             }
         }
 
-        // Ordenamos los servidores por la fecha más reciente (el que tenga actividad más actual primero)
+        // Ordenamos los servidores por la fecha más reciente
         listaServidores.sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
 
-        // Verificamos si el más reciente tiene actividad reciente (por ejemplo, en las últimas 2 horas) o cogemos el primero de la lista
         let estadoServidorActual = "🔴 Offline / Desconectado de Rust";
-        
+
         if (listaServidores.length > 0) {
             const primerServidor = listaServidores[0];
-            // Si el servidor superior tiene un lastSeen válido, lo mostramos
-            if (primerServidor.nombre) {
-                estadoServidorActual = primerServidor.nombre;
+            
+            if (primerServidor.lastSeen) {
+                const fechaLastSeen = new Date(primerServidor.lastSeen);
+                const ahora = new Date();
+                
+                // Diferencia en minutos entre la hora actual y la última vez que se le vio en ese servidor
+                const diferenciaMinutos = (ahora - fechaLastSeen) / (1000 * 60);
+
+                // Si fue visto hace menos de 10 minutos, consideraremos que está online en ese servidor
+                // (puedes ajustar este margen si lo ves necesario)
+                if (diferenciaMinutos <= 10) {
+                    estadoServidorActual = primerServidor.nombre;
+                }
             }
         }
 
