@@ -25,7 +25,7 @@ async function getBattleMetricsHours(playerId) {
         let segundosTotales = 0;
         let listaServidores = [];
         const servidoresContados = new Set();
-        let ultimoWipeServidor = "Desconocido";
+        let servidorActualId = null;
 
         for (const item of included) {
             if (item.type === "server") {
@@ -37,20 +37,13 @@ async function getBattleMetricsHours(playerId) {
                 segundosTotales += tiempo;
 
                 const lastSeen = item.meta?.lastSeen || item.attributes?.updatedAt || "";
-                
-                // Inspeccionamos los detalles del servidor
-                const details = item.attributes?.details || {};
-                
-                // Buscamos en todas las posibles variantes que usa BattleMetrics para el wipe
-                const rawWipe = details.rust_lastWipe || details.rustLastWipe || details.lastWipe || details.wipe || null;
 
                 listaServidores.push({
                     id: servidorId,
                     nombre: item.attributes.name,
                     segundos: tiempo,
                     horas: (tiempo / 3600).toFixed(2),
-                    lastSeen: lastSeen,
-                    rustWipe: rawWipe
+                    lastSeen: lastSeen
                 });
             }
         }
@@ -59,25 +52,47 @@ async function getBattleMetricsHours(playerId) {
         listaServidores.sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
 
         let estadoServidorActual = "🔴 Offline / Desconectado de Rust";
+        let ultimoWipeServidor = "Desconocido";
 
         if (listaServidores.length > 0 && listaServidores[0].nombre) {
             const servidorPrincipal = listaServidores[0];
             estadoServidorActual = servidorPrincipal.nombre;
-            
-            console.log("DETALLES DEL SERVIDOR ACTUAL:", servidorPrincipal.nombre);
-            console.log("WIPE ENCONTRADO (RAW):", servidorPrincipal.rustWipe);
+            servidorActualId = servidorPrincipal.id;
 
-            if (servidorPrincipal.rustWipe) {
-                const fechaWipe = new Date(servidorPrincipal.rustWipe);
-                if (!isNaN(fechaWipe.getTime())) {
-                    ultimoWipeServidor = fechaWipe.toLocaleDateString("es-ES", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit"
-                    });
+            // Consultamos los detalles específicos de ese servidor para obtener el wipe
+            try {
+                console.log(`CONSULTANDO DETALLES DEL SERVIDOR ID: ${servidorActualId}...`);
+                const serverResponse = await axios.get(
+                    `https://api.battlemetrics.com/servers/${servidorActualId}`,
+                    {
+                        headers: {
+                            "Authorization": `Bearer ${token}`,
+                            "Content-Type": "application/json"
+                        }
+                    }
+                );
+
+                const serverAttributes = serverResponse.data.data.attributes;
+                const details = serverAttributes.details || {};
+                
+                console.log("DETAILS DEL SERVIDOR:", details);
+
+                const rawWipe = details.rust_lastWipe || details.lastWipe || details.wipe || details.rustLastWipe || null;
+
+                if (rawWipe) {
+                    const fechaWipe = new Date(rawWipe);
+                    if (!isNaN(fechaWipe.getTime())) {
+                        ultimoWipeServidor = fechaWipe.toLocaleDateString("es-ES", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                        });
+                    }
                 }
+            } catch (err) {
+                console.log("No se pudieron obtener los detalles específicos del servidor:", err.message);
             }
         }
 
