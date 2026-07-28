@@ -52,22 +52,9 @@ async function getBattleMetricsHours(playerId) {
 
         let estadoServidorActual = "🔴 Offline / Desconectado de Rust";
 
-        if (listaServidores.length > 0) {
-            const primerServidor = listaServidores[0];
-            
-            if (primerServidor.lastSeen) {
-                const fechaLastSeen = new Date(primerServidor.lastSeen);
-                const ahora = new Date();
-                
-                // Diferencia en minutos entre la hora actual y la última vez que se le vio en ese servidor
-                const diferenciaMinutos = (ahora - fechaLastSeen) / (1000 * 60);
-
-                // Si fue visto hace menos de 10 minutos, consideraremos que está online en ese servidor
-                // (puedes ajustar este margen si lo ves necesario)
-                if (diferenciaMinutos <= 10) {
-                    estadoServidorActual = primerServidor.nombre;
-                }
-            }
+        // Si hay servidores en la lista, cogemos el más reciente de forma directa
+        if (listaServidores.length > 0 && listaServidores[0].nombre) {
+            estadoServidorActual = listaServidores[0].nombre;
         }
 
         const horasTotales = (segundosTotales / 3600).toFixed(2);
