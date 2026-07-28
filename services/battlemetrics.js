@@ -44,7 +44,6 @@ async function getBattleMetricsPlayerStatus(playerId) {
             headers["Authorization"] = `Bearer ${token}`;
         }
 
-        // Peticiones paralelas: Perfil con servidores e identifiers, más el Historial de Sesiones (traemos más páginas/registros para calcular bien el wipe)
         const [playerRes, sessionRes] = await Promise.all([
             axios.get(`https://api.battlemetrics.com/players/${playerId}?include=server,identifier`, { headers }),
             axios.get(`https://api.battlemetrics.com/players/${playerId}/relationships/sessions`, { 
@@ -64,7 +63,6 @@ async function getBattleMetricsPlayerStatus(playerId) {
         const historialNombresSet = new Set();
 
         for (const item of incluidos) {
-            // Procesar Servidores y Horas
             if (item.type === "server") {
                 const servidorId = item.id;
                 
@@ -79,7 +77,6 @@ async function getBattleMetricsPlayerStatus(playerId) {
                 segundosTotales += tiempo;
             }
 
-            // Procesar Identificadores / Historial de Nombres en Steam
             if (item.type === "identifier" && item.attributes?.type === "steamID") {
                 const nombreSteam = item.attributes?.metadata?.name;
                 if (nombreSteam) {
@@ -90,7 +87,6 @@ async function getBattleMetricsPlayerStatus(playerId) {
 
         const horasTotalesCalculadas = Math.floor(segundosTotales / 3600);
 
-        // --- CÁLCULO DE TIEMPO DE LA SESIÓN ACTUAL ---
         let online = false;
         let tiempoJugando = "0m";
         const sesiones = sessionRes?.data?.data || [];
@@ -108,7 +104,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
             if (nombreServidorActual === "Desconocido") {
                 const sessionServerId = sesionActiva.relationships?.server?.data?.id;
                 if (sessionServerId) {
-                    activeServerId = sessionServerId; // Aseguramos el ID para los wipes
+                    activeServerId = sessionServerId;
                     const servidorSesion = incluidos.find(s => s.type === "server" && s.id === sessionServerId);
                     if (servidorSesion) {
                         nombreServidorActual = servidorSesion.attributes?.name || "Desconocido";
@@ -117,7 +113,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
             }
         }
 
-        // --- CÁLCULO DE ÚLTIMO WIPE Y HORAS DESDE EL WIPE ---
+        // --- CÁLCULO INTELIGENTE DE ÚLTIMO WIPE ---
         let ultimoWipeServidor = "Desconocido";
         let horasDesdeWipe = "0.00";
         let rawWipeDate = null;
@@ -131,7 +127,25 @@ async function getBattleMetricsPlayerStatus(playerId) {
 
                 const serverAttributes = serverResponse.data.data.attributes;
                 const details = serverAttributes.details || {};
+                
+                // 1. Intentar obtener la fecha de wipe estándar de Rust
                 rawWipeDate = details.rust_last_wipe || details.rust_lastWipe || details.lastWipe || null;
+
+                // 2. Si no existe o es muy antigua (ej. más de 30 días en servidores que wipend diario/semanal), usamos la fecha de actualización/reinicio del servidor en BM como respaldo exacto
+                if (rawWipeDate) {
+                    const parsedWipe = new Date(rawWipeDate);
+                    const now = new Date();
+                    const diffDays = (now - parsedWipe) / (1000 * 60 * 60 * 24);
+                    
+                    if (isNaN(parsedWipe.getTime()) || diffDays > 31) {
+                        rawWipeDate = null; // Descartar fecha errónea o colgada
+                    }
+                }
+
+                if (!rawWipeDate) {
+                    // Usamos el campo de estado/reinicio del servidor que BM actualiza al hacer wipe
+                    rawWipeDate = serverAttributes.details?.rust_last_wipe || serverAttributes.updatedAt;
+                }
 
                 if (rawWipeDate) {
                     const fechaWipe = new Date(rawWipeDate);
