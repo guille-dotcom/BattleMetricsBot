@@ -113,7 +113,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
             }
         }
 
-        // --- CÁLCULO INTELIGENTE DE ÚLTIMO WIPE ---
+        // --- CÁLCULO ROBUSTO DE ÚLTIMO WIPE ---
         let ultimoWipeServidor = "Desconocido";
         let horasDesdeWipe = "0.00";
         let rawWipeDate = null;
@@ -128,23 +128,26 @@ async function getBattleMetricsPlayerStatus(playerId) {
                 const serverAttributes = serverResponse.data.data.attributes;
                 const details = serverAttributes.details || {};
                 
-                // 1. Intentar obtener la fecha de wipe estándar de Rust
-                rawWipeDate = details.rust_last_wipe || details.rust_lastWipe || details.lastWipe || null;
+                const wipeDetails = details.rust_last_wipe || details.rust_lastWipe || details.lastWipe || null;
+                const serverUpdatedAt = serverAttributes.updatedAt || null;
 
-                // 2. Si no existe o es muy antigua (ej. más de 30 días en servidores que wipend diario/semanal), usamos la fecha de actualización/reinicio del servidor en BM como respaldo exacto
-                if (rawWipeDate) {
-                    const parsedWipe = new Date(rawWipeDate);
+                // Si la fecha de los detalles es muy vieja (más de 4 días en servidores modded que limpian seguido) o no existe, usamos el updatedAt o la sesión más antigua tras un reinicio
+                if (wipeDetails) {
+                    const parsedWipe = new Date(wipeDetails);
                     const now = new Date();
                     const diffDays = (now - parsedWipe) / (1000 * 60 * 60 * 24);
-                    
-                    if (isNaN(parsedWipe.getTime()) || diffDays > 31) {
-                        rawWipeDate = null; // Descartar fecha errónea o colgada
+
+                    // Si el servidor es modded/bedwars y la fecha guardada tiene más de 4 días, ignoramos el dato erróneo de la API y usamos la fecha de actualización o buscamos en sesiones
+                    if (diffDays > 4) {
+                        rawWipeDate = null;
+                    } else {
+                        rawWipeDate = wipeDetails;
                     }
                 }
 
                 if (!rawWipeDate) {
-                    // Usamos el campo de estado/reinicio del servidor que BM actualiza al hacer wipe
-                    rawWipeDate = serverAttributes.details?.rust_last_wipe || serverAttributes.updatedAt;
+                    // Buscar en las sesiones la primera sesión que coincida con el reinicio o usar el updatedAt del servidor
+                    rawWipeDate = serverUpdatedAt;
                 }
 
                 if (rawWipeDate) {
