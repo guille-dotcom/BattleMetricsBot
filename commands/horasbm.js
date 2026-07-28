@@ -83,7 +83,7 @@ module.exports = {
                     },
                     {
                         name: "⏱️ Horas battlemetrics",
-                        value: `### ${totalHoras.toFixed(2)}h`,
+                        value: `**> ${totalHoras.toFixed(2)}h**`,
                         inline: false
                     },
                     {
