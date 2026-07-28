@@ -60,7 +60,6 @@ module.exports = {
                 servidoresEncontrados = 0;
             }
 
-            // Diseño limpio y estructurado
             const embed = new EmbedBuilder()
                 .setTitle("🎮 Perfil BattleMetrics")
                 .setColor("#57F287")
@@ -81,7 +80,7 @@ module.exports = {
                         inline: true
                     },
                     {
-                        name: "⏱️ Horas Totales",
+                        name: "⏱️ Horas battlemetrics",
                         value: `\`${totalHoras.toFixed(2)}h\``,
                         inline: true
                     }
