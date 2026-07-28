@@ -22,14 +22,6 @@ async function getBattleMetricsHours(playerId) {
 
         const nombreJugador = player.attributes.name || "Desconocido";
 
-        // Mapear los servidores del array included
-        const servidoresMap = new Map();
-        for (const item of included) {
-            if (item.type === "server") {
-                servidoresMap.set(item.id, item);
-            }
-        }
-
         let segundosTotales = 0;
         let listaServidores = [];
         const servidoresContados = new Set();
@@ -43,27 +35,30 @@ async function getBattleMetricsHours(playerId) {
                 const tiempo = item.meta?.timePlayed || 0;
                 segundosTotales += tiempo;
 
+                // Capturamos la fecha de la última vez visto en este servidor
+                const lastSeen = item.meta?.lastSeen || item.attributes?.updatedAt || "";
+
                 listaServidores.push({
                     id: servidorId,
                     nombre: item.attributes.name,
                     segundos: tiempo,
-                    horas: (tiempo / 3600).toFixed(2)
+                    horas: (tiempo / 3600).toFixed(2),
+                    lastSeen: lastSeen
                 });
             }
         }
 
-        // Comprobamos si está en una sesión activa (Current Server)
+        // Ordenamos los servidores por la fecha más reciente (el que tenga actividad más actual primero)
+        listaServidores.sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
+
+        // Verificamos si el más reciente tiene actividad reciente (por ejemplo, en las últimas 2 horas) o cogemos el primero de la lista
         let estadoServidorActual = "🔴 Offline / Desconectado de Rust";
         
-        const relationships = player.relationships?.server?.data;
-        if (relationships) {
-            const relArray = Array.isArray(relationships) ? relationships : [relationships];
-            if (relArray.length > 0 && relArray[0].id) {
-                const currentServerId = relArray[0].id;
-                const servidorActualObj = servidoresMap.get(currentServerId);
-                if (servidorActualObj) {
-                    estadoServidorActual = servidorActualObj.attributes.name;
-                }
+        if (listaServidores.length > 0) {
+            const primerServidor = listaServidores[0];
+            // Si el servidor superior tiene un lastSeen válido, lo mostramos
+            if (primerServidor.nombre) {
+                estadoServidorActual = primerServidor.nombre;
             }
         }
 
