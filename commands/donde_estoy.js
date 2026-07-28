@@ -11,9 +11,12 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        const MI_ID = "585618134447161373";
+        const USUARIOS_AUTORIZADOS = [
+            "585618134447161373",
+            "73780201913896993"
+        ];
 
-        if (interaction.user.id !== MI_ID) {
+        if (!USUARIOS_AUTORIZADOS.includes(interaction.user.id)) {
             return interaction.reply({
                 content: "❌ No tienes permiso para usar este comando.",
                 ephemeral: true
