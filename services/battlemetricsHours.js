@@ -1,216 +1,95 @@
 require("dotenv").config();
-
 const axios = require("axios");
 
-
 async function getBattleMetricsHours(playerId) {
-
     try {
-
         console.log("CONSULTANDO DATOS DEL JUGADOR...");
-
 
         const token = process.env.BATTLEMETRICS_TOKEN;
 
-
         const response = await axios.get(
-
             `https://api.battlemetrics.com/players/${playerId}?include=server`,
-
             {
                 headers: {
                     "Authorization": `Bearer ${token}`,
                     "Content-Type": "application/json"
                 }
             }
-
         );
-
 
         const player = response.data.data;
-
         const servidores = response.data.included || [];
 
-
-        const nombreJugador =
-            player.attributes.name || "Desconocido";
-
-
-        console.log(
-            "JUGADOR:",
-            nombreJugador
-        );
-
-
-        console.log(
-            "SERVIDORES ENCONTRADOS:",
-            servidores.length
-        );
-
+        const nombreJugador = player.attributes.name || "Desconocido";
 
         let segundosTotales = 0;
-
         let listaServidores = [];
-
-
-        // Evita sumar el mismo servidor más de una vez
         const servidoresContados = new Set();
-
+        let primerServidorActual = "Ninguno / Desconectado";
 
         for (const servidor of servidores) {
-
-
-            if (servidor.type !== "server")
-                continue;
-
+            if (servidor.type !== "server") continue;
 
             const servidorId = servidor.id;
 
-
-            if (servidoresContados.has(servidorId)) {
-
-                console.log(
-                    "SERVIDOR DUPLICADO IGNORADO:",
-                    servidor.attributes.name
-                );
-
-                continue;
-
+            // Guarda el primer servidor que aparece en el perfil
+            if (primerServidorActual === "Ninguno / Desconectado") {
+                primerServidorActual = servidor.attributes.name;
             }
 
+            if (servidoresContados.has(servidorId)) {
+                continue;
+            }
 
             servidoresContados.add(servidorId);
 
-
-            const tiempo =
-                servidor.meta?.timePlayed || 0;
-
-
+            const tiempo = servidor.meta?.timePlayed || 0;
             segundosTotales += tiempo;
 
-
             listaServidores.push({
-
-                id:
-                    servidorId,
-
-                nombre:
-                    servidor.attributes.name,
-
-                segundos:
-                    tiempo,
-
-                horas:
-                    (tiempo / 3600).toFixed(2)
-
+                id: servidorId,
+                nombre: servidor.attributes.name,
+                segundos: tiempo,
+                horas: (tiempo / 3600).toFixed(2)
             });
-
-
         }
 
-
-        const horasTotales =
-            (segundosTotales / 3600).toFixed(2);
-
-
-        console.log(
-            "SERVIDORES ÚNICOS:",
-            listaServidores.length
-        );
-
-
-        console.log(
-            "SEGUNDOS TOTALES:",
-            segundosTotales
-        );
-
-
-        console.log(
-            "HORAS TOTALES:",
-            horasTotales
-        );
-
+        const horasTotales = (segundosTotales / 3600).toFixed(2);
 
         return {
-
-            // Nombre del perfil BattleMetrics
-            nombre:
-                nombreJugador,
-
-
-            totalHoras:
-                horasTotales,
-
-
+            nombre: nombreJugador,
+            totalHoras: horasTotales,
+            primerServidor: primerServidorActual,
             servidores: {
-
                 rust: {
-
-                    horas:
-                        horasTotales,
-
+                    horas: horasTotales,
                     datos: {
-
-                        servidoresEncontrados:
-                            listaServidores.length,
-
-                        lista:
-                            listaServidores
-
+                        servidoresEncontrados: listaServidores.length,
+                        lista: listaServidores
                     }
-
                 }
-
             }
-
-
         };
 
-
-    } catch(error) {
-
-
-        console.log(
-            "ERROR API:",
-            error.response?.data || error.message
-        );
-
+    } catch (error) {
+        console.log("ERROR API:", error.response?.data || error.message);
 
         return {
-
-            nombre:
-                "Desconocido",
-
-            totalHoras:
-                "0.00",
-
+            nombre: "Desconocido",
+            totalHoras: "0.00",
+            primerServidor: "Desconocido",
             servidores: {
-
                 rust: {
-
-                    horas:
-                        "0.00",
-
+                    horas: "0.00",
                     datos: {
-
-                        servidoresEncontrados:
-                            0,
-
-                        lista:
-                            []
-
+                        servidoresEncontrados: 0,
+                        lista: []
                     }
-
                 }
-
             }
-
         };
-
     }
-
 }
-
 
 module.exports = {
     getBattleMetricsHours
