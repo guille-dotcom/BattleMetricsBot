@@ -59,7 +59,6 @@ async function getBattleMetricsHours(playerId) {
             estadoServidorActual = servidorPrincipal.nombre;
             servidorActualId = servidorPrincipal.id;
 
-            // Consultamos los detalles específicos de ese servidor para obtener el wipe
             try {
                 console.log(`CONSULTANDO DETALLES DEL SERVIDOR ID: ${servidorActualId}...`);
                 const serverResponse = await axios.get(
@@ -75,9 +74,8 @@ async function getBattleMetricsHours(playerId) {
                 const serverAttributes = serverResponse.data.data.attributes;
                 const details = serverAttributes.details || {};
                 
-                console.log("DETAILS DEL SERVIDOR:", details);
-
-                const rawWipe = details.rust_lastWipe || details.lastWipe || details.wipe || details.rustLastWipe || null;
+                // Extraemos exactamente rust_last_wipe que viene en los detalles
+                const rawWipe = details.rust_last_wipe || details.rust_lastWipe || details.lastWipe || null;
 
                 if (rawWipe) {
                     const fechaWipe = new Date(rawWipe);
