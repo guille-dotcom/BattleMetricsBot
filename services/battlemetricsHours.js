@@ -79,21 +79,8 @@ async function getBattleMetricsHours(playerId) {
                 const wipeDetails = details.rust_last_wipe || details.rust_lastWipe || details.lastWipe || null;
                 const serverUpdatedAt = serverAttributes.updatedAt || null;
 
-                // Validación robusta: Si el wipe guardado en los detalles tiene más de 2 días, lo descartamos
-                if (wipeDetails) {
-                    const parsedWipe = new Date(wipeDetails);
-                    const now = new Date();
-                    const diffDays = (now - parsedWipe) / (1000 * 60 * 60 * 24);
-
-                    if (!isNaN(parsedWipe.getTime()) && diffDays <= 2) {
-                        rawWipeDate = wipeDetails;
-                    }
-                }
-
-                // Si no hay una fecha reciente en details, usamos obligatoriamente la fecha de actualización del servidor (updatedAt)
-                if (!rawWipeDate) {
-                    rawWipeDate = serverUpdatedAt;
-                }
+                // Usamos directamente el campo oficial de wipe si existe; si no, recurrimos al updatedAt del servidor
+                rawWipeDate = wipeDetails || serverUpdatedAt;
 
                 if (rawWipeDate) {
                     const fechaWipe = new Date(rawWipeDate);
