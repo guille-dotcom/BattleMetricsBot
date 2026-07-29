@@ -2,11 +2,9 @@ const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
-const { getBattleMetricsHours } = require("../services/battlemetricsHours");
 
 const configPath = path.join(__dirname, "..", "data", "config.json");
 
-// Función auxiliar para formatear horas
 function formatHoursToHoursMinutes(decimalHours) {
     const totalMinutes = Math.round(parseFloat(decimalHours) * 60);
     const hours = Math.floor(totalMinutes / 60);
@@ -21,7 +19,7 @@ function formatHoursToHoursMinutes(decimalHours) {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("ranking")
-        .setDescription("Ranking de jugadores con más horas desde el último wipe en el servidor"),
+        .setDescription("Ranking de jugadores con más horas desde el último wipe"),
 
     async execute(interaction) {
         await interaction.deferReply();
@@ -51,10 +49,9 @@ module.exports = {
                 "Content-Type": "application/json"
             };
 
-            console.log(`[RANKING WIPE] Obteniendo jugadores activos del servidor ${serverIdConfigurado}...`);
+            console.log(`[RANKING WIPE] Consultando servidor ${serverIdConfigurado}...`);
             const inicio = Date.now();
 
-            // Obtenemos las sesiones activas del servidor actual
             const response = await axios.get(
                 `https://api.battlemetrics.com/servers/${serverIdConfigurado}?include=session,player`,
                 { headers, timeout: 7000 }
@@ -62,56 +59,68 @@ module.exports = {
 
             console.log(`[RANKING WIPE] Respuesta de BM recibida en ${Date.now() - inicio}ms`);
 
+            const serverData = response.data.data;
+            const details = serverData.attributes?.details || {};
+            
+            // Extraer la fecha del último wipe del servidor
+            const lastWipeStr = details.rustLastWipe || details.wipeTime || serverData.attributes?.metadata?.rustLastWipe;
+            const fechaWipe = lastWipeStr ? new Date(lastWipeStr) : new Date(Date.now() - (3 * 24 * 60 * 60 * 1000)); // Respaldo de 3 días si no viene especificado
+
             const included = response.data.included || [];
             const playersMap = {};
-            const activePlayerIds = new Set();
+            const sessions = [];
 
             for (const item of included) {
                 if (item.type === "player") {
                     playersMap[item.id] = item.attributes?.name || "Desconocido";
                 }
-                if (item.type === "session" && !item.attributes?.stop) {
-                    const playerId = item.relationships?.player?.data?.id;
-                    if (playerId) activePlayerIds.add(playerId);
+                if (item.type === "session") {
+                    sessions.push(item);
                 }
             }
 
-            if (activePlayerIds.size === 0) {
-                return await interaction.editReply({
-                    content: "❌ No hay jugadores activos en este momento en el servidor para calcular el ranking."
+            const playerSeconds = {};
+            const ahora = new Date();
+
+            // Acumular el tiempo de todas las sesiones desde el wipe
+            for (const session of sessions) {
+                const playerId = session.relationships?.player?.data?.id;
+                if (!playerId) continue;
+
+                const sessionStart = new Date(session.attributes.start);
+                const sessionStop = session.attributes.stop ? new Date(session.attributes.stop) : ahora;
+
+                // Si la sesión terminó antes del wipe, la ignoramos
+                if (sessionStop < fechaWipe) continue;
+
+                // Recortar si empezó antes del wipe
+                const inicioEfectivo = sessionStart < fechaWipe ? fechaWipe : sessionStart;
+                const diffSegundos = (sessionStop - inicioEfectivo) / 1000;
+
+                if (diffSegundos > 0) {
+                    playerSeconds[playerId] = (playerSeconds[playerId] || 0) + diffSegundos;
+                }
+            }
+
+            const ranking = [];
+            for (const [playerId, segundos] of Object.entries(playerSeconds)) {
+                const horas = segundos / 3600;
+                ranking.push({
+                    id: playerId,
+                    name: playersMap[playerId] || "Desconocido",
+                    hoursDecimal: horas,
+                    formatted: formatHoursToHoursMinutes(horas)
                 });
             }
 
-            await interaction.editReply("⏱️ Calculando horas desde el último wipe para los jugadores activos...");
-
-            const rankingData = [];
-
-            // Consultamos las horas de cada jugador activo utilizando el mismo servicio de horasbm
-            for (const playerId of activePlayerIds) {
-                try {
-                    const data = await getBattleMetricsHours(playerId);
-                    const horasDecimal = parseFloat(data.horasDesdeWipe || 0);
-                    rankingData.log ? null : null; // Evitar warning
-                    
-                    rankingData.push({
-                        name: data.nombre || playersMap[playerId] || "Desconocido",
-                        id: playerId,
-                        hoursDecimal: horasDecimal,
-                        formatted: formatHoursToHoursMinutes(horasDecimal)
-                    });
-                } catch (err) {
-                    console.log(`No se pudieron obtener datos del jugador ${playerId}:`, err.message);
-                }
-            }
-
-            // Ordenar de mayor a menor según las horas desde el wipe
-            rankingData.sort((a, b) => b.hoursDecimal - a.hoursDecimal);
+            // Ordenar de mayor a menor tiempo desde el wipe
+            ranking.sort((a, b) => b.hoursDecimal - a.hoursDecimal);
 
             let text = "";
-            if (rankingData.length === 0) {
-                text = "No se pudieron calcular las horas de los jugadores.";
+            if (ranking.length === 0) {
+                text = "No hay registros de tiempo desde el último wipe.";
             } else {
-                rankingData.slice(0, 15).forEach((u, i) => {
+                ranking.slice(0, 15).forEach((u, i) => {
                     text += `**${i + 1}.** [${u.name}](https://www.battlemetrics.com/players/${u.id}) — \`${u.formatted}\`\n`;
                 });
             }
