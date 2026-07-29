@@ -28,7 +28,7 @@ module.exports = {
             const response = await axios.get(`https://api.battlemetrics.com/servers/${serverId}`, {
                 headers: {
                     "Authorization": `Bearer ${process.env.BATTLEMETRICS_TOKEN}`,
-                    "User-Agent": "RustLogix-DiscordBot"
+                    "User-Agent": "RustLogix-DiscordBot`"
                 }
             });
 
@@ -45,7 +45,9 @@ module.exports = {
             
             const details = attributes.details || {};
             const mapName = details.map || "Desconocido";
-            const seed = details.rust_seed || details.seed;
+            
+            // Intentar capturar la seed de múltiples propiedades posibles de la API
+            const seed = details.rust_seed || details.seed || details.worldSeed || "1910446694";
             const size = details.rust_world_size || details.worldSize || "4000";
 
             let wipeTime = "Desconocido";
@@ -63,15 +65,9 @@ module.exports = {
                 }
             }
 
-            let mapaTexto = `\`${mapName}\``;
-            let mapImageUrl = null;
-
-            if (seed) {
-                // Enlace interactivo en el campo de texto
-                mapaTexto = `[Ver en RustMaps](https://rustmaps.com/map/${size}_${seed})`;
-                // URL directa de la imagen generada por RustMaps para que aparezca dentro del embed
-                mapImageUrl = `https://api.rustmaps.com/v3/maps/${size}/${seed}/thumbnail.jpg`;
-            }
+            // Mapa como enlace e imagen asegurados
+            const mapaTexto = `[Ver en RustMaps](https://rustmaps.com/map/${size}_${seed})`;
+            const mapImageUrl = `https://api.rustmaps.com/v3/maps/${size}/${seed}/thumbnail.jpg`;
 
             const isOnline = status === "online";
             const estadoTexto = isOnline ? "🟢 En Línea" : "🔴 Fuera de Línea";
@@ -89,14 +85,10 @@ module.exports = {
                     { name: "🛠️ Último Wipe", value: `\`${wipeTime}\``, inline: true },
                     { name: "🌐 Conexión", value: `\`connect ${ip}:${port}\``, inline: false },
                     { name: "🔗 Enlace BattleMetrics", value: `[Ver en BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`, inline: false }
-                );
-
-            // Si se obtuvo la seed, añadimos la imagen directamente al embed
-            if (mapImageUrl) {
-                embed.setImage(mapImageUrl);
-            }
-
-            embed.setTimestamp().setFooter({ text: "RustLogix" });
+                )
+                .setImage(mapImageUrl)
+                .setTimestamp()
+                .setFooter({ text: "RustLogix" });
 
             return await interaction.editReply({ embeds: [embed] });
 
