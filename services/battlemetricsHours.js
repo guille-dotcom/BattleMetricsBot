@@ -1,5 +1,9 @@
 require("dotenv").config();
 const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
+
+const configPath = path.join(__dirname, "..", "..", "data", "config.json");
 
 async function getBattleMetricsHours(playerId, targetServerId = null) {
     try {
@@ -8,6 +12,24 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             "Authorization": `Bearer ${token}`,
             "Content-Type": "application/json"
         };
+
+        // Si no se pasa el servidor, intentar leerlo del config.json
+        if (!targetServerId) {
+            try {
+                let resolvedConfigPath = configPath;
+                if (!fs.existsSync(resolvedConfigPath)) {
+                    resolvedConfigPath = path.join(__dirname, "..", "data", "config.json");
+                }
+                if (fs.existsSync(resolvedConfigPath)) {
+                    const config = JSON.parse(fs.readFileSync(resolvedConfigPath, "utf-8"));
+                    if (config.battlemetricsServer) {
+                        targetServerId = config.battlemetricsServer;
+                    }
+                }
+            } catch (e) {
+                console.log("Error leyendo config en el servicio:", e.message);
+            }
+        }
 
         // 1. Obtener datos básicos del jugador
         const playerRes = await axios.get(
@@ -31,7 +53,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                     `https://api.battlemetrics.com/servers/${targetServerId}`,
                     { headers }
                 );
-                const serverData = serverResponse.data.data;
+                const serverData = responseData = serverResponse.data.data;
                 const details = serverData.attributes?.details || {};
                 
                 primerServidor = serverData.attributes?.name || "Desconocido";
@@ -40,7 +62,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                 let fechaWipe = lastWipeStr ? new Date(lastWipeStr) : null;
 
                 if (!fechaWipe || isNaN(fechaWipe.getTime()) || fechaWipe > new Date()) {
-                    fechaWipe = new Date(Date.now() - (4 * 24 * 60 * 60 * 1000)); // 4 días atrás por defecto
+                    fechaWipe = new Date(Date.now() - (4 * 24 * 60 * 60 * 1000));
                     fechaWipeFormateada = "No disponible (últimos 4 días)";
                 } else {
                     fechaWipeFormateada = fechaWipe.toLocaleString();
