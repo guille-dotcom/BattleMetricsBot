@@ -38,34 +38,45 @@ module.exports = {
                 "Content-Type": "application/json"
             };
 
-            // Consultar los jugadores incluidos en el servidor
+            console.log(`[RANKING] Consultando servidor ${serverIdConfigurado} en BattleMetrics...`);
+            const inicio = Date.now();
+
+            // Consultar las sesiones activas actuales del servidor
             const response = await axios.get(
-                `https://api.battlemetrics.com/servers/${serverIdConfigurado}?include=player`,
-                { headers }
+                `https://api.battlemetrics.com/servers/${serverIdConfigurado}?include=session,player`,
+                { headers, timeout: 7000 } // Timeout de seguridad de 7 segundos
             );
 
+            console.log(`[RANKING] Respuesta recibida en ${Date.now() - inicio}ms`);
+
             const included = response.data.included || [];
-            const ranking = [];
+            const playersMap = {};
+            const sessions = [];
 
             for (const item of included) {
                 if (item.type === "player") {
-                    const nombre = item.attributes?.name || "Desconocido";
-                    
-                    // BattleMetrics almacena el tiempo de juego de la sesión actual en el objeto relacional o metadatos
-                    // Si viene en el meta de la relación o atributos de playtime:
-                    const tiempoSegundos = item.meta?.timePlayed || item.attributes?.timePlayed || 0;
-                    
-                    // Si el tiempo viene en 0, intentamos ver si tiene estadísticas de tiempo total o de sesión
-                    let horas = tiempoSegundos / 3600;
-
-                    ranking.push({
-                        discord: nombre,
-                        hours: horas
-                    });
+                    playersMap[item.id] = item.attributes?.name || "Desconocido";
+                }
+                if (item.type === "session" && !item.attributes?.stop) {
+                    sessions.push(item);
                 }
             }
 
-            // Ordenar de mayor a menor tiempo
+            const ranking = [];
+
+            for (const session of sessions) {
+                const playerId = session.relationships?.player?.data?.id;
+                const playerName = playerId ? playersMap[playerId] : "Desconocido";
+                
+                const timePlayedSeconds = session.attributes?.time || session.meta?.timePlayed || 0;
+                const hours = timePlayedSeconds / 3600;
+
+                ranking.push({
+                    discord: playerName,
+                    hours: hours
+                });
+            }
+
             ranking.sort((a, b) => b.hours - a.hours);
 
             let text = "";
@@ -89,7 +100,7 @@ module.exports = {
         } catch (error) {
             console.log("ERROR API Ranking:", error.response?.data || error.message);
             return await interaction.editReply({ 
-                content: "❌ Hubo un error al obtener el ranking desde BattleMetrics." 
+                content: "❌ Hubo un error al obtener el ranking desde BattleMetrics (Timeout o fallo de API)." 
             });
         }
     }
