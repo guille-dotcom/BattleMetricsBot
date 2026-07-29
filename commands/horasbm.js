@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { getBattleMetricsHours } = require("../services/battlemetricsHours.js");
 
 function formatHoursToHoursMinutes(decimalHours) {
@@ -49,7 +49,7 @@ module.exports = {
                 .setColor(datos.online ? "#57F287" : "#ED4245")
                 .addFields(
                     { name: "👤 Jugador", value: `[${datos.nombre}](https://www.battlemetrics.com/players/${datos.id})`, inline: false },
-                    { name: tituloServidor, value: `||${datos.servidor}||`, inline: false },
+                    { name: tituloServidor, value: datos.servidor, inline: false }, // <-- Aquí se quitó el spoiler ||
                     { name: "🛠️ Último Wipe", value: `\`${datos.ultimoWipe}\``, inline: true },
                     { name: "⏱️ Sesión Actual", value: datos.online ? datos.jugando : "🔴 Offline", inline: true },
                     { name: "📈 Horas battlemetrics", value: `${datos.totalHoras}h`, inline: true },

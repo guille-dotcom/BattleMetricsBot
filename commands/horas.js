@@ -71,7 +71,7 @@ module.exports = {
                     .setColor("#FF0000")
                     .setDescription(`⚠️ El jugador **no está online** actualmente en el servidor.`)
                     .addFields(
-                        { name: "🆔 Steam ID", value: `||[${steamId}](https://steamcommunity.com/profiles/${steamId})||`, inline: true },
+                        { name: "🆔 Steam ID", value: `[${steamId}](https://steamcommunity.com/profiles/${steamId})`, inline: true },
                         { name: "📊 Horas Steam", value: horasSteamTexto, inline: true },
                         { name: "🖥️ Estado", value: "🔴 Desconectado", inline: true },
                         { name: "🌍 País", value: paisTexto, inline: true },
@@ -108,17 +108,15 @@ module.exports = {
             const ultimoWipe = datosFinales.ultimoWipe || "Desconocido";
             const horasDesdeWipeDecimal = datosFinales.horasDesdeWipe || "0.00";
             
-            // Aplicamos la conversión a formato "Xh Ym"
             const horasDesdeWipeFormateadas = formatHoursToHoursMinutes(horasDesdeWipeDecimal);
 
-            // Diseño optimizado y simétrico en 3 columnas
             const embedOnline = new EmbedBuilder()
                 .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
                 .setColor("#57F287")
                 .addFields(
-                    { name: "🎮 Servidor", value: `||${datosFinales.server || "Desconocido"}||`, inline: false },
-                    { name: "🆔 BattleMetrics", value: `||[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})||`, inline: true },
-                    { name: "🆔 Steam ID", value: `||[${steamId}](https://steamcommunity.com/profiles/${steamId})||`, inline: true },
+                    { name: "🎮 Servidor", value: datosFinales.server || "Desconocido", inline: false },
+                    { name: "🆔 BattleMetrics", value: `[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})`, inline: true },
+                    { name: "🆔 Steam ID", value: `[${steamId}](https://steamcommunity.com/profiles/${steamId})`, inline: true },
                     { name: "⏱️ Sesión Actual", value: `${datosFinales.jugando}`, inline: true },
                     { name: "🛠️ Último Wipe", value: `\`${ultimoWipe}\``, inline: true },
                     { name: "⏱️ Desde el Wipe", value: `\`${horasDesdeWipeFormateadas}\``, inline: true },

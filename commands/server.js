@@ -11,7 +11,6 @@ module.exports = {
     async execute(interaction) {
         await interaction.deferReply();
 
-        // 1. Obtener el ID del servidor desde config.json
         let serverId = "433255"; 
         try {
             const configPath = path.join(__dirname, "../data/config.json");
@@ -26,30 +25,35 @@ module.exports = {
         }
 
         try {
-            // 2. Consulta a BattleMetrics incluyendo los Headers de autorización y User-Agent
-            // Nota: Si ya usas un token en tus otros servicios, asegúrate de colocarlo aquí o usar process.env.BATTLEMETRICS_TOKEN
             const response = await axios.get(`https://api.battlemetrics.com/servers/${serverId}`, {
                 headers: {
-                    // Si en tu otro servicio (battlemetricsHours.js) usas un token, ponlo aquí (ej: `Bearer tu_token`)
-                    // O si la API te pide una clave específica, cámbiala en este header:
-                    // "Authorization": `Bearer ${process.env.BATTLEMETRICS_TOKEN}`
+                    "Authorization": `Bearer ${process.env.BATTLEMETRICS_TOKEN}`,
                     "User-Agent": "RustLogix-DiscordBot"
                 }
             });
 
             const serverData = response.data.data;
+            const attributes = serverData.attributes || {};
 
-            const name = serverData.attributes.name || "Servidor Desconocido";
-            const status = serverData.attributes.status; 
-            const players = serverData.attributes.players || 0;
-            const maxPlayers = serverData.attributes.maxPlayers || 0;
-            const ip = serverData.attributes.ip || "N/A";
-            const port = serverData.attributes.port || "N/A";
-            const rank = serverData.attributes.rank || "N/A";
+            const name = attributes.name || "Servidor Desconocido";
+            const status = attributes.status; 
+            const players = attributes.players || 0;
+            const maxPlayers = attributes.maxPlayers || 0;
+            const ip = attributes.ip || "N/A";
+            const port = attributes.port || "N/A";
+            const rank = attributes.rank || "N/A";
             
-            const details = serverData.attributes.details || {};
+            const details = attributes.details || {};
             const map = details.map || "Desconocido";
-            const wipeTime = details.rust_last_wipe ? new Date(details.rust_last_wipe).toLocaleString() : "Desconocido";
+
+            let wipeTime = "Desconocido";
+            const rawWipe = details.rust_last_wipe || details.rust_lastWipe;
+            if (rawWipe) {
+                const fechaWipe = new Date(rawWipe);
+                if (!isNaN(fechaWipe.getTime())) {
+                    wipeTime = fechaWipe.toLocaleString();
+                }
+            }
 
             const isOnline = status === "online";
             const estadoTexto = isOnline ? "🟢 En Línea" : "🔴 Fuera de Línea";
