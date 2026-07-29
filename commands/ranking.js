@@ -41,10 +41,9 @@ module.exports = {
             console.log(`[RANKING] Consultando servidor ${serverIdConfigurado} en BattleMetrics...`);
             const inicio = Date.now();
 
-            // Consultar las sesiones activas actuales del servidor
             const response = await axios.get(
                 `https://api.battlemetrics.com/servers/${serverIdConfigurado}?include=session,player`,
-                { headers, timeout: 7000 } // Timeout de seguridad de 7 segundos
+                { headers, timeout: 7000 }
             );
 
             console.log(`[RANKING] Respuesta recibida en ${Date.now() - inicio}ms`);
@@ -63,20 +62,29 @@ module.exports = {
             }
 
             const ranking = [];
+            const ahora = new Date();
 
             for (const session of sessions) {
                 const playerId = session.relationships?.player?.data?.id;
                 const playerName = playerId ? playersMap[playerId] : "Desconocido";
                 
-                const timePlayedSeconds = session.attributes?.time || session.meta?.timePlayed || 0;
-                const hours = timePlayedSeconds / 3600;
+                // Calculamos el tiempo transcurrido desde que inició la sesión actual hasta este momento
+                let horas = 0;
+                if (session.attributes?.start) {
+                    const inicioSesion = new Date(session.attributes.start);
+                    const diffSegundos = (ahora - inicioSesion) / 1000;
+                    if (diffSegundos > 0) {
+                        horas = diffSegundos / 3600;
+                    }
+                }
 
                 ranking.push({
                     discord: playerName,
-                    hours: hours
+                    hours: horas
                 });
             }
 
+            // Ordenar de mayor a menor tiempo de juego actual
             ranking.sort((a, b) => b.hours - a.hours);
 
             let text = "";
@@ -100,7 +108,7 @@ module.exports = {
         } catch (error) {
             console.log("ERROR API Ranking:", error.response?.data || error.message);
             return await interaction.editReply({ 
-                content: "❌ Hubo un error al obtener el ranking desde BattleMetrics (Timeout o fallo de API)." 
+                content: "❌ Hubo un error al obtener el ranking desde BattleMetrics." 
             });
         }
     }
