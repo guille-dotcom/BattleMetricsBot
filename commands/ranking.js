@@ -34,41 +34,48 @@ module.exports = {
 
         if (!serverIdConfigurado) {
             return await interaction.editReply({ 
-                content: "❌ No hay ningún servidor de BattleMetrics configurado. Usa el comando de configuración del servidor primero." 
+                content: "❌ No hay ningún servidor de BattleMetrics configurado." 
             });
         }
 
         const users = JSON.parse(fs.readFileSync(file, "utf-8"));
-        const ranking = [];
-
-        for (const id of Object.keys(users)) {
+        
+        // Creamos un array de promesas para consultar a todos los usuarios en paralelo (súper rápido)
+        const promesasRanking = Object.keys(users).map(async (id) => {
             const u = users[id];
             try {
                 const h = await getBattleMetricsHours(u.battlemetricsId, serverIdConfigurado);
                 const horasWipeNum = Number(h.horasDesdeWipe || 0);
-
-                // Añadimos al ranking (incluso si tienen horas, los ordenaremos)
                 const nombreJugador = u.discord || h.nombre || "Desconocido";
-                ranking.push({ discord: nombreJugador, hours: horasWipeNum });
-
-                await new Promise(resolve => setTimeout(resolve, 300));
+                return { discord: nombreJugador, hours: horasWipeNum };
             } catch (err) {
                 console.log(`Error obteniendo datos para ID ${u.battlemetricsId}:`, err.message);
+                return null;
             }
-        }
+        });
+
+        // Esperamos a que todas las peticiones terminen al mismo tiempo
+        const resultados = await Promise.all(promesasRanking);
+        
+        // Filtramos nulos
+        const ranking = resultados.filter(item => item !== null);
 
         // Ordenar de mayor a menor cantidad de horas
         ranking.sort((a, b) => b.hours - a.hours);
 
         let text = "";
-        // Mostramos el top 15
-        ranking.slice(0, 15).forEach((u, i) => {
-            text += `**${i + 1}.** ${u.discord} — **${u.hours.toFixed(2)}h**\n`;
-        });
+        if (ranking.length === 0) {
+            text = "No hay datos disponibles para el ranking.";
+        } else {
+            // Mostramos el top 15
+            ranking.slice(0, 15).forEach((u, i) => {
+                text += `**${i + 1}.** ${u.discord} — **${u.hours.toFixed(2)}h**\n`;
+            });
+        }
 
         const embed = new EmbedBuilder()
             .setTitle("🏆 Top 15 — Horas desde el Último Wipe")
-            .setDescription(text || "Sin datos disponibles")
+            .setDescription(text)
             .setColor("#57F287")
             .setTimestamp()
             .setFooter({ text: "RustLogix" });
