@@ -1,87 +1,175 @@
 require("dotenv").config();
 const axios = require("axios");
 
-async function getBattleMetricsHours(playerId, targetServerId = null) {
+async function getBattleMetricsHours(playerId) {
     try {
         const token = process.env.BATTLEMETRICS_TOKEN;
         const headers = {
-            "Authorization": `Bearer ${token}`,
             "Content-Type": "application/json"
         };
-
-        // 1. Obtener datos básicos del jugador (Nombre)
-        const playerRes = await axios.get(
-            `https://api.battlemetrics.com/players/${playerId}`,
-            { headers }
-        );
-
-        const player = playerRes.data.data;
-        const nombreJugador = player.attributes?.name || "Desconocido";
-
-        let nombreServidorActual = "No conectado en ningún servidor";
-        let onlineServerId = targetServerId;
-
-        // 2. Obtener la sesión actual usando el filtro correcto de la API de BattleMetrics
-        try {
-            const sessionsRes = await axios.get(
-                `https://api.battlemetrics.com/sessions`,
-                { 
-                    headers,
-                    params: { 
-                        "filter[player]": playerId,
-                        "filter[active]": "true",
-                        "include": "server"
-                    }
-                }
-            );
-
-            const sessions = sessionsRes.data.data || [];
-            const included = sessionsRes.data.included || [];
-
-            const serverMap = {};
-            for (const inc of included) {
-                if (inc.type === "server") {
-                    serverMap[inc.id] = inc.attributes?.name;
-                }
-            }
-
-            if (sessions.length > 0) {
-                const activeSession = sessions[0];
-                const serverRel = activeSession.relationships?.server?.data;
-                if (serverRel) {
-                    onlineServerId = serverRel.id;
-                    if (serverMap[onlineServerId]) {
-                        nombreServidorActual = serverMap[onlineServerId];
-                    }
-                }
-            }
-        } catch (e) {
-            console.log("Error consultando sesiones activas:", e.response?.data || e.message);
+        if (token) {
+            headers["Authorization"] = `Bearer ${token}`;
         }
 
-        // 3. Respaldo por ID de servidor si no se encontró en las activas
-        if (onlineServerId && nombreServidorActual === "No conectado en ningún servidor") {
+        const [playerRes, sessionRes] = await Promise.all([
+            axios.get(`https://api.battlemetrics.com/players/${playerId}?include=server,identifier`, { headers }),
+            axios.get(`https://api.battlemetrics.com/players/${playerId}/relationships/sessions`, { 
+                headers, 
+                params: { "page[size]": 50 } 
+            }).catch(() => null)
+        ]);
+
+        const player = playerRes.data.data;
+        if (!player) return null;
+
+        const incluidos = playerRes.data.included || [];
+        let segundosTotales = 0;
+        const servidoresContados = new Set();
+        let nombreServidorActual = "No conectado en ningún servidor";
+        let activeServerId = player.relationships?.server?.data?.id;
+        const historialNombresSet = new Set();
+
+        for (const item of incluidos) {
+            if (item.type === "server") {
+                const servidorId = item.id;
+                
+                if (activeServerId && servidorId === activeServerId) {
+                    nombreServidorActual = item.attributes?.name || "Desconocido";
+                }
+
+                if (servidoresContados.has(servidorId)) continue;
+                servidoresContados.add(servidorId);
+                
+                const tiempo = item.meta?.timePlayed || 0;
+                segundosTotales += tiempo;
+            }
+
+            if (item.type === "identifier" && item.attributes?.type === "steamID") {
+                const nombreSteam = item.attributes?.metadata?.name;
+                if (nombreSteam) {
+                    historialNombresSet.add(nombreSteam);
+                }
+            }
+        }
+
+        const horasTotalesCalculadas = Math.floor(segundosTotales / 3600);
+
+        let online = false;
+        let tiempoJugando = "0m";
+        const sesiones = sessionRes?.data?.data || [];
+        const sesionActiva = sesiones.find(s => s.attributes.stop === null);
+
+        if (sesionActiva) {
+            online = true;
+            const inicio = new Date(sesionActiva.attributes.start);
+            const ahora = new Date();
+            const segundos = Math.floor((ahora - inicio) / 1000);
+            const h = Math.floor(segundos / 3600);
+            const m = Math.floor((segundos % 3600) / 60);
+            tiempoJugando = h > 0 ? `${h}h ${m}m` : `${m}m`;
+
+            if (nombreServidorActual === "No conectado en ningún servidor" || nombreServidorActual === "Desconocido") {
+                const sessionServerId = sesionActiva.relationships?.server?.data?.id;
+                if (sessionServerId) {
+                    activeServerId = sessionServerId;
+                    const servidorSesion = incluidos.find(s => s.type === "server" && s.id === sessionServerId);
+                    if (servidorSesion) {
+                        nombreServidorActual = servidorSesion.attributes?.name || "Desconocido";
+                    }
+                }
+            }
+        }
+
+        // --- CÁLCULO DE ÚLTIMO WIPE ---
+        let ultimoWipeServidor = "Desconocido";
+        let horasDesdeWipe = "0.00";
+        let rawWipeDate = null;
+
+        if (activeServerId) {
             try {
-                const serverRes = await axios.get(
-                    `https://api.battlemetrics.com/servers/${onlineServerId}`,
+                const serverResponse = await axios.get(
+                    `https://api.battlemetrics.com/servers/${activeServerId}`,
                     { headers }
                 );
-                nombreServidorActual = serverRes.data.data.attributes?.name || "Desconocido";
+
+                const serverAttributes = serverResponse.data.data.attributes;
+                const details = serverAttributes.details || {};
+                
+                const wipeDetails = details.rust_last_wipe || details.rust_lastWipe || details.lastWipe || null;
+                const serverUpdatedAt = serverAttributes.updatedAt || null;
+
+                if (wipeDetails) {
+                    const parsedWipe = new Date(wipeDetails);
+                    const now = new Date();
+                    const diffDays = (now - parsedWipe) / (1000 * 60 * 60 * 24);
+
+                    if (!isNaN(parsedWipe.getTime()) && diffDays <= 2) {
+                        rawWipeDate = wipeDetails;
+                    }
+                }
+
+                if (!rawWipeDate) {
+                    rawWipeDate = serverUpdatedAt;
+                }
+
+                if (rawWipeDate) {
+                    const fechaWipe = new Date(rawWipeDate);
+                    if (!isNaN(fechaWipe.getTime())) {
+                        ultimoWipeServidor = fechaWipe.toLocaleDateString("es-ES", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                        });
+                    }
+                }
             } catch (err) {
-                console.log("Error consultando servidor directo:", err.message);
+                console.log("No se pudieron obtener los detalles del servidor actual:", err.message);
+            }
+
+            if (rawWipeDate) {
+                try {
+                    const wipeTimeObj = new Date(rawWipeDate);
+                    let segundosDesdeWipe = 0;
+
+                    for (const session of sesiones) {
+                        const relServer = session.relationships?.server?.data;
+                        if (!relServer || relServer.id !== activeServerId) continue;
+
+                        const attributes = session.attributes || {};
+                        const start = new Date(attributes.start);
+                        const stop = attributes.stop ? new Date(attributes.stop) : new Date();
+
+                        if (stop >= wipeTimeObj) {
+                            const effectiveStart = start < wipeTimeObj ? wipeTimeObj : start;
+                            const diffSeconds = (stop - effectiveStart) / 1000;
+                            if (diffSeconds > 0) {
+                                segundosDesdeWipe += diffSeconds;
+                            }
+                        }
+                    }
+
+                    horasDesdeWipe = (segundosDesdeWipe / 3600).toFixed(2);
+                } catch (sessionErr) {
+                    console.log("No se pudieron calcular las horas desde el wipe:", sessionErr.message);
+                }
             }
         }
 
         return {
-            nombre: nombreJugador,
-            totalHoras: 0,
+            id: player.id,
+            nombre: player.attributes?.name || "Desconocido",
+            online: online || player.attributes?.online === true,
+            jugando: tiempoJugando,
+            totalHoras: horasTotalesCalculadas,
             primerServidor: nombreServidorActual,
-            ultimoWipe: "Desconocido",
-            horasDesdeWipe: "0.00",
+            ultimoWipe: ultimoWipeServidor,
+            horasDesdeWipe: horasDesdeWipe,
             servidores: {
                 rust: {
                     datos: {
-                        servidoresEncontrados: 0
+                        servidoresEncontrados: servidoresContados.size
                     }
                 }
             }
@@ -89,14 +177,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
 
     } catch (error) {
         console.log("ERROR API battlemetricsHours:", error.response?.data || error.message);
-        return {
-            nombre: "Desconocido",
-            totalHoras: 0,
-            primerServidor: "No conectado en ningún servidor",
-            ultimoWipe: "Desconocido",
-            horasDesdeWipe: "0.00",
-            servidores: { rust: { datos: { servidoresEncontrados: 0 } } }
-        };
+        return null;
     }
 }
 

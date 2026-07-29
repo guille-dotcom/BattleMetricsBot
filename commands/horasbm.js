@@ -1,12 +1,5 @@
-const {
-    SlashCommandBuilder,
-    EmbedBuilder,
-    MessageFlags
-} = require("discord.js");
-
-const {
-    getBattleMetricsHours
-} = require("../services/battlemetricsHours");
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
+const { getBattleMetricsHours } = require("../services/battlemetricsHours.js");
 
 // Función auxiliar para convertir horas decimales a formato "Xh Ym"
 function formatHoursToHoursMinutes(decimalHours) {
@@ -23,127 +16,62 @@ function formatHoursToHoursMinutes(decimalHours) {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("horasbm")
-        .setDescription(
-            "Muestra las horas usando un perfil de BattleMetrics"
-        )
+        .setDescription("Muestra las horas y estadísticas de BattleMetrics mediante el link del perfil")
         .addStringOption(option =>
-            option
-                .setName("link")
-                .setDescription(
-                    "Link del perfil BattleMetrics"
-                )
+            option.setName("link")
+                .setDescription("Link del perfil de BattleMetrics (Ej: https://www.battlemetrics.com/players/1185311435)")
                 .setRequired(true)
         ),
 
     async execute(interaction) {
+        const linkInput = interaction.options.getString("link").trim();
+        await interaction.deferReply();
+
+        // Extraer el ID de BattleMetrics del link usando una expresión regular robusta
+        const match = linkInput.match(/\/players\/(\d+)/);
+        if (!match || !match[1]) {
+            return await interaction.editReply("❌ El enlace proporcionado no es válido. Debe ser un link de perfil de BattleMetrics (ej: `https://www.battlemetrics.com/players/1185311435`).");
+        }
+
+        const playerId = match[1];
+        console.log(`===== INICIO /horasbm =====`);
+        console.log(`LINK: ${linkInput}`);
+        console.log(`ID BM: ${playerId}`);
+
         try {
-            console.log("===== INICIO /horasbm =====");
+            const datos = await getBattleMetricsHours(playerId);
 
-            await interaction.deferReply();
-
-            const link = interaction.options.getString("link");
-            console.log("LINK:", link);
-
-            const match = link.match(/players\/(\d+)/);
-            if (!match) {
-                return await interaction.editReply(
-                    "❌ Link inválido.\n\nEjemplo:\nhttps://www.battlemetrics.com/players/1010507609"
-                );
+            if (!datos) {
+                return await interaction.editReply("❌ No se pudieron encontrar datos para ese jugador en BattleMetrics.");
             }
 
-            const battlemetricsId = match[1];
-            console.log("ID BM:", battlemetricsId);
+            console.log("DATOS RECIBIDOS:", datos);
+            console.log("ENVIANDO EMBED...");
 
-            await interaction.editReply(
-                "⏱️ Calculando horas..."
-            );
-
-            const data = await getBattleMetricsHours(battlemetricsId);
-            console.log("DATOS RECIBIDOS:", data);
-
-            const totalHoras = Number(data.totalHoras || 0);
-            const nombreJugador = data.nombre || "Desconocido";
-            const primerServidor = data.primerServidor || "Desconocido";
-            const ultimoWipe = data.ultimoWipe || "Desconocido";
-            const horasDesdeWipeDecimal = data.horasDesdeWipe || "0.00";
-
-            // Aplicamos la conversión a formato "Xh Ym"
-            const horasDesdeWipeFormateadas = formatHoursToHoursMinutes(horasDesdeWipeDecimal);
-
-            let servidoresEncontrados = 0;
-            try {
-                servidoresEncontrados = data.servidores.rust.datos.servidoresEncontrados || 0;
-            } catch {
-                servidoresEncontrados = 0;
-            }
+            const horasDesdeWipeFormateadas = formatHoursToHoursMinutes(datos.horasDesdeWipe);
 
             const embed = new EmbedBuilder()
                 .setTitle("🎮 Perfil BattleMetrics")
-                .setColor("#57F287")
+                .setColor(datos.online ? "#57F287" : "#ED4245")
                 .addFields(
-                    {
-                        name: "👤 Jugador",
-                        value: `[${nombreJugador}](https://www.battlemetrics.com/players/${battlemetricsId})`,
-                        inline: false
-                    },
-                    {
-                        name: "🌐 Servidor Actual",
-                        value: `${primerServidor}`,
-                        inline: false
-                    },
-                    {
-                        name: "🛠️ Último Wipe",
-                        value: `\`${ultimoWipe}\``,
-                        inline: false
-                    },
-                    {
-                        name: "⏱️ Horas battlemetrics",
-                        value: `**> ${totalHoras.toFixed(2)}h**`,
-                        inline: false
-                    },
-                    {
-                        name: "⏱️ Horas desde el Wipe",
-                        value: `\`${horasDesdeWipeFormateadas}\``,
-                        inline: true
-                    },
-                    {
-                        name: "🖥️ Servidores Jugados",
-                        value: `\`${servidoresEncontrados}\``,
-                        inline: true
-                    }
+                    { name: "👤 Jugador", value: `[${datos.nombre}](https://www.battlemetrics.com/players/${datos.id})`, inline: false },
+                    { name: "🌐 Servidor Actual", value: `||${datos.primerServidor}||`, inline: false },
+                    { name: "🛠️ Último Wipe", value: `\`${datos.ultimoWipe}\``, inline: true },
+                    { name: "⏱️ Sesión Actual", value: datos.online ? datos.jugando : "🔴 Offline", inline: true },
+                    { name: "📈 Horas battlemetrics", value: `${datos.totalHoras}h`, inline: true },
+                    { name: "⏱️ Horas desde el Wipe", value: `\`${horasDesdeWipeFormateadas}\``, inline: true },
+                    { name: "🖥️ Servidores Jugados", value: `${datos.servidores.rust.datos.servidoresEncontrados}`, inline: true }
                 )
                 .setTimestamp()
-                .setFooter({
-                    text: "RustLogix"
-                });
+                .setFooter({ text: "RustLogix" });
 
-            console.log("ENVIANDO EMBED...");
-
-            await interaction.editReply({
-                content: null,
-                embeds: [embed]
-            });
-
+            await interaction.editReply({ embeds: [embed] });
             console.log("✅ RESPUESTA ENVIADA");
 
         } catch (error) {
-            console.error("ERROR EN /horasbm");
-            console.error(error);
-
-            try {
-                if (interaction.deferred || interaction.replied) {
-                    await interaction.editReply(
-                        "❌ Ocurrió un error ejecutando el comando."
-                    );
-                } else {
-                    await interaction.reply({
-                        content: "❌ Ocurrió un error ejecutando el comando.",
-                        flags: MessageFlags.Ephemeral
-                    });
-                }
-            } catch (err) {
-                console.error("ERROR RESPONDIENDO A DISCORD");
-                console.error(err);
+            console.error("Error en comando /horasbm:", error);
+            if (interaction.deferred || interaction.replied) {
+                return await interaction.editReply("❌ Ocurrió un error al procesar el comando.");
             }
         }
     }
