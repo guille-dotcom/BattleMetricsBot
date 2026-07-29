@@ -9,31 +9,57 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             "Content-Type": "application/json"
         };
 
+        // 1. Obtener datos del jugador y relaciones (incluyendo servidores donde ha estado)
         const response = await axios.get(
-            `https://api.battlemetrics.com/players/${playerId}`,
+            `https://api.battlemetrics.com/players/${playerId}?include=identifier,server`,
             { headers }
         );
 
         const player = response.data.data;
         const nombreJugador = player.attributes.name || "Desconocido";
+        const included = response.data.included || [];
+
+        let totalHoras = 0;
+        let primerServidor = "Ninguno / Desconocido";
+        let servidoresEncontrados = 0;
+
+        // Buscar información en los datos incluidos
+        for (const item of included) {
+            if (item.type === "server") {
+                servidoresEncontrados++;
+                // Tomamos el primer servidor activo o registrado como referencia
+                if (primerServidor === "Ninguno / Desconocido" && item.attributes?.name) {
+                    primerServidor = item.attributes.name;
+                }
+            }
+        }
+
+        // Si el jugador tiene metadata o estadísticas generales en el perfil
+        if (player.attributes.timePlayed) {
+            totalHoras = player.attributes.timePlayed / 3600;
+        }
 
         let horasDesdeWipe = "0.00";
+        let fechaWipeFormateada = "Desconocido";
 
         if (targetServerId) {
             try {
-                // Obtener datos del servidor
+                // Obtener datos del servidor configurado
                 const serverResponse = await axios.get(`https://api.battlemetrics.com/servers/${targetServerId}`, { headers });
                 const serverAttributes = serverResponse.data.data.attributes;
                 const details = serverAttributes.details || {};
                 
-                // Intentamos capturar la fecha del wipe; si no existe, usamos una fecha de respaldo (ej. 7 días atrás o updatedAt del servidor)
-                const rawWipeDate = details.rust_last_wipe || details.rust_lastWipe || details.lastWipe;
+                primerServidor = serverAttributes.name || primerServidor;
+
+                const rawWipeDate = details.rustLastWipe || details.rust_lastWipe || details.wipeTime || serverAttributes.metadata?.rustLastWipe;
                 let fechaWipe = rawWipeDate ? new Date(rawWipeDate) : null;
 
                 if (!fechaWipe || isNaN(fechaWipe.getTime())) {
-                    // Respaldo por defecto: si el servidor no reporta wipe, tomamos los últimos 7 días como rango del ranking
                     fechaWipe = new Date();
-                    fechaWipe.setDate(fechaWipe.getDate() - 7); 
+                    fechaWipe.setDate(fechaWipe.getDate() - 4); // Respaldo de 4 días
+                    fechaWipeFormateada = "No disponible (últimos 4 días)";
+                } else {
+                    fechaWipeFormateada = fechaWipe.toLocaleString();
                 }
 
                 // Consultar sesiones filtradas por el servidor objetivo
@@ -44,11 +70,12 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
 
                 const sessions = sessionsResponse.data.data || [];
                 let segundosDesdeWipe = 0;
+                const ahora = new Date();
 
                 for (const session of sessions) {
                     const attributes = session.attributes || {};
                     const start = new Date(attributes.start);
-                    const stop = attributes.stop ? new Date(attributes.stop) : new Date();
+                    const stop = attributes.stop ? new Date(attributes.stop) : ahora;
 
                     if (stop >= fechaWipe) {
                         const effectiveStart = start < fechaWipe ? fechaWipe : start;
@@ -67,14 +94,28 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
 
         return {
             nombre: nombreJugador,
-            horasDesdeWipe: horasDesdeWipe
+            totalHoras: totalHoras,
+            primerServidor: primerServidor,
+            ultimoWipe: fechaWipeFormateada,
+            horasDesdeWipe: horasDesdeWipe,
+            servidores: {
+                rust: {
+                    datos: {
+                        servidoresEncontrados: servidoresEncontrados
+                    }
+                }
+            }
         };
 
     } catch (error) {
         console.log("ERROR API:", error.response?.data || error.message);
         return {
             nombre: "Desconocido",
-            horasDesdeWipe: "0.00"
+            totalHoras: 0,
+            primerServidor: "Desconocido",
+            ultimoWipe: "Desconocido",
+            horasDesdeWipe: "0.00",
+            servidores: { rust: { datos: { servidoresEncontrados: 0 } } }
         };
     }
 }
