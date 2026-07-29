@@ -12,12 +12,17 @@ module.exports = {
         await interaction.deferReply();
 
         let serverId = "433255"; 
+        let customMapUrl = "https://rustmaps.com/map/a758fe45e0f545e18645294134457ef6"; // Enlace exacto actual por defecto
+
         try {
             const configPath = path.join(__dirname, "../data/config.json");
             if (fs.existsSync(configPath)) {
                 const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
                 if (config.battlemetricsServer) {
                     serverId = config.battlemetricsServer; 
+                }
+                if (config.mapUrl) {
+                    customMapUrl = config.mapUrl;
                 }
             }
         } catch (error) {
@@ -45,10 +50,6 @@ module.exports = {
             
             const details = attributes.details || {};
             const mapName = details.map || "Desconocido";
-            
-            // Extraemos la seed y el tamaño exactos del servidor
-            const seed = details.rust_seed || details.seed || "1910446694";
-            const size = details.rust_world_size || details.worldSize || "4000";
 
             let wipeTime = "Desconocido";
             const rawWipe = details.rust_last_wipe || details.rust_lastWipe;
@@ -69,9 +70,6 @@ module.exports = {
             const estadoTexto = isOnline ? "🟢 En Línea" : "🔴 Fuera de Línea";
             const colorEmbed = isOnline ? "#57F287" : "#FF0000";
 
-            // Enlace directo correcto hacia RustMaps usando los parámetros del servidor
-            const mapPageUrl = `https://rustmaps.com/map/${size}_${seed}`;
-
             const embed = new EmbedBuilder()
                 .setTitle(`🎮 Estado del Servidor`)
                 .setDescription(`**${name}**`)
@@ -80,7 +78,7 @@ module.exports = {
                     { name: "🖥️ Estado", value: estadoTexto, inline: true },
                     { name: "👥 Jugadores", value: `\`${players} / ${maxPlayers}\``, inline: true },
                     { name: "🏆 Ranking BM", value: `\`#${rank}\``, inline: true },
-                    { name: "🗺️ Mapa", value: `[${mapName}](${mapPageUrl})`, inline: true },
+                    { name: "🗺️ Mapa", value: `[${mapName}](${customMapUrl})`, inline: true },
                     { name: "🛠️ Último Wipe", value: `\`${wipeTime}\``, inline: true },
                     { name: "🌐 Conexión", value: `\`connect ${ip}:${port}\``, inline: false },
                     { name: "🔗 Enlace BattleMetrics", value: `[Ver en BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`, inline: false }
@@ -89,7 +87,7 @@ module.exports = {
                 .setFooter({ text: "RustLogix" });
 
             return await interaction.editReply({ 
-                content: `🗺️ **Ver mapa en RustMaps (Seed: ${seed} | Tamaño: ${size}):**\n${mapPageUrl}`,
+                content: `🗺️ **Mapa actual del servidor:**\n${customMapUrl}`,
                 embeds: [embed] 
             });
 
