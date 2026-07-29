@@ -49,7 +49,7 @@ module.exports = {
                 "Content-Type": "application/json"
             };
 
-            console.log(`[RANKING WIPE] Consultando detalles del servidor ${serverIdConfigurado}...`);
+            console.log(`[RANKING WIPE] Consultando detalles y sesiones del servidor ${serverIdConfigurado}...`);
             const inicio = Date.now();
 
             // 1. Obtener la fecha del último wipe del servidor
@@ -62,19 +62,17 @@ module.exports = {
             const details = serverData.attributes?.details || {};
             const lastWipeStr = details.rustLastWipe || details.wipeTime || serverData.attributes?.metadata?.rustLastWipe;
             
-            // Si el servidor provee el wipe lo usamos, si no, un respaldo prudente de 7 días
             const fechaWipe = lastWipeStr ? new Date(lastWipeStr) : new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
             const fechaWipeISO = fechaWipe.toISOString();
 
             console.log(`[RANKING WIPE] Fecha de wipe detectada: ${fechaWipeISO}`);
 
-            // 2. Consultar las sesiones de este servidor desde la fecha del wipe
+            // 2. Consultar las sesiones usando la ruta correcta de relación del servidor en BattleMetrics
             const sessionsResponse = await axios.get(
-                `https://api.battlemetrics.com/sessions`,
+                `https://api.battlemetrics.com/servers/${serverIdConfigurado}/relationships/sessions`,
                 {
                     headers,
                     params: {
-                        "filter[servers]": serverIdConfigurado,
                         "filter[start]": `${fechaWipeISO},`,
                         "include": "player",
                         "page[size]": 100
@@ -106,10 +104,8 @@ module.exports = {
                 const sessionStart = new Date(session.attributes.start);
                 const sessionStop = session.attributes.stop ? new Date(session.attributes.stop) : ahora;
 
-                // Si por alguna razón la sesión terminó antes del wipe, la ignoramos
                 if (sessionStop < fechaWipe) continue;
 
-                // Recortar el inicio si la sesión comenzó antes del wipe
                 const inicioEfectivo = sessionStart < fechaWipe ? fechaWipe : sessionStart;
                 const diffSegundos = (sessionStop - inicioEfectivo) / 1000;
 
