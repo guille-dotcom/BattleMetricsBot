@@ -44,7 +44,7 @@ module.exports = {
             const rank = attributes.rank || "N/A";
             
             const details = attributes.details || {};
-            const mapName = details.map || "Desconocido";
+            const mapName = details.map || "Ver Mapa";
 
             // Enlace directo a la página de BattleMetrics del servidor donde se visualiza el mapa
             const bmServerUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
@@ -78,8 +78,7 @@ module.exports = {
                     { name: "🏆 Ranking BM", value: `\`#${rank}\``, inline: true },
                     { name: "🗺️ Mapa", value: `[${mapName}](${bmServerUrl})`, inline: true },
                     { name: "🛠️ Último Wipe", value: `\`${wipeTime}\``, inline: true },
-                    { name: "🌐 Conexión", value: `\`connect ${ip}:${port}\``, inline: false },
-                    { name: "🔗 Enlace BattleMetrics", value: `[Ver Servidor y Mapa](${bmServerUrl})`, inline: false }
+                    { name: "🌐 Conexión", value: `\`connect ${ip}:${port}\``, inline: false }
                 )
                 .setTimestamp()
                 .setFooter({ text: "RustLogix" });
