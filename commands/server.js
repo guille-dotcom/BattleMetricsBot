@@ -40,10 +40,7 @@ module.exports = {
             const players = attributes.players || 0;
             const maxPlayers = attributes.maxPlayers || 0;
             
-            // Priorizamos el hostname (dominio) si existe, si no usamos la IP
             const address = attributes.hostname || attributes.ip || "N/A";
-            
-            // Usamos estrictamente el puerto de juego principal (attributes.port)
             const port = attributes.port || 28015;
             const rank = attributes.rank || "N/A";
             
@@ -56,14 +53,16 @@ module.exports = {
             }
 
             const bmServerUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
-            
-            // Genera el comando connect exacto con el puerto de juego principal
             const connectText = `client.connect ${address}:${port}`;
 
             let wipeTime = "Desconocido";
-            const rawWipe = details.rust_last_wipe || details.rust_lastWipe;
+            // Forzamos la búsqueda de los campos exactos de wipe que devuelve BattleMetrics para Rust
+            const rawWipe = details.rust_last_wipe || details.rust_lastWipe || details.wipe || details.lastWipe;
+            
             if (rawWipe) {
-                const fechaWipe = new Date(rawWipe);
+                const timestamp = typeof rawWipe === "number" && rawWipe < 10000000000 ? rawWipe * 1000 : rawWipe;
+                const fechaWipe = new Date(timestamp);
+                
                 if (!isNaN(fechaWipe.getTime())) {
                     wipeTime = fechaWipe.toLocaleDateString("es-ES", {
                         day: '2-digit',
