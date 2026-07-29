@@ -45,8 +45,10 @@ module.exports = {
             
             const details = attributes.details || {};
             const mapName = details.map || "Desconocido";
-            const seed = details.rust_seed || details.seed || "1910446694";
-            const size = details.rust_world_size || details.worldSize || "4000";
+            
+            // Capturamos de forma precisa los datos reales del mapa desde BattleMetrics
+            const seed = details.rust_seed || details.seed || details.worldSeed;
+            const size = details.rust_world_size || details.worldSize || details.rust_mapSize;
 
             let wipeTime = "Desconocido";
             const rawWipe = details.rust_last_wipe || details.rust_lastWipe;
@@ -67,7 +69,12 @@ module.exports = {
             const estadoTexto = isOnline ? "🟢 En Línea" : "🔴 Fuera de Línea";
             const colorEmbed = isOnline ? "#57F287" : "#FF0000";
 
-            const mapPageUrl = `https://rustmaps.com/map/${size}_${seed}`;
+            // Si el servidor provee seed y size reales, armamos el link directo al mapa en RustMaps.
+            // Si es un mapa custom o no tiene seed, mandamos a la búsqueda general o web de RustMaps.
+            let mapPageUrl = `https://rustmaps.com/`;
+            if (seed && size) {
+                mapPageUrl = `https://rustmaps.com/map/${size}_${seed}`;
+            }
 
             const embed = new EmbedBuilder()
                 .setTitle(`🎮 Estado del Servidor`)
@@ -85,11 +92,12 @@ module.exports = {
                 .setTimestamp()
                 .setFooter({ text: "RustLogix" });
 
-            // Enviamos el embed y mandamos el enlace de RustMaps suelto abajo para que Discord cree la tarjeta visual del mapa
-            return await interaction.editReply({ 
-                content: `🗺️ **Vista previa del mapa:**\n${mapPageUrl}`,
-                embeds: [embed] 
-            });
+            const payload = { embeds: [embed] };
+            if (seed && size) {
+                payload.content = `🗺️ **Mapa actual del servidor (${size} / Seed: ${seed}):**\n${mapPageUrl}`;
+            }
+
+            return await interaction.editReply(payload);
 
         } catch (error) {
             console.error("Error al consultar el servidor en BattleMetrics:", error.message);
