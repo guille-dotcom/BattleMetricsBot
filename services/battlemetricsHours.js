@@ -86,10 +86,9 @@ async function getBattleMetricsHours(playerId) {
             }
         }
 
-        // --- CÁLCULO DE ÚLTIMO WIPE Y HORAS DESDE EL WIPE ---
-        let ultimoWipeServidor = "Desconocido";
-        let segundosDesdeWipe = 0;
-        let rawWipeDate = null;
+        // --- CÁLCULO ROBUSTO DE ÚLTIMO WIPE Y HORAS DESDE EL WIPE ---
+        let ultimoWipeServidor = "Consultar en Web";
+        let horasDesdeWipeDecimal = "0.00";
 
         if (activeServerId) {
             try {
@@ -101,51 +100,44 @@ async function getBattleMetricsHours(playerId) {
                 const serverAttributes = serverResponse.data.data.attributes;
                 const details = serverAttributes.details || {};
                 
-                rawWipeDate = details.rust_lastWipe || details.rust_last_wipe || details.lastWipe || null;
+                let fechaWipeFinal = null;
 
-                if (rawWipeDate) {
-                    const fechaWipe = new Date(rawWipeDate);
-                    if (!isNaN(fechaWipe.getTime())) {
-                        ultimoWipeServidor = fechaWipe.toLocaleDateString("es-ES", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit"
-                        });
-                    }
+                // 1. Buscar en el array de wipes de la API
+                if (Array.isArray(details.rust_wipes) && details.rust_wipes.length > 0) {
+                    fechaWipeFinal = new Date(details.rust_wipes[details.rust_wipes.length - 1]);
                 }
-            } catch (err) {
-                console.log("No se pudieron obtener los detalles del servidor:", err.message);
-            }
 
-            if (rawWipeDate) {
-                try {
-                    const wipeTimeObj = new Date(rawWipeDate);
-
-                    for (const session of sesiones) {
-                        const relServer = session.relationships?.server?.data;
-                        if (!relServer || relServer.id !== activeServerId) continue;
-
-                        const attributes = session.attributes || {};
-                        const start = new Date(attributes.start);
-                        const stop = attributes.stop ? new Date(attributes.stop) : new Date();
-
-                        if (stop >= wipeTimeObj) {
-                            const effectiveStart = start < wipeTimeObj ? wipeTimeObj : start;
-                            const diffSeconds = (stop - effectiveStart) / 1000;
-                            if (diffSeconds > 0) {
-                                segundosDesdeWipe += diffSeconds;
-                            }
+                // 2. Buscar en propiedades alternativas si el array no existe o está vacío
+                if (!fechaWipeFinal || isNaN(fechaWipeFinal.getTime()) || fechaWipeFinal.getFullYear() < 2024) {
+                    const rawWipe = details.rust_last_wipe_ent || details.rust_last_wipe;
+                    if (rawWipe) {
+                        if (typeof rawWipe === "string") {
+                            fechaWipeFinal = new Date(rawWipe);
+                        } else if (typeof rawWipe === "number") {
+                            fechaWipeFinal = new Date(rawWipe < 10000000000 ? rawWipe * 1000 : rawWipe);
                         }
                     }
-                } catch (sessionErr) {
-                    console.log("Error calculando horas desde el wipe:", sessionErr.message);
                 }
+
+                // 3. Validar y formatear la fecha final del wipe
+                if (fechaWipeFinal && !isNaN(fechaWipeFinal.getTime()) && fechaWipeFinal.getFullYear() >= 2024) {
+                    ultimoWipeServidor = fechaWipeFinal.toLocaleDateString("es-ES", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit"
+                    });
+
+                    // Calcular la diferencia exacta en horas desde el wipe hasta ahora
+                    const diffMs = new Date() - fechaWipeFinal;
+                    horasDesdeWipeDecimal = (diffMs / (1000 * 60 * 60)).toFixed(2);
+                    if (parseFloat(horasDesdeWipeDecimal) < 0) horasDesdeWipeDecimal = "0.00";
+                }
+            } catch (err) {
+                console.log("No se pudieron obtener los detalles del servidor para el wipe:", err.message);
             }
         }
-
-        const horasDesdeWipeDecimal = (segundosDesdeWipe / 3600).toFixed(2);
 
         return {
             id: player.id,
