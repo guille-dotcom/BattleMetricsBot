@@ -4,18 +4,6 @@ const { searchBattleMetricsPlayer, getBattleMetricsPlayerStatus } = require("../
 const fs = require("fs");
 const path = require("path");
 
-// Función auxiliar para convertir horas decimales a formato "Xh Ym"
-function formatHoursToHoursMinutes(decimalHours) {
-    const totalMinutes = Math.round(parseFloat(decimalHours) * 60);
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-
-    if (hours === 0 && minutes === 0) return "0m";
-    if (hours === 0) return `${minutes}m`;
-    if (minutes === 0) return `${hours}h`;
-    return `${hours}h ${minutes}m`;
-}
-
 module.exports = { 
     data: new SlashCommandBuilder()
         .setName("horas")
@@ -105,11 +93,6 @@ module.exports = {
                 ? datosFinales.historialNombres.slice(0, 3).join(", ") 
                 : "No disponible";
 
-            const ultimoWipe = datosFinales.ultimoWipe || "Desconocido";
-            const horasDesdeWipeDecimal = datosFinales.horasDesdeWipe || "0.00";
-            
-            const horasDesdeWipeFormateadas = formatHoursToHoursMinutes(horasDesdeWipeDecimal);
-
             const embedOnline = new EmbedBuilder()
                 .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
                 .setColor("#57F287")
@@ -118,15 +101,11 @@ module.exports = {
                     { name: "🆔 BattleMetrics", value: `[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})`, inline: true },
                     { name: "🆔 Steam ID", value: `[${steamId}](https://steamcommunity.com/profiles/${steamId})`, inline: true },
                     { name: "⏱️ Sesión Actual", value: `${datosFinales.jugando}`, inline: true },
-                    { name: "🛠️ Último Wipe", value: `\`${ultimoWipe}\``, inline: true },
-                    { name: "⏱️ Desde el Wipe", value: `\`${horasDesdeWipeFormateadas}\``, inline: true },
                     { name: "🌍 País", value: paisTexto, inline: true },
                     { name: "📈 Horas (BM)", value: `${datosFinales.horasTotalesBM}h`, inline: true },
                     { name: "📊 Horas (Steam)", value: horasSteamTexto, inline: true },
                     { name: "⚖️ Diferencia", value: diferenciaTexto, inline: true },
                     { name: "🛡️ Estado Baneos", value: vacTexto, inline: true },
-                    { name: "\u200b", value: "\u200b", inline: true },
-                    { name: "\u200b", value: "\u200b", inline: true },
                     { name: "📝 Historial de Nombres", value: historialTexto, inline: false }
                 )
                 .setTimestamp()
