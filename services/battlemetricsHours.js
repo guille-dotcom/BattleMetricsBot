@@ -13,7 +13,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             "Content-Type": "application/json"
         };
 
-        // Si no se pasa el servidor, intentar leerlo del config.json
+        // Si no se pasa el servidor, leerlo del config.json
         if (!targetServerId) {
             try {
                 let resolvedConfigPath = configPath;
@@ -48,7 +48,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
 
         if (targetServerId) {
             try {
-                // 2. Obtener datos del servidor configurado y su fecha de wipe
+                // 2. Obtener datos del servidor y su fecha de wipe
                 const serverResponse = await axios.get(
                     `https://api.battlemetrics.com/servers/${targetServerId}`,
                     { headers }
@@ -68,32 +68,40 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                     fechaWipeFormateada = fechaWipe.toLocaleString();
                 }
 
-                // 3. Consultar las sesiones filtradas correctamente por el servidor usando relaciones
+                // 3. Obtener la relación específica del jugador con este servidor (contiene el tiempo de juego total en attributes.timePlayed)
+                try {
+                    const serverRelRes = await axios.get(
+                        `https://api.battlemetrics.com/players/${playerId}/relationships/servers/${targetServerId}`,
+                        { headers }
+                    );
+                    const relData = serverRelRes.data.data;
+                    if (relData && relData.attributes && relData.attributes.timePlayed) {
+                        totalHoras = relData.attributes.timePlayed / 3600;
+                    }
+                } catch (e) {
+                    console.log("No se pudo obtener timePlayed directo del servidor, intentando sesiones...", e.message);
+                }
+
+                // 4. Obtener sesiones para calcular las horas desde el wipe con mayor precisión
                 const sessionsResponse = await axios.get(
-                    `https://api.battlemetrics.com/players/${playerId}/relationships/sessions`,
+                    `https://api.battlemetrics.com/players/${playerId}/sessions`,
                     {
                         headers,
                         params: {
                             "filter[servers]": targetServerId,
-                            "page[size]": 100
+                            "page[size]": 50
                         }
                     }
                 );
 
                 const sessions = sessionsResponse.data.data || [];
                 let segundosDesdeWipe = 0;
-                let segundosTotalesServidor = 0;
                 const ahora = new Date();
 
                 for (const session of sessions) {
                     const attributes = session.attributes || {};
                     const start = new Date(attributes.start);
                     const stop = attributes.stop ? new Date(attributes.stop) : ahora;
-
-                    const diffServer = (stop - start) / 1000;
-                    if (diffServer > 0) {
-                        segundosTotalesServidor += diffServer;
-                    }
 
                     if (stop >= fechaWipe) {
                         const effectiveStart = start < fechaWipe ? fechaWipe : start;
@@ -104,11 +112,10 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                     }
                 }
 
-                totalHoras = segundosTotalesServidor / 3600;
                 horasDesdeWipe = (segundosDesdeWipe / 3600).toFixed(2);
 
             } catch (err) {
-                console.log(`Error obteniendo sesiones del servidor objetivo:`, err.message);
+                console.log(`Error obteniendo datos del servidor objetivo:`, err.message);
             }
         }
 
