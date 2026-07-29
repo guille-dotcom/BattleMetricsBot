@@ -4,18 +4,32 @@ const path = require("path");
 const { getBattleMetricsHours } = require("../services/battlemetricsHours");
 
 const file = path.join(__dirname, "..", "data", "users.json");
+const configPath = path.join(__dirname, "..", "data", "config.json");
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("ranking")
-        .setDescription("Ranking de horas jugadas desde el último wipe"),
+        .setDescription("Ranking de horas jugadas desde el último wipe en el servidor configurado"),
 
     async execute(interaction) {
         if (!fs.existsSync(file)) {
             return await interaction.reply({ 
                 content: "❌ No hay datos de usuarios registrados para el ranking.", 
-                flags: 6 // Equivalente a MessageFlags.Ephemeral si usas discord.js v14+
+                ephemeral: true 
             });
+        }
+
+        // Obtener el ID del servidor configurado
+        let serverIdConfigurado = null;
+        try {
+            if (fs.existsSync(configPath)) {
+                const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+                if (config.battlemetricsServer) {
+                    serverIdConfigurado = config.battlemetricsServer;
+                }
+            }
+        } catch (error) {
+            console.log("Error leyendo config.json:", error.message);
         }
 
         const users = JSON.parse(fs.readFileSync(file, "utf-8"));
@@ -26,10 +40,9 @@ module.exports = {
         for (const id of Object.keys(users)) {
             const u = users[id];
             try {
-                // Obtenemos los datos completos del perfil de BattleMetrics del usuario
-                const h = await getBattleMetricsHours(u.battlemetricsId);
+                // Le pasamos el ID del servidor configurado para que busque las horas exactas de ahí
+                const h = await getBattleMetricsHours(u.battlemetricsId, serverIdConfigurado);
                 
-                // Extraemos las horas desde el wipe (asegurándonos de pasarlo a número)
                 const horasWipeNum = Number(h.horasDesdeWipe || 0);
                 const nombreJugador = u.discord || h.nombre || "Desconocido";
 
@@ -39,7 +52,6 @@ module.exports = {
             }
         }
 
-        // Ordenamos de mayor a menor según las horas desde el wipe
         ranking.sort((a, b) => b.hours - a.hours);
 
         let text = "";
@@ -52,9 +64,7 @@ module.exports = {
             .setDescription(text || "Sin datos disponibles")
             .setColor("#57F287")
             .setTimestamp()
-            .setFooter({
-                text: "RustLogix"
-            });
+            .setFooter({ text: "RustLogix" });
 
         await interaction.editReply({ embeds: [embed] });
     }
