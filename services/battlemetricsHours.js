@@ -9,7 +9,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             "Content-Type": "application/json"
         };
 
-        // 1. Obtener datos básicos del jugador
+        // 1. Obtener datos básicos del jugador (Nombre)
         const playerRes = await axios.get(
             `https://api.battlemetrics.com/players/${playerId}`,
             { headers }
@@ -25,15 +25,15 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
         let fechaWipeFormateada = "Desconocido";
         let onlineServerId = targetServerId;
 
-        // 2. Obtener sesiones usando el filtro correcto de la API de BattleMetrics ([players])
+        // 2. Obtener las sesiones del jugador usando la estructura de parámetros admitida por BattleMetrics
         try {
             const sessionsRes = await axios.get(
                 `https://api.battlemetrics.com/sessions`,
                 { 
                     headers,
                     params: { 
-                        "filter[players]": playerId,
-                        "page[size]": 100,
+                        "filter[player]": playerId,
+                        "page[size]": 50,
                         "sort": "-start"
                     }
                 }
@@ -58,7 +58,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                     segundosTotales += diff;
                 }
 
-                // Detectar servidor activo (sesión sin stop)
+                // Detectar si el jugador está online actualmente (la sesión no tiene 'stop')
                 if (!attr.stop && serverRel && !onlineServerId) {
                     onlineServerId = serverRel.id;
                 }
@@ -79,7 +79,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             console.log("Error obteniendo sesiones del jugador:", e.message);
         }
 
-        // 3. Obtener detalles del servidor actual, su wipe y calcular horas desde el wipe
+        // 3. Si encontramos el servidor online, consultamos sus detalles y calculamos horas desde el wipe
         if (onlineServerId) {
             try {
                 const serverResponse = await axios.get(
@@ -101,14 +101,14 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                     fechaWipeFormateada = fechaWipe.toLocaleString();
                 }
 
-                // Obtener sesiones para este servidor específico usando filter[players] y filter[servers]
+                // Obtener sesiones para este servidor específico
                 const serverSessionsRes = await axios.get(
                     `https://api.battlemetrics.com/sessions`,
                     {
                         headers,
                         params: {
-                            "filter[players]": playerId,
-                            "filter[servers]": onlineServerId,
+                            "filter[player]": playerId,
+                            "filter[server]": onlineServerId,
                             "page[size]": 100
                         }
                     }
@@ -135,7 +135,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                 horasDesdeWipe = (segundosDesdeWipe / 3600).toFixed(2);
 
             } catch (err) {
-                console.log(`Error obteniendo datos del servidor o sesiones:`, err.message);
+                console.log(`Error obteniendo datos del servidor online:`, err.message);
             }
         }
 
