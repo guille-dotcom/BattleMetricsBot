@@ -19,9 +19,10 @@ function formatHoursToHoursMinutes(decimalHours) {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("ranking")
-        .setDescription("Ranking de jugadores con el tiempo total acumulado en el servidor"),
+        .setDescription("Ranking de jugadores con el tiempo total acumulado"),
 
     async execute(interaction) {
+        // Responder inmediatamente a Discord para evitar que la interacción expire
         await interaction.deferReply();
 
         let serverIdConfigurado = null;
@@ -49,30 +50,25 @@ module.exports = {
                 "Content-Type": "application/json"
             };
 
-            console.log(`[RANKING ROBUST] Consultando servidor ${serverIdConfigurado}...`);
+            console.log(`[RANKING FAST] Consultando servidor ${serverIdConfigurado}...`);
             const inicio = Date.now();
 
-            // Consultar el servidor incluyendo sesiones y jugadores
+            // Usamos un timeout controlado para que la API responda rápido
             const response = await axios.get(
                 `https://api.battlemetrics.com/servers/${serverIdConfigurado}?include=session,player`,
-                { headers, timeout: 8000 }
+                { headers, timeout: 7000 }
             );
 
-            console.log(`[RANKING ROBUST] Datos recibidos en ${Date.now() - inicio}ms`);
+            console.log(`[RANKING FAST] Datos recibidos en ${Date.now() - inicio}ms`);
 
             const serverData = response.data.data;
             const details = serverData.attributes?.details || {};
-            
-            // Buscar la fecha de wipe real o usar un margen seguro de 7 días atrás si no viene definida
             const lastWipeStr = details.rustLastWipe || details.wipeTime || serverData.attributes?.metadata?.rustLastWipe;
-            let fechaWipe = lastWipeStr ? new Date(lastWipeStr) : new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
             
-            // Validación de seguridad: si la fecha del wipe es futura o menor a hace 1 minuto, tomamos por defecto 4 días atrás
+            let fechaWipe = lastWipeStr ? new Date(lastWipeStr) : new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
             if (isNaN(fechaWipe.getTime()) || fechaWipe > new Date()) {
                 fechaWipe = new Date(Date.now() - (4 * 24 * 60 * 60 * 1000));
             }
-
-            console.log(`[RANKING ROBUST] Usando fecha de referencia wipe: ${fechaWipe.toISOString()}`);
 
             const included = response.data.included || [];
             const playersMap = {};
@@ -120,8 +116,6 @@ module.exports = {
 
             ranking.sort((a, b) => b.hoursDecimal - a.hoursDecimal);
 
-            console.log(`[RANKING ROBUST] Jugadores procesados con tiempo: ${ranking.length}`);
-
             let text = "";
             if (ranking.length === 0) {
                 text = "No hay registros de tiempo acumulado disponibles en este momento.";
@@ -144,9 +138,9 @@ module.exports = {
             });
 
         } catch (error) {
-            console.log("ERROR API Ranking Robust:", error.response?.data || error.message);
+            console.log("ERROR API Ranking Fast:", error.response?.data || error.message);
             return await interaction.editReply({ 
-                content: "❌ Hubo un error al calcular el ranking del servidor." 
+                content: "❌ Hubo un error al conectar con BattleMetrics para generar el ranking." 
             });
         }
     }
