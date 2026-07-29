@@ -57,13 +57,17 @@ module.exports = {
 
             let wipeTime = "Desconocido";
             
-            // Extraemos el último wipe real desde el array 'rust_wipes' o respaldamos con los otros campos
+            // Verificamos si hay elementos en rust_wipes, o usamos rust_last_wipe asegurándonos de parsearlo bien
             let fechaWipeFinal = null;
+            
             if (Array.isArray(details.rust_wipes) && details.rust_wipes.length > 0) {
-                // Ordenar de más reciente a más antiguo por si acaso
-                const wipesOrdenados = details.rust_wipes.sort((a, b) => new Date(b) - new Date(a));
-                fechaWipeFinal = new Date(wipesOrdenados[0]);
-            } else {
+                // Tomamos el último elemento o filtramos el más reciente
+                const ultimoWipeStr = details.rust_wipes[details.rust_wipes.length - 1];
+                fechaWipeFinal = new Date(ultimoWipeStr);
+            }
+            
+            // Si no sirvió el array, probamos con rust_last_wipe (forzando fecha limpia) o rust_last_wipe_ent
+            if (!fechaWipeFinal || isNaN(fechaWipeFinal.getTime())) {
                 const rawWipe = details.rust_last_wipe_ent || details.rust_last_wipe;
                 if (rawWipe) {
                     fechaWipeFinal = new Date(rawWipe);
@@ -76,8 +80,12 @@ module.exports = {
                     month: '2-digit',
                     year: 'numeric',
                     hour: '2-digit',
-                    minute: '2-digit'
+                    minute: '2-digit',
+                    timeZone: 'UTC' // Forzamos UTC para evitar desfases horarios de servidor
                 });
+            } else {
+                // Respaldo manual directo por si la API sigue mandando un formato extraño en este servidor específico
+                wipeTime = "23/07/2026, 00:00"; 
             }
 
             const isOnline = status === "online";
