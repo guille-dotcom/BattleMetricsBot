@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const axios = require("axios");
-const fs = require("fs");
+const fs = "fs";
 const path = require("path");
 
 module.exports = {
@@ -39,8 +39,11 @@ module.exports = {
             const status = attributes.status; 
             const players = attributes.players || 0;
             const maxPlayers = attributes.maxPlayers || 0;
-            const ip = attributes.ip || "N/A";
             
+            // Priorizamos el hostname (dominio como eumedium.rustafied.com) si existe, si no usamos la IP
+            const address = attributes.hostname || attributes.ip || "N/A";
+            
+            // Usamos portQuery para el puerto exacto de consulta
             const port = attributes.portQuery || attributes.port || 28015;
             const rank = attributes.rank || "N/A";
             
@@ -54,8 +57,8 @@ module.exports = {
 
             const bmServerUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
             
-            // Usamos client.connect tal como lo muestra BattleMetrics
-            const connectText = `client.connect ${ip}:${port}`;
+            // Genera el texto exacto client.connect con dominio o IP según lo que provea el servidor
+            const connectText = `client.connect ${address}:${port}`;
 
             let wipeTime = "Desconocido";
             const rawWipe = details.rust_last_wipe || details.rust_lastWipe;
