@@ -46,23 +46,8 @@ module.exports = {
             const details = attributes.details || {};
             const mapName = details.map || "Desconocido";
 
-            // Buscamos de forma exhaustiva si la API incluye el enlace directo a RustMaps en algún rincón de los detalles
-            let mapPageUrl = details.rust_map_url || details.mapUrl || details.rustMapUrl;
-
-            // Si no está directo, revisamos si algún valor dentro de details contiene un link de rustmaps
-            if (!mapPageUrl) {
-                for (const key in details) {
-                    if (typeof details[key] === "string" && details[key].includes("rustmaps.com")) {
-                        mapPageUrl = details[key];
-                        break;
-                    }
-                }
-            }
-
-            // Si de plano la API no lo manda para este servidor en particular, usamos el enlace directo a la ficha de BattleMetrics como respaldo seguro
-            if (!mapPageUrl) {
-                mapPageUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
-            }
+            // Enlace directo a la página de BattleMetrics del servidor donde se visualiza el mapa
+            const bmServerUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
 
             let wipeTime = "Desconocido";
             const rawWipe = details.rust_last_wipe || details.rust_lastWipe;
@@ -91,16 +76,15 @@ module.exports = {
                     { name: "🖥️ Estado", value: estadoTexto, inline: true },
                     { name: "👥 Jugadores", value: `\`${players} / ${maxPlayers}\``, inline: true },
                     { name: "🏆 Ranking BM", value: `\`#${rank}\``, inline: true },
-                    { name: "🗺️ Mapa", value: `[${mapName}](${mapPageUrl})`, inline: true },
+                    { name: "🗺️ Mapa", value: `[${mapName}](${bmServerUrl})`, inline: true },
                     { name: "🛠️ Último Wipe", value: `\`${wipeTime}\``, inline: true },
                     { name: "🌐 Conexión", value: `\`connect ${ip}:${port}\``, inline: false },
-                    { name: "🔗 Enlace BattleMetrics", value: `[Ver en BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`, inline: false }
+                    { name: "🔗 Enlace BattleMetrics", value: `[Ver Servidor y Mapa](${bmServerUrl})`, inline: false }
                 )
                 .setTimestamp()
                 .setFooter({ text: "RustLogix" });
 
             return await interaction.editReply({ 
-                content: `🗺️ **Mapa actual del servidor:**\n${mapPageUrl}`,
                 embeds: [embed] 
             });
 
