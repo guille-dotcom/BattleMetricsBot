@@ -12,17 +12,12 @@ module.exports = {
         await interaction.deferReply();
 
         let serverId = "433255"; 
-        let customMapUrl = "https://rustmaps.com/map/a758fe45e0f545e18645294134457ef6"; // Enlace exacto actual por defecto
-
         try {
             const configPath = path.join(__dirname, "../data/config.json");
             if (fs.existsSync(configPath)) {
                 const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
                 if (config.battlemetricsServer) {
                     serverId = config.battlemetricsServer; 
-                }
-                if (config.mapUrl) {
-                    customMapUrl = config.mapUrl;
                 }
             }
         } catch (error) {
@@ -50,6 +45,15 @@ module.exports = {
             
             const details = attributes.details || {};
             const mapName = details.map || "Desconocido";
+            
+            const seed = details.rust_seed || details.seed;
+            const size = details.rust_world_size || details.worldSize;
+
+            // Enlace inteligente: Si tiene seed y size válidos, usa RustMaps. Si es custom, usa BattleMetrics directamente para evitar errores.
+            let mapPageUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
+            if (seed && size && !isNaN(seed) && !isNaN(size)) {
+                mapPageUrl = `https://rustmaps.com/map/${size}_${seed}`;
+            }
 
             let wipeTime = "Desconocido";
             const rawWipe = details.rust_last_wipe || details.rust_lastWipe;
@@ -78,7 +82,7 @@ module.exports = {
                     { name: "🖥️ Estado", value: estadoTexto, inline: true },
                     { name: "👥 Jugadores", value: `\`${players} / ${maxPlayers}\``, inline: true },
                     { name: "🏆 Ranking BM", value: `\`#${rank}\``, inline: true },
-                    { name: "🗺️ Mapa", value: `[${mapName}](${customMapUrl})`, inline: true },
+                    { name: "🗺️ Mapa", value: `[${mapName}](${mapPageUrl})`, inline: true },
                     { name: "🛠️ Último Wipe", value: `\`${wipeTime}\``, inline: true },
                     { name: "🌐 Conexión", value: `\`connect ${ip}:${port}\``, inline: false },
                     { name: "🔗 Enlace BattleMetrics", value: `[Ver en BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`, inline: false }
@@ -87,7 +91,7 @@ module.exports = {
                 .setFooter({ text: "RustLogix" });
 
             return await interaction.editReply({ 
-                content: `🗺️ **Mapa actual del servidor:**\n${customMapUrl}`,
+                content: `🗺️ **Información del mapa y servidor:**\n${mapPageUrl}`,
                 embeds: [embed] 
             });
 
