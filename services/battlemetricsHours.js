@@ -1,5 +1,5 @@
 require("dotenv").config();
-const axios = "axios" in global ? global.axios : require("axios");
+const axios = require("axios");
 
 async function getBattleMetricsHours(playerId, targetServerId = null) {
     try {
@@ -9,41 +9,75 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             "Content-Type": "application/json"
         };
 
-        // 1. Obtener datos del jugador incluyendo el servidor actual
+        // 1. Obtener datos del jugador (Nombre)
         const playerRes = await axios.get(
             `https://api.battlemetrics.com/players/${playerId}`,
-            { 
-                headers,
-                params: {
-                    "include": "server"
-                }
-            }
+            { headers }
         );
 
-        const playerData = playerRes.data;
-        const player = playerData.data;
+        const player = playerRes.data.data;
         const nombreJugador = player.attributes?.name || "Desconocido";
 
         let nombreServidorActual = "No conectado en ningún servidor";
         let onlineServerId = targetServerId;
 
-        // Comprobar la relación de servidores activos en la estructura de BattleMetrics
-        const serversRel = player.relationships?.servers?.data;
-        if (serversRel && Array.isArray(serversRel) && serversRel.length > 0) {
-            onlineServerId = serversRel[0].id;
-        } else if (player.relationships?.server?.data) {
-            onlineServerId = player.relationships.server.data.id;
-        }
+        // 2. Obtener sesiones recientes para detectar el servidor actual (la sesión abierta sin 'stop')
+        try {
+            const sessionsRes = await axios.get(
+                `https://api.battlemetrics.com/sessions`,
+                { 
+                    headers,
+                    params: { 
+                        "filter[player]": playerId,
+                        "page[size]": 5,
+                        "sort": "-start",
+                        "include": "server"
+                    }
+                }
+            );
 
-        // Buscar el nombre del servidor en los elementos 'included'
-        if (onlineServerId && playerData.included) {
-            const serverInfo = playerData.included.find(inc => inc.type === "server" && inc.id === onlineServerId);
-            if (serverInfo) {
-                nombreServidorActual = serverInfo.attributes?.name || "Desconocido";
+            const sessions = sessionsRes.data.data || [];
+            const included = sessionsRes.data.included || [];
+
+            // Mapear los servidores incluidos
+            const serverMap = {};
+            for (const inc of included) {
+                if (inc.type === "server") {
+                    serverMap[inc.id] = inc.attributes?.name;
+                }
             }
+
+            // Buscar la sesión actual (la que no tiene 'stop')
+            for (const session of sessions) {
+                const attr = session.attributes || {};
+                const serverRel = session.relationships?.server?.data;
+
+                if (!attr.stop && serverRel) {
+                    onlineServerId = serverRel.id;
+                    if (serverMap[onlineServerId]) {
+                        nombreServidorActual = serverMap[onlineServerId];
+                    }
+                    break;
+                }
+            }
+
+            // Si no hay una sesión explícitamente abierta pero la última ocurrió hace menos de 10 minutos, tomarla como actual
+            if (nombreServidorActual === "No conectado en ningún servidor" && sessions.length > 0) {
+                const latest = sessions[0];
+                const serverRel = latest.relationships?.server?.data;
+                if (serverRel) {
+                    onlineServerId = serverRel.id;
+                    if (serverMap[onlineServerId]) {
+                        nombreServidorActual = serverMap[onlineServerId];
+                    }
+                }
+            }
+
+        } catch (e) {
+            console.log("Error consultando sesiones para el servidor actual:", e.message);
         }
 
-        // Si hay ID pero no venía en included, hacemos consulta directa
+        // 3. Respaldo por si tenemos el ID pero no el nombre exacto
         if (onlineServerId && nombreServidorActual === "No conectado en ningún servidor") {
             try {
                 const serverRes = await axios.get(
@@ -52,7 +86,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                 );
                 nombreServidorActual = serverRes.data.data.attributes?.name || "Desconocido";
             } catch (err) {
-                console.log("Error consultando servidor directo:", err.message);
+                console.log("Error consultando servidor directo por ID:", err.message);
             }
         }
 
