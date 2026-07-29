@@ -53,12 +53,12 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                     `https://api.battlemetrics.com/servers/${targetServerId}`,
                     { headers }
                 );
-                const serverData = responseData = serverResponse.data.data;
+                const serverData = serverResponse.data.data;
                 const details = serverData.attributes?.details || {};
                 
                 primerServidor = serverData.attributes?.name || "Desconocido";
 
-                const lastWipeStr = details.rustLastWipe || details.wipeTime || serverData.attributes?.metadata?.rustLastWipe;
+                const lastWipeStr = details.rustLastWipe || details.wipeTime || details.rust_last_wipe || serverData.attributes?.metadata?.rustLastWipe;
                 let fechaWipe = lastWipeStr ? new Date(lastWipeStr) : null;
 
                 if (!fechaWipe || isNaN(fechaWipe.getTime()) || fechaWipe > new Date()) {
@@ -68,12 +68,15 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                     fechaWipeFormateada = fechaWipe.toLocaleString();
                 }
 
-                // 3. Consultar las sesiones del jugador en este servidor específico
+                // 3. Consultar las sesiones filtradas correctamente por el servidor usando relaciones
                 const sessionsResponse = await axios.get(
-                    `https://api.battlemetrics.com/players/${playerId}/servers/${targetServerId}/sessions`,
+                    `https://api.battlemetrics.com/players/${playerId}/relationships/sessions`,
                     {
                         headers,
-                        params: { "page[size]": 100 }
+                        params: {
+                            "filter[servers]": targetServerId,
+                            "page[size]": 100
+                        }
                     }
                 );
 
