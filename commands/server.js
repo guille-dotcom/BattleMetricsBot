@@ -40,15 +40,14 @@ module.exports = {
             const players = attributes.players || 0;
             const maxPlayers = attributes.maxPlayers || 0;
             const ip = attributes.ip || "N/A";
+            
+            // Usamos siempre el puerto principal del juego (Game Port) para que conecte bien en cualquier servidor
             const port = attributes.port || 28015;
             const rank = attributes.rank || "N/A";
             
             const details = attributes.details || {};
             
-            // Intentamos obtener el query port de los atributos o detalles, si no existe usamos port + 3 (estándar en Rust) o port
-            const queryPort = attributes.queryPort || details.queryPort || (typeof port === 'number' ? port + 3 : port);
-
-            // Validamos si el nombre del mapa es válido
+            // Validamos que el nombre del mapa sea un texto limpio y no un link o invitación
             let rawMap = details.map;
             let mapName = "Ver Mapa en BattleMetrics";
             if (rawMap && typeof rawMap === "string" && !rawMap.includes("discord") && !rawMap.includes("http") && rawMap.length < 30) {
@@ -86,7 +85,7 @@ module.exports = {
                     { name: "🏆 Ranking BM", value: `\`#${rank}\``, inline: true },
                     { name: "🗺️ Mapa", value: `[${mapName}](${bmServerUrl})`, inline: true },
                     { name: "🛠️ Último Wipe", value: `\`${wipeTime}\``, inline: true },
-                    { name: "🌐 Conexión", value: `\`connect ${ip}:${queryPort}\``, inline: false }
+                    { name: "🌐 Conexión", value: `\`connect ${ip}:${port}\``, inline: false }
                 )
                 .setTimestamp()
                 .setFooter({ text: "RustLogix" });
