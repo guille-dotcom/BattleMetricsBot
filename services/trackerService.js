@@ -132,7 +132,8 @@ function registrarTracker({
         expiraEn: Date.now() + (24 * 60 * 60 * 1000),
         ultimoEstado: "desconocido",
         inicioSesion: null,
-        ultimoServidor: null
+        ultimoServidor: null,
+        ultimoServerId: null
     };
 
     guardarTrackers(trackers);
@@ -171,6 +172,7 @@ async function revisarTrackers(client) {
                 tracker.ultimoEstado = "online";
                 tracker.inicioSesion = Date.now();
                 tracker.ultimoServidor = status.server;
+                tracker.ultimoServerId = status.serverId;
 
                 await canal.send({
                     embeds: [crearEmbedOnline(status, tracker, status.server)]
@@ -208,6 +210,7 @@ async function revisarTrackers(client) {
             tracker.ultimoEstado = "online";
             tracker.inicioSesion = Date.now();
             tracker.ultimoServidor = status.server;
+            tracker.ultimoServerId = status.serverId;
 
             await canal.send({
                 content: `🔔 **${status.name} volvió a entrar al servidor**`,
@@ -222,15 +225,15 @@ async function revisarTrackers(client) {
         // 3. SIGUE ONLINE (O CAMBIÓ DE SERVIDOR DIRECTO)
         // ============================
         if(status.online && tracker.ultimoEstado === "online"){
-            // Detectar cambio de servidor sin desconexión previa
+            // Detectar cambio de servidor real usando el ID del servidor
             if (
-                status.server && 
-                tracker.ultimoServidor && 
-                status.server !== tracker.ultimoServidor &&
-                status.server !== "Desconocido"
+                status.serverId && 
+                tracker.ultimoServerId && 
+                status.serverId !== tracker.ultimoServerId
             ) {
                 const viejoServer = tracker.ultimoServidor;
                 tracker.ultimoServidor = status.server;
+                tracker.ultimoServerId = status.serverId;
                 tracker.inicioSesion = Date.now();
 
                 await canal.send({
@@ -239,6 +242,7 @@ async function revisarTrackers(client) {
                 });
             } else if (status.server && status.server !== "Desconocido") {
                 tracker.ultimoServidor = status.server;
+                tracker.ultimoServerId = status.serverId;
             }
         }
 
@@ -257,6 +261,7 @@ async function revisarTrackers(client) {
             });
 
             tracker.inicioSesion = null;
+            tracker.ultimoServerId = null;
         }
 
         guardarTrackers(trackers);
