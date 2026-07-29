@@ -1,147 +1,61 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const { getServerLeaderboard } = require("../services/battlemetrics.js");
 const fs = require("fs");
 const path = require("path");
-const axios = require("axios");
 
-const configPath = path.join(__dirname, "..", "data", "config.json");
-
-function formatHoursToHoursMinutes(decimalHours) {
-    const totalMinutes = Math.round(parseFloat(decimalHours) * 60);
+function formatSecondsToHoursMinutes(seconds) {
+    const totalMinutes = Math.floor(seconds / 60);
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
 
-    if (hours === 0 && minutes === 0) return "0m";
     if (hours === 0) return `${minutes}m`;
-    if (minutes === 0) return `${hours}h`;
     return `${hours}h ${minutes}m`;
 }
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("ranking")
-        .setDescription("Ranking de jugadores con el tiempo total acumulado"),
+        .setDescription("Muestra el top de jugadores activos en el servidor según su tiempo de juego"),
 
     async execute(interaction) {
-        // Responder inmediatamente a Discord para evitar que la interacción expire
         await interaction.deferReply();
 
-        let serverIdConfigurado = null;
+        let serverId = "433255"; // Valor por defecto
         try {
+            const configPath = path.join(__dirname, "../data/config.json");
             if (fs.existsSync(configPath)) {
                 const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
                 if (config.battlemetricsServer) {
-                    serverIdConfigurado = config.battlemetricsServer;
+                    serverId = config.battlemetricsServer;
                 }
             }
         } catch (error) {
             console.log("Error leyendo config.json:", error.message);
         }
 
-        if (!serverIdConfigurado) {
-            return await interaction.editReply({ 
-                content: "❌ No hay ningún servidor de BattleMetrics configurado." 
-            });
+        const ranking = await getServerLeaderboard(serverId);
+
+        if (!ranking || ranking.length === 0) {
+            return await interaction.editReply("❌ No se pudo obtener el ranking o no hay jugadores en este momento.");
         }
 
-        try {
-            const token = process.env.BATTLEMETRICS_TOKEN;
-            const headers = {
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
-            };
+        // Tomamos los primeros 10 jugadores para el top
+        const topPlayers = ranking.slice(0, 10);
 
-            console.log(`[RANKING FAST] Consultando servidor ${serverIdConfigurado}...`);
-            const inicio = Date.now();
+        let description = "";
+        topPlayers.forEach((player, index) => {
+            const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `**#${index + 1}**`;
+            const tiempoFormateado = formatSecondsToHoursMinutes(player.timePlayedSeconds);
+            description += `${medal} [${player.name}](https://www.battlemetrics.com/players/${player.id}) — \`${tiempoFormateado}\`\n`;
+        });
 
-            // Usamos un timeout controlado para que la API responda rápido
-            const response = await axios.get(
-                `https://api.battlemetrics.com/servers/${serverIdConfigurado}?include=session,player`,
-                { headers, timeout: 7000 }
-            );
+        const embed = new EmbedBuilder()
+            .setTitle("🏆 Ranking de Tiempo en el Servidor")
+            .setColor("#57F287")
+            .setDescription(description)
+            .setTimestamp()
+            .setFooter({ text: "RustLogix" });
 
-            console.log(`[RANKING FAST] Datos recibidos en ${Date.now() - inicio}ms`);
-
-            const serverData = response.data.data;
-            const details = serverData.attributes?.details || {};
-            const lastWipeStr = details.rustLastWipe || details.wipeTime || serverData.attributes?.metadata?.rustLastWipe;
-            
-            let fechaWipe = lastWipeStr ? new Date(lastWipeStr) : new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
-            if (isNaN(fechaWipe.getTime()) || fechaWipe > new Date()) {
-                fechaWipe = new Date(Date.now() - (4 * 24 * 60 * 60 * 1000));
-            }
-
-            const included = response.data.included || [];
-            const playersMap = {};
-            const sessions = [];
-
-            for (const item of included) {
-                if (item.type === "player") {
-                    playersMap[item.id] = item.attributes?.name || "Desconocido";
-                }
-                if (item.type === "session") {
-                    sessions.push(item);
-                }
-            }
-
-            const playerSeconds = {};
-            const ahora = new Date();
-
-            for (const session of sessions) {
-                const playerId = session.relationships?.player?.data?.id;
-                if (!playerId) continue;
-
-                const sessionStart = new Date(session.attributes.start);
-                const sessionStop = session.attributes.stop ? new Date(session.attributes.stop) : ahora;
-
-                if (sessionStop < fechaWipe) continue;
-
-                const inicioEfectivo = sessionStart < fechaWipe ? fechaWipe : sessionStart;
-                const diffSegundos = (sessionStop - inicioEfectivo) / 1000;
-
-                if (diffSegundos > 0) {
-                    playerSeconds[playerId] = (playerSeconds[playerId] || 0) + diffSegundos;
-                }
-            }
-
-            const ranking = [];
-            for (const [playerId, segundos] of Object.entries(playerSeconds)) {
-                const horas = segundos / 3600;
-                ranking.push({
-                    id: playerId,
-                    name: playersMap[playerId] || "Desconocido",
-                    hoursDecimal: horas,
-                    formatted: formatHoursToHoursMinutes(horas)
-                });
-            }
-
-            ranking.sort((a, b) => b.hoursDecimal - a.hoursDecimal);
-
-            let text = "";
-            if (ranking.length === 0) {
-                text = "No hay registros de tiempo acumulado disponibles en este momento.";
-            } else {
-                ranking.slice(0, 15).forEach((u, i) => {
-                    text += `**${i + 1}.** [${u.name}](https://www.battlemetrics.com/players/${u.id}) — \`${u.formatted}\`\n`;
-                });
-            }
-
-            const embed = new EmbedBuilder()
-                .setTitle("🏆 Top 15 — Horas Totales Acumuladas")
-                .setDescription(text)
-                .setColor("#57F287")
-                .setTimestamp()
-                .setFooter({ text: "RustLogix" });
-
-            return await interaction.editReply({ 
-                content: null,
-                embeds: [embed] 
-            });
-
-        } catch (error) {
-            console.log("ERROR API Ranking Fast:", error.response?.data || error.message);
-            return await interaction.editReply({ 
-                content: "❌ Hubo un error al conectar con BattleMetrics para generar el ranking." 
-            });
-        }
+        await interaction.editReply({ embeds: [embed] });
     }
 };
