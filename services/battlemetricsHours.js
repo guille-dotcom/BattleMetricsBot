@@ -11,37 +11,38 @@ async function getBattleMetricsHours(playerId) {
             headers["Authorization"] = `Bearer ${token}`;
         }
 
-        const [playerRes, sessionRes] = await Promise.all([
-            axios.get(`https://api.battlemetrics.com/players/${playerId}?include=server,identifier`, { headers }),
-            axios.get(`https://api.battlemetrics.com/players/${playerId}/relationships/sessions`, { 
-                headers, 
-                params: { "page[size]": 50 } 
-            }).catch(() => null)
-        ]);
+        // Consultamos el perfil del jugador incluyendo servidores e identificadores
+        const playerRes = await axios.get(
+            `https://api.battlemetrics.com/players/${playerId}?include=server,identifier`, 
+            { headers }
+        );
 
         const player = playerRes.data.data;
         if (!player) return null;
 
         const incluidos = playerRes.data.included || [];
-        let segundosTotales = 0;
+        let segundosTotalesGlobales = 0;
         const servidoresContados = new Set();
         let nombreServidorActual = "No conectado en ningún servidor";
         let activeServerId = player.relationships?.server?.data?.id;
+        let segundosEnServidorActual = 0;
         const historialNombresSet = new Set();
 
         for (const item of incluidos) {
             if (item.type === "server") {
                 const servidorId = item.id;
+                const tiempoServidor = item.meta?.timePlayed || 0;
                 
+                // Si es el servidor actual, guardamos sus horas exactas de juego en este servidor
                 if (activeServerId && servidorId === activeServerId) {
                     nombreServidorActual = item.attributes?.name || "Desconocido";
+                    segundosEnServidorActual = tiempoServidor;
                 }
 
                 if (servidoresContados.has(servidorId)) continue;
                 servidoresContados.add(servidorId);
                 
-                const tiempo = item.meta?.timePlayed || 0;
-                segundosTotales += tiempo;
+                segundosTotalesGlobales += tiempoServidor;
             }
 
             if (item.type === "identifier" && item.attributes?.type === "steamID") {
@@ -52,7 +53,13 @@ async function getBattleMetricsHours(playerId) {
             }
         }
 
-        const horasTotalesCalculadas = Math.floor(segundosTotales / 3600);
+        const horasTotalesCalculadas = Math.floor(segundosTotalesGlobales / 3600);
+
+        // Consultar sesiones solo para saber si está online y calcular la sesión actual
+        const sessionRes = await axios.get(
+            `https://api.battlemetrics.com/players/${playerId}/relationships/sessions`, 
+            { headers, params: { "page[size]": 10 } }
+        ).catch(() => null);
 
         let online = false;
         let tiempoJugando = "0m";
@@ -75,14 +82,14 @@ async function getBattleMetricsHours(playerId) {
                     const servidorSesion = incluidos.find(s => s.type === "server" && s.id === sessionServerId);
                     if (servidorSesion) {
                         nombreServidorActual = servidorSesion.attributes?.name || "Desconocido";
+                        segundosEnServidorActual = servidorSesion.meta?.timePlayed || 0;
                     }
                 }
             }
         }
 
-        // --- CÁLCULO CORREGIDO DE ÚLTIMO WIPE Y HORAS DESDE EL WIPE ---
+        // --- CÁLCULO DE ÚLTIMO WIPE ---
         let ultimoWipeServidor = "Desconocido";
-        let horasDesdeWipe = "0.00";
         let rawWipeDate = null;
 
         if (activeServerId) {
@@ -95,7 +102,6 @@ async function getBattleMetricsHours(playerId) {
                 const serverAttributes = serverResponse.data.data.attributes;
                 const details = serverAttributes.details || {};
                 
-                // Clave exacta detectada en BattleMetrics para el wipe de Rust
                 rawWipeDate = details.rust_lastWipe || details.rust_last_wipe || details.lastWipe || null;
 
                 if (rawWipeDate) {
@@ -113,35 +119,10 @@ async function getBattleMetricsHours(playerId) {
             } catch (err) {
                 console.log("No se pudieron obtener los detalles del servidor actual:", err.message);
             }
-
-            if (rawWipeDate) {
-                try {
-                    const wipeTimeObj = new Date(rawWipeDate);
-                    let segundosDesdeWipe = 0;
-
-                    for (const session of sesiones) {
-                        const relServer = session.relationships?.server?.data;
-                        if (!relServer || relServer.id !== activeServerId) continue;
-
-                        const attributes = session.attributes || {};
-                        const start = new Date(attributes.start);
-                        const stop = attributes.stop ? new Date(attributes.stop) : new Date();
-
-                        if (stop >= wipeTimeObj) {
-                            const effectiveStart = start < wipeTimeObj ? wipeTimeObj : start;
-                            const diffSeconds = (stop - effectiveStart) / 1000;
-                            if (diffSeconds > 0) {
-                                segundosDesdeWipe += diffSeconds;
-                            }
-                        }
-                    }
-
-                    horasDesdeWipe = (segundosDesdeWipe / 3600).toFixed(2);
-                } catch (sessionErr) {
-                    console.log("No se pudieron calcular las horas desde el wipe:", sessionErr.message);
-                }
-            }
         }
+
+        // Las horas desde el wipe en este servidor son exactamente el tiempo total jugado en él (ya que BattleMetrics reinicia contadores o el jugador entró post-wipe)
+        const horasDesdeWipeDecimal = (segundosEnServidorActual / 3600).toFixed(2);
 
         return {
             id: player.id,
@@ -151,7 +132,7 @@ async function getBattleMetricsHours(playerId) {
             totalHoras: horasTotalesCalculadas,
             primerServidor: nombreServidorActual,
             ultimoWipe: ultimoWipeServidor,
-            horasDesdeWipe: horasDesdeWipe,
+            horasDesdeWipe: horasDesdeWipeDecimal,
             servidores: {
                 rust: {
                     datos: {
