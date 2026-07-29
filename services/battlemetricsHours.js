@@ -1,4 +1,4 @@
-require("dotenv".config();
+require("dotenv").config();
 const axios = require("axios");
 
 async function getBattleMetricsHours(playerId, targetServerId = null) {
@@ -9,7 +9,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             "Content-Type": "application/json"
         };
 
-        // 1. Obtener datos del jugador incluyendo la relación y los datos incluidos del servidor
+        // 1. Obtener datos del jugador incluyendo el servidor actual de forma segura
         const playerRes = await axios.get(
             `https://api.battlemetrics.com/players/${playerId}`,
             { 
@@ -22,35 +22,35 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
 
         const playerData = playerRes.data;
         const player = playerData.data;
-        const nombreJugador = player.attributes.name || "Desconocido";
+        const nombreJugador = player.attributes?.name || "Desconocido";
 
         let nombreServidorActual = "No conectado en ningún servidor";
         let onlineServerId = null;
 
-        // Comprobar si hay relaciones de servidor activas en el objeto del jugador
+        // Comprobar si el jugador tiene una relación activa con un servidor
         const serverRelationship = player.relationships?.server?.data;
         if (serverRelationship) {
             onlineServerId = serverRelationship.id;
         }
 
-        // Si tenemos el ID del servidor actual, buscamos su nombre en los elementos 'included' de la respuesta
+        // Buscar el nombre del servidor en los datos 'included' que devuelve la API
         if (onlineServerId && playerData.included) {
             const serverInfo = playerData.included.find(inc => inc.type === "server" && inc.id === onlineServerId);
             if (serverInfo) {
-                nombreServidorActual = serverInfo.attributes.name || "Desconocido";
+                nombreServidorActual = serverInfo.attributes?.name || "Desconocido";
             }
         }
 
-        // Si no venía en el 'included', hacemos una consulta directa al servidor por su ID
+        // Si hay ID pero no se encontró en el included, hacemos una consulta directa rápida
         if (onlineServerId && nombreServidorActual === "No conectado en ningún servidor") {
             try {
                 const serverRes = await axios.get(
                     `https://api.battlemetrics.com/servers/${onlineServerId}`,
                     { headers }
                 );
-                nombreServidorActual = serverRes.data.data.attributes.name || "Desconocido";
+                nombreServidorActual = serverRes.data.data.attributes?.name || "Desconocido";
             } catch (err) {
-                console.log("Error consultando detalles del servidor actual:", err.message);
+                console.log("Error consultando servidor directo:", err.message);
             }
         }
 
