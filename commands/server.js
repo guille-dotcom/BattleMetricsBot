@@ -41,8 +41,8 @@ module.exports = {
             const maxPlayers = attributes.maxPlayers || 0;
             const ip = attributes.ip || "N/A";
             
-            // Usamos siempre el puerto principal del juego (Game Port) para que conecte bien en cualquier servidor
-            const port = attributes.port || 28015;
+            // Usamos portQuery que es el segundo puerto (Query Port) que muestra BattleMetrics, y respaldamos con port si no existiera
+            const port = attributes.portQuery || attributes.port || 28015;
             const rank = attributes.rank || "N/A";
             
             const details = attributes.details || {};
