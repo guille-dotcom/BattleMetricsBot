@@ -23,39 +23,39 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
         const nombreJugador = player.attributes.name || "Desconocido";
 
         let totalHoras = 0;
-        let primerServidor = "Ninguno / Desconocido (Offline)";
+        let primerServidor = "Ninguno / Desconocido";
         let servidoresEncontrados = 0;
         let horasDesdeWipe = "0.00";
         let fechaWipeFormateada = "Desconocido";
         let onlineServerId = targetServerId;
 
-        // 2. Obtener lista de servidores del jugador para sumar horas totales y detectar si está online en alguno
+        // 2. Obtener la lista de servidores del jugador para sumar horas totales y contar servidores jugados
         try {
-            const relRes = await axios.get(
-                `https://api.battlemetrics.com/players/${playerId}/relationships/servers`,
+            const serversRes = await axios.get(
+                `https://api.battlemetrics.com/players/${playerId}/servers`,
                 { 
                     headers,
                     params: { "page[size]": 100 }
                 }
             );
 
-            const serverRelationships = relRes.data.data || [];
-            servidoresEncontrados = serverRelationships.length;
+            const serverList = serversRes.data.data || [];
+            servidoresEncontrados = serverList.length;
 
-            for (const serverEntry of serverRelationships) {
-                const timePlayed = serverEntry.attributes?.timePlayed || 0;
+            for (const s of serverList) {
+                const timePlayed = s.attributes?.timePlayed || 0;
                 totalHoras += timePlayed / 3600;
 
-                // Detectar si el jugador está jugando activamente en este servidor ahora mismo
-                if (serverEntry.attributes?.status === "online" && !onlineServerId) {
-                    onlineServerId = serverEntry.id;
+                // Detectar si está online actualmente en algún servidor
+                if (s.attributes?.status === "online" && !onlineServerId) {
+                    onlineServerId = s.id;
                 }
             }
         } catch (e) {
-            console.log("Error obteniendo relaciones de servidores:", e.message);
+            console.log("Error obteniendo servidores del jugador:", e.message);
         }
 
-        // Si no vino un servidor por parámetro y no se detectó uno online, intentar leer del config.json como respaldo
+        // Si no hay servidor online detectado, leer del config.json como respaldo
         if (!onlineServerId) {
             try {
                 let resolvedConfigPath = configPath;
@@ -69,11 +69,11 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                     }
                 }
             } catch (err) {
-                console.log("Error leyendo config en el servicio:", err.message);
+                console.log("Error leyendo config:", err.message);
             }
         }
 
-        // 3. Si tenemos un servidor online (o el configurado), obtenemos su nombre, su último wipe y las horas desde el wipe
+        // 3. Obtener detalles del servidor actual/online, su último wipe y calcular horas desde el wipe
         if (onlineServerId) {
             try {
                 const serverResponse = await axios.get(
@@ -95,14 +95,14 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                     fechaWipeFormateada = fechaWipe.toLocaleString();
                 }
 
-                // Obtener sesiones en este servidor para calcular horas desde el wipe
+                // Obtener sesiones para este jugador en este servidor específico
                 const sessionsResponse = await axios.get(
                     `https://api.battlemetrics.com/sessions`,
                     {
                         headers,
                         params: {
                             "filter[player]": playerId,
-                            "filter[servers]": onlineServerId,
+                            "filter[server]": onlineServerId,
                             "page[size]": 100
                         }
                     }
@@ -129,7 +129,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                 horasDesdeWipe = (segundosDesdeWipe / 3600).toFixed(2);
 
             } catch (err) {
-                console.log(`Error obteniendo datos del servidor online o sus sesiones:`, err.message);
+                console.log(`Error obteniendo datos del servidor o sesiones:`, err.message);
             }
         }
 
