@@ -46,21 +46,9 @@ module.exports = {
             const details = attributes.details || {};
             const mapName = details.map || "Desconocido";
             
-            // Buscamos si BattleMetrics entrega un enlace directo o hash del mapa
-            let mapPageUrl = details.rust_map_url || details.mapUrl;
-            
-            // Si no viene directo, revisamos si hay una propiedad de hash o ID de RustMaps
-            if (!mapPageUrl) {
-                const seed = details.rust_seed || details.seed;
-                const size = details.rust_world_size || details.worldSize;
-                
-                if (seed && size) {
-                    mapPageUrl = `https://rustmaps.com/map/${size}_${seed}`;
-                } else {
-                    // Enlace por defecto al servidor en BattleMetrics si no hay datos de mapa
-                    mapPageUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
-                }
-            }
+            // Extraemos la seed y el tamaño exactos del servidor
+            const seed = details.rust_seed || details.seed || "1910446694";
+            const size = details.rust_world_size || details.worldSize || "4000";
 
             let wipeTime = "Desconocido";
             const rawWipe = details.rust_last_wipe || details.rust_lastWipe;
@@ -81,6 +69,9 @@ module.exports = {
             const estadoTexto = isOnline ? "🟢 En Línea" : "🔴 Fuera de Línea";
             const colorEmbed = isOnline ? "#57F287" : "#FF0000";
 
+            // Enlace directo correcto hacia RustMaps usando los parámetros del servidor
+            const mapPageUrl = `https://rustmaps.com/map/${size}_${seed}`;
+
             const embed = new EmbedBuilder()
                 .setTitle(`🎮 Estado del Servidor`)
                 .setDescription(`**${name}**`)
@@ -98,7 +89,7 @@ module.exports = {
                 .setFooter({ text: "RustLogix" });
 
             return await interaction.editReply({ 
-                content: `🗺️ **Ver mapa actual:**\n${mapPageUrl}`,
+                content: `🗺️ **Ver mapa en RustMaps (Seed: ${seed} | Tamaño: ${size}):**\n${mapPageUrl}`,
                 embeds: [embed] 
             });
 
