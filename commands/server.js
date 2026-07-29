@@ -45,14 +45,23 @@ module.exports = {
             
             const details = attributes.details || {};
             const mapName = details.map || "Desconocido";
-            
-            const seed = details.rust_seed || details.seed;
-            const size = details.rust_world_size || details.worldSize;
 
-            // Enlace inteligente: Si tiene seed y size válidos, usa RustMaps. Si es custom, usa BattleMetrics directamente para evitar errores.
-            let mapPageUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
-            if (seed && size && !isNaN(seed) && !isNaN(size)) {
-                mapPageUrl = `https://rustmaps.com/map/${size}_${seed}`;
+            // Buscamos de forma exhaustiva si la API incluye el enlace directo a RustMaps en algún rincón de los detalles
+            let mapPageUrl = details.rust_map_url || details.mapUrl || details.rustMapUrl;
+
+            // Si no está directo, revisamos si algún valor dentro de details contiene un link de rustmaps
+            if (!mapPageUrl) {
+                for (const key in details) {
+                    if (typeof details[key] === "string" && details[key].includes("rustmaps.com")) {
+                        mapPageUrl = details[key];
+                        break;
+                    }
+                }
+            }
+
+            // Si de plano la API no lo manda para este servidor en particular, usamos el enlace directo a la ficha de BattleMetrics como respaldo seguro
+            if (!mapPageUrl) {
+                mapPageUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
             }
 
             let wipeTime = "Desconocido";
@@ -91,7 +100,7 @@ module.exports = {
                 .setFooter({ text: "RustLogix" });
 
             return await interaction.editReply({ 
-                content: `🗺️ **Información del mapa y servidor:**\n${mapPageUrl}`,
+                content: `🗺️ **Mapa actual del servidor:**\n${mapPageUrl}`,
                 embeds: [embed] 
             });
 
