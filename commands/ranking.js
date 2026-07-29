@@ -12,10 +12,12 @@ module.exports = {
         .setDescription("Ranking de horas jugadas desde el último wipe en el servidor configurado"),
 
     async execute(interaction) {
+        // 1. Respondemos inmediatamente a Discord para evitar el error de "comando obsoleto"
+        await interaction.deferReply();
+
         if (!fs.existsSync(file)) {
-            return await interaction.reply({ 
-                content: "❌ No hay datos de usuarios registrados para el ranking.", 
-                ephemeral: true 
+            return await interaction.editReply({ 
+                content: "❌ No hay datos de usuarios registrados para el ranking." 
             });
         }
 
@@ -33,25 +35,27 @@ module.exports = {
         }
 
         const users = JSON.parse(fs.readFileSync(file, "utf-8"));
-        await interaction.deferReply();
-
         const ranking = [];
 
+        // 2. Procesamos cada usuario con una pequeña pausa para no saturar la API
         for (const id of Object.keys(users)) {
             const u = users[id];
             try {
-                // Le pasamos el ID del servidor configurado para que busque las horas exactas de ahí
                 const h = await getBattleMetricsHours(u.battlemetricsId, serverIdConfigurado);
                 
                 const horasWipeNum = Number(h.horasDesdeWipe || 0);
                 const nombreJugador = u.discord || h.nombre || "Desconocido";
 
                 ranking.push({ discord: nombreJugador, hours: horasWipeNum });
+
+                // Pequeña pausa de 500ms entre cada petición para cuidar la API y evitar bloqueos
+                await new Promise(resolve => setTimeout(resolve, 500));
             } catch (err) {
                 console.log(`Error obteniendo datos para ID ${u.battlemetricsId}:`, err.message);
             }
         }
 
+        // Ordenar de mayor a menor y limitar a 10 jugadores
         ranking.sort((a, b) => b.hours - a.hours);
 
         let text = "";
@@ -66,6 +70,6 @@ module.exports = {
             .setTimestamp()
             .setFooter({ text: "RustLogix" });
 
-        await interaction.editReply({ embeds: [embed] });
+        return await interaction.editReply({ embeds: [embed] });
     }
 };
