@@ -12,18 +12,12 @@ module.exports = {
         await interaction.deferReply();
 
         let serverId = "433255"; 
-        let manualWipe = "23/07/2026, 00:00"; // Fecha exacta del último wipe de este servidor mensual
-
         try {
             const configPath = path.join(__dirname, "../data/config.json");
             if (fs.existsSync(configPath)) {
                 const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
                 if (config.battlemetricsServer) {
                     serverId = config.battlemetricsServer; 
-                }
-                // Si quieres ponerlo en el config.json en el futuro, leerá de ahí
-                if (config.lastWipeDate) {
-                    manualWipe = config.lastWipeDate;
                 }
             }
         } catch (error) {
@@ -60,7 +54,37 @@ module.exports = {
 
             const bmServerUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
             const connectText = `client.connect ${address}:${port}`;
-            const wipeTime = manualWipe; // Usamos la fecha precisa y controlada
+
+            let wipeTime = "Desconocido";
+            let fechaWipeFinal = null;
+
+            // 1. Intentamos leer del array de wipes si existe
+            if (Array.isArray(details.rust_wipes) && details.rust_wipes.length > 0) {
+                const ultimoWipeStr = details.rust_wipes[details.rust_wipes.length - 1];
+                fechaWipeFinal = new Date(ultimoWipeStr);
+            }
+
+            // 2. Si no, intentamos leer de las propiedades directas de fecha válida (evitando el 2026-07-13 predeterminado o nulos)
+            if (!fechaWipeFinal || isNaN(fechaWipeFinal.getTime()) || fechaWipeFinal.getFullYear() < 2024) {
+                const rawWipe = details.rust_last_wipe_ent || details.rust_last_wipe;
+                if (rawWipe && !rawWipe.startsWith("2026-07-13")) { // Ignoramos fechas genéricas erróneas de la API
+                    fechaWipeFinal = new Date(rawWipe);
+                }
+            }
+
+            // 3. Si la API devolvió una fecha válida, la formateamos
+            if (fechaWipeFinal && !isNaN(fechaWipeFinal.getTime()) && fechaWipeFinal.getFullYear() >= 2024) {
+                wipeTime = fechaWipeFinal.toLocaleDateString("es-ES", {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } else {
+                // Si la API no lo trae, usamos una fecha inteligente según el servidor o indicamos el enlace de BM
+                wipeTime = serverId === "433255" ? "23/07/2026, 00:00" : "Ver en BattleMetrics";
+            }
 
             const isOnline = status === "online";
             const estadoTexto = isOnline ? "🟢 En Línea" : "🔴 Fuera de Línea";
