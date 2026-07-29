@@ -62,9 +62,8 @@ module.exports = {
             const serverData = response.data.data;
             const details = serverData.attributes?.details || {};
             
-            // Extraer la fecha del último wipe del servidor
             const lastWipeStr = details.rustLastWipe || details.wipeTime || serverData.attributes?.metadata?.rustLastWipe;
-            const fechaWipe = lastWipeStr ? new Date(lastWipeStr) : new Date(Date.now() - (3 * 24 * 60 * 60 * 1000)); // Respaldo de 3 días si no viene especificado
+            const fechaWipe = lastWipeStr ? new Date(lastWipeStr) : new Date(Date.now() - (3 * 24 * 60 * 60 * 1000));
 
             const included = response.data.included || [];
             const playersMap = {};
@@ -82,7 +81,6 @@ module.exports = {
             const playerSeconds = {};
             const ahora = new Date();
 
-            // Acumular el tiempo de todas las sesiones desde el wipe
             for (const session of sessions) {
                 const playerId = session.relationships?.player?.data?.id;
                 if (!playerId) continue;
@@ -90,10 +88,8 @@ module.exports = {
                 const sessionStart = new Date(session.attributes.start);
                 const sessionStop = session.attributes.stop ? new Date(session.attributes.stop) : ahora;
 
-                // Si la sesión terminó antes del wipe, la ignoramos
                 if (sessionStop < fechaWipe) continue;
 
-                // Recortar si empezó antes del wipe
                 const inicioEfectivo = sessionStart < fechaWipe ? fechaWipe : sessionStart;
                 const diffSegundos = (sessionStop - inicioEfectivo) / 1000;
 
@@ -113,7 +109,6 @@ module.exports = {
                 });
             }
 
-            // Ordenar de mayor a menor tiempo desde el wipe
             ranking.sort((a, b) => b.hoursDecimal - a.hoursDecimal);
 
             let text = "";
