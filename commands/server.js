@@ -46,6 +46,10 @@ module.exports = {
             
             const details = attributes.details || {};
             
+            // 🔎 Depuración en consola de Render para ver las claves reales del servidor
+            console.log("=== KEYS EN DETAILS ===", Object.keys(details));
+            console.log("=== VALOR RUST WIPE ===", details.rust_last_wipe, details.rust_lastWipe, details.wipe, details.lastWipe);
+
             let rawMap = details.map;
             let mapName = "Ver Mapa en BattleMetrics";
             if (rawMap && typeof rawMap === "string" && !rawMap.includes("discord") && !rawMap.includes("http") && rawMap.length < 30) {
@@ -56,8 +60,7 @@ module.exports = {
             const connectText = `client.connect ${address}:${port}`;
 
             let wipeTime = "Desconocido";
-            // Forzamos la búsqueda de los campos exactos de wipe que devuelve BattleMetrics para Rust
-            const rawWipe = details.rust_last_wipe || details.rust_lastWipe || details.wipe || details.lastWipe;
+            const rawWipe = details.rust_last_wipe || details.rust_lastWipe || details.wipe || details.lastWipe || details.rust_wipeTime || details.server_wipe;
             
             if (rawWipe) {
                 const timestamp = typeof rawWipe === "number" && rawWipe < 10000000000 ? rawWipe * 1000 : rawWipe;
