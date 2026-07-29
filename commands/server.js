@@ -40,19 +40,21 @@ module.exports = {
             const players = attributes.players || 0;
             const maxPlayers = attributes.maxPlayers || 0;
             const ip = attributes.ip || "N/A";
-            const port = attributes.port || "N/A";
+            const port = attributes.port || 28015;
             const rank = attributes.rank || "N/A";
             
             const details = attributes.details || {};
             
-            // Validamos si el nombre del mapa es válido (si contiene URLs, discord o es muy largo, usamos un texto limpio por defecto)
+            // Intentamos obtener el query port de los atributos o detalles, si no existe usamos port + 3 (estándar en Rust) o port
+            const queryPort = attributes.queryPort || details.queryPort || (typeof port === 'number' ? port + 3 : port);
+
+            // Validamos si el nombre del mapa es válido
             let rawMap = details.map;
             let mapName = "Ver Mapa en BattleMetrics";
             if (rawMap && typeof rawMap === "string" && !rawMap.includes("discord") && !rawMap.includes("http") && rawMap.length < 30) {
                 mapName = rawMap;
             }
 
-            // Enlace directo a la página de BattleMetrics del servidor
             const bmServerUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
 
             let wipeTime = "Desconocido";
@@ -84,7 +86,7 @@ module.exports = {
                     { name: "🏆 Ranking BM", value: `\`#${rank}\``, inline: true },
                     { name: "🗺️ Mapa", value: `[${mapName}](${bmServerUrl})`, inline: true },
                     { name: "🛠️ Último Wipe", value: `\`${wipeTime}\``, inline: true },
-                    { name: "🌐 Conexión", value: `\`connect ${ip}:${port}\``, inline: false }
+                    { name: "🌐 Conexión", value: `\`connect ${ip}:${queryPort}\``, inline: false }
                 )
                 .setTimestamp()
                 .setFooter({ text: "RustLogix" });
