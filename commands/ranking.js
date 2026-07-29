@@ -19,7 +19,7 @@ function formatHoursToHoursMinutes(decimalHours) {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("ranking")
-        .setDescription("Ranking de jugadores con el tiempo total acumulado desde el último wipe"),
+        .setDescription("Ranking de jugadores con el tiempo total acumulado en el servidor"),
 
     async execute(interaction) {
         await interaction.deferReply();
@@ -49,93 +49,82 @@ module.exports = {
                 "Content-Type": "application/json"
             };
 
-            console.log(`[RANKING WIPE FIX] Consultando servidor y jugadores activos ${serverIdConfigurado}...`);
+            console.log(`[RANKING ROBUST] Consultando servidor ${serverIdConfigurado}...`);
             const inicio = Date.now();
 
-            const serverResponse = await axios.get(
-                `https://api.battlemetrics.com/servers/${serverIdConfigurado}?include=player`,
-                { headers, timeout: 6000 }
+            // Consultar el servidor incluyendo sesiones y jugadores
+            const response = await axios.get(
+                `https://api.battlemetrics.com/servers/${serverIdConfigurado}?include=session,player`,
+                { headers, timeout: 8000 }
             );
 
-            const serverData = serverResponse.data.data;
-            const details = serverData.attributes?.details || {};
-            const lastWipeStr = details.rustLastWipe || details.wipeTime || serverData.attributes?.metadata?.rustLastWipe;
-            
-            const fechaWipe = lastWipeStr ? new Date(lastWipeStr) : new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
-            const fechaWipeISO = fechaWipe.toISOString();
-            console.log(`[RANKING WIPE FIX] Fecha wipe detectada: ${fechaWipeISO}`);
+            console.log(`[RANKING ROBUST] Datos recibidos en ${Date.now() - inicio}ms`);
 
-            const included = serverResponse.data.included || [];
-            const playersList = [];
+            const serverData = response.data.data;
+            const details = serverData.attributes?.details || {};
+            
+            // Buscar la fecha de wipe real o usar un margen seguro de 7 días atrás si no viene definida
+            const lastWipeStr = details.rustLastWipe || details.wipeTime || serverData.attributes?.metadata?.rustLastWipe;
+            let fechaWipe = lastWipeStr ? new Date(lastWipeStr) : new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
+            
+            // Validación de seguridad: si la fecha del wipe es futura o menor a hace 1 minuto, tomamos por defecto 4 días atrás
+            if (isNaN(fechaWipe.getTime()) || fechaWipe > new Date()) {
+                fechaWipe = new Date(Date.now() - (4 * 24 * 60 * 60 * 1000));
+            }
+
+            console.log(`[RANKING ROBUST] Usando fecha de referencia wipe: ${fechaWipe.toISOString()}`);
+
+            const included = response.data.included || [];
+            const playersMap = {};
+            const sessions = [];
 
             for (const item of included) {
                 if (item.type === "player") {
-                    playersList.push({
-                        id: item.id,
-                        name: item.attributes?.name || "Desconocido"
-                    });
+                    playersMap[item.id] = item.attributes?.name || "Desconocido";
+                }
+                if (item.type === "session") {
+                    sessions.push(item);
                 }
             }
 
-            const playersToProcess = playersList.slice(0, 30);
+            const playerSeconds = {};
             const ahora = new Date();
-            const ranking = [];
 
-            const promises = playersToProcess.map(async (player) => {
-                try {
-                    // Quitamos la coma del filtro para que BattleMetrics acepte la fecha correctamente
-                    const sessionRes = await axios.get(
-                        `https://api.battlemetrics.com/players/${player.id}/servers/${serverIdConfigurado}/sessions`,
-                        {
-                            headers,
-                            params: {
-                                "filter[start]": fechaWipeISO,
-                                "page[size]": 50
-                            },
-                            timeout: 4000
-                        }
-                    );
+            for (const session of sessions) {
+                const playerId = session.relationships?.player?.data?.id;
+                if (!playerId) continue;
 
-                    const sessions = sessionRes.data.data || [];
-                    let totalSeconds = 0;
+                const sessionStart = new Date(session.attributes.start);
+                const sessionStop = session.attributes.stop ? new Date(session.attributes.stop) : ahora;
 
-                    for (const session of sessions) {
-                        const sessionStart = new Date(session.attributes.start);
-                        const sessionStop = session.attributes.stop ? new Date(session.attributes.stop) : ahora;
+                if (sessionStop < fechaWipe) continue;
 
-                        if (sessionStop < fechaWipe) continue;
+                const inicioEfectivo = sessionStart < fechaWipe ? fechaWipe : sessionStart;
+                const diffSegundos = (sessionStop - inicioEfectivo) / 1000;
 
-                        const inicioEfectivo = sessionStart < fechaWipe ? fechaWipe : sessionStart;
-                        const diff = (sessionStop - inicioEfectivo) / 1000;
-
-                        if (diff > 0) {
-                            totalSeconds += diff;
-                        }
-                    }
-
-                    const hoursDecimal = totalSeconds / 3600;
-                    if (hoursDecimal > 0) {
-                        ranking.push({
-                            id: player.id,
-                            name: player.name,
-                            hoursDecimal: hoursDecimal,
-                            formatted: formatHoursToHoursMinutes(hoursDecimal)
-                        });
-                    }
-                } catch (err) {
-                    // Ignorar errores individuales de jugadores
+                if (diffSegundos > 0) {
+                    playerSeconds[playerId] = (playerSeconds[playerId] || 0) + diffSegundos;
                 }
-            });
+            }
 
-            await Promise.all(promises);
-
-            console.log(`[RANKING WIPE FIX] Procesado en ${Date.now() - inicio}ms. Jugadores con horas: ${ranking.length}`);
+            const ranking = [];
+            for (const [playerId, segundos] of Object.entries(playerSeconds)) {
+                const horas = segundos / 3600;
+                ranking.push({
+                    id: playerId,
+                    name: playersMap[playerId] || "Desconocido",
+                    hoursDecimal: horas,
+                    formatted: formatHoursToHoursMinutes(horas)
+                });
+            }
 
             ranking.sort((a, b) => b.hoursDecimal - a.hoursDecimal);
 
+            console.log(`[RANKING ROBUST] Jugadores procesados con tiempo: ${ranking.length}`);
+
             let text = "";
             if (ranking.length === 0) {
-                text = "No hay registros de tiempo acumulado desde el último wipe.";
+                text = "No hay registros de tiempo acumulado disponibles en este momento.";
             } else {
                 ranking.slice(0, 15).forEach((u, i) => {
                     text += `**${i + 1}.** [${u.name}](https://www.battlemetrics.com/players/${u.id}) — \`${u.formatted}\`\n`;
@@ -143,7 +132,7 @@ module.exports = {
             }
 
             const embed = new EmbedBuilder()
-                .setTitle("🏆 Top 15 — Horas Acumuladas desde el Último Wipe")
+                .setTitle("🏆 Top 15 — Horas Totales Acumuladas")
                 .setDescription(text)
                 .setColor("#57F287")
                 .setTimestamp()
@@ -155,9 +144,9 @@ module.exports = {
             });
 
         } catch (error) {
-            console.log("ERROR API Ranking Wipe Fix:", error.response?.data || error.message);
+            console.log("ERROR API Ranking Robust:", error.response?.data || error.message);
             return await interaction.editReply({ 
-                content: "❌ Hubo un error al calcular el ranking desde el último wipe." 
+                content: "❌ Hubo un error al calcular el ranking del servidor." 
             });
         }
     }
