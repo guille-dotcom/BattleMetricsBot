@@ -1,5 +1,5 @@
 require("dotenv").config();
-const axios =خ("axios");
+const axios = require("axios");
 
 async function getBattleMetricsHours(playerId, targetServerId = null) {
     try {
@@ -40,16 +40,6 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             );
 
             const sessions = sessionsRes.data.data || [];
-            const includedServers = sessionsRes.data.included || [];
-            
-            // Mapear servidores incluidos para lectura rápida
-            const serverMap = {};
-            for (const inc of includedServers) {
-                if (inc.type === "server") {
-                    serverMap[inc.id] = inc;
-                }
-            }
-
             const uniqueServers = new Set();
             let segundosTotales = 0;
             const ahora = new Date();
@@ -77,7 +67,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             totalHoras = segundosTotales / 3600;
             servidoresEncontrados = uniqueServers.size;
 
-            // Si no se encontró por sesión abierta pero hay sesiones, tomamos la más reciente como referencia si es actual
+            // Respaldo: si la sesión más reciente no tiene stop, usarla
             if (!onlineServerId && sessions.length > 0) {
                 const latestSession = sessions[0];
                 if (!latestSession.attributes?.stop) {
@@ -89,7 +79,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             console.log("Error obteniendo sesiones del jugador:", e.message);
         }
 
-        // 3. Si encontramos el servidor online actual, obtenemos sus detalles, el último wipe y calculamos horas desde el wipe
+        // 3. Si encontramos el servidor online actual, obtenemos sus detalles, el último wipe y horas desde el wipe
         if (onlineServerId) {
             try {
                 const serverResponse = await axios.get(
@@ -111,7 +101,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                     fechaWipeFormateada = fechaWipe.toLocaleString();
                 }
 
-                // Calcular horas desde el wipe en este servidor específico usando sus sesiones
+                // Calcular horas desde el wipe en este servidor específico
                 const serverSessionsRes = await axios.get(
                     `https://api.battlemetrics.com/sessions`,
                     {
