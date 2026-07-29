@@ -12,12 +12,18 @@ module.exports = {
         await interaction.deferReply();
 
         let serverId = "433255"; 
+        let manualWipe = "23/07/2026, 00:00"; // Fecha exacta del último wipe de este servidor mensual
+
         try {
             const configPath = path.join(__dirname, "../data/config.json");
             if (fs.existsSync(configPath)) {
                 const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
                 if (config.battlemetricsServer) {
                     serverId = config.battlemetricsServer; 
+                }
+                // Si quieres ponerlo en el config.json en el futuro, leerá de ahí
+                if (config.lastWipeDate) {
+                    manualWipe = config.lastWipeDate;
                 }
             }
         } catch (error) {
@@ -54,39 +60,7 @@ module.exports = {
 
             const bmServerUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
             const connectText = `client.connect ${address}:${port}`;
-
-            let wipeTime = "Desconocido";
-            
-            // Verificamos si hay elementos en rust_wipes, o usamos rust_last_wipe asegurándonos de parsearlo bien
-            let fechaWipeFinal = null;
-            
-            if (Array.isArray(details.rust_wipes) && details.rust_wipes.length > 0) {
-                // Tomamos el último elemento o filtramos el más reciente
-                const ultimoWipeStr = details.rust_wipes[details.rust_wipes.length - 1];
-                fechaWipeFinal = new Date(ultimoWipeStr);
-            }
-            
-            // Si no sirvió el array, probamos con rust_last_wipe (forzando fecha limpia) o rust_last_wipe_ent
-            if (!fechaWipeFinal || isNaN(fechaWipeFinal.getTime())) {
-                const rawWipe = details.rust_last_wipe_ent || details.rust_last_wipe;
-                if (rawWipe) {
-                    fechaWipeFinal = new Date(rawWipe);
-                }
-            }
-
-            if (fechaWipeFinal && !isNaN(fechaWipeFinal.getTime())) {
-                wipeTime = fechaWipeFinal.toLocaleDateString("es-ES", {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    timeZone: 'UTC' // Forzamos UTC para evitar desfases horarios de servidor
-                });
-            } else {
-                // Respaldo manual directo por si la API sigue mandando un formato extraño en este servidor específico
-                wipeTime = "23/07/2026, 00:00"; 
-            }
+            const wipeTime = manualWipe; // Usamos la fecha precisa y controlada
 
             const isOnline = status === "online";
             const estadoTexto = isOnline ? "🟢 En Línea" : "🔴 Fuera de Línea";
