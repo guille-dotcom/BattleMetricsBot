@@ -28,7 +28,7 @@ module.exports = {
             const response = await axios.get(`https://api.battlemetrics.com/servers/${serverId}`, {
                 headers: {
                     "Authorization": `Bearer ${process.env.BATTLEMETRICS_TOKEN}`,
-                    "User-Agent": "RustLogix-DiscordBot`"
+                    "User-Agent": "RustLogix-DiscordBot"
                 }
             });
 
@@ -45,9 +45,7 @@ module.exports = {
             
             const details = attributes.details || {};
             const mapName = details.map || "Desconocido";
-            
-            // Intentar capturar la seed de múltiples propiedades posibles de la API
-            const seed = details.rust_seed || details.seed || details.worldSeed || "1910446694";
+            const seed = details.rust_seed || details.seed || "1910446694";
             const size = details.rust_world_size || details.worldSize || "4000";
 
             let wipeTime = "Desconocido";
@@ -65,28 +63,25 @@ module.exports = {
                 }
             }
 
-            // Mapa como enlace e imagen asegurados
-            const mapaTexto = `[Ver en RustMaps](https://rustmaps.com/map/${size}_${seed})`;
-            const mapImageUrl = `https://api.rustmaps.com/v3/maps/${size}/${seed}/thumbnail.jpg`;
-
             const isOnline = status === "online";
             const estadoTexto = isOnline ? "🟢 En Línea" : "🔴 Fuera de Línea";
             const colorEmbed = isOnline ? "#57F287" : "#FF0000";
 
+            // Enlace limpio para que Discord actúe como tarjeta estilo Steam
+            const mapLink = `https://rustmaps.com/map/${size}_${seed}`;
+
             const embed = new EmbedBuilder()
                 .setTitle(`🎮 Estado del Servidor`)
-                .setDescription(`**${name}**`)
+                .setDescription(`**${name}**\n\n🗺️ **Mapa:** ${mapName}\n🔗 ${mapLink}`)
                 .setColor(colorEmbed)
                 .addFields(
                     { name: "🖥️ Estado", value: estadoTexto, inline: true },
                     { name: "👥 Jugadores", value: `\`${players} / ${maxPlayers}\``, inline: true },
                     { name: "🏆 Ranking BM", value: `\`#${rank}\``, inline: true },
-                    { name: "🗺️ Mapa", value: mapaTexto, inline: true },
                     { name: "🛠️ Último Wipe", value: `\`${wipeTime}\``, inline: true },
                     { name: "🌐 Conexión", value: `\`connect ${ip}:${port}\``, inline: false },
                     { name: "🔗 Enlace BattleMetrics", value: `[Ver en BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`, inline: false }
                 )
-                .setImage(mapImageUrl)
                 .setTimestamp()
                 .setFooter({ text: "RustLogix" });
 
