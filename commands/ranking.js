@@ -19,7 +19,7 @@ function formatHoursToHoursMinutes(decimalHours) {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("ranking")
-        .setDescription("Ranking de jugadores con el tiempo total acumulado desde el último wipe"),
+        .setDescription("Ranking de jugadores con el tiempo acumulado desde el último wipe"),
 
     async execute(interaction) {
         await interaction.deferReply();
@@ -49,65 +49,51 @@ module.exports = {
                 "Content-Type": "application/json"
             };
 
-            console.log(`[RANKING WIPE TOTAL] Consultando servidor e historial de sesiones ${serverIdConfigurado}...`);
+            console.log(`[RANKING] Consultando servidor ${serverIdConfigurado}...`);
             const inicio = Date.now();
 
-            // 1. Obtenemos los detalles del servidor para sacar la fecha exacta del último wipe
-            const serverResponse = await axios.get(
-                `https://api.battlemetrics.com/servers/${serverIdConfigurado}`,
-                { headers, timeout: 6000 }
+            // Pedimos el servidor con inclusión de sesiones y jugadores en una sola llamada rápida
+            const response = await axios.get(
+                `https://api.battlemetrics.com/servers/${serverIdConfigurado}?include=session,player`,
+                { headers, timeout: 7000 }
             );
 
-            const serverData = serverResponse.data.data;
+            console.log(`[RANKING] Respuesta recibida en ${Date.now() - inicio}ms`);
+
+            const serverData = response.data.data;
             const details = serverData.attributes?.details || {};
-            const lastWipeStr = details.rustLastWipe || details.wipeTime || serverData.attributes?.metadata?.rustLastWipe;
             
-            // Si el servidor expone el wipe lo usamos, si no, un respaldo prudente de 7 días
+            const lastWipeStr = details.rustLastWipe || details.wipeTime || serverData.attributes?.metadata?.rustLastWipe;
             const fechaWipe = lastWipeStr ? new Date(lastWipeStr) : new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
-            const fechaWipeISO = fechaWipe.toISOString();
 
-            console.log(`[RANKING WIPE TOTAL] Fecha de wipe detectada: ${fechaWipeISO}`);
-
-            // 2. Consultamos las sesiones filtrando explícitamente desde la fecha del wipe usando los parámetros de la API de BattleMetrics
-            const sessionsResponse = await axios.get(
-                `https://api.battlemetrics.com/sessions`,
-                {
-                    headers,
-                    params: {
-                        "filter[server]": serverIdConfigurado,
-                        "filter[start]": `${fechaWipeISO},`,
-                        "include": "player",
-                        "page[size]": 100
-                    },
-                    timeout: 8000
-                }
-            );
-
-            console.log(`[RANKING WIPE TOTAL] Sesiones históricas obtenidas en ${Date.now() - inicio}ms`);
-
-            const sessionsData = sessionsResponse.data.data || [];
-            const included = sessionsResponse.data.included || [];
+            const included = response.data.included || [];
             const playersMap = {};
+            const sessions = [];
 
             for (const item of included) {
                 if (item.type === "player") {
                     playersMap[item.id] = item.attributes?.name || "Desconocido";
+                }
+                if (item.type === "session") {
+                    sessions.push(item);
                 }
             }
 
             const playerSeconds = {};
             const ahora = new Date();
 
-            // 3. Sumar el tiempo de cada sesión histórica desde el wipe
-            for (const session of sessionsData) {
+            // Sumar todas las sesiones del payload que ocurrieron desde el wipe
+            for (const session of sessions) {
                 const playerId = session.relationships?.player?.data?.id;
                 if (!playerId) continue;
 
                 const sessionStart = new Date(session.attributes.start);
-                // Si la sesión sigue abierta, usa la hora actual; si cerró, usa su hora de cierre
                 const sessionStop = session.attributes.stop ? new Date(session.attributes.stop) : ahora;
 
-                // Recortar límites si empezó antes del wipe
+                // Si la sesión terminó antes del wipe, la ignoramos
+                if (sessionStop < fechaWipe) continue;
+
+                // Recortar si empezó antes del wipe
                 const inicioEfectivo = sessionStart < fechaWipe ? fechaWipe : sessionStart;
                 const diffSegundos = (sessionStop - inicioEfectivo) / 1000;
 
@@ -127,7 +113,7 @@ module.exports = {
                 });
             }
 
-            // Ordenar de mayor a menor tiempo acumulado total
+            // Ordenar de mayor a menor tiempo acumulado
             ranking.sort((a, b) => b.hoursDecimal - a.hoursDecimal);
 
             let text = "";
@@ -152,9 +138,9 @@ module.exports = {
             });
 
         } catch (error) {
-            console.log("ERROR API Ranking Histórico Wipe:", error.response?.data || error.message);
+            console.log("ERROR API Ranking:", error.response?.data || error.message);
             return await interaction.editReply({ 
-                content: "❌ Hubo un error al calcular las horas acumuladas desde el último wipe." 
+                content: "❌ Hubo un error al calcular el ranking desde el último wipe." 
             });
         }
     }
