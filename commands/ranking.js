@@ -9,10 +9,9 @@ const configPath = path.join(__dirname, "..", "data", "config.json");
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("ranking")
-        .setDescription("Ranking de horas jugadas desde el último wipe en el servidor configurado"),
+        .setDescription("Ranking de los jugadores con más horas desde el último wipe"),
 
     async execute(interaction) {
-        // 1. Respondemos inmediatamente a Discord para evitar el error de "comando obsoleto"
         await interaction.deferReply();
 
         if (!fs.existsSync(file)) {
@@ -21,7 +20,6 @@ module.exports = {
             });
         }
 
-        // Obtener el ID del servidor configurado
         let serverIdConfigurado = null;
         try {
             if (fs.existsSync(configPath)) {
@@ -34,45 +32,43 @@ module.exports = {
             console.log("Error leyendo config.json:", error.message);
         }
 
+        if (!serverIdConfigurado) {
+            return await interaction.editReply({ 
+                content: "❌ No hay ningún servidor de BattleMetrics configurado. Usa el comando de configuración del servidor primero." 
+            });
+        }
+
         const users = JSON.parse(fs.readFileSync(file, "utf-8"));
         const ranking = [];
 
-        // 2. Procesamos cada usuario con una pequeña pausa para no saturar la API
         for (const id of Object.keys(users)) {
             const u = users[id];
             try {
                 const h = await getBattleMetricsHours(u.battlemetricsId, serverIdConfigurado);
-                
                 const horasWipeNum = Number(h.horasDesdeWipe || 0);
 
-                // MODIFICACIÓN: Solo agregar al ranking si tiene horas mayores a 0 en este wipe
-                if (horasWipeNum > 0) {
-                    const nombreJugador = u.discord || h.nombre || "Desconocido";
-                    ranking.push({ discord: nombreJugador, hours: horasWipeNum });
-                }
+                // Añadimos al ranking (incluso si tienen horas, los ordenaremos)
+                const nombreJugador = u.discord || h.nombre || "Desconocido";
+                ranking.push({ discord: nombreJugador, hours: horasWipeNum });
 
-                // Pequeña pausa de 300ms-500ms entre cada petición para cuidar la API y evitar bloqueos
                 await new Promise(resolve => setTimeout(resolve, 300));
             } catch (err) {
                 console.log(`Error obteniendo datos para ID ${u.battlemetricsId}:`, err.message);
             }
         }
 
-        // Ordenar de mayor a menor y limitar a 10 jugadores
+        // Ordenar de mayor a menor cantidad de horas
         ranking.sort((a, b) => b.hours - a.hours);
 
         let text = "";
-        if (ranking.length === 0) {
-            text = "No hay jugadores con horas registradas en este servidor desde el último wipe.";
-        } else {
-            ranking.slice(0, 10).forEach((u, i) => {
-                text += `**${i + 1}.** ${u.discord} — **${u.hours.toFixed(2)}h** desde el wipe\n`;
-            });
-        }
+        // Mostramos el top 15
+        ranking.slice(0, 15).forEach((u, i) => {
+            text += `**${i + 1}.** ${u.discord} — **${u.hours.toFixed(2)}h**\n`;
+        });
 
         const embed = new EmbedBuilder()
-            .setTitle("⏱️ Ranking: Horas desde el Último Wipe")
-            .setDescription(text)
+            .setTitle("🏆 Top 15 — Horas desde el Último Wipe")
+            .setDescription(text || "Sin datos disponibles")
             .setColor("#57F287")
             .setTimestamp()
             .setFooter({ text: "RustLogix" });
