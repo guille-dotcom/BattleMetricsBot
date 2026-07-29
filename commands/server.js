@@ -46,9 +46,21 @@ module.exports = {
             const details = attributes.details || {};
             const mapName = details.map || "Desconocido";
             
-            // Capturamos de forma precisa los datos reales del mapa desde BattleMetrics
-            const seed = details.rust_seed || details.seed || details.worldSeed;
-            const size = details.rust_world_size || details.worldSize || details.rust_mapSize;
+            // Buscamos si BattleMetrics entrega un enlace directo o hash del mapa
+            let mapPageUrl = details.rust_map_url || details.mapUrl;
+            
+            // Si no viene directo, revisamos si hay una propiedad de hash o ID de RustMaps
+            if (!mapPageUrl) {
+                const seed = details.rust_seed || details.seed;
+                const size = details.rust_world_size || details.worldSize;
+                
+                if (seed && size) {
+                    mapPageUrl = `https://rustmaps.com/map/${size}_${seed}`;
+                } else {
+                    // Enlace por defecto al servidor en BattleMetrics si no hay datos de mapa
+                    mapPageUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
+                }
+            }
 
             let wipeTime = "Desconocido";
             const rawWipe = details.rust_last_wipe || details.rust_lastWipe;
@@ -69,13 +81,6 @@ module.exports = {
             const estadoTexto = isOnline ? "🟢 En Línea" : "🔴 Fuera de Línea";
             const colorEmbed = isOnline ? "#57F287" : "#FF0000";
 
-            // Si el servidor provee seed y size reales, armamos el link directo al mapa en RustMaps.
-            // Si es un mapa custom o no tiene seed, mandamos a la búsqueda general o web de RustMaps.
-            let mapPageUrl = `https://rustmaps.com/`;
-            if (seed && size) {
-                mapPageUrl = `https://rustmaps.com/map/${size}_${seed}`;
-            }
-
             const embed = new EmbedBuilder()
                 .setTitle(`🎮 Estado del Servidor`)
                 .setDescription(`**${name}**`)
@@ -92,12 +97,10 @@ module.exports = {
                 .setTimestamp()
                 .setFooter({ text: "RustLogix" });
 
-            const payload = { embeds: [embed] };
-            if (seed && size) {
-                payload.content = `🗺️ **Mapa actual del servidor (${size} / Seed: ${seed}):**\n${mapPageUrl}`;
-            }
-
-            return await interaction.editReply(payload);
+            return await interaction.editReply({ 
+                content: `🗺️ **Ver mapa actual:**\n${mapPageUrl}`,
+                embeds: [embed] 
+            });
 
         } catch (error) {
             console.error("Error al consultar el servidor en BattleMetrics:", error.message);
