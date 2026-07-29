@@ -44,9 +44,15 @@ module.exports = {
             const rank = attributes.rank || "N/A";
             
             const details = attributes.details || {};
-            const mapName = details.map || "Ver Mapa";
+            
+            // Validamos si el nombre del mapa es válido (si contiene URLs, discord o es muy largo, usamos un texto limpio por defecto)
+            let rawMap = details.map;
+            let mapName = "Ver Mapa en BattleMetrics";
+            if (rawMap && typeof rawMap === "string" && !rawMap.includes("discord") && !rawMap.includes("http") && rawMap.length < 30) {
+                mapName = rawMap;
+            }
 
-            // Enlace directo a la página de BattleMetrics del servidor donde se visualiza el mapa
+            // Enlace directo a la página de BattleMetrics del servidor
             const bmServerUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
 
             let wipeTime = "Desconocido";
