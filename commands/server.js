@@ -41,13 +41,11 @@ module.exports = {
             const maxPlayers = attributes.maxPlayers || 0;
             const ip = attributes.ip || "N/A";
             
-            // Usamos portQuery para obtener el segundo puerto (Query Port)
             const port = attributes.portQuery || attributes.port || 28015;
             const rank = attributes.rank || "N/A";
             
             const details = attributes.details || {};
             
-            // Validamos que el nombre del mapa sea un texto limpio
             let rawMap = details.map;
             let mapName = "Ver Mapa en BattleMetrics";
             if (rawMap && typeof rawMap === "string" && !rawMap.includes("discord") && !rawMap.includes("http") && rawMap.length < 30) {
@@ -56,9 +54,8 @@ module.exports = {
 
             const bmServerUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
             
-            // Enlace limpio formato Markdown estándar apuntando a BattleMetrics
-            const connectText = `connect ${ip}:${port}`;
-            const connectLink = `[${connectText}](${bmServerUrl})`;
+            // Usamos client.connect tal como lo muestra BattleMetrics
+            const connectText = `client.connect ${ip}:${port}`;
 
             let wipeTime = "Desconocido";
             const rawWipe = details.rust_last_wipe || details.rust_lastWipe;
@@ -89,7 +86,7 @@ module.exports = {
                     { name: "🏆 Ranking BM", value: `\`#${rank}\``, inline: true },
                     { name: "🗺️ Mapa", value: `[${mapName}](${bmServerUrl})`, inline: true },
                     { name: "🛠️ Último Wipe", value: `\`${wipeTime}\``, inline: true },
-                    { name: "🌐 Conexión", value: connectLink, inline: false }
+                    { name: "🌐 Conexión", value: `\`${connectText}\``, inline: false }
                 )
                 .setTimestamp()
                 .setFooter({ text: "RustLogix" });
