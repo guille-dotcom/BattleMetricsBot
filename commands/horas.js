@@ -4,6 +4,18 @@ const { searchBattleMetricsPlayer, getBattleMetricsPlayerStatus } = require("../
 const fs = require("fs");
 const path = require("path");
 
+// Función auxiliar para convertir horas decimales a formato "Xh Ym"
+function formatHoursToHoursMinutes(decimalHours) {
+    const totalMinutes = Math.round(parseFloat(decimalHours) * 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours === 0 && minutes === 0) return "0m";
+    if (hours === 0) return `${minutes}m`;
+    if (minutes === 0) return `${hours}h`;
+    return `${hours}h ${minutes}m`;
+}
+
 module.exports = { 
     data: new SlashCommandBuilder()
         .setName("horas")
@@ -94,7 +106,10 @@ module.exports = {
                 : "No disponible";
 
             const ultimoWipe = datosFinales.ultimoWipe || "Desconocido";
-            const horasDesdeWipe = datosFinales.horasDesdeWipe || "0.00";
+            const horasDesdeWipeDecimal = datosFinales.horasDesdeWipe || "0.00";
+            
+            // Aplicamos la conversión a formato "Xh Ym"
+            const horasDesdeWipeFormateadas = formatHoursToHoursMinutes(horasDesdeWipeDecimal);
 
             // Diseño optimizado y simétrico en 3 columnas
             const embedOnline = new EmbedBuilder()
@@ -106,7 +121,7 @@ module.exports = {
                     { name: "🆔 Steam ID", value: `||[${steamId}](https://steamcommunity.com/profiles/${steamId})||`, inline: true },
                     { name: "⏱️ Sesión Actual", value: `${datosFinales.jugando}`, inline: true },
                     { name: "🛠️ Último Wipe", value: `\`${ultimoWipe}\``, inline: true },
-                    { name: "⏱️ Desde el Wipe", value: `\`${horasDesdeWipe}h\``, inline: true },
+                    { name: "⏱️ Desde el Wipe", value: `\`${horasDesdeWipeFormateadas}\``, inline: true },
                     { name: "🌍 País", value: paisTexto, inline: true },
                     { name: "📈 Horas (BM)", value: `${datosFinales.horasTotalesBM}h`, inline: true },
                     { name: "📊 Horas (Steam)", value: horasSteamTexto, inline: true },

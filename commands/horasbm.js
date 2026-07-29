@@ -8,6 +8,18 @@ const {
     getBattleMetricsHours
 } = require("../services/battlemetricsHours");
 
+// Función auxiliar para convertir horas decimales a formato "Xh Ym"
+function formatHoursToHoursMinutes(decimalHours) {
+    const totalMinutes = Math.round(parseFloat(decimalHours) * 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours === 0 && minutes === 0) return "0m";
+    if (hours === 0) return `${minutes}m`;
+    if (minutes === 0) return `${hours}h`;
+    return `${hours}h ${minutes}m`;
+}
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("horasbm")
@@ -53,7 +65,10 @@ module.exports = {
             const nombreJugador = data.nombre || "Desconocido";
             const primerServidor = data.primerServidor || "Desconocido";
             const ultimoWipe = data.ultimoWipe || "Desconocido";
-            const horasDesdeWipe = data.horasDesdeWipe || "0.00";
+            const horasDesdeWipeDecimal = data.horasDesdeWipe || "0.00";
+
+            // Aplicamos la conversión a formato "Xh Ym"
+            const horasDesdeWipeFormateadas = formatHoursToHoursMinutes(horasDesdeWipeDecimal);
 
             let servidoresEncontrados = 0;
             try {
@@ -88,7 +103,7 @@ module.exports = {
                     },
                     {
                         name: "⏱️ Horas desde el Wipe",
-                        value: `\`${horasDesdeWipe}h\``,
+                        value: `\`${horasDesdeWipeFormateadas}\``,
                         inline: true
                     },
                     {
