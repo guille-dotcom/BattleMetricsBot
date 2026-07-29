@@ -44,15 +44,28 @@ module.exports = {
             const rank = attributes.rank || "N/A";
             
             const details = attributes.details || {};
-            const map = details.map || "Desconocido";
+            const mapName = details.map || "Desconocido";
+            const seed = details.rust_seed || details.seed;
+            const size = details.rust_world_size || details.worldSize || "4000";
 
             let wipeTime = "Desconocido";
             const rawWipe = details.rust_last_wipe || details.rust_lastWipe;
             if (rawWipe) {
                 const fechaWipe = new Date(rawWipe);
                 if (!isNaN(fechaWipe.getTime())) {
-                    wipeTime = fechaWipe.toLocaleString();
+                    wipeTime = fechaWipe.toLocaleDateString("es-ES", {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
                 }
+            }
+
+            let mapaTexto = `\`${mapName}\``;
+            if (seed) {
+                mapaTexto = `[${mapName} (Seed: ${seed})](https://rustmaps.com/map/${size}_${seed})`;
             }
 
             const isOnline = status === "online";
@@ -67,7 +80,7 @@ module.exports = {
                     { name: "🖥️ Estado", value: estadoTexto, inline: true },
                     { name: "👥 Jugadores", value: `\`${players} / ${maxPlayers}\``, inline: true },
                     { name: "🏆 Ranking BM", value: `\`#${rank}\``, inline: true },
-                    { name: "🗺️ Mapa", value: `\`${map}\``, inline: true },
+                    { name: "🗺️ Mapa", value: mapaTexto, inline: true },
                     { name: "🛠️ Último Wipe", value: `\`${wipeTime}\``, inline: true },
                     { name: "🌐 Conexión", value: `\`connect ${ip}:${port}\``, inline: false },
                     { name: "🔗 Enlace BattleMetrics", value: `[Ver en BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`, inline: false }
