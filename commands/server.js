@@ -68,26 +68,28 @@ module.exports = {
             const colorEmbed = isOnline ? "#57F287" : "#FF0000";
 
             const mapPageUrl = `https://rustmaps.com/map/${size}_${seed}`;
-            const mapImageUrl = `https://api.rustmaps.com/v3/maps/${size}/${seed}/thumbnail.jpg`;
 
             const embed = new EmbedBuilder()
                 .setTitle(`🎮 Estado del Servidor`)
-                .setURL(mapPageUrl) // Hace que el título del embed lleve directo a RustMaps
-                .setDescription(`**${name}**\n\n🗺️ **Mapa:** [${mapName}](${mapPageUrl})`)
+                .setDescription(`**${name}**`)
                 .setColor(colorEmbed)
                 .addFields(
                     { name: "🖥️ Estado", value: estadoTexto, inline: true },
                     { name: "👥 Jugadores", value: `\`${players} / ${maxPlayers}\``, inline: true },
                     { name: "🏆 Ranking BM", value: `\`#${rank}\``, inline: true },
+                    { name: "🗺️ Mapa", value: `[${mapName}](${mapPageUrl})`, inline: true },
                     { name: "🛠️ Último Wipe", value: `\`${wipeTime}\``, inline: true },
                     { name: "🌐 Conexión", value: `\`connect ${ip}:${port}\``, inline: false },
                     { name: "🔗 Enlace BattleMetrics", value: `[Ver en BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`, inline: false }
                 )
-                .setImage(mapImageUrl) // Muestra la foto del mapa grande dentro del embed (al hacer clic en la foto o el título va a RustMaps)
                 .setTimestamp()
                 .setFooter({ text: "RustLogix" });
 
-            return await interaction.editReply({ embeds: [embed] });
+            // Enviamos el embed y mandamos el enlace de RustMaps suelto abajo para que Discord cree la tarjeta visual del mapa
+            return await interaction.editReply({ 
+                content: `🗺️ **Vista previa del mapa:**\n${mapPageUrl}`,
+                embeds: [embed] 
+            });
 
         } catch (error) {
             console.error("Error al consultar el servidor en BattleMetrics:", error.message);
