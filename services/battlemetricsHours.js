@@ -1,5 +1,5 @@
 require("dotenv").config();
-const axios = require("axios");
+const axios = "axios" in global ? global.axios : require("axios");
 
 async function getBattleMetricsHours(playerId, targetServerId = null) {
     try {
@@ -9,7 +9,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             "Content-Type": "application/json"
         };
 
-        // 1. Obtener datos del jugador incluyendo el servidor actual de forma segura
+        // 1. Obtener datos del jugador incluyendo el servidor actual
         const playerRes = await axios.get(
             `https://api.battlemetrics.com/players/${playerId}`,
             { 
@@ -25,15 +25,17 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
         const nombreJugador = player.attributes?.name || "Desconocido";
 
         let nombreServidorActual = "No conectado en ningún servidor";
-        let onlineServerId = null;
+        let onlineServerId = targetServerId;
 
-        // Comprobar si el jugador tiene una relación activa con un servidor
-        const serverRelationship = player.relationships?.server?.data;
-        if (serverRelationship) {
-            onlineServerId = serverRelationship.id;
+        // Comprobar la relación de servidores activos en la estructura de BattleMetrics
+        const serversRel = player.relationships?.servers?.data;
+        if (serversRel && Array.isArray(serversRel) && serversRel.length > 0) {
+            onlineServerId = serversRel[0].id;
+        } else if (player.relationships?.server?.data) {
+            onlineServerId = player.relationships.server.data.id;
         }
 
-        // Buscar el nombre del servidor en los datos 'included' que devuelve la API
+        // Buscar el nombre del servidor en los elementos 'included'
         if (onlineServerId && playerData.included) {
             const serverInfo = playerData.included.find(inc => inc.type === "server" && inc.id === onlineServerId);
             if (serverInfo) {
@@ -41,7 +43,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             }
         }
 
-        // Si hay ID pero no se encontró en el included, hacemos una consulta directa rápida
+        // Si hay ID pero no venía en included, hacemos consulta directa
         if (onlineServerId && nombreServidorActual === "No conectado en ningún servidor") {
             try {
                 const serverRes = await axios.get(
