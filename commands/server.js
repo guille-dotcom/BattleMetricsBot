@@ -55,24 +55,27 @@ module.exports = {
             const bmServerUrl = `https://www.battlemetrics.com/servers/rust/${serverId}`;
             const connectText = `client.connect ${address}:${port}`;
 
-            let wipeTime = "Desconocido";
+            let wipeTime = "No disponible";
             let fechaWipeFinal = null;
 
-            // 1. Intentamos leer del array de wipes si existe
+            // 1. Buscar en el array de wipes de la API
             if (Array.isArray(details.rust_wipes) && details.rust_wipes.length > 0) {
-                const ultimoWipeStr = details.rust_wipes[details.rust_wipes.length - 1];
-                fechaWipeFinal = new Date(ultimoWipeStr);
+                fechaWipeFinal = new Date(details.rust_wipes[details.rust_wipes.length - 1]);
             }
 
-            // 2. Si no, intentamos leer de las propiedades directas de fecha válida (evitando el 2026-07-13 predeterminado o nulos)
+            // 2. Buscar en propiedades alternativas de la API de Rust
             if (!fechaWipeFinal || isNaN(fechaWipeFinal.getTime()) || fechaWipeFinal.getFullYear() < 2024) {
                 const rawWipe = details.rust_last_wipe_ent || details.rust_last_wipe;
-                if (rawWipe && !rawWipe.startsWith("2026-07-13")) { // Ignoramos fechas genéricas erróneas de la API
-                    fechaWipeFinal = new Date(rawWipe);
+                if (rawWipe) {
+                    if (typeof rawWipe === "string") {
+                        fechaWipeFinal = new Date(rawWipe);
+                    } else if (typeof rawWipe === "number") {
+                        fechaWipeFinal = new Date(rawWipe < 10000000000 ? rawWipe * 1000 : rawWipe);
+                    }
                 }
             }
 
-            // 3. Si la API devolvió una fecha válida, la formateamos
+            // 3. Si la API da una fecha válida, la formateamos
             if (fechaWipeFinal && !isNaN(fechaWipeFinal.getTime()) && fechaWipeFinal.getFullYear() >= 2024) {
                 wipeTime = fechaWipeFinal.toLocaleDateString("es-ES", {
                     day: '2-digit',
@@ -82,8 +85,8 @@ module.exports = {
                     minute: '2-digit'
                 });
             } else {
-                // Si la API no lo trae, usamos una fecha inteligente según el servidor o indicamos el enlace de BM
-                wipeTime = serverId === "433255" ? "23/07/2026, 00:00" : "Ver en BattleMetrics";
+                // Respaldo limpio y profesional si el servidor no expone el dato por API
+                wipeTime = "Consultar en Web";
             }
 
             const isOnline = status === "online";
