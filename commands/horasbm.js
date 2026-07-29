@@ -1,17 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { getBattleMetricsHours } = require("../services/battlemetricsHours.js");
 
-function formatHoursToHoursMinutes(decimalHours) {
-    const totalMinutes = Math.round(parseFloat(decimalHours) * 60);
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-
-    if (hours === 0 && minutes === 0) return "0m";
-    if (hours === 0) return `${minutes}m`;
-    if (minutes === 0) return `${hours}h`;
-    return `${hours}h ${minutes}m`;
-}
-
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("horasbm")
@@ -39,8 +28,6 @@ module.exports = {
                 return await interaction.editReply("❌ No se pudieron encontrar datos para ese jugador en BattleMetrics.");
             }
 
-            const horasDesdeWipeFormateadas = formatHoursToHoursMinutes(datos.horasDesdeWipe);
-            
             // Texto dinámico: si está jugando muestra "Servidor Actual", si está offline muestra "Último Servidor"
             const tituloServidor = datos.online ? "🌐 Servidor Actual" : "🌐 Último Servidor Jugado";
 
@@ -49,11 +36,9 @@ module.exports = {
                 .setColor(datos.online ? "#57F287" : "#ED4245")
                 .addFields(
                     { name: "👤 Jugador", value: `[${datos.nombre}](https://www.battlemetrics.com/players/${datos.id})`, inline: false },
-                    { name: tituloServidor, value: datos.servidor, inline: false }, // <-- Aquí se quitó el spoiler ||
-                    { name: "🛠️ Último Wipe", value: `\`${datos.ultimoWipe}\``, inline: true },
+                    { name: tituloServidor, value: datos.servidor, inline: false },
                     { name: "⏱️ Sesión Actual", value: datos.online ? datos.jugando : "🔴 Offline", inline: true },
                     { name: "📈 Horas battlemetrics", value: `${datos.totalHoras}h`, inline: true },
-                    { name: "⏱️ Horas desde el Wipe", value: `\`${horasDesdeWipeFormateadas}\``, inline: true },
                     { name: "🖥️ Servidores Jugados", value: `${datos.servidores.rust.datos.servidoresEncontrados}`, inline: true }
                 )
                 .setTimestamp()
