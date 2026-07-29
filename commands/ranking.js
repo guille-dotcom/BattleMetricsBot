@@ -49,10 +49,9 @@ module.exports = {
                 "Content-Type": "application/json"
             };
 
-            console.log(`[RANKING WIPE REAL] Consultando servidor y jugadores activos ${serverIdConfigurado}...`);
+            console.log(`[RANKING WIPE FIX] Consultando servidor y jugadores activos ${serverIdConfigurado}...`);
             const inicio = Date.now();
 
-            // 1. Obtener detalles del servidor y la fecha del wipe
             const serverResponse = await axios.get(
                 `https://api.battlemetrics.com/servers/${serverIdConfigurado}?include=player`,
                 { headers, timeout: 6000 }
@@ -64,7 +63,7 @@ module.exports = {
             
             const fechaWipe = lastWipeStr ? new Date(lastWipeStr) : new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
             const fechaWipeISO = fechaWipe.toISOString();
-            console.log(`[RANKING WIPE REAL] Fecha wipe detectada: ${fechaWipeISO}`);
+            console.log(`[RANKING WIPE FIX] Fecha wipe detectada: ${fechaWipeISO}`);
 
             const included = serverResponse.data.included || [];
             const playersList = [];
@@ -78,20 +77,19 @@ module.exports = {
                 }
             }
 
-            // Limitamos a los primeros 30 jugadores activos para optimizar rendimiento y evitar timeouts de Discord
             const playersToProcess = playersList.slice(0, 30);
             const ahora = new Date();
             const ranking = [];
 
-            // 2. Entrar al perfil de cada jugador en este servidor para sumar sus sesiones desde el wipe
             const promises = playersToProcess.map(async (player) => {
                 try {
+                    // Quitamos la coma del filtro para que BattleMetrics acepte la fecha correctamente
                     const sessionRes = await axios.get(
                         `https://api.battlemetrics.com/players/${player.id}/servers/${serverIdConfigurado}/sessions`,
                         {
                             headers,
                             params: {
-                                "filter[start]": `${fechaWipeISO},`,
+                                "filter[start]": fechaWipeISO,
                                 "page[size]": 50
                             },
                             timeout: 4000
@@ -125,15 +123,14 @@ module.exports = {
                         });
                     }
                 } catch (err) {
-                    // Si un jugador falla individualmente, se omite para no romper el ranking general
+                    // Ignorar errores individuales de jugadores
                 }
             });
 
             await Promise.all(promises);
 
-            console.log(`[RANKING WIPE REAL] Procesado en ${Date.now() - inicio}ms`);
+            console.log(`[RANKING WIPE FIX] Procesado en ${Date.now() - inicio}ms. Jugadores con horas: ${ranking.length}`);
 
-            // Ordenar de mayor a menor tiempo acumulado real
             ranking.sort((a, b) => b.hoursDecimal - a.hoursDecimal);
 
             let text = "";
@@ -158,7 +155,7 @@ module.exports = {
             });
 
         } catch (error) {
-            console.log("ERROR API Ranking Wipe Real:", error.response?.data || error.message);
+            console.log("ERROR API Ranking Wipe Fix:", error.response?.data || error.message);
             return await interaction.editReply({ 
                 content: "❌ Hubo un error al calcular el ranking desde el último wipe." 
             });
