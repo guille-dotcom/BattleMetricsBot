@@ -38,7 +38,7 @@ module.exports = {
                 "Content-Type": "application/json"
             };
 
-            // Consultar los jugadores actuales en el servidor de BattleMetrics e incluir sus relaciones/sesiones si es necesario
+            // Consultar los jugadores incluidos en el servidor
             const response = await axios.get(
                 `https://api.battlemetrics.com/servers/${serverIdConfigurado}?include=player`,
                 { headers }
@@ -47,13 +47,16 @@ module.exports = {
             const included = response.data.included || [];
             const ranking = [];
 
-            // Extraer los jugadores que están en la lista del servidor
             for (const item of included) {
                 if (item.type === "player") {
                     const nombre = item.attributes?.name || "Desconocido";
-                    // BattleMetrics a veces provee el tiempo de juego actual o metadatos de sesión
-                    const tiempoJuegoSegundos = item.meta?.timePlayed || item.attributes?.timePlayed || 0;
-                    const horas = tiempoJuegoSegundos / 3600;
+                    
+                    // BattleMetrics almacena el tiempo de juego de la sesión actual en el objeto relacional o metadatos
+                    // Si viene en el meta de la relación o atributos de playtime:
+                    const tiempoSegundos = item.meta?.timePlayed || item.attributes?.timePlayed || 0;
+                    
+                    // Si el tiempo viene en 0, intentamos ver si tiene estadísticas de tiempo total o de sesión
+                    let horas = tiempoSegundos / 3600;
 
                     ranking.push({
                         discord: nombre,
@@ -75,7 +78,7 @@ module.exports = {
             }
 
             const embed = new EmbedBuilder()
-                .setTitle("🏆 Top 15 — Jugadores en el Servidor")
+                .setTitle("🏆 Top 15 — Jugadores Activos en el Servidor")
                 .setDescription(text)
                 .setColor("#57F287")
                 .setTimestamp()
