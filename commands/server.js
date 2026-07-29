@@ -67,12 +67,13 @@ module.exports = {
             const estadoTexto = isOnline ? "🟢 En Línea" : "🔴 Fuera de Línea";
             const colorEmbed = isOnline ? "#57F287" : "#FF0000";
 
-            // Enlace limpio para que Discord actúe como tarjeta estilo Steam
-            const mapLink = `https://rustmaps.com/map/${size}_${seed}`;
+            const mapPageUrl = `https://rustmaps.com/map/${size}_${seed}`;
+            const mapImageUrl = `https://api.rustmaps.com/v3/maps/${size}/${seed}/thumbnail.jpg`;
 
             const embed = new EmbedBuilder()
                 .setTitle(`🎮 Estado del Servidor`)
-                .setDescription(`**${name}**\n\n🗺️ **Mapa:** ${mapName}\n🔗 ${mapLink}`)
+                .setURL(mapPageUrl) // Hace que el título del embed lleve directo a RustMaps
+                .setDescription(`**${name}**\n\n🗺️ **Mapa:** [${mapName}](${mapPageUrl})`)
                 .setColor(colorEmbed)
                 .addFields(
                     { name: "🖥️ Estado", value: estadoTexto, inline: true },
@@ -82,6 +83,7 @@ module.exports = {
                     { name: "🌐 Conexión", value: `\`connect ${ip}:${port}\``, inline: false },
                     { name: "🔗 Enlace BattleMetrics", value: `[Ver en BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`, inline: false }
                 )
+                .setImage(mapImageUrl) // Muestra la foto del mapa grande dentro del embed (al hacer clic en la foto o el título va a RustMaps)
                 .setTimestamp()
                 .setFooter({ text: "RustLogix" });
 
