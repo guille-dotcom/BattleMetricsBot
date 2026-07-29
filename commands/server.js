@@ -46,10 +46,6 @@ module.exports = {
             
             const details = attributes.details || {};
             
-            // 🔎 Depuración en consola de Render para ver las claves reales del servidor
-            console.log("=== KEYS EN DETAILS ===", Object.keys(details));
-            console.log("=== VALOR RUST WIPE ===", details.rust_last_wipe, details.rust_lastWipe, details.wipe, details.lastWipe);
-
             let rawMap = details.map;
             let mapName = "Ver Mapa en BattleMetrics";
             if (rawMap && typeof rawMap === "string" && !rawMap.includes("discord") && !rawMap.includes("http") && rawMap.length < 30) {
@@ -60,21 +56,28 @@ module.exports = {
             const connectText = `client.connect ${address}:${port}`;
 
             let wipeTime = "Desconocido";
-            const rawWipe = details.rust_last_wipe || details.rust_lastWipe || details.wipe || details.lastWipe || details.rust_wipeTime || details.server_wipe;
             
-            if (rawWipe) {
-                const timestamp = typeof rawWipe === "number" && rawWipe < 10000000000 ? rawWipe * 1000 : rawWipe;
-                const fechaWipe = new Date(timestamp);
-                
-                if (!isNaN(fechaWipe.getTime())) {
-                    wipeTime = fechaWipe.toLocaleDateString("es-ES", {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
+            // Extraemos el último wipe real desde el array 'rust_wipes' o respaldamos con los otros campos
+            let fechaWipeFinal = null;
+            if (Array.isArray(details.rust_wipes) && details.rust_wipes.length > 0) {
+                // Ordenar de más reciente a más antiguo por si acaso
+                const wipesOrdenados = details.rust_wipes.sort((a, b) => new Date(b) - new Date(a));
+                fechaWipeFinal = new Date(wipesOrdenados[0]);
+            } else {
+                const rawWipe = details.rust_last_wipe_ent || details.rust_last_wipe;
+                if (rawWipe) {
+                    fechaWipeFinal = new Date(rawWipe);
                 }
+            }
+
+            if (fechaWipeFinal && !isNaN(fechaWipeFinal.getTime())) {
+                wipeTime = fechaWipeFinal.toLocaleDateString("es-ES", {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
             }
 
             const isOnline = status === "online";
