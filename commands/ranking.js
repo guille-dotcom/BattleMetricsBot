@@ -44,12 +44,15 @@ module.exports = {
                 const h = await getBattleMetricsHours(u.battlemetricsId, serverIdConfigurado);
                 
                 const horasWipeNum = Number(h.horasDesdeWipe || 0);
-                const nombreJugador = u.discord || h.nombre || "Desconocido";
 
-                ranking.push({ discord: nombreJugador, hours: horasWipeNum });
+                // MODIFICACIÓN: Solo agregar al ranking si tiene horas mayores a 0 en este wipe
+                if (horasWipeNum > 0) {
+                    const nombreJugador = u.discord || h.nombre || "Desconocido";
+                    ranking.push({ discord: nombreJugador, hours: horasWipeNum });
+                }
 
-                // Pequeña pausa de 500ms entre cada petición para cuidar la API y evitar bloqueos
-                await new Promise(resolve => setTimeout(resolve, 500));
+                // Pequeña pausa de 300ms-500ms entre cada petición para cuidar la API y evitar bloqueos
+                await new Promise(resolve => setTimeout(resolve, 300));
             } catch (err) {
                 console.log(`Error obteniendo datos para ID ${u.battlemetricsId}:`, err.message);
             }
@@ -59,13 +62,17 @@ module.exports = {
         ranking.sort((a, b) => b.hours - a.hours);
 
         let text = "";
-        ranking.slice(0, 10).forEach((u, i) => {
-            text += `**${i + 1}.** ${u.discord} — **${u.hours.toFixed(2)}h** desde el wipe\n`;
-        });
+        if (ranking.length === 0) {
+            text = "No hay jugadores con horas registradas en este servidor desde el último wipe.";
+        } else {
+            ranking.slice(0, 10).forEach((u, i) => {
+                text += `**${i + 1}.** ${u.discord} — **${u.hours.toFixed(2)}h** desde el wipe\n`;
+            });
+        }
 
         const embed = new EmbedBuilder()
             .setTitle("⏱️ Ranking: Horas desde el Último Wipe")
-            .setDescription(text || "Sin datos disponibles")
+            .setDescription(text)
             .setColor("#57F287")
             .setTimestamp()
             .setFooter({ text: "RustLogix" });

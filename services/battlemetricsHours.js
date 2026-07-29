@@ -11,6 +11,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             "Content-Type": "application/json"
         };
 
+        // 1. Obtener datos básicos del jugador y sus servidores recientes
         const response = await axios.get(
             `https://api.battlemetrics.com/players/${playerId}?include=server`,
             { headers }
@@ -44,12 +45,11 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             }
         }
 
-        // Definir cuál servidor vamos a auditar para las horas desde el wipe
+        // 2. Definir cuál servidor vamos a auditar
         let servidorIdAUsar = targetServerId;
         let nombreServidorActual = "🔴 Offline / Desconectado de Rust";
 
         if (!servidorIdAUsar && listaServidores.length > 0) {
-            // Si no hay uno forzado, ordenamos por fecha reciente
             listaServidores.sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
             const servidorPrincipal = listaServidores[0];
             const now = new Date();
@@ -65,7 +65,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
 
         if (servidorIdAUsar) {
             try {
-                // Consultar detalles del servidor específico para obtener el wipe
+                // Consultar detalles del servidor para obtener la fecha de wipe
                 const serverResponse = await axios.get(`https://api.battlemetrics.com/servers/${servidorIdAUsar}`, { headers });
                 const serverAttributes = serverResponse.data.data.attributes;
                 nombreServidorActual = serverAttributes.name || nombreServidorActual;
@@ -80,9 +80,9 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                             day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
                         });
 
-                        // Consultar sesiones del jugador para ese servidor desde el wipe
+                        // 3. CONSULTAR SESIONES FILTRADAS DIRECTAMENTE POR EL SERVIDOR (Mucho más preciso y rápido)
                         const sessionsResponse = await axios.get(
-                            `https://api.battlemetrics.com/players/${playerId}/relationships/sessions?page[size]=100`,
+                            `https://api.battlemetrics.com/players/${playerId}/relationships/sessions?filter[servers]=${servidorIdAUsar}&page[size]=100`,
                             { headers }
                         );
 
@@ -90,13 +90,11 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                         let segundosDesdeWipe = 0;
 
                         for (const session of sessions) {
-                            const relServer = session.relationships?.server?.data;
-                            if (!relServer || relServer.id !== servidorIdAUsar) continue;
-
                             const attributes = session.attributes || {};
                             const start = new Date(attributes.start);
                             const stop = attributes.stop ? new Date(attributes.stop) : new Date();
 
+                            // Si la sesión terminó después o durante el wipe
                             if (stop >= fechaWipe) {
                                 const effectiveStart = start < fechaWipe ? fechaWipe : start;
                                 const diffSeconds = (stop - effectiveStart) / 1000;
