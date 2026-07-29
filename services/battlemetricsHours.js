@@ -80,7 +80,7 @@ async function getBattleMetricsHours(playerId) {
             }
         }
 
-        // --- CÁLCULO DE ÚLTIMO WIPE ---
+        // --- CÁLCULO CORREGIDO DE ÚLTIMO WIPE Y HORAS DESDE EL WIPE ---
         let ultimoWipeServidor = "Desconocido";
         let horasDesdeWipe = "0.00";
         let rawWipeDate = null;
@@ -95,22 +95,8 @@ async function getBattleMetricsHours(playerId) {
                 const serverAttributes = serverResponse.data.data.attributes;
                 const details = serverAttributes.details || {};
                 
-                const wipeDetails = details.rust_last_wipe || details.rust_lastWipe || details.lastWipe || null;
-                const serverUpdatedAt = serverAttributes.updatedAt || null;
-
-                if (wipeDetails) {
-                    const parsedWipe = new Date(wipeDetails);
-                    const now = new Date();
-                    const diffDays = (now - parsedWipe) / (1000 * 60 * 60 * 24);
-
-                    if (!isNaN(parsedWipe.getTime()) && diffDays <= 2) {
-                        rawWipeDate = wipeDetails;
-                    }
-                }
-
-                if (!rawWipeDate) {
-                    rawWipeDate = serverUpdatedAt;
-                }
+                // Clave exacta detectada en BattleMetrics para el wipe de Rust
+                rawWipeDate = details.rust_lastWipe || details.rust_last_wipe || details.lastWipe || null;
 
                 if (rawWipeDate) {
                     const fechaWipe = new Date(rawWipeDate);
