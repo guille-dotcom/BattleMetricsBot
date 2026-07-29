@@ -9,7 +9,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             "Content-Type": "application/json"
         };
 
-        // 1. Obtener datos del jugador (Nombre)
+        // 1. Obtener datos básicos del jugador (Nombre)
         const playerRes = await axios.get(
             `https://api.battlemetrics.com/players/${playerId}`,
             { headers }
@@ -21,7 +21,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
         let nombreServidorActual = "No conectado en ningún servidor";
         let onlineServerId = targetServerId;
 
-        // 2. Obtener sesiones recientes para detectar el servidor actual (la sesión abierta sin 'stop')
+        // 2. Obtener la sesión actual usando el filtro correcto de la API de BattleMetrics
         try {
             const sessionsRes = await axios.get(
                 `https://api.battlemetrics.com/sessions`,
@@ -29,8 +29,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                     headers,
                     params: { 
                         "filter[player]": playerId,
-                        "page[size]": 5,
-                        "sort": "-start",
+                        "filter[active]": "true",
                         "include": "server"
                     }
                 }
@@ -39,7 +38,6 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             const sessions = sessionsRes.data.data || [];
             const included = sessionsRes.data.included || [];
 
-            // Mapear los servidores incluidos
             const serverMap = {};
             for (const inc of included) {
                 if (inc.type === "server") {
@@ -47,24 +45,9 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                 }
             }
 
-            // Buscar la sesión actual (la que no tiene 'stop')
-            for (const session of sessions) {
-                const attr = session.attributes || {};
-                const serverRel = session.relationships?.server?.data;
-
-                if (!attr.stop && serverRel) {
-                    onlineServerId = serverRel.id;
-                    if (serverMap[onlineServerId]) {
-                        nombreServidorActual = serverMap[onlineServerId];
-                    }
-                    break;
-                }
-            }
-
-            // Si no hay una sesión explícitamente abierta pero la última ocurrió hace menos de 10 minutos, tomarla como actual
-            if (nombreServidorActual === "No conectado en ningún servidor" && sessions.length > 0) {
-                const latest = sessions[0];
-                const serverRel = latest.relationships?.server?.data;
+            if (sessions.length > 0) {
+                const activeSession = sessions[0];
+                const serverRel = activeSession.relationships?.server?.data;
                 if (serverRel) {
                     onlineServerId = serverRel.id;
                     if (serverMap[onlineServerId]) {
@@ -72,12 +55,11 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                     }
                 }
             }
-
         } catch (e) {
-            console.log("Error consultando sesiones para el servidor actual:", e.message);
+            console.log("Error consultando sesiones activas:", e.response?.data || e.message);
         }
 
-        // 3. Respaldo por si tenemos el ID pero no el nombre exacto
+        // 3. Respaldo por ID de servidor si no se encontró en las activas
         if (onlineServerId && nombreServidorActual === "No conectado en ningún servidor") {
             try {
                 const serverRes = await axios.get(
@@ -86,7 +68,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                 );
                 nombreServidorActual = serverRes.data.data.attributes?.name || "Desconocido";
             } catch (err) {
-                console.log("Error consultando servidor directo por ID:", err.message);
+                console.log("Error consultando servidor directo:", err.message);
             }
         }
 
