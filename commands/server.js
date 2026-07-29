@@ -64,8 +64,13 @@ module.exports = {
             }
 
             let mapaTexto = `\`${mapName}\``;
+            let mapImageUrl = null;
+
             if (seed) {
-                mapaTexto = `[${mapName} (Seed: ${seed})](https://rustmaps.com/map/${size}_${seed})`;
+                // Enlace interactivo en el campo de texto
+                mapaTexto = `[Ver en RustMaps](https://rustmaps.com/map/${size}_${seed})`;
+                // URL directa de la imagen generada por RustMaps para que aparezca dentro del embed
+                mapImageUrl = `https://api.rustmaps.com/v3/maps/${size}/${seed}/thumbnail.jpg`;
             }
 
             const isOnline = status === "online";
@@ -84,9 +89,14 @@ module.exports = {
                     { name: "🛠️ Último Wipe", value: `\`${wipeTime}\``, inline: true },
                     { name: "🌐 Conexión", value: `\`connect ${ip}:${port}\``, inline: false },
                     { name: "🔗 Enlace BattleMetrics", value: `[Ver en BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`, inline: false }
-                )
-                .setTimestamp()
-                .setFooter({ text: "RustLogix" });
+                );
+
+            // Si se obtuvo la seed, añadimos la imagen directamente al embed
+            if (mapImageUrl) {
+                embed.setImage(mapImageUrl);
+            }
+
+            embed.setTimestamp().setFooter({ text: "RustLogix" });
 
             return await interaction.editReply({ embeds: [embed] });
 
