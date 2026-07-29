@@ -13,7 +13,7 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             "Content-Type": "application/json"
         };
 
-        // Si no se pasa el servidor por parámetro, leerlo del config.json
+        // Si no se pasa el servidor, leerlo del config.json
         if (!targetServerId) {
             try {
                 let resolvedConfigPath = configPath;
@@ -31,10 +31,13 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
             }
         }
 
-        // 1. Obtener datos básicos del jugador
+        // 1. Obtener datos básicos del jugador (Nombre y horas generales si vienen en attributes)
         const playerRes = await axios.get(
             `https://api.battlemetrics.com/players/${playerId}`,
-            { headers }
+            { 
+                headers,
+                params: { "include": "identifier" }
+            }
         );
 
         const player = playerRes.data.data;
@@ -68,38 +71,68 @@ async function getBattleMetricsHours(playerId, targetServerId = null) {
                     fechaWipeFormateada = fechaWipe.toLocaleString();
                 }
 
-                // 3. Obtener el listado de servidores y tiempo de juego del jugador desde sus relaciones
-                const relRes = await axios.get(
-                    `https://api.battlemetrics.com/players/${playerId}/relationships/servers`,
-                    { 
+                // 3. Obtener las sesiones del jugador filtradas por este servidor para calcular horas exactas y horas desde el wipe
+                const sessionsResponse = await axios.get(
+                    `https://api.battlemetrics.com/sessions`,
+                    {
                         headers,
-                        params: { "page[size]": 100 }
+                        params: {
+                            "filter[player]": playerId,
+                            "filter[servers]": targetServerId,
+                            "page[size]": 100
+                        }
                     }
                 );
 
-                const serverRelationships = relRes.data.data || [];
-                servidoresEncontrados = serverRelationships.length;
+                const sessions = sessionsResponse.data.data || [];
+                let segundosDesdeWipe = 0;
+                let segundosTotalesServidor = 0;
+                const ahora = new Date();
 
-                // Buscar el servidor específico dentro de las relaciones
-                const serverEntry = serverRelationships.find(s => s.id === targetServerId);
-                if (serverEntry && serverEntry.attributes && serverEntry.attributes.timePlayed) {
-                    totalHoras = serverEntry.attributes.timePlayed / 3600;
+                for (const session of sessions) {
+                    const attributes = session.attributes || {};
+                    const start = new Date(attributes.start);
+                    const stop = attributes.stop ? new Date(attributes.stop) : ahora;
+
+                    const diffServer = (stop - start) / 1000;
+                    if (diffServer > 0) {
+                        segundosTotalesServidor += diffServer;
+                    }
+
+                    if (stop >= fechaWipe) {
+                        const effectiveStart = start < fechaWipe ? fechaWipe : start;
+                        const diffWipe = (stop - effectiveStart) / 1000;
+                        if (diffWipe > 0) {
+                            segundosDesdeWipe += diffWipe;
+                        }
+                    }
                 }
 
+                totalHoras = segundosTotalesServidor / 3600;
+                horasDesdeWipe = (segundosDesdeWipe / 3600).toFixed(2);
+
             } catch (err) {
-                console.log(`Error obteniendo datos del servidor objetivo:`, err.message);
+                console.log(`Error obteniendo sesiones del servidor objetivo:`, err.message);
             }
-        } else {
-            // Si no hay servidor objetivo, al menos obtenemos la cantidad de servidores jugados
-            try {
-                const relRes = await axios.get(
-                    `https://api.battlemetrics.com/players/${playerId}/relationships/servers`,
-                    { headers }
-                );
-                servidoresEncontrados = relRes.data.data?.length || 0;
-            } catch (e) {
-                servidoresEncontrados = 0;
+        }
+
+        // 4. Obtener cantidad total de servidores jugados usando el endpoint correcto de paginación/meta
+        try {
+            const relRes = await axios.get(
+                `https://api.battlemetrics.com/servers`,
+                { 
+                    headers,
+                    params: {
+                        "filter[players]": playerId,
+                        "page[size]": 1
+                    }
+                }
+            );
+            if (relRes.data.meta && relRes.data.meta.total) {
+                servidoresEncontrados = relRes.data.meta.total;
             }
+        } catch (e) {
+            servidoresEncontrados = 0;
         }
 
         return {
