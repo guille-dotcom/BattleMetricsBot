@@ -131,7 +131,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
     }
 }
 
-// 3. Obtener el ranking de los jugadores activos con el tiempo exacto en este servidor
+// 3. Obtener el ranking consultando el tiempo exacto por servidor de forma segura
 async function getServerLeaderboard(serverId) {
     try {
         const token = process.env.BATTLEMETRICS_TOKEN;
@@ -146,50 +146,52 @@ async function getServerLeaderboard(serverId) {
         );
 
         const included = response.data.included || [];
-        const playersMap = new Map();
-        const playerIds = [];
+        const players = included.filter(item => item.type === "player");
 
-        for (const item of included) {
-            if (item.type === "player") {
-                playersMap.set(item.id, {
-                    id: item.id,
-                    name: item.attributes?.name || "Desconocido",
-                    timePlayedSeconds: 0
-                });
-                playerIds.push(item.id);
+        if (players.length === 0) return [];
+
+        const validResults = [];
+        // Consultamos de 3 en 3 para obtener el tiempo real sin saturar la API
+        for (let i = 0; i < players.length; i += 3) {
+            const batch = players.slice(i, i + 3);
+            const promises = batch.map(async (player) => {
+                try {
+                    const playerId = player.id;
+                    const playerName = player.attributes?.name || "Desconocido";
+
+                    const playerRes = await axios.get(
+                        `https://api.battlemetrics.com/players/${playerId}?include=server`,
+                        { headers }
+                    );
+
+                    let segundosEnServidor = 0;
+                    for (const item of (playerRes.data.included || [])) {
+                        if (item.type === "server" && String(item.id) === String(serverId)) {
+                            segundosEnServidor = item.meta?.timePlayed || 0;
+                            break;
+                        }
+                    }
+
+                    return {
+                        id: playerId,
+                        name: playerName,
+                        timePlayedSeconds: segundosEnServidor
+                    };
+                } catch (err) {
+                    return null;
+                }
+            });
+
+            const results = await Promise.all(promises);
+            validResults.push(...results.filter(r => r !== null));
+
+            if (i + 3 < players.length) {
+                await new Promise(resolve => setTimeout(resolve, 250));
             }
         }
 
-        if (playerIds.length === 0) return [];
-
-        // Consultamos el tiempo exacto de forma masiva para evitar bloqueos por límite de peticiones
-        const serverPlayersRes = await axios.get(
-            `https://api.battlemetrics.com/server-players`,
-            {
-                headers,
-                params: {
-                    "filter[server]": serverId,
-                    "filter[player]": playerIds.join(","),
-                    "page[size]": 100
-                }
-            }
-        ).catch(() => null);
-
-        if (serverPlayersRes && serverPlayersRes.data && serverPlayersRes.data.data) {
-            for (const sp of serverPlayersRes.data.data) {
-                const playerId = sp.relationships?.player?.data?.id;
-                const timePlayed = sp.attributes?.timePlayed || 0;
-
-                if (playerId && playersMap.has(playerId)) {
-                    playersMap.get(playerId).timePlayedSeconds = timePlayed;
-                }
-            }
-        }
-
-        const ranking = Array.from(playersMap.values())
-            .sort((a, b) => b.timePlayedSeconds - a.timePlayedSeconds);
-
-        return ranking;
+        validResults.sort((a, b) => b.timePlayedSeconds - a.timePlayedSeconds);
+        return validResults;
 
     } catch (error) {
         console.error("Error obteniendo ranking del servidor:", error.response?.data || error.message);
