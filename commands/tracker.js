@@ -83,8 +83,10 @@ module.exports = {
                 embeds: [embed]
             });
 
-            // 🚀 Forzamos la revisión inmediata pasando el ID específico del tracker recién creado
-            await revisarTrackers(interaction.client, tracker._id);
+            // Forzamos la revisión inmediata para que mande el embed al canal al instante
+            if (tracker && tracker._id) {
+                await revisarTrackers(interaction.client, tracker._id);
+            }
 
         } catch (error) {
             console.error("ERROR TRACKER:", error);
