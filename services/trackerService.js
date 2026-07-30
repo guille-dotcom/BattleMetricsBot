@@ -1,9 +1,6 @@
 const { EmbedBuilder } = require("discord.js");
 const Tracker = require("../models/TrackerSchema");
-
-const {
-    getBattleMetricsPlayerStatus
-} = require("./battlemetricsSearch");
+const { getBattleMetricsPlayerStatus } = require("./battlemetricsSearch");
 
 function obtenerBattleMetricsId(texto) {
     if(!texto) return null;
@@ -45,7 +42,7 @@ ${status.jugando || "0m"}
         .setTimestamp();
 }
 
-function crearEmbedOffline(status, tracker, tiempo, ultimoServidor) {
+function crearEmbedOffline(tracker, tiempo, ultimoServidor) {
     const serverToShow = ultimoServidor || tracker.ultimoServidor || "Desconocido";
     return new EmbedBuilder()
         .setTitle("🎯 RustLogix")
@@ -73,17 +70,13 @@ async function registrarTracker({
     nombre = "Desconocido",
     canalId,
     guildId,
-    registradoPor,
-    estadoForzado = null,
-    inicioSesionForzado = null,
-    servidorForzado = null,
-    serverIdForzado = null
+    registradoPor
 }) {
     try {
         const fechaExpiracion = new Date(Date.now() + (24 * 60 * 60 * 1000));
         const status = await getBattleMetricsPlayerStatus(battlemetricsId);
         
-        const esOnline = status && (status.online === true || status.online === "true");
+        const esOnline = status && status.online === true;
 
         const nuevoTracker = await Tracker.findOneAndUpdate(
             { battlemetricsId, guildId },
@@ -95,10 +88,10 @@ async function registrarTracker({
                 registradoPor,
                 createdAt: new Date(),
                 expiresAt: fechaExpiracion,
-                ultimoEstado: estadoForzado || (esOnline ? "online" : "offline"),
-                inicioSesion: inicioSesionForzado !== undefined ? inicioSesionForzado : (esOnline ? new Date() : null),
-                ultimoServidor: servidorForzado !== undefined ? servidorForzado : (esOnline ? status?.server : null),
-                ultimoServerId: serverIdForzado !== undefined ? serverIdForzado : (esOnline ? status?.serverId : null)
+                ultimoEstado: esOnline ? "online" : "offline",
+                inicioSesion: esOnline ? new Date() : null,
+                ultimoServidor: esOnline ? (status?.server || "Desconocido") : null,
+                ultimoServerId: esOnline ? (status?.serverId || null) : null
             },
             { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
         );
@@ -110,15 +103,13 @@ async function registrarTracker({
     }
 }
 
-async function revisarTrackers(client, specificTrackerId = null) {
+async function revisarTrackers(client) {
     try {
-        const query = specificTrackerId ? { _id: specificTrackerId } : {};
-        const trackers = await Tracker.find(query);
+        const trackers = await Tracker.find({});
 
         for(const tracker of trackers) {
-            if(!specificTrackerId && new Date() > new Date(tracker.expiresAt)) {
+            if(new Date() > new Date(tracker.expiresAt)) {
                 await Tracker.deleteOne({ _id: tracker._id });
-                console.log("🗑 Tracker expirado:", tracker.battlemetricsId);
                 continue;
             }
 
@@ -133,30 +124,24 @@ async function revisarTrackers(client, specificTrackerId = null) {
             }
             if(!canal) continue;
 
-            const estaOnlineAhora = status.online === true || status.online === "true";
+            const estaOnlineAhora = status.online === true;
 
+            // Si el estado inicial es desconocido por registros viejos en la BD
             if(tracker.ultimoEstado === "desconocido") {
                 tracker.ultimoEstado = estaOnlineAhora ? "online" : "offline";
-                if(estaOnlineAhora) {
-                    tracker.inicioSesion = new Date();
-                    tracker.ultimoServidor = status.server || tracker.ultimoServidor;
-                    tracker.ultimoServerId = status.serverId || tracker.ultimoServerId;
-                    await canal.send({ embeds: [crearEmbedOnline(status, tracker, tracker.ultimoServidor)] });
-                } else {
-                    tracker.inicioSesion = null;
-                    tracker.ultimoServerId = null;
-                }
+                tracker.inicioSesion = estaOnlineAhora ? new Date() : null;
+                tracker.ultimoServidor = estaOnlineAhora ? (status.server || "Desconocido") : tracker.ultimoServidor;
+                tracker.ultimoServerId = estaOnlineAhora ? status.serverId : null;
+                
                 await tracker.save();
                 continue;
             }
 
-            // ============================
-            // 1. CAMBIO OFFLINE -> ONLINE
-            // ============================
+            // 1. OFFLINE -> ONLINE
             if(estaOnlineAhora && tracker.ultimoEstado === "offline") {
                 tracker.ultimoEstado = "online";
                 tracker.inicioSesion = new Date();
-                tracker.ultimoServidor = status.server;
+                tracker.ultimoServidor = status.server || "Desconocido";
                 tracker.ultimoServerId = status.serverId;
 
                 await canal.send({
@@ -168,23 +153,17 @@ async function revisarTrackers(client, specificTrackerId = null) {
                 continue;
             }
 
-            // ============================
-            // 2. SIGUE ONLINE (Revisar cambio de servidor)
-            // ============================
+            // 2. SIGUE ONLINE (Cambio de servidor)
             if(estaOnlineAhora && tracker.ultimoEstado === "online") {
-                if (
-                    status.serverId && 
-                    tracker.ultimoServerId && 
-                    status.serverId !== tracker.ultimoServerId
-                ) {
+                if (status.serverId && tracker.ultimoServerId && status.serverId !== tracker.ultimoServerId) {
                     const viejoServer = tracker.ultimoServidor;
-                    tracker.ultimoServidor = status.server;
+                    tracker.ultimoServidor = status.server || "Desconocido";
                     tracker.ultimoServerId = status.serverId;
                     tracker.inicioSesion = new Date();
 
                     await canal.send({
-                        content: `🔀 **${status.name || tracker.nombre} cambió de servidor** (De: \`${viejoServer}\` a \`${status.server}\`)`,
-                        embeds: [crearEmbedOnline(status, tracker, status.server)]
+                        content: `🔀 **${status.name || tracker.nombre} cambió de servidor** (De: \`${viejoServer}\` a \`${tracker.ultimoServidor}\`)`,
+                        embeds: [crearEmbedOnline(status, tracker, tracker.ultimoServidor)]
                     });
                 } else if (status.server && status.server !== "Desconocido") {
                     tracker.ultimoServidor = status.server;
@@ -192,9 +171,7 @@ async function revisarTrackers(client, specificTrackerId = null) {
                 }
             }
 
-            // ============================
-            // 3. CAMBIO ONLINE -> OFFLINE
-            // ============================
+            // 3. ONLINE -> OFFLINE
             if(!estaOnlineAhora && tracker.ultimoEstado === "online") {
                 const tiempoJugado = formatoTiempo(tracker.inicioSesion);
                 const servidorDondeEstaba = tracker.ultimoServidor || "Desconocido";
@@ -205,7 +182,7 @@ async function revisarTrackers(client, specificTrackerId = null) {
 
                 await canal.send({
                     content: `🔔 **${tracker.nombre} salió del servidor**`,
-                    embeds: [crearEmbedOffline(status, tracker, tiempoJugado, servidorDondeEstaba)]
+                    embeds: [crearEmbedOffline(tracker, tiempoJugado, servidorDondeEstaba)]
                 });
             }
 

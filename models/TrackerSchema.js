@@ -6,6 +6,10 @@ const trackerSchema = new mongoose.Schema({
     canalId: { type: String, required: true },
     guildId: { type: String, required: true },
     registradoPor: { type: String, required: true },
+    ultimoEstado: { type: String, default: "desconocido" },
+    inicioSesion: { type: Date, default: null },
+    ultimoServidor: { type: String, default: null },
+    ultimoServerId: { type: String, default: null },
     createdAt: { type: Date, default: Date.now },
     expiresAt: { type: Date, required: true }
 });
