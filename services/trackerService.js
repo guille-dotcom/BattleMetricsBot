@@ -76,7 +76,7 @@ ${tiempo}
         .setTimestamp();
 }
 
-// Registrar tracker en MongoDB
+// Registrar tracker en MongoDB (Forzando siempre estado desconocido al crear)
 async function registrarTracker({
     battlemetricsId,
     nombre = "Desconocido",
@@ -97,12 +97,12 @@ async function registrarTracker({
                 registradoPor,
                 createdAt: new Date(),
                 expiresAt: fechaExpiracion,
-                ultimoEstado: "desconocido",
+                ultimoEstado: "desconocido", // <-- Forzamos a desconocido para que mande el primer mensaje sí o sí
                 inicioSesion: null,
                 ultimoServidor: null,
                 ultimoServerId: null
             },
-            { upsert: true, returnDocument: 'after' }
+            { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
         );
 
         return nuevoTracker;
@@ -112,7 +112,7 @@ async function registrarTracker({
     }
 }
 
-// Revisar trackers desde MongoDB (con soporte para ID específico opcional)
+// Revisar trackers desde MongoDB
 async function revisarTrackers(client, specificTrackerId = null) {
     try {
         const query = specificTrackerId ? { _id: specificTrackerId } : {};
@@ -132,15 +132,13 @@ async function revisarTrackers(client, specificTrackerId = null) {
             let canal;
             try {
                 canal = await client.channels.fetch(tracker.canalId);
-                console.log("✅ Canal encontrado:", tracker.canalId);
             } catch (e) {
-                console.error("❌ Error al buscar el canal de Discord:", e);
                 continue;
             }
             if(!canal) continue;
 
             // ============================
-            // 1. PRIMERA REVISIÓN (O SI ESTÁ EN DESCONOCIDO)
+            // 1. PRIMERA REVISIÓN (Estado desconocido)
             // ============================
             if(tracker.ultimoEstado === "desconocido"){
                 if(status.online){
@@ -149,14 +147,11 @@ async function revisarTrackers(client, specificTrackerId = null) {
                     tracker.ultimoServidor = status.server;
                     tracker.ultimoServerId = status.serverId;
 
-                    console.log("📤 Intentando enviar embed ONLINE inicial...");
                     await canal.send({
                         embeds: [crearEmbedOnline(status, tracker, status.server)]
                     });
-                    console.log("✨ Embed ONLINE inicial enviado con éxito.");
                 } else {
                     tracker.ultimoEstado = "offline";
-                    console.log("📤 Intentando enviar embed OFFLINE inicial...");
                     await canal.send({
                         embeds: [
                             new EmbedBuilder()
@@ -176,7 +171,6 @@ async function revisarTrackers(client, specificTrackerId = null) {
                                 .setTimestamp()
                         ]
                     });
-                    console.log("✨ Embed OFFLINE inicial enviado con éxito.");
                 }
                 await tracker.save();
                 continue;
@@ -191,19 +185,17 @@ async function revisarTrackers(client, specificTrackerId = null) {
                 tracker.ultimoServidor = status.server;
                 tracker.ultimoServerId = status.serverId;
 
-                console.log("📤 Intentando enviar aviso: volvió a entrar...");
                 await canal.send({
                     content: `🔔 **${status.name} volvió a entrar al servidor**`,
                     embeds: [crearEmbedOnline(status, tracker, status.server)]
                 });
-                console.log("✨ Aviso de entrada enviado con éxito.");
 
                 await tracker.save();
                 continue;
             }
 
             // ============================
-            // 3. SIGUE ONLINE (MANDAR EMBED DIRECTAMENTE)
+            // 3. SIGUE ONLINE (Solo avisa si cambia de servidor)
             // ============================
             if(status.online && tracker.ultimoEstado === "online"){
                 if (
@@ -216,23 +208,14 @@ async function revisarTrackers(client, specificTrackerId = null) {
                     tracker.ultimoServerId = status.serverId;
                     tracker.inicioSesion = new Date();
 
-                    console.log("📤 Intentando enviar aviso: cambió de servidor...");
                     await canal.send({
                         content: `🔀 **${status.name} cambió de servidor** (De: \`${viejoServer}\` a \`${status.server}\`)`,
                         embeds: [crearEmbedOnline(status, tracker, status.server)]
                     });
-                    console.log("✨ Aviso de cambio de servidor enviado con éxito.");
                 } else if (status.server && status.server !== "Desconocido") {
                     tracker.ultimoServidor = status.server;
                     tracker.ultimoServerId = status.serverId;
                 }
-
-                // Forzar el envío del embed online para que "mande ese embed y ya"
-                console.log("📤 Forzando envío de embed online continuo...");
-                await canal.send({
-                    embeds: [crearEmbedOnline(status, tracker, status.server)]
-                });
-                console.log("✨ Embed online continuo enviado con éxito.");
             }
 
             // ============================
@@ -244,12 +227,10 @@ async function revisarTrackers(client, specificTrackerId = null) {
 
                 tracker.ultimoEstado = "offline";
 
-                console.log("📤 Intentando enviar aviso: salió del servidor...");
                 await canal.send({
                     content: `🔔 **${status.name} salió del servidor**`,
                     embeds: [crearEmbedOffline(status, tracker, tiempoJugado, servidorDondeEstaba)]
                 });
-                console.log("✨ Aviso de salida enviado con éxito.");
 
                 tracker.inicioSesion = null;
                 tracker.ultimoServerId = null;
