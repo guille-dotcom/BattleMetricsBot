@@ -140,7 +140,7 @@ async function revisarTrackers(client, specificTrackerId = null) {
             if(!canal) continue;
 
             // ============================
-            // 1. PRIMERA REVISIÓN
+            // 1. PRIMERA REVISIÓN (O SI ESTÁ EN DESCONOCIDO)
             // ============================
             if(tracker.ultimoEstado === "desconocido"){
                 if(status.online){
@@ -203,7 +203,7 @@ async function revisarTrackers(client, specificTrackerId = null) {
             }
 
             // ============================
-            // 3. SIGUE ONLINE (O CAMBIÓ DE SERVIDOR)
+            // 3. SIGUE ONLINE (MANDAR EMBED DIRECTAMENTE)
             // ============================
             if(status.online && tracker.ultimoEstado === "online"){
                 if (
@@ -226,6 +226,13 @@ async function revisarTrackers(client, specificTrackerId = null) {
                     tracker.ultimoServidor = status.server;
                     tracker.ultimoServerId = status.serverId;
                 }
+
+                // Forzar el envío del embed online para que "mande ese embed y ya"
+                console.log("📤 Forzando envío de embed online continuo...");
+                await canal.send({
+                    embeds: [crearEmbedOnline(status, tracker, status.server)]
+                });
+                console.log("✨ Embed online continuo enviado con éxito.");
             }
 
             // ============================
