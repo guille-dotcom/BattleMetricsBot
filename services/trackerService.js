@@ -1,130 +1,18 @@
-const { EmbedBuilder } = require("discord.js");
-const Tracker = require("../models/TrackerSchema");
-
-const {
-    getBattleMetricsPlayerStatus
-} = require("./battlemetricsSearch");
-
-// Obtener ID BattleMetrics
-function obtenerBattleMetricsId(texto) {
-    if(!texto) return null;
-    texto = texto.trim();
-    if(/^\d+$/.test(texto)) return texto;
-    const match = texto.match(/players\/(\d+)/);
-    if(match) return match[1];
-    return null;
-}
-
-// Formato tiempo
-function formatoTiempo(inicio) {
-    if(!inicio) return "00h 00m";
-    const minutos = Math.floor((Date.now() - new Date(inicio).getTime()) / 60000);
-    const horas = Math.floor(minutos / 60);
-    const minutosRestantes = minutos % 60;
-    return `${horas.toString().padStart(2,"0")}h ${minutosRestantes.toString().padStart(2,"0")}m`;
-}
-
-// ============================
-// CREAR EMBED ONLINE
-// ============================
-function crearEmbedOnline(status, tracker, servidorActual) {
-    const serverToShow = servidorActual || status.server || "Desconocido";
-    return new EmbedBuilder()
-        .setTitle("🎯 RustLogix")
-        .setDescription(
-`🟢 **JUGADOR ONLINE**
-
-👤 **${status.name}**
-
-🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${tracker.battlemetricsId})
-
-🎮 **Servidor**
-||${serverToShow}||
-
-⏱ **Jugando**
-${status.jugando || "0m"}
-
-📡 Estado actualizado`
-        )
-        .setColor(0x00ff00)
-        .setTimestamp();
-}
-
-// ============================
-// CREAR EMBED OFFLINE
-// ============================
-function crearEmbedOffline(status, tracker, tiempo, ultimoServidor) {
-    const serverToShow = ultimoServidor || tracker.ultimoServidor || "Desconocido";
-    return new EmbedBuilder()
-        .setTitle("🎯 RustLogix")
-        .setDescription(
-`🔴 **JUGADOR OFFLINE**
-
-👤 **${status.name}**
-
-🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${tracker.battlemetricsId})
-
-🎮 **Último servidor**
-||${serverToShow}||
-
-⏱ **Tiempo jugado**
-${tiempo}
-
-📡 Estado actualizado`
-        )
-        .setColor(0xff0000)
-        .setTimestamp();
-}
-
-// Registrar tracker en MongoDB
-async function registrarTracker({
-    battlemetricsId,
-    nombre = "Desconocido",
-    canalId,
-    guildId,
-    registradoPor
-}) {
-    try {
-        const fechaExpiracion = new Date(Date.now() + (24 * 60 * 60 * 1000));
-
-        const nuevoTracker = await Tracker.findOneAndUpdate(
-            { battlemetricsId, guildId },
-            {
-                battlemetricsId,
-                nombre,
-                canalId,
-                guildId,
-                registradoPor,
-                createdAt: new Date(),
-                expiresAt: fechaExpiracion,
-                ultimoEstado: "desconocido",
-                inicioSesion: null,
-                ultimoServidor: null,
-                ultimoServerId: null
-            },
-            { upsert: true, returnDocument: 'after' }
-        );
-
-        return nuevoTracker;
-    } catch (error) {
-        console.error("ERROR REGISTRANDO TRACKER EN MONGO:", error);
-        throw error;
-    }
-}
-
 // Revisar trackers desde MongoDB
-async function revisarTrackers(client) {
+async function revisarTrackers(client, specificTrackerId = null) {
     try {
-        const trackers = await Tracker.find({});
+        const query = specificTrackerId ? { _id: specificTrackerId } : {};
+        const trackers = await Tracker.find(query);
 
         for(const tracker of trackers) {
-            if(new Date() > new Date(tracker.expiresAt)) {
+            if(!specificTrackerId && new Date() > new Date(tracker.expiresAt)) {
                 await Tracker.deleteOne({ _id: tracker._id });
                 console.log("🗑 Tracker expirado:", tracker.battlemetricsId);
                 continue;
             }
 
             const status = await getBattleMetricsPlayerStatus(tracker.battlemetricsId);
+            console.log("📊 Estado obtenido de BattleMetrics para tracker:", status);
             if(!status) continue;
 
             let canal;
@@ -240,9 +128,3 @@ async function revisarTrackers(client) {
         console.error("ERROR EN REVISAR TRACKERS:", error);
     }
 }
-
-module.exports = {
-    obtenerBattleMetricsId,
-    registrarTracker,
-    revisarTrackers
-};
