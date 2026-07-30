@@ -39,27 +39,22 @@ module.exports = {
 
             const status = await getBattleMetricsPlayerStatus(battlemetricsId);
             const nombre = status?.name || "Desconocido";
-
             const esOnline = status && (status.online === true || status.online === "true");
 
+            // Pasamos los datos ya listos a registrarTracker para que se guarden correctamente de una sola vez
             const tracker = await registrarTracker({
                 battlemetricsId,
                 nombre,
                 canalId: interaction.channel.id,
                 guildId: interaction.guild.id,
-                registradoPor: interaction.user.tag
+                registradoPor: interaction.user.tag,
+                estadoForzado: esOnline ? "online" : "offline",
+                inicioSesionForzado: esOnline ? new Date() : null,
+                servidorForzado: esOnline ? status.server : null,
+                serverIdForzado: esOnline ? status.serverId : null
             });
 
-            if (esOnline) {
-                tracker.ultimoEstado = "online";
-                tracker.inicioSesion = new Date();
-                tracker.ultimoServidor = status.server;
-                tracker.ultimoServerId = status.serverId;
-            } else {
-                tracker.ultimoEstado = "offline";
-            }
-            await tracker.save();
-
+            // 1. Embed de confirmación de tracker creado
             const embedConfirmacion = new EmbedBuilder()
                 .setTitle("🎯 Tracker creado")
                 .setColor("#57F287")
@@ -94,7 +89,8 @@ module.exports = {
                 embeds: [embedConfirmacion]
             });
 
-            const serverToShow = status.server || "Desconocido";
+            // 2. Embed del estado actual del servidor (Online u Offline) tal como pediste
+            const serverToShow = status?.server || "Desconocido";
             
             if (esOnline) {
                 await interaction.channel.send({
@@ -104,7 +100,7 @@ module.exports = {
                             .setDescription(
 `🟢 **JUGADOR ONLINE**
 
-👤 **${status.name}**
+👤 **${status.name || nombre}**
 
 🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${battlemetricsId})
 
