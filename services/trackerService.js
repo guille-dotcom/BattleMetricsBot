@@ -87,7 +87,6 @@ async function registrarTracker({
     try {
         const fechaExpiracion = new Date(Date.now() + (24 * 60 * 60 * 1000));
 
-        // Si ya existe un tracker previo para este jugador, lo actualizamos o lo creamos de nuevo
         const nuevoTracker = await Tracker.findOneAndUpdate(
             { battlemetricsId, guildId },
             {
@@ -103,7 +102,7 @@ async function registrarTracker({
                 ultimoServidor: null,
                 ultimoServerId: null
             },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
 
         return nuevoTracker;
