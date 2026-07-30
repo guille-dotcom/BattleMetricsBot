@@ -12,6 +12,11 @@ const fs = require("fs");
 const path = require("path"); 
 const http = require("http"); 
 
+// ====================== // 
+// CONEXIÓN A MONGODB     // 
+// ====================== // 
+const connectDB = require("./utils/database"); // <--- Requerimos tu database.js
+
 const { 
     revisarTrackers 
 } = require("./services/trackerService"); 
@@ -256,5 +261,8 @@ process.on("uncaughtException", (error) => {
 // ====================== // 
 // LOGIN                  // 
 // ====================== // 
+
+// Ejecutamos la conexión a MongoDB antes del login
+connectDB(); // <--- Aquí conectamos a la base de datos
 
 client.login(process.env.TOKEN);
