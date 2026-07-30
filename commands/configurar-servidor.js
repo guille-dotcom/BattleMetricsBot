@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require("discord.js");
-const ServerConfig = require("../models/ServerConfig"); // Importamos el modelo de MongoDB
+const ServerConfig = require("../models/ServerConfig");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -14,39 +14,37 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
+    // Deferimos la respuesta inmediatamente para ganar tiempo y evitar el error de los 3 segundos
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     const input = interaction.options.getString("serverid").trim();
 
-    // Extrae únicamente los números del texto ingresado
     const match = input.match(/\d+/g);
     const cleanServerId = match ? match[match.length - 1] : null;
 
     if (!cleanServerId) {
-      return await interaction.reply({
-        content: "❌ No se pudo encontrar un ID de servidor válido en el enlace o texto ingresado.",
-        flags: MessageFlags.Ephemeral
+      return await interaction.editReply({
+        content: "❌ No se pudo encontrar un ID de servidor válido en el enlace o texto ingresado."
       });
     }
 
     const guildId = interaction.guild.id;
 
     try {
-      // Guardar o actualizar en MongoDB usando findOneAndUpdate con upsert: true
       await ServerConfig.findOneAndUpdate(
         { guildId: guildId },
         { battleMetricsServerId: cleanServerId },
         { upsert: true, new: true }
       );
 
-      return await interaction.reply({
-        content: `✅ Servidor de BattleMetrics configurado correctamente en la base de datos. ID guardado: \`${cleanServerId}\``,
-        flags: MessageFlags.Ephemeral
+      return await interaction.editReply({
+        content: `✅ Servidor de BattleMetrics configurado correctamente en la base de datos. ID guardado: \`${cleanServerId}\``
       });
 
     } catch (error) {
       console.error("Error al guardar la configuración en MongoDB:", error);
-      return await interaction.reply({
-        content: "❌ Ocurrió un error al intentar guardar la configuración del servidor en la base de datos.",
-        flags: MessageFlags.Ephemeral
+      return await interaction.editReply({
+        content: "❌ Ocurrió un error al intentar guardar la configuración del servidor en la base de datos."
       });
     }
   }
