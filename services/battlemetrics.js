@@ -139,28 +139,18 @@ async function getServerLeaderboard(serverId) {
             `https://api.battlemetrics.com/servers/${serverId}`,
             {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
-                params: { include: "player,serverPlayer" }
+                params: { include: "player" }
             }
         );
 
         const included = response.data.included || [];
         const playersMap = new Map();
-        const timePlayedMap = new Map();
-
-        for (const item of included) {
-            if (item.type === "serverPlayer") {
-                const playerId = item.relationships?.player?.data?.id;
-                const timePlayed = item.attributes?.timePlayed || 0;
-                if (playerId) {
-                    timePlayedMap.set(playerId, timePlayed);
-                }
-            }
-        }
 
         for (const item of included) {
             if (item.type === "player") {
                 const playerId = item.id;
-                const timePlayedSeconds = timePlayedMap.get(playerId) || item.meta?.timePlayed || 0;
+                // BattleMetrics incluye el tiempo jugado en este servidor dentro de meta.timePlayed para cada jugador activo
+                const timePlayedSeconds = item.meta?.timePlayed || 0;
 
                 playersMap.set(playerId, {
                     id: playerId,
