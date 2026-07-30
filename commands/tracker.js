@@ -13,152 +13,86 @@ const {
     getBattleMetricsPlayerStatus
 } = require("../services/battlemetricsSearch");
 
-
 module.exports = {
-
     data: new SlashCommandBuilder()
-
         .setName("tracker")
-
-        .setDescription(
-            "Rastrea un jugador de BattleMetrics durante 24 horas"
-        )
-
+        .setDescription("Rastrea un jugador de BattleMetrics durante 24 horas")
         .addStringOption(option =>
             option
                 .setName("jugador")
-                .setDescription(
-                    "ID o link de BattleMetrics"
-                )
+                .setDescription("ID o link de BattleMetrics")
                 .setRequired(true)
         ),
 
-
     async execute(interaction) {
-
         try {
-
             await interaction.deferReply();
 
-            const jugador =
-                interaction.options.getString("jugador");
-
-            const battlemetricsId =
-                obtenerBattleMetricsId(jugador);
-
+            const jugador = interaction.options.getString("jugador");
+            const battlemetricsId = obtenerBattleMetricsId(jugador);
 
             if (!battlemetricsId) {
-
                 return await interaction.editReply(
                     "❌ ID o link de BattleMetrics inválido."
                 );
-
             }
 
-            const status =
-                await getBattleMetricsPlayerStatus(
-                    battlemetricsId
-                );
+            const status = await getBattleMetricsPlayerStatus(battlemetricsId);
+            const nombre = status?.name || "Desconocido";
 
-            const nombre =
-                status?.name || "Desconocido";
-
-
-            const tracker =
-                registrarTracker({
-
-                    battlemetricsId,
-
-                    nombre,
-
-                    canalId: interaction.channel.id,
-
-                    guildId: interaction.guild.id,
-
-                    registradoPor:
-                        interaction.user.tag
-
-                });
-
-
-            const embed =
-                new EmbedBuilder()
-
-                    .setTitle(
-                        "🎯 Tracker creado"
-                    )
-
-                    .setColor(
-                        "#57F287"
-                    )
-
-                    .addFields(
-
-                        {
-                            name: "👤 Jugador",
-                            value: `\`${nombre}\``,
-                            inline: false
-                        },
-
-                        {
-                            name: "🆔 BattleMetrics",
-                            value: `\`${battlemetricsId}\``,
-                            inline: true
-                        },
-
-                        {
-                            name: "⏱ Duración",
-                            value: "24 horas",
-                            inline: true
-                        },
-
-                        {
-                            name: "👤 Registrado por",
-                            value: interaction.user.tag,
-                            inline: false
-                        }
-
-                    )
-
-                    .setTimestamp()
-                    .setFooter({
-                        text: "RustLogix"
-                    });
-
-
-            await interaction.editReply({
-
-                embeds: [
-                    embed
-                ]
-
+            // Se agregó 'await' porque la comunicación con MongoDB es asíncrona
+            const tracker = await registrarTracker({
+                battlemetricsId,
+                nombre,
+                canalId: interaction.channel.id,
+                guildId: interaction.guild.id,
+                registradoPor: interaction.user.tag
             });
 
+            const embed = new EmbedBuilder()
+                .setTitle("🎯 Tracker creado")
+                .setColor("#57F287")
+                .addFields(
+                    {
+                        name: "👤 Jugador",
+                        value: `\`${nombre}\``,
+                        inline: false
+                    },
+                    {
+                        name: "🆔 BattleMetrics",
+                        value: `\`${battlemetricsId}\``,
+                        inline: true
+                    },
+                    {
+                        name: "⏱ Duración",
+                        value: "24 horas",
+                        inline: true
+                    },
+                    {
+                        name: "👤 Registrado por",
+                        value: interaction.user.tag,
+                        inline: false
+                    }
+                )
+                .setTimestamp()
+                .setFooter({
+                    text: "RustLogix"
+                });
+
+            await interaction.editReply({
+                embeds: [embed]
+            });
 
         } catch (error) {
-
-            console.error(
-                "ERROR TRACKER:",
-                error
-            );
-
+            console.error("ERROR TRACKER:", error);
             if (interaction.deferred || interaction.replied) {
-
-                await interaction.editReply(
-                    "❌ Error creando tracker."
-                );
-
+                await interaction.editReply("❌ Error creando tracker.");
             } else {
-
                 await interaction.reply({
                     content: "❌ Error creando tracker.",
                     flags: MessageFlags.Ephemeral
                 });
-
             }
-
         }
-
     }
-
 };
