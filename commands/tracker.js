@@ -6,7 +6,8 @@ const {
 
 const {
     obtenerBattleMetricsId,
-    registrarTracker
+    registrarTracker,
+    revisarTrackers
 } = require("../services/trackerService");
 
 const {
@@ -40,7 +41,6 @@ module.exports = {
             const status = await getBattleMetricsPlayerStatus(battlemetricsId);
             const nombre = status?.name || "Desconocido";
 
-            // Se agregó 'await' porque la comunicación con MongoDB es asíncrona
             const tracker = await registrarTracker({
                 battlemetricsId,
                 nombre,
@@ -82,6 +82,9 @@ module.exports = {
             await interaction.editReply({
                 embeds: [embed]
             });
+
+            // 🚀 Forzamos la revisión inmediata para que mande el estado online/offline al instante
+            await revisarTrackers(interaction.client);
 
         } catch (error) {
             console.error("ERROR TRACKER:", error);
