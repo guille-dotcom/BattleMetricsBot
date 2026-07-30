@@ -135,10 +135,13 @@ async function getBattleMetricsPlayerStatus(playerId) {
 async function getServerLeaderboard(serverId) {
     try {
         const token = process.env.BATTLEMETRICS_TOKEN;
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+        // 1. Obtenemos los jugadores online en el servidor
         const response = await axios.get(
             `https://api.battlemetrics.com/servers/${serverId}`,
             {
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                headers,
                 params: { include: "player" }
             }
         );
@@ -148,15 +151,34 @@ async function getServerLeaderboard(serverId) {
 
         for (const item of included) {
             if (item.type === "player") {
-                const playerId = item.id;
-                // BattleMetrics incluye el tiempo jugado en este servidor dentro de meta.timePlayed para cada jugador activo
-                const timePlayedSeconds = item.meta?.timePlayed || 0;
-
-                playersMap.set(playerId, {
-                    id: playerId,
+                playersMap.set(item.id, {
+                    id: item.id,
                     name: item.attributes?.name || "Desconocido",
-                    timePlayedSeconds: timePlayedSeconds
+                    timePlayedSeconds: 0
                 });
+            }
+        }
+
+        // 2. Consultamos los registros de tiempo exacto en este servidor (server-players)
+        const serverPlayersRes = await axios.get(
+            `https://api.battlemetrics.com/server-players`,
+            {
+                headers,
+                params: {
+                    "filter[server]": serverId,
+                    "page[size]": 100
+                }
+            }
+        ).catch(() => null);
+
+        if (serverPlayersRes && serverPlayersRes.data && serverPlayersRes.data.data) {
+            for (const sp of serverPlayersRes.data.data) {
+                const playerId = sp.relationships?.player?.data?.id;
+                const timePlayed = sp.attributes?.timePlayed || 0;
+
+                if (playerId && playersMap.has(playerId)) {
+                    playersMap.get(playerId).timePlayedSeconds = timePlayed;
+                }
             }
         }
 
