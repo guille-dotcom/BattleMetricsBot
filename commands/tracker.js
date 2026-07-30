@@ -40,7 +40,8 @@ module.exports = {
             const status = await getBattleMetricsPlayerStatus(battlemetricsId);
             const nombre = status?.name || "Desconocido";
 
-            // 1. Registramos en la base de datos
+            const esOnline = status && (status.online === true || status.online === "true");
+
             const tracker = await registrarTracker({
                 battlemetricsId,
                 nombre,
@@ -49,8 +50,7 @@ module.exports = {
                 registradoPor: interaction.user.tag
             });
 
-            // Actualizamos su estado a online/offline directamente en la BD para que el bucle sepa que ya no está en "desconocido"
-            if (status && status.online) {
+            if (esOnline) {
                 tracker.ultimoEstado = "online";
                 tracker.inicioSesion = new Date();
                 tracker.ultimoServidor = status.server;
@@ -60,7 +60,6 @@ module.exports = {
             }
             await tracker.save();
 
-            // 2. Creamos el embed de confirmación del comando
             const embedConfirmacion = new EmbedBuilder()
                 .setTitle("🎯 Tracker creado")
                 .setColor("#57F287")
@@ -95,9 +94,9 @@ module.exports = {
                 embeds: [embedConfirmacion]
             });
 
-            // 3. ENVIAR EL EMBED DE ESTADO AL INSTANTE AL CANAL
             const serverToShow = status.server || "Desconocido";
-            if (status && status.online) {
+            
+            if (esOnline) {
                 await interaction.channel.send({
                     embeds: [
                         new EmbedBuilder()
@@ -110,7 +109,7 @@ module.exports = {
 🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${battlemetricsId})
 
 🎮 **Servidor**
-||${serverToShow}||
+${serverToShow}
 
 ⏱ **Jugando**
 ${status.jugando || "0m"}

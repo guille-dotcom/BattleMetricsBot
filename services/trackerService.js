@@ -5,7 +5,6 @@ const {
     getBattleMetricsPlayerStatus
 } = require("./battlemetricsSearch");
 
-// Obtener ID BattleMetrics
 function obtenerBattleMetricsId(texto) {
     if(!texto) return null;
     texto = texto.trim();
@@ -15,7 +14,6 @@ function obtenerBattleMetricsId(texto) {
     return null;
 }
 
-// Formato tiempo
 function formatoTiempo(inicio) {
     if(!inicio) return "00h 00m";
     const minutos = Math.floor((Date.now() - new Date(inicio).getTime()) / 60000);
@@ -24,9 +22,6 @@ function formatoTiempo(inicio) {
     return `${horas.toString().padStart(2,"0")}h ${minutosRestantes.toString().padStart(2,"0")}m`;
 }
 
-// ============================
-// CREAR EMBED ONLINE
-// ============================
 function crearEmbedOnline(status, tracker, servidorActual) {
     const serverToShow = servidorActual || status.server || "Desconocido";
     return new EmbedBuilder()
@@ -34,12 +29,12 @@ function crearEmbedOnline(status, tracker, servidorActual) {
         .setDescription(
 `🟢 **JUGADOR ONLINE**
 
-👤 **${status.name}**
+👤 **${status.name || tracker.nombre}**
 
 🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${tracker.battlemetricsId})
 
 🎮 **Servidor**
-||${serverToShow}||
+${serverToShow}
 
 ⏱ **Jugando**
 ${status.jugando || "0m"}
@@ -50,9 +45,6 @@ ${status.jugando || "0m"}
         .setTimestamp();
 }
 
-// ============================
-// CREAR EMBED OFFLINE
-// ============================
 function crearEmbedOffline(status, tracker, tiempo, ultimoServidor) {
     const serverToShow = ultimoServidor || tracker.ultimoServidor || "Desconocido";
     return new EmbedBuilder()
@@ -60,12 +52,12 @@ function crearEmbedOffline(status, tracker, tiempo, ultimoServidor) {
         .setDescription(
 `🔴 **JUGADOR OFFLINE**
 
-👤 **${status.name}**
+👤 **${tracker.nombre}**
 
 🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${tracker.battlemetricsId})
 
 🎮 **Último servidor**
-||${serverToShow}||
+${serverToShow}
 
 ⏱ **Tiempo jugado**
 ${tiempo}
@@ -76,7 +68,6 @@ ${tiempo}
         .setTimestamp();
 }
 
-// Registrar tracker en MongoDB (Forzando siempre estado desconocido al crear)
 async function registrarTracker({
     battlemetricsId,
     nombre = "Desconocido",
@@ -86,21 +77,24 @@ async function registrarTracker({
 }) {
     try {
         const fechaExpiracion = new Date(Date.now() + (24 * 60 * 60 * 1000));
+        const status = await getBattleMetricsPlayerStatus(battlemetricsId);
+        
+        const esOnline = status && (status.online === true || status.online === "true");
 
         const nuevoTracker = await Tracker.findOneAndUpdate(
             { battlemetricsId, guildId },
             {
                 battlemetricsId,
-                nombre,
+                nombre: status?.name || nombre,
                 canalId,
                 guildId,
                 registradoPor,
                 createdAt: new Date(),
                 expiresAt: fechaExpiracion,
-                ultimoEstado: "desconocido", // <-- Forzamos a desconocido para que mande el primer mensaje sí o sí
-                inicioSesion: null,
-                ultimoServidor: null,
-                ultimoServerId: null
+                ultimoEstado: esOnline ? "online" : "offline",
+                inicioSesion: esOnline ? new Date() : null,
+                ultimoServidor: esOnline ? status.server : null,
+                ultimoServerId: esOnline ? status.serverId : null
             },
             { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
         );
@@ -112,7 +106,6 @@ async function registrarTracker({
     }
 }
 
-// Revisar trackers desde MongoDB
 async function revisarTrackers(client, specificTrackerId = null) {
     try {
         const query = specificTrackerId ? { _id: specificTrackerId } : {};
@@ -126,7 +119,6 @@ async function revisarTrackers(client, specificTrackerId = null) {
             }
 
             const status = await getBattleMetricsPlayerStatus(tracker.battlemetricsId);
-            console.log("📊 Estado obtenido de BattleMetrics para tracker:", status);
             if(!status) continue;
 
             let canal;
@@ -137,36 +129,21 @@ async function revisarTrackers(client, specificTrackerId = null) {
             }
             if(!canal) continue;
 
-            // ============================
-            // 1. PRIMERA REVISIÓN (Estado desconocido)
-            // ============================
-            if(tracker.ultimoEstado === "desconocido"){
-                if(status.online){
-                    tracker.ultimoEstado = "online";
+            const estaOnlineAhora = status.online === true || status.online === "true";
+
+            if(tracker.ultimoEstado === "desconocido") {
+                tracker.ultimoEstado = estaOnlineAhora ? "online" : "offline";
+                if(estaOnlineAhora) {
                     tracker.inicioSesion = new Date();
                     tracker.ultimoServidor = status.server;
                     tracker.ultimoServerId = status.serverId;
-
-                    await canal.send({
-                        embeds: [crearEmbedOnline(status, tracker, status.server)]
-                    });
+                    await canal.send({ embeds: [crearEmbedOnline(status, tracker, status.server)] });
                 } else {
-                    tracker.ultimoEstado = "offline";
                     await canal.send({
                         embeds: [
                             new EmbedBuilder()
                                 .setTitle("🎯 RustLogix")
-                                .setDescription(
-`🔴 **JUGADOR OFFLINE**
-
-👤 **${status.name}**
-
-🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${tracker.battlemetricsId})
-
-⏳ Esperando conexión...
-
-📡 Tracker activo`
-                                )
+                                .setDescription(`🔴 **JUGADOR OFFLINE**\n\n👤 **${tracker.nombre}**\n\n🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${tracker.battlemetricsId})\n\n⏳ Esperando conexión...\n\n📡 Tracker activo`)
                                 .setColor(0xff0000)
                                 .setTimestamp()
                         ]
@@ -177,16 +154,16 @@ async function revisarTrackers(client, specificTrackerId = null) {
             }
 
             // ============================
-            // 2. CAMBIO OFFLINE -> ONLINE
+            // 1. CAMBIO OFFLINE -> ONLINE
             // ============================
-            if(status.online && tracker.ultimoEstado === "offline"){
+            if(estaOnlineAhora && tracker.ultimoEstado === "offline") {
                 tracker.ultimoEstado = "online";
                 tracker.inicioSesion = new Date();
                 tracker.ultimoServidor = status.server;
                 tracker.ultimoServerId = status.serverId;
 
                 await canal.send({
-                    content: `🔔 **${status.name} volvió a entrar al servidor**`,
+                    content: `🔔 **${status.name || tracker.nombre} volvió a entrar al servidor**`,
                     embeds: [crearEmbedOnline(status, tracker, status.server)]
                 });
 
@@ -195,9 +172,9 @@ async function revisarTrackers(client, specificTrackerId = null) {
             }
 
             // ============================
-            // 3. SIGUE ONLINE (Solo avisa si cambia de servidor)
+            // 2. SIGUE ONLINE (Revisar cambio de servidor)
             // ============================
-            if(status.online && tracker.ultimoEstado === "online"){
+            if(estaOnlineAhora && tracker.ultimoEstado === "online") {
                 if (
                     status.serverId && 
                     tracker.ultimoServerId && 
@@ -209,7 +186,7 @@ async function revisarTrackers(client, specificTrackerId = null) {
                     tracker.inicioSesion = new Date();
 
                     await canal.send({
-                        content: `🔀 **${status.name} cambió de servidor** (De: \`${viejoServer}\` a \`${status.server}\`)`,
+                        content: `🔀 **${status.name || tracker.nombre} cambió de servidor** (De: \`${viejoServer}\` a \`${status.server}\`)`,
                         embeds: [crearEmbedOnline(status, tracker, status.server)]
                     });
                 } else if (status.server && status.server !== "Desconocido") {
@@ -219,16 +196,16 @@ async function revisarTrackers(client, specificTrackerId = null) {
             }
 
             // ============================
-            // 4. CAMBIO ONLINE -> OFFLINE
+            // 3. CAMBIO ONLINE -> OFFLINE
             // ============================
-            if(!status.online && tracker.ultimoEstado === "online"){
+            if(!estaOnlineAhora && tracker.ultimoEstado === "online") {
                 const tiempoJugado = status.jugando !== "0m" ? status.jugando : formatoTiempo(tracker.inicioSesion);
-                const servidorDondeEstaba = tracker.ultimoServidor || status.server;
+                const servidorDondeEstaba = tracker.ultimoServidor || "Desconocido";
 
                 tracker.ultimoEstado = "offline";
 
                 await canal.send({
-                    content: `🔔 **${status.name} salió del servidor**`,
+                    content: `🔔 **${tracker.nombre} salió del servidor**`,
                     embeds: [crearEmbedOffline(status, tracker, tiempoJugado, servidorDondeEstaba)]
                 });
 
