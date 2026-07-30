@@ -21,6 +21,11 @@ function formatoTiempo(inicio) {
 
 function crearEmbedOnline(status, tracker, servidorActual) {
     const serverToShow = servidorActual || status.server || "Desconocido";
+    let tiempoMostrado = status.jugando;
+    if (!tiempoMostrado || tiempoMostrado === "0m") {
+        tiempoMostrado = formatoTiempo(tracker.inicioSesion || new Date());
+    }
+
     return new EmbedBuilder()
         .setTitle("🎯 RustLogix")
         .setDescription(
@@ -34,7 +39,7 @@ function crearEmbedOnline(status, tracker, servidorActual) {
 ${serverToShow}
 
 ⏱ **Jugando**
-${status.jugando || "0m"}
+${tiempoMostrado}
 
 📡 Estado actualizado`
         )
@@ -126,7 +131,7 @@ async function revisarTrackers(client) {
 
             const estaOnlineAhora = status.online === true;
 
-            // Si el estado inicial es desconocido por registros viejos en la BD
+            // Si el estado inicial es desconocido
             if(tracker.ultimoEstado === "desconocido") {
                 tracker.ultimoEstado = estaOnlineAhora ? "online" : "offline";
                 tracker.inicioSesion = estaOnlineAhora ? new Date() : null;
@@ -137,42 +142,40 @@ async function revisarTrackers(client) {
                 continue;
             }
 
-            // 1. OFFLINE -> ONLINE
-            if(estaOnlineAhora && tracker.ultimoEstado === "offline") {
-                tracker.ultimoEstado = "online";
-                tracker.inicioSesion = new Date();
-                tracker.ultimoServidor = status.server || "Desconocido";
-                tracker.ultimoServerId = status.serverId;
-
-                await canal.send({
-                    content: `🔔 **${status.name || tracker.nombre} volvió a entrar al servidor**`,
-                    embeds: [crearEmbedOnline(status, tracker, status.server)]
-                });
-
-                await tracker.save();
-                continue;
-            }
-
-            // 2. SIGUE ONLINE (Cambio de servidor)
-            if(estaOnlineAhora && tracker.ultimoEstado === "online") {
-                if (status.serverId && tracker.ultimoServerId && status.serverId !== tracker.ultimoServerId) {
-                    const viejoServer = tracker.ultimoServidor;
+            // 1. SI ESTÁ ONLINE AHORA
+            if(estaOnlineAhora) {
+                // Si antes estaba offline, es una entrada real desde cero
+                if(tracker.ultimoEstado === "offline") {
+                    tracker.ultimoEstado = "online";
+                    tracker.inicioSesion = new Date();
                     tracker.ultimoServidor = status.server || "Desconocido";
                     tracker.ultimoServerId = status.serverId;
-                    tracker.inicioSesion = new Date();
 
                     await canal.send({
-                        content: `🔀 **${status.name || tracker.nombre} cambió de servidor** (De: \`${viejoServer}\` a \`${tracker.ultimoServidor}\`)`,
-                        embeds: [crearEmbedOnline(status, tracker, tracker.ultimoServidor)]
+                        content: `🔔 **${status.name || tracker.nombre} volvió a entrar al servidor**`,
+                        embeds: [crearEmbedOnline(status, tracker, status.server)]
                     });
-                } else if (status.server && status.server !== "Desconocido") {
-                    tracker.ultimoServidor = status.server;
-                    tracker.ultimoServerId = status.serverId;
-                }
-            }
+                } 
+                // Si YA estaba online, verificamos si cambió de servidor
+                else if(tracker.ultimoEstado === "online") {
+                    if (status.serverId && tracker.ultimoServerId && status.serverId !== tracker.ultimoServerId) {
+                        const viejoServer = tracker.ultimoServidor;
+                        tracker.ultimoServidor = status.server || "Desconocido";
+                        tracker.ultimoServerId = status.serverId;
+                        tracker.inicioSesion = new Date();
 
-            // 3. ONLINE -> OFFLINE
-            if(!estaOnlineAhora && tracker.ultimoEstado === "online") {
+                        await canal.send({
+                            content: `🔀 **${status.name || tracker.nombre} cambió de servidor** (De: \`${viejoServer}\` a \`${tracker.ultimoServidor}\`)`,
+                            embeds: [crearEmbedOnline(status, tracker, tracker.ultimoServidor)]
+                        });
+                    } else if (status.server && status.server !== "Desconocido") {
+                        tracker.ultimoServidor = status.server;
+                        tracker.ultimoServerId = status.serverId;
+                    }
+                }
+            } 
+            // 2. SI ESTÁ OFFLINE AHORA (Y antes estaba online)
+            else if(!estaOnlineAhora && tracker.ultimoEstado === "online") {
                 const tiempoJugado = formatoTiempo(tracker.inicioSesion);
                 const servidorDondeEstaba = tracker.ultimoServidor || "Desconocido";
 
