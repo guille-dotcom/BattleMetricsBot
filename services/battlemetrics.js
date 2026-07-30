@@ -131,14 +131,14 @@ async function getBattleMetricsPlayerStatus(playerId) {
     }
 }
 
-// 3. Obtener el ranking de forma rápida usando el endpoint server-players correctamente
+// 3. Obtener el ranking de forma rápida y precisa extrayendo el tiempo exacto por servidor
 async function getServerLeaderboard(serverId) {
     try {
         const token = process.env.BATTLEMETRICS_TOKEN;
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-        // Obtenemos los jugadores online y sus datos básicos del servidor
-        const serverRes = await axios.get(
+        // Obtenemos los jugadores online actuales del servidor
+        const response = await axios.get(
             `https://api.battlemetrics.com/servers/${serverId}`,
             {
                 headers,
@@ -146,48 +146,56 @@ async function getServerLeaderboard(serverId) {
             }
         );
 
-        const included = serverRes.data.included || [];
-        const playersMap = new Map();
+        const included = response.data.included || [];
+        const players = included.filter(item => item.type === "player");
 
-        for (const item of included) {
-            if (item.type === "player") {
-                playersMap.set(item.id, {
-                    id: item.id,
-                    name: item.attributes?.name || "Desconocido",
-                    timePlayedSeconds: 0
-                });
-            }
+        if (players.length === 0) return [];
+
+        // Para evitar que sea lento pero asegurar que traiga las horas reales, consultamos en bloques paralelos eficientes de 5
+        const batchSize = 5;
+        const validResults = [];
+
+        for (let i = 0; i < players.length; i += batchSize) {
+            const batch = players.slice(i, i + batchSize);
+            const batchPromises = batch.map(async (player) => {
+                try {
+                    const playerId = player.id;
+                    const playerName = player.attributes?.name || "Desconocido";
+
+                    // Consultamos el perfil del jugador con sus servidores incluidos (igual que /horas)
+                    const playerRes = await axios.get(
+                        `https://api.battlemetrics.com/players/${playerId}?include=server`,
+                        { headers }
+                    );
+
+                    const playerIncluded = playerRes.data.included || [];
+                    let segundosEnServidor = 0;
+
+                    for (const item of playerIncluded) {
+                        if (item.type === "server" && String(item.id) === String(serverId)) {
+                            segundosEnServidor = item.meta?.timePlayed || 0;
+                            break;
+                        }
+                    }
+
+                    return {
+                        id: playerId,
+                        name: playerName,
+                        timePlayedSeconds: segundosEnServidor
+                    };
+                } catch (err) {
+                    return null;
+                }
+            });
+
+            const batchResults = await Promise.all(batchPromises);
+            validResults.push(...batchResults.filter(r => r !== null));
         }
 
-        if (playersMap.size === 0) return [];
+        // Ordenar de mayor a menor tiempo jugado en el servidor
+        validResults.sort((a, b) => b.timePlayedSeconds - a.timePlayedSeconds);
 
-        // Consultamos el endpoint server-players filtrando por servidor para extraer el tiempo exacto acumulado
-        const serverPlayersRes = await axios.get(
-            `https://api.battlemetrics.com/server-players`,
-            {
-                headers,
-                params: {
-                    "filter[server]": serverId,
-                    "page[size]": 100
-                }
-            }
-        ).catch(() => null);
-
-        if (serverPlayersRes && serverPlayersRes.data && serverPlayersRes.data.data) {
-            for (const sp of serverPlayersRes.data.data) {
-                const playerId = sp.relationships?.player?.data?.id;
-                const timePlayed = sp.attributes?.timePlayed || 0;
-
-                if (playerId && playersMap.has(playerId)) {
-                    playersMap.get(playerId).timePlayedSeconds = timePlayed;
-                }
-            }
-        }
-
-        const ranking = Array.from(playersMap.values())
-            .sort((a, b) => b.timePlayedSeconds - a.timePlayedSeconds);
-
-        return ranking;
+        return validResults;
 
     } catch (error) {
         console.error("Error obteniendo ranking del servidor:", error.response?.data || error.message);
