@@ -6,8 +6,7 @@ const {
 
 const {
     obtenerBattleMetricsId,
-    registrarTracker,
-    revisarTrackers
+    registrarTracker
 } = require("../services/trackerService");
 
 const {
@@ -41,6 +40,7 @@ module.exports = {
             const status = await getBattleMetricsPlayerStatus(battlemetricsId);
             const nombre = status?.name || "Desconocido";
 
+            // 1. Registramos en la base de datos
             const tracker = await registrarTracker({
                 battlemetricsId,
                 nombre,
@@ -49,7 +49,19 @@ module.exports = {
                 registradoPor: interaction.user.tag
             });
 
-            const embed = new EmbedBuilder()
+            // Actualizamos su estado a online/offline directamente en la BD para que el bucle sepa que ya no está en "desconocido"
+            if (status && status.online) {
+                tracker.ultimoEstado = "online";
+                tracker.inicioSesion = new Date();
+                tracker.ultimoServidor = status.server;
+                tracker.ultimoServerId = status.serverId;
+            } else {
+                tracker.ultimoEstado = "offline";
+            }
+            await tracker.save();
+
+            // 2. Creamos el embed de confirmación del comando
+            const embedConfirmacion = new EmbedBuilder()
                 .setTitle("🎯 Tracker creado")
                 .setColor("#57F287")
                 .addFields(
@@ -80,12 +92,55 @@ module.exports = {
                 });
 
             await interaction.editReply({
-                embeds: [embed]
+                embeds: [embedConfirmacion]
             });
 
-            // Forzamos la revisión inmediata para que mande el embed al canal al instante
-            if (tracker && tracker._id) {
-                await revisarTrackers(interaction.client, tracker._id);
+            // 3. ENVIAR EL EMBED DE ESTADO AL INSTANTE AL CANAL
+            const serverToShow = status.server || "Desconocido";
+            if (status && status.online) {
+                await interaction.channel.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setTitle("🎯 RustLogix")
+                            .setDescription(
+`🟢 **JUGADOR ONLINE**
+
+👤 **${status.name}**
+
+🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${battlemetricsId})
+
+🎮 **Servidor**
+||${serverToShow}||
+
+⏱ **Jugando**
+${status.jugando || "0m"}
+
+📡 Estado actualizado`
+                            )
+                            .setColor(0x00ff00)
+                            .setTimestamp()
+                    ]
+                });
+            } else {
+                await interaction.channel.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setTitle("🎯 RustLogix")
+                            .setDescription(
+`🔴 **JUGADOR OFFLINE**
+
+👤 **${nombre}**
+
+🆔 [Perfil BattleMetrics](https://www.battlemetrics.com/players/${battlemetricsId})
+
+⏳ Esperando conexión...
+
+📡 Tracker activo`
+                            )
+                            .setColor(0xff0000)
+                            .setTimestamp()
+                    ]
+                });
             }
 
         } catch (error) {
