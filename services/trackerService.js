@@ -139,9 +139,9 @@ async function revisarTrackers(client, specificTrackerId = null) {
                 tracker.ultimoEstado = estaOnlineAhora ? "online" : "offline";
                 if(estaOnlineAhora) {
                     tracker.inicioSesion = new Date();
-                    tracker.ultimoServidor = status.server;
-                    tracker.ultimoServerId = status.serverId;
-                    await canal.send({ embeds: [crearEmbedOnline(status, tracker, status.server)] });
+                    tracker.ultimoServidor = status.server || tracker.ultimoServidor;
+                    tracker.ultimoServerId = status.serverId || tracker.ultimoServerId;
+                    await canal.send({ embeds: [crearEmbedOnline(status, tracker, tracker.ultimoServidor)] });
                 } else {
                     tracker.inicioSesion = null;
                     tracker.ultimoServerId = null;
@@ -196,7 +196,7 @@ async function revisarTrackers(client, specificTrackerId = null) {
             // 3. CAMBIO ONLINE -> OFFLINE
             // ============================
             if(!estaOnlineAhora && tracker.ultimoEstado === "online") {
-                const tiempoJugado = (status.jugando && status.jugando !== "0m") ? status.jugando : formatoTiempo(tracker.inicioSesion);
+                const tiempoJugado = formatoTiempo(tracker.inicioSesion);
                 const servidorDondeEstaba = tracker.ultimoServidor || "Desconocido";
 
                 tracker.ultimoEstado = "offline";
