@@ -131,67 +131,58 @@ async function getBattleMetricsPlayerStatus(playerId) {
     }
 }
 
-// 3. Obtener el ranking consultando el tiempo exacto por servidor de forma segura
+// 3. Obtener el ranking de forma instantánea usando relaciones directas del servidor
 async function getServerLeaderboard(serverId) {
     try {
         const token = process.env.BATTLEMETRICS_TOKEN;
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
+        // Consultamos el servidor incluyendo los "server-players" directamente en una sola petición
         const response = await axios.get(
             `https://api.battlemetrics.com/servers/${serverId}`,
             {
                 headers,
-                params: { include: "player" }
+                params: { 
+                    include: "player,serverPlayer",
+                    "page[size]": 100 
+                }
             }
         );
 
         const included = response.data.included || [];
-        const players = included.filter(item => item.type === "player");
+        const playersMap = new Map();
+        const timeMap = new Map();
 
-        if (players.length === 0) return [];
-
-        const validResults = [];
-        // Consultamos de 3 en 3 para obtener el tiempo real sin saturar la API
-        for (let i = 0; i < players.length; i += 3) {
-            const batch = players.slice(i, i + 3);
-            const promises = batch.map(async (player) => {
-                try {
-                    const playerId = player.id;
-                    const playerName = player.attributes?.name || "Desconocido";
-
-                    const playerRes = await axios.get(
-                        `https://api.battlemetrics.com/players/${playerId}?include=server`,
-                        { headers }
-                    );
-
-                    let segundosEnServidor = 0;
-                    for (const item of (playerRes.data.included || [])) {
-                        if (item.type === "server" && String(item.id) === String(serverId)) {
-                            segundosEnServidor = item.meta?.timePlayed || 0;
-                            break;
-                        }
-                    }
-
-                    return {
-                        id: playerId,
-                        name: playerName,
-                        timePlayedSeconds: segundosEnServidor
-                    };
-                } catch (err) {
-                    return null;
+        // Extraemos los datos de tiempo de los registros de serverPlayer
+        for (const item of included) {
+            if (item.type === "serverPlayer") {
+                const playerId = item.relationships?.player?.data?.id;
+                const timePlayed = item.attributes?.timePlayed || 0;
+                if (playerId) {
+                    timeMap.set(playerId, timePlayed);
                 }
-            });
-
-            const results = await Promise.all(promises);
-            validResults.push(...results.filter(r => r !== null));
-
-            if (i + 3 < players.length) {
-                await new Promise(resolve => setTimeout(resolve, 250));
             }
         }
 
-        validResults.sort((a, b) => b.timePlayedSeconds - a.timePlayedSeconds);
-        return validResults;
+        // Mapeamos los nombres de los jugadores
+        for (const item of included) {
+            if (item.type === "player") {
+                const playerId = item.id;
+                const playerName = item.attributes?.name || "Desconocido";
+                const timePlayedSeconds = timeMap.get(playerId) || 0;
+
+                playersMap.set(playerId, {
+                    id: playerId,
+                    name: playerName,
+                    timePlayedSeconds: timePlayedSeconds
+                });
+            }
+        }
+
+        const ranking = Array.from(playersMap.values())
+            .sort((a, b) => b.timePlayedSeconds - a.timePlayedSeconds);
+
+        return ranking;
 
     } catch (error) {
         console.error("Error obteniendo ranking del servidor:", error.response?.data || error.message);
