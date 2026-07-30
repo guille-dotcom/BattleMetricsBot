@@ -131,7 +131,44 @@ async function getBattleMetricsPlayerStatus(playerId) {
     }
 }
 
+// 3. Obtener el ranking/leaderboard de tiempo de juego de los jugadores en el servidor actual
+async function getServerLeaderboard(serverId) {
+    try {
+        const token = process.env.BATTLEMETRICS_TOKEN;
+        const response = await axios.get(
+            `https://api.battlemetrics.com/servers/${serverId}`,
+            {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                params: { include: "player" }
+            }
+        );
+
+        const included = response.data.included || [];
+        const playersMap = new Map();
+
+        for (const item of included) {
+            if (item.type === "player") {
+                playersMap.set(item.id, {
+                    id: item.id,
+                    name: item.attributes?.name || "Desconocido",
+                    timePlayedSeconds: item.meta?.timePlayed || 0
+                });
+            }
+        }
+
+        const ranking = Array.from(playersMap.values())
+            .sort((a, b) => b.timePlayedSeconds - a.timePlayedSeconds);
+
+        return ranking;
+
+    } catch (error) {
+        console.error("Error obteniendo ranking del servidor:", error.response?.data || error.message);
+        return [];
+    }
+}
+
 module.exports = { 
     searchBattleMetricsPlayer, 
-    getBattleMetricsPlayerStatus 
+    getBattleMetricsPlayerStatus,
+    getServerLeaderboard 
 };
