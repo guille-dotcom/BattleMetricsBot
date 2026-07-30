@@ -131,7 +131,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
     }
 }
 
-// 3. Obtener el ranking de los jugadores activos consultando sus datos individuales
+// 3. Obtener el ranking de los jugadores activos con el tiempo exacto en este servidor
 async function getServerLeaderboard(serverId) {
     try {
         const token = process.env.BATTLEMETRICS_TOKEN;
@@ -146,44 +146,50 @@ async function getServerLeaderboard(serverId) {
         );
 
         const included = response.data.included || [];
-        const players = included.filter(item => item.type === "player");
+        const playersMap = new Map();
+        const playerIds = [];
 
-        const rankingPromises = players.map(async (player) => {
-            try {
-                const playerId = player.id;
-                const playerName = player.attributes?.name || "Desconocido";
-
-                const playerRes = await axios.get(
-                    `https://api.battlemetrics.com/players/${playerId}?include=server`,
-                    { headers }
-                );
-
-                const playerIncluded = playerRes.data.included || [];
-                let segundosEnServidor = 0;
-
-                for (const item of playerIncluded) {
-                    if (item.type === "server" && String(item.id) === String(serverId)) {
-                        segundosEnServidor = item.meta?.timePlayed || 0;
-                        break;
-                    }
-                }
-
-                return {
-                    id: playerId,
-                    name: playerName,
-                    timePlayedSeconds: segundosEnServidor
-                };
-            } catch (err) {
-                return null;
+        for (const item of included) {
+            if (item.type === "player") {
+                playersMap.set(item.id, {
+                    id: item.id,
+                    name: item.attributes?.name || "Desconocido",
+                    timePlayedSeconds: 0
+                });
+                playerIds.push(item.id);
             }
-        });
+        }
 
-        const results = await Promise.all(rankingPromises);
-        const validResults = results.filter(r => r !== null);
+        if (playerIds.length === 0) return [];
 
-        validResults.sort((a, b) => b.timePlayedSeconds - a.timePlayedSeconds);
+        // Consultamos el tiempo exacto de forma masiva para evitar bloqueos por límite de peticiones
+        const serverPlayersRes = await axios.get(
+            `https://api.battlemetrics.com/server-players`,
+            {
+                headers,
+                params: {
+                    "filter[server]": serverId,
+                    "filter[player]": playerIds.join(","),
+                    "page[size]": 100
+                }
+            }
+        ).catch(() => null);
 
-        return validResults;
+        if (serverPlayersRes && serverPlayersRes.data && serverPlayersRes.data.data) {
+            for (const sp of serverPlayersRes.data.data) {
+                const playerId = sp.relationships?.player?.data?.id;
+                const timePlayed = sp.attributes?.timePlayed || 0;
+
+                if (playerId && playersMap.has(playerId)) {
+                    playersMap.get(playerId).timePlayedSeconds = timePlayed;
+                }
+            }
+        }
+
+        const ranking = Array.from(playersMap.values())
+            .sort((a, b) => b.timePlayedSeconds - a.timePlayedSeconds);
+
+        return ranking;
 
     } catch (error) {
         console.error("Error obteniendo ranking del servidor:", error.response?.data || error.message);
