@@ -1,8 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
 const { getSteamProfile } = require("../services/steam.js"); 
 const { searchBattleMetricsPlayer, getBattleMetricsPlayerStatus } = require("../services/battlemetrics.js"); 
-const fs = require("fs");
-const path = require("path");
+const ServerConfig = require("../models/ServerConfig"); // <--- Importamos el modelo de MongoDB
 
 module.exports = { 
     data: new SlashCommandBuilder()
@@ -18,17 +17,16 @@ module.exports = {
         const steamId = interaction.options.getString("steamid").trim(); 
         await interaction.deferReply();
 
-        let serverId = "433255"; 
+        let serverId = "433255"; // Servidor por defecto si no hay ninguno configurado
+        
         try {
-            const configPath = path.join(__dirname, "../data/config.json");
-            if (fs.existsSync(configPath)) {
-                const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-                if (config.battlemetricsServer) {
-                    serverId = config.battlemetricsServer; 
-                }
+            // Buscamos la configuración de este servidor específico de Discord en MongoDB
+            const dbConfig = await ServerConfig.findOne({ guildId: interaction.guild.id });
+            if (dbConfig && dbConfig.battleMetricsServerId) {
+                serverId = dbConfig.battleMetricsServerId;
             }
         } catch (error) {
-            console.log("Error leyendo data/config.json:", error.message);
+            console.log("Error consultando MongoDB para la configuración del servidor:", error.message);
         }
 
         try { 

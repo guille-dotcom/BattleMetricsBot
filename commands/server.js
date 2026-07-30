@@ -1,7 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
+const ServerConfig = require("../models/ServerConfig"); // <--- Importamos el modelo de MongoDB
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -11,17 +10,16 @@ module.exports = {
     async execute(interaction) {
         await interaction.deferReply();
 
-        let serverId = "433255"; 
+        let serverId = "433255"; // Valor por defecto si no hay ninguno configurado
+        
         try {
-            const configPath = path.join(__dirname, "../data/config.json");
-            if (fs.existsSync(configPath)) {
-                const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-                if (config.battlemetricsServer) {
-                    serverId = config.battlemetricsServer; 
-                }
+            // Buscamos la configuración de este servidor en MongoDB
+            const dbConfig = await ServerConfig.findOne({ guildId: interaction.guild.id });
+            if (dbConfig && dbConfig.battleMetricsServerId) {
+                serverId = dbConfig.battleMetricsServerId;
             }
         } catch (error) {
-            console.log("Console log - Error leyendo data/config.json:", error.message);
+            console.log("Console log - Error consultando MongoDB para el comando server:", error.message);
         }
 
         try {
@@ -85,7 +83,6 @@ module.exports = {
                     minute: '2-digit'
                 });
             } else {
-                // Respaldo limpio y profesional si el servidor no expone el dato por API
                 wipeTime = "Consultar en Web";
             }
 

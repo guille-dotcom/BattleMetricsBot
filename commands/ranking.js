@@ -1,7 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
 const { getServerLeaderboard } = require("../services/battlemetrics.js");
-const fs = require("fs");
-const path = require("path");
+const ServerConfig = require("../models/ServerConfig"); // <--- Importamos el modelo de MongoDB
 
 function formatSecondsToHoursMinutes(seconds) {
     const totalMinutes = Math.floor(seconds / 60);
@@ -18,20 +17,18 @@ module.exports = {
         .setDescription("Muestra el top de jugadores activos en el servidor según su tiempo de juego"),
 
     async execute(interaction) {
-        // Deferimos la respuesta inmediatamente para evitar que Discord invalide el comando (timeout de 3s)
         await interaction.deferReply();
 
-        let serverId = "433255"; // Valor por defecto
+        let serverId = "433255"; // Valor por defecto si no hay ninguno configurado
+        
         try {
-            const configPath = path.join(__dirname, "../data/config.json");
-            if (fs.existsSync(configPath)) {
-                const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-                if (config.battlemetricsServer) {
-                    serverId = config.battlemetricsServer;
-                }
+            // Buscamos la configuración de este servidor en MongoDB
+            const dbConfig = await ServerConfig.findOne({ guildId: interaction.guild.id });
+            if (dbConfig && dbConfig.battleMetricsServerId) {
+                serverId = dbConfig.battleMetricsServerId;
             }
         } catch (error) {
-            console.log("Error leyendo config.json:", error.message);
+            console.log("Error consultando MongoDB para el ranking:", error.message);
         }
 
         try {

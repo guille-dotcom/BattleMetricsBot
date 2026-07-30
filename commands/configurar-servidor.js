@@ -1,6 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require("discord.js");
-const fs = require("fs");
-const path = require("path");
+const ServerConfig = require("../models/ServerConfig"); // Importamos el modelo de MongoDB
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -12,12 +11,12 @@ module.exports = {
         .setDescription("El link del servidor o su ID (Ej: https://www.battlemetrics.com/servers/rust/1451019)")
         .setRequired(true)
     )
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator), // Solo administradores pueden usarlo
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
     const input = interaction.options.getString("serverid").trim();
 
-    // Extrae únicamente los números del texto ingresado (soporta links completos e IDs puras)
+    // Extrae únicamente los números del texto ingresado
     const match = input.match(/\d+/g);
     const cleanServerId = match ? match[match.length - 1] : null;
 
@@ -28,37 +27,25 @@ module.exports = {
       });
     }
 
-    const configPath = path.join(__dirname, "../data/config.json");
+    const guildId = interaction.guild.id;
 
     try {
-      // 1. Validar/crear la carpeta data si no existe
-      const dirPath = path.dirname(configPath);
-      if (!fs.existsSync(dirPath)) {
-        fs.mkdirSync(dirPath, { recursive: true });
-      }
-
-      let config = {};
-
-      // 2. Leer configuración previa si existe
-      if (fs.existsSync(configPath)) {
-        config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-      }
-
-      // 3. Guardar únicamente el ID numérico extraído
-      config.battlemetricsServer = cleanServerId;
-
-      // 4. Escribir en el archivo JSON
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 4), "utf-8");
+      // Guardar o actualizar en MongoDB usando findOneAndUpdate con upsert: true
+      await ServerConfig.findOneAndUpdate(
+        { guildId: guildId },
+        { battleMetricsServerId: cleanServerId },
+        { upsert: true, new: true }
+      );
 
       return await interaction.reply({
-        content: `✅ Servidor de BattleMetrics configurado correctamente. ID guardado: \`${cleanServerId}\``,
-        flags: MessageFlags.Ephemeral // Solo lo ve quien ejecuta el comando
+        content: `✅ Servidor de BattleMetrics configurado correctamente en la base de datos. ID guardado: \`${cleanServerId}\``,
+        flags: MessageFlags.Ephemeral
       });
 
     } catch (error) {
-      console.error("Error al guardar la configuración:", error);
+      console.error("Error al guardar la configuración en MongoDB:", error);
       return await interaction.reply({
-        content: "❌ Ocurrió un error al intentar guardar la configuración del servidor.",
+        content: "❌ Ocurrió un error al intentar guardar la configuración del servidor en la base de datos.",
         flags: MessageFlags.Ephemeral
       });
     }
