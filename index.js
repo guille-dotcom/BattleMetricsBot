@@ -15,7 +15,7 @@ const http = require("http");
 // ====================== // 
 // CONEXIÓN A MONGODB     // 
 // ====================== // 
-const connectDB = require("./utils/database"); // <--- Requerimos tu database.js
+const connectDB = require("./utils/database");
 
 const { 
     revisarTrackers 
@@ -193,25 +193,30 @@ client.on("interactionCreate", async interaction => {
     if (interaction.isButton()) {
         if (interaction.customId.startsWith("eliminar_tracker_")) {
             const id = interaction.customId.replace("eliminar_tracker_", "");
-            const { leerTrackers, guardarTrackers } = require("./services/trackerService");
-            const trackers = leerTrackers();
+            const Tracker = require("./models/TrackerSchema");
 
-            if (!trackers[id]) {
+            try {
+                const trackerEliminado = await Tracker.findByIdAndDelete(id);
+
+                if (!trackerEliminado) {
+                    return interaction.reply({
+                        content: "❌ Ese tracker ya no existe o ya fue eliminado.",
+                        ephemeral: true
+                    });
+                }
+
+                return interaction.update({
+                    content: `🗑️ Tracker eliminado: **${trackerEliminado.nombre || id}**`,
+                    embeds: [],
+                    components: []
+                });
+            } catch (error) {
+                console.error("Error al eliminar tracker por botón:", error);
                 return interaction.reply({
-                    content: "❌ Ese tracker ya no existe.",
+                    content: "❌ Ocurrió un error al intentar eliminar el tracker.",
                     ephemeral: true
                 });
             }
-
-            const nombre = trackers[id].nombre || id;
-            delete trackers[id];
-            guardarTrackers(trackers);
-
-            return interaction.update({
-                content: `🗑️ Tracker eliminado: **${nombre}**`,
-                embeds: [],
-                components: []
-            });
         }
         return;
     }
@@ -262,7 +267,6 @@ process.on("uncaughtException", (error) => {
 // LOGIN                  // 
 // ====================== // 
 
-// Ejecutamos la conexión a MongoDB antes del login
-connectDB(); // <--- Aquí conectamos a la base de datos
+connectDB(); 
 
 client.login(process.env.TOKEN);
