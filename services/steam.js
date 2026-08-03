@@ -9,11 +9,9 @@ function calcularFechaPorSteamID(steamId64) {
         const accountId = Number(idBigInt - BASE_STEAM_ID);
         if (accountId <= 0) return "12 sep 2003";
 
-        // Coeficiente de incremento temporal de registros de Steam
-        // Ajustado para coincidir con la precisión de herramientas como SteamID.io
-        const segundosDesdeInicio = accountId / 41.5; 
+        // Coeficiente calibrado con precisión para perfiles del año 2020
         const timestampInicioSteam = 1063324800; // 12 sep 2003 en timestamp Unix
-        const timestampEstimado = timestampInicioSteam + segundosDesdeInicio;
+        const timestampEstimado = timestampInicioSteam + (accountId / 3.42);
 
         const fecha = new Date(timestampEstimado * 1000);
         if (isNaN(fecha.getTime())) return "No disponible (Privado)";
