@@ -1,11 +1,34 @@
 require("dotenv").config();
 const axios = require("axios");
 
+// Función matemática de estimación basada en bloques de ID de Steam
+function calcularFechaPorSteamID(steamId64) {
+    const BASE_STEAM_ID = 76561197960265728n; // SteamID64 inicial (12 sep 2003)
+    try {
+        const idBigInt = BigInt(steamId64);
+        const accountId = Number(idBigInt - BASE_STEAM_ID);
+        if (accountId <= 0) return "12 sep 2003";
+
+        const timestampInicioSteam = 1063324800; // 12 sep 2003 en timestamp Unix
+        
+        // Coeficiente ajustado para perfiles de rangos recientes
+        const timestampEstimado = timestampInicioSteam + (accountId / 3.02);
+
+        const fecha = new Date(timestampEstimado * 1000);
+        if (isNaN(fecha.getTime())) return "No disponible";
+
+        return fecha.toLocaleDateString("es-ES", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric"
+        });
+    } catch (e) {
+        return "No disponible";
+    }
+}
+
 async function getSteamProfile(steamId){
     try {
-        // ----------------------------
-        // 1. Perfil de Steam (Resumen y País)
-        // ----------------------------
         const profileResponse = await axios.get(
             "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/",
             {
@@ -21,7 +44,6 @@ async function getSteamProfile(steamId){
             return null;
         }
 
-        // Obtener fecha de creación (Oficial o respaldada por SteamDB para perfiles privados)
         let creationDateText = "No disponible";
         if (player.timecreated) {
             const fecha = new Date(player.timecreated * 1000);
@@ -31,34 +53,10 @@ async function getSteamProfile(steamId){
                 year: "numeric"
             });
         } else {
-            // Si el perfil es privado, consultamos directamente los datos públicos indexados
-            try {
-                const steamDbRes = await axios.get(`https://steamdb.info/api/calculator/?player=${steamId}`, {
-                    headers: {
-                        "User-Agent": "Mozilla/5.0"
-                    }
-                });
-                
-                if (steamDbRes.data && steamDbRes.data.success && steamDbRes.data.player_processed) {
-                    const profileData = steamDbRes.data.player_processed;
-                    if (profileData.timecreated) {
-                        const fecha = new Date(profileData.timecreated * 1000);
-                        creationDateText = fecha.toLocaleDateString("es-ES", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric"
-                        });
-                    }
-                }
-            } catch (err) {
-                console.log("No se pudo obtener la fecha desde SteamDB:", err.message);
-                creationDateText = "No disponible (Privado)";
-            }
+            // Cálculo matemático automático para perfiles privados
+            creationDateText = calcularFechaPorSteamID(steamId);
         }
 
-        // ----------------------------
-        // 2. Baneos de Steam (VAC / Game Bans)
-        // ----------------------------
         let vacBanned = false;
         let gameBansCount = 0;
         try {
@@ -80,9 +78,6 @@ async function getSteamProfile(steamId){
             console.log("No se pudieron obtener los baneos:", e.message);
         }
 
-        // ----------------------------
-        // 3. Horas de Rust
-        // ----------------------------
         let rustHours = null;
         try {
             const gamesResponse = await axios.get(
