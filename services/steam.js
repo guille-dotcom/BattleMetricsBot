@@ -1,28 +1,6 @@
 require("dotenv").config();
 const axios = require("axios");
 
-// Función para calcular la fecha mediante el SteamID64 si el perfil es privado
-function calcularFechaPorSteamID(steamId64) {
-    const BASE_STEAM_ID = 76561197960265728n;
-    try {
-        const idBigInt = BigInt(steamId64);
-        const accountId = Number(idBigInt - BASE_STEAM_ID);
-        if (accountId <= 0) return "Desconocido";
-
-        // Coeficiente histórico de creación de cuentas de Steam (desde Septiembre de 2003)
-        const timestampEstimado = 1063324800 + (accountId / 73.5);
-        const fecha = new Date(timestampEstimado * 1000);
-
-        return fecha.toLocaleDateString("es-ES", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric"
-        });
-    } catch (e) {
-        return "Desconocido";
-    }
-}
-
 async function getSteamProfile(steamId){
     try {
         // ----------------------------
@@ -43,8 +21,8 @@ async function getSteamProfile(steamId){
             return null;
         }
 
-        // Procesar la fecha de creación: Si la API la da (público) se usa, si no, se calcula por SteamID64
-        let creationDateText = "Desconocido";
+        // Obtener fecha de creación
+        let creationDateText = "No disponible";
         if (player.timecreated) {
             const fecha = new Date(player.timecreated * 1000);
             creationDateText = fecha.toLocaleDateString("es-ES", {
@@ -53,7 +31,22 @@ async function getSteamProfile(steamId){
                 year: "numeric"
             });
         } else {
-            creationDateText = calcularFechaPorSteamID(steamId);
+            // Si el perfil es privado, consultamos directamente SteamID.io
+            try {
+                const steamIdIoResponse = await axios.get(`https://steamid.io/lookup/${steamId}`, {
+                    headers: { "User-Agent": "Mozilla/5.0" }
+                });
+                
+                const match = steamIdIoResponse.data.match(/profile created<\/dt><dd[^>]*>([^<]+)<\/dd>/i);
+                if (match && match[1]) {
+                    creationDateText = match[1].trim();
+                } else {
+                    creationDateText = "No disponible (Privado)";
+                }
+            } catch (e) {
+                console.log("No se pudo obtener la fecha desde SteamID.io:", e.message);
+                creationDateText = "No disponible (Privado)";
+            }
         }
 
         // ----------------------------
@@ -103,7 +96,6 @@ async function getSteamProfile(steamId){
                 rustHours = (rust.playtime_forever / 60).toFixed(2);
             }
         } catch {
-            // Perfil privado o juegos ocultos
             rustHours = null;
         }
 
@@ -115,7 +107,7 @@ async function getSteamProfile(steamId){
             vacBanned: vacBanned,
             gameBansCount: gameBansCount,
             rustHours,
-            creationDate: creationDateText // <--- Fecha obtenida de API o calculada por SteamID
+            creationDate: creationDateText
         };
 
     } catch(error) {
