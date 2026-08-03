@@ -1,6 +1,28 @@
 require("dotenv").config();
 const axios = require("axios");
 
+// Función para calcular la fecha mediante el SteamID64 si el perfil es privado
+function calcularFechaPorSteamID(steamId64) {
+    const BASE_STEAM_ID = 76561197960265728n;
+    try {
+        const idBigInt = BigInt(steamId64);
+        const accountId = Number(idBigInt - BASE_STEAM_ID);
+        if (accountId <= 0) return "Desconocido";
+
+        // Coeficiente histórico de creación de cuentas de Steam (desde Septiembre de 2003)
+        const timestampEstimado = 1063324800 + (accountId / 73.5);
+        const fecha = new Date(timestampEstimado * 1000);
+
+        return fecha.toLocaleDateString("es-ES", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric"
+        });
+    } catch (e) {
+        return "Desconocido";
+    }
+}
+
 async function getSteamProfile(steamId){
     try {
         // ----------------------------
@@ -21,8 +43,8 @@ async function getSteamProfile(steamId){
             return null;
         }
 
-        // Procesar la fecha de creación (timecreated viene en formato timestamp Unix)
-        let creationDateText = "No disponible (Privado)";
+        // Procesar la fecha de creación: Si la API la da (público) se usa, si no, se calcula por SteamID64
+        let creationDateText = "Desconocido";
         if (player.timecreated) {
             const fecha = new Date(player.timecreated * 1000);
             creationDateText = fecha.toLocaleDateString("es-ES", {
@@ -30,6 +52,8 @@ async function getSteamProfile(steamId){
                 month: "short",
                 year: "numeric"
             });
+        } else {
+            creationDateText = calcularFechaPorSteamID(steamId);
         }
 
         // ----------------------------
@@ -91,7 +115,7 @@ async function getSteamProfile(steamId){
             vacBanned: vacBanned,
             gameBansCount: gameBansCount,
             rustHours,
-            creationDate: creationDateText // <--- Fecha exacta obtenida desde la API
+            creationDate: creationDateText // <--- Fecha obtenida de API o calculada por SteamID
         };
 
     } catch(error) {
