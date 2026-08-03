@@ -31,20 +31,45 @@ async function getSteamProfile(steamId){
                 year: "numeric"
             });
         } else {
-            // Si el perfil es privado, consultamos directamente SteamID.io
+            // Consultamos la API interna JSON de SteamID.io para perfiles privados
             try {
-                const steamIdIoResponse = await axios.get(`https://steamid.io/lookup/${steamId}`, {
-                    headers: { "User-Agent": "Mozilla/5.0" }
-                });
+                const steamIdIoResponse = await axios.post(
+                    "https://steamid.io/ajax/lookup",
+                    new URLSearchParams({ input: steamId }),
+                    {
+                        headers: {
+                            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                            "X-Requested-With": "XMLHttpRequest",
+                            "User-Agent": "Mozilla/5.0"
+                        }
+                    }
+                );
+
+                if (steamIdIoResponse.data && steamIdIoResponse.data.success) {
+                    const profileCreated = steamIdIoResponse.data.profile?.created;
+                    if (profileCreated) {
+                        // SteamID.io suele devolver un timestamp o un texto formateado según el endpoint
+                        const fecha = typeof profileCreated === "number" 
+                            ? new Date(profileCreated * 1000) 
+                            : new Date(profileCreated);
+
+                        if (!isNaN(fecha.getTime())) {
+                            creationDateText = fecha.toLocaleDateString("es-ES", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric"
+                            });
+                        } else {
+                            creationDateText = String(profileCreated).trim();
+                        }
+                    }
+                }
                 
-                const match = steamIdIoResponse.data.match(/profile created<\/dt><dd[^>]*>([^<]+)<\/dd>/i);
-                if (match && match[1]) {
-                    creationDateText = match[1].trim();
-                } else {
+                if (creationDateText === "No disponible") {
                     creationDateText = "No disponible (Privado)";
                 }
             } catch (e) {
-                console.log("No se pudo obtener la fecha desde SteamID.io:", e.message);
+                console.log("No se pudo obtener la fecha desde la API de SteamID.io:", e.message);
                 creationDateText = "No disponible (Privado)";
             }
         }
