@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
 const { getSteamProfile } = require("../services/steam.js"); 
 const { searchBattleMetricsPlayer, getBattleMetricsPlayerStatus } = require("../services/battlemetrics.js"); 
-const ServerConfig = require("../models/ServerConfig"); // <--- Importamos el modelo de MongoDB
+const ServerConfig = require("../models/ServerConfig");
 
 module.exports = { 
     data: new SlashCommandBuilder()
@@ -17,10 +17,9 @@ module.exports = {
         const steamId = interaction.options.getString("steamid").trim(); 
         await interaction.deferReply();
 
-        let serverId = "433255"; // Servidor por defecto si no hay ninguno configurado
+        let serverId = "433255"; 
         
         try {
-            // Buscamos la configuración de este servidor específico de Discord en MongoDB
             const dbConfig = await ServerConfig.findOne({ guildId: interaction.guild.id });
             if (dbConfig && dbConfig.battleMetricsServerId) {
                 serverId = dbConfig.battleMetricsServerId;
@@ -39,6 +38,7 @@ module.exports = {
             const horasSteamTexto = horasSteamNum > 0 ? `${horasSteamNum}h` : "🔒 Privado";
 
             const paisTexto = perfilSteam.loccountrycode ? `:flag_${perfilSteam.loccountrycode.toLowerCase()}: (${perfilSteam.loccountrycode})` : "Desconocido";
+            const creacionSteamTexto = perfilSteam.creationDate || "No disponible";
             
             let vacTexto = "✅ Sin Baneos";
             if (perfilSteam.vacBanned && perfilSteam.gameBansCount > 0) {
@@ -62,7 +62,7 @@ module.exports = {
                         { name: "🖥️ Estado", value: "🔴 Desconectado", inline: true },
                         { name: "🌍 País", value: paisTexto, inline: true },
                         { name: "🛡️ Baneos", value: vacTexto, inline: true },
-                        { name: "\u200b", value: "\u200b", inline: true }
+                        { name: "📅 Creación Cuenta", value: creacionSteamTexto, inline: true }
                     )
                     .setTimestamp()
                     .setFooter({ text: "RustLogix" });
@@ -104,6 +104,7 @@ module.exports = {
                     { name: "📊 Horas (Steam)", value: horasSteamTexto, inline: true },
                     { name: "⚖️ Diferencia", value: diferenciaTexto, inline: true },
                     { name: "🛡️ Estado Baneos", value: vacTexto, inline: true },
+                    { name: "📅 Creación Cuenta", value: creacionSteamTexto, inline: true },
                     { name: "📝 Historial de Nombres", value: historialTexto, inline: false }
                 )
                 .setTimestamp()
@@ -128,4 +129,4 @@ module.exports = {
             }
         } 
     } 
-};
+};  

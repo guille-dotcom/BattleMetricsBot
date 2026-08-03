@@ -4,7 +4,7 @@ const axios = require("axios");
 async function getSteamProfile(steamId){
     try {
         // ----------------------------
-        // 1. Perfil de Steam (Resumen y País)
+        // 1. Perfil de Steam (Resumen, País y Fecha de Creación)
         // ----------------------------
         const profileResponse = await axios.get(
             "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/",
@@ -19,6 +19,17 @@ async function getSteamProfile(steamId){
         const player = profileResponse.data.response.players[0];
         if(!player){
             return null;
+        }
+
+        // Procesar la fecha de creación (timecreated viene en formato timestamp Unix)
+        let creationDateText = "No disponible (Privado)";
+        if (player.timecreated) {
+            const fecha = new Date(player.timecreated * 1000);
+            creationDateText = fecha.toLocaleDateString("es-ES", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric"
+            });
         }
 
         // ----------------------------
@@ -78,8 +89,9 @@ async function getSteamProfile(steamId){
             profile: player.profileurl,
             loccountrycode: player.loccountrycode || null,
             vacBanned: vacBanned,
-            gameBansCount: gameBansCount, // Cantidad de bloqueos de juego
-            rustHours
+            gameBansCount: gameBansCount,
+            rustHours,
+            creationDate: creationDateText // <--- Fecha exacta obtenida desde la API
         };
 
     } catch(error) {
