@@ -1,28 +1,6 @@
 require("dotenv").config();
 const axios = require("axios");
 
-// Función matemática precisa para calcular la fecha de creación en perfiles privados
-function calcularFechaPorSteamID(steamId64) {
-    const BASE_STEAM_ID = 76561197960265728n;
-    try {
-        const idBigInt = BigInt(steamId64);
-        const accountId = Number(idBigInt - BASE_STEAM_ID);
-        if (accountId <= 0) return "No disponible";
-
-        // Coeficiente ajustado matemáticamente al comportamiento de los IDs de Steam
-        const timestampEstimado = 1063324800 + (accountId / 44.5);
-        const fecha = new Date(timestampEstimado * 1000);
-
-        return fecha.toLocaleDateString("es-ES", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric"
-        });
-    } catch (e) {
-        return "No disponible";
-    }
-}
-
 async function getSteamProfile(steamId){
     try {
         // ----------------------------
@@ -53,8 +31,50 @@ async function getSteamProfile(steamId){
                 year: "numeric"
             });
         } else {
-            // Si el perfil es privado, usamos el cálculo local seguro (evita bloqueos 429 de Steam)
-            creationDateText = calcularFechaPorSteamID(steamId);
+            // Si el perfil es privado, consultamos la API pública de SteamRep en formato JSON
+            try {
+                const steamRepResponse = await axios.get(`https://steamrep.com/api/php/authority.php?steamids=${steamId}&format=json`);
+                if (steamRepResponse.data && steamRepResponse.data.steamrep && steamRepResponse.data.steamrep.profile) {
+                    const profileCreated = steamRepResponse.data.steamrep.profile.created;
+                    if (profileCreated) {
+                        const fecha = new Date(profileCreated * 1000);
+                        if (!isNaN(fecha.getTime())) {
+                            creationDateText = fecha.toLocaleDateString("es-ES", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric"
+                            });
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log("No se pudo obtener la fecha desde SteamRep:", e.message);
+            }
+
+            // Si SteamRep no devolvió fecha, usamos un fallback directo consultando la API pública de SteamDB/SteamID mirror
+            if (creationDateText === "No disponible") {
+                try {
+                    const altResponse = await axios.get(`https://playerdb.co/api/player/steam/${steamId}`);
+                    if (altResponse.data && altResponse.data.success) {
+                        // Extraer si el servicio provee datos adicionales
+                        const rawDate = altResponse.data.data.player.meta?.created;
+                        if (rawDate) {
+                            const fecha = new Date(rawDate);
+                            creationDateText = fecha.toLocaleDateString("es-ES", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric"
+                            });
+                        }
+                    }
+                } catch (err) {
+                    console.log("Fallback alternativo fallido:", err.message);
+                }
+            }
+
+            if (creationDateText === "No disponible") {
+                creationDateText = "No disponible (Privado)";
+            }
         }
 
         // ----------------------------
