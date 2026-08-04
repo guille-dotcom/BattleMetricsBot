@@ -1,4 +1,5 @@
 const path = require("path");
+const fs = require("fs");
 const { google } = require("googleapis");
 const ServerConfig = require("../models/ServerConfig");
 
@@ -23,18 +24,25 @@ async function agregarFilaAPlanilla(guildId, battlemetricsUrl, motivo, streamMod
             throw new Error("Este servidor no tiene configurada una planilla de Google Sheets.");
         }
 
+        // Buscar el archivo credentials.json en Render (Secret Files) o localmente
+        const secretFileRender = "/etc/secrets/credentials.json";
+        const localFile = path.join(__dirname, "../credentials.json");
+        const keyFilePath = fs.existsSync(secretFileRender) ? secretFileRender : localFile;
+
         const auth = new google.auth.GoogleAuth({
-            keyFile: path.join(__dirname, "../credentials.json"),
+            keyFile: keyFilePath,
             scopes: ["https://www.googleapis.com/auth/spreadsheets"],
         });
 
         const sheets = google.sheets({ version: "v4", auth });
 
-        const bmLink = battlemetricsUrl.startsWith("http") 
-            ? battlemetricsUrl 
-            : `https://www.battlemetrics.com/players/${battlemetricsUrl}`;
+        // Protección por si battlemetricsUrl viene vacío o nulo
+        const bmUrlStr = battlemetricsUrl ? String(battlemetricsUrl) : "";
+        const bmLink = bmUrlStr.startsWith("http") 
+            ? bmUrlStr 
+            : `https://www.battlemetrics.com/players/${bmUrlStr}`;
             
-        const steamLink = `https://steamcommunity.com/profiles/${steamId64}`;
+        const steamLink = `https://steamcommunity.com/profiles/${steamId64 || ""}`;
 
         const values = [
             [bmLink, motivo || "", streamMode || "", steamLink]
@@ -49,7 +57,7 @@ async function agregarFilaAPlanilla(guildId, battlemetricsUrl, motivo, streamMod
 
         return true;
     } catch (error) {
-        console.error("Error al guardar en Google Sheets:", error.message);
+        console.error("Error al guardar en Google Sheets:", error);
         return false;
     }
 }
