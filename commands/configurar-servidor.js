@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require("discord.js");
 const ServerConfig = require("../models/ServerConfig");
 
 module.exports = {
@@ -14,27 +14,26 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
-    // Usamos el formato clásico y compatible con cualquier versión de Discord.js
-    await interaction.deferReply({ ephemeral: true });
-
-    const input = interaction.options.getString("serverid").trim();
-
-    const match = input.match(/\d+/g);
-    const cleanServerId = match ? match[match.length - 1] : null;
-
-    if (!cleanServerId) {
-      return await interaction.editReply({
-        content: "❌ No se pudo encontrar un ID de servidor válido en el enlace o texto ingresado."
-      });
-    }
-
-    const guildId = interaction.guild.id;
-
     try {
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
+      const input = interaction.options.getString("serverid").trim();
+
+      const match = input.match(/\d+/g);
+      const cleanServerId = match ? match[match.length - 1] : null;
+
+      if (!cleanServerId) {
+        return await interaction.editReply({
+          content: "❌ No se pudo encontrar un ID de servidor válido en el enlace o texto ingresado."
+        });
+      }
+
+      const guildId = interaction.guild.id;
+
       await ServerConfig.findOneAndUpdate(
         { guildId: guildId },
         { battleMetricsServerId: cleanServerId },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after', maxTimeMS: 5000 }
       );
 
       return await interaction.editReply({
@@ -43,9 +42,12 @@ module.exports = {
 
     } catch (error) {
       console.error("Error al guardar la configuración en MongoDB:", error);
-      return await interaction.editReply({
-        content: "❌ Ocurrió un error al intentar guardar la configuración del servidor en la base de datos."
-      });
+      
+      if (interaction.deferred || interaction.replied) {
+        return await interaction.editReply({
+          content: "❌ Ocurrió un error al intentar guardar la configuración en la base de datos."
+        });
+      }
     }
   }
 };
