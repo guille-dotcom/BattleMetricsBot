@@ -15,7 +15,8 @@ module.exports = {
             .setDescription(
                 "Antes de usar los comandos, debes configurar tu entorno:\n\n" +
                 "👉 **/configurar-servidor** — Establece el servidor de Rust activo.\n" +
-                "👉 **/setupsheet** — Configura la planilla de Google Sheets para este servidor.\n\n" +
+                "👉 **/setupsheet** — Configura la planilla de Google Sheets para este servidor.\n" +
+                "👉 **/verplanilla** — Muestra el enlace de la planilla configurada actualmente.\n\n" +
                 "💡 **Para administradores (Planilla de Google Sheets):**\n" +
                 "1. Crea un Google Sheet nuevo.\n" +
                 "2. Dale permisos de **Editor** al correo:\n" +
