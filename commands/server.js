@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const axios = require("axios");
-const ServerConfig = require("../models/ServerConfig"); // <--- Importamos el modelo de MongoDB
+const ServerConfig = require("../models/ServerConfig");
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -27,7 +27,8 @@ module.exports = {
                 headers: {
                     "Authorization": `Bearer ${process.env.BATTLEMETRICS_TOKEN}`,
                     "User-Agent": "RustLogix-DiscordBot"
-                }
+                },
+                timeout: 10000 // Timeout de seguridad de 10 segundos para evitar bloqueos
             });
 
             const serverData = response.data.data;
@@ -111,7 +112,9 @@ module.exports = {
 
         } catch (error) {
             console.error("Error al consultar el servidor en BattleMetrics:", error.message);
-            return await interaction.editReply("❌ No se pudo obtener el estado del servidor en este momento. Inténtalo más tarde.");
+            if (interaction.deferred || interaction.replied) {
+                return await interaction.editReply("❌ No se pudo obtener el estado del servidor en este momento. Inténtalo más tarde.");
+            }
         }
     }
 };

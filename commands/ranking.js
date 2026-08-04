@@ -1,6 +1,6 @@
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { getServerLeaderboard } = require("../services/battlemetrics.js");
-const ServerConfig = require("../models/ServerConfig"); // <--- Importamos el modelo de MongoDB
+const ServerConfig = require("../models/ServerConfig");
 
 function formatSecondsToHoursMinutes(seconds) {
     const totalMinutes = Math.floor(seconds / 60);
@@ -44,7 +44,7 @@ module.exports = {
             let description = "";
             topPlayers.forEach((player, index) => {
                 const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `**#${index + 1}**`;
-                const tiempoFormateado = formatSecondsToHoursMinutes(player.timePlayedSeconds);
+                const tiempoFormateado = formatSecondsToHoursMinutes(player.timePlayedSeconds || 0);
                 description += `${medal} [${player.name}](https://www.battlemetrics.com/players/${player.id}) — \`${tiempoFormateado}\`\n`;
             });
 
@@ -60,7 +60,7 @@ module.exports = {
         } catch (error) {
             console.error("Error en comando /ranking:", error);
             if (interaction.deferred || interaction.replied) {
-                return await interaction.editReply("❌ Ocurrió un error al procesar el ranking.");
+                return await interaction.editReply("❌ Ocurrió un error al procesar el ranking de BattleMetrics.");
             }
         }
     }

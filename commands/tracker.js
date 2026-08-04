@@ -1,7 +1,6 @@
 const {
     SlashCommandBuilder,
-    EmbedBuilder,
-    MessageFlags
+    EmbedBuilder
 } = require("discord.js");
 
 const {
@@ -42,7 +41,7 @@ module.exports = {
             const esOnline = status && (status.online === true || status.online === "true");
 
             // Pasamos los datos ya listos a registrarTracker para que se guarden correctamente de una sola vez
-            const tracker = await registrarTracker({
+            await registrarTracker({
                 battlemetricsId,
                 nombre,
                 canalId: interaction.channel.id,
@@ -89,7 +88,7 @@ module.exports = {
                 embeds: [embedConfirmacion]
             });
 
-            // 2. Embed del estado actual del servidor (Online u Offline) tal como pediste
+            // 2. Embed del estado actual del servidor (Online u Offline)
             const serverToShow = status?.server || "Desconocido";
             
             if (esOnline) {
@@ -145,7 +144,7 @@ ${status.jugando || "0m"}
             } else {
                 await interaction.reply({
                     content: "❌ Error creando tracker.",
-                    flags: MessageFlags.Ephemeral
+                    ephemeral: true
                 });
             }
         }

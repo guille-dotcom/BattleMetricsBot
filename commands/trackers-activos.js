@@ -3,8 +3,7 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
-    ButtonStyle,
-    MessageFlags
+    ButtonStyle
 } = require("discord.js");
 
 const Tracker = require("../models/TrackerSchema");
@@ -83,7 +82,7 @@ module.exports = {
             } else {
                 await interaction.reply({
                     content: "❌ Ocurrió un error al cargar los trackers activos.",
-                    flags: MessageFlags.Ephemeral
+                    ephemeral: true
                 });
             }
         }

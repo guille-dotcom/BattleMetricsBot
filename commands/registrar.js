@@ -27,28 +27,35 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        // Se quita { ephemeral: true } para que el indicador de "pensando" sea público
         await interaction.deferReply();
 
-        // Capturar los valores que el usuario escribe en Discord
-        const steamId64 = interaction.options.getString('steamid');
-        const battlemetricsUrl = interaction.options.getString('battlemetrics');
-        const motivo = interaction.options.getString('motivo');
-        const streamMode = interaction.options.getString('stream_mode') || 'No especificado';
+        try {
+            // Capturar los valores que el usuario escribe en Discord
+            const steamId64 = interaction.options.getString('steamid');
+            const battlemetricsUrl = interaction.options.getString('battlemetrics');
+            const motivo = interaction.options.getString('motivo');
+            const streamMode = interaction.options.getString('stream_mode') || 'No especificado';
 
-        // Enviar los datos a la función que guarda en Google Sheets
-        const exito = await agregarFilaAPlanilla(
-            interaction.guildId, 
-            battlemetricsUrl, 
-            motivo, 
-            streamMode, 
-            steamId64
-        );
+            // Enviar los datos a la función que guarda en Google Sheets
+            const exito = await agregarFilaAPlanilla(
+                interaction.guildId, 
+                battlemetricsUrl, 
+                motivo, 
+                streamMode, 
+                steamId64
+            );
 
-        if (exito) {
-            await interaction.editReply('✅ ¡Jugador registrado correctamente en la planilla de este servidor!');
-        } else {
-            await interaction.editReply('❌ Error al registrar. Asegúrate de haber configurado la planilla con `/setupsheet` y de que la cuenta de servicio tenga permisos de Editor en tu Google Sheets.');
+            if (exito) {
+                return await interaction.editReply('✅ ¡Jugador registrado correctamente en la planilla de este servidor!');
+            } else {
+                return await interaction.editReply('❌ Error al registrar. Asegúrate de haber configurado la planilla con `/setupsheet` y de que la cuenta de servicio tenga permisos de Editor en tu Google Sheets.');
+            }
+
+        } catch (error) {
+            console.error("Error en comando /registrar:", error);
+            if (interaction.deferred || interaction.replied) {
+                return await interaction.editReply('❌ Ocurrió un error inesperado al intentar guardar los datos en la planilla.');
+            }
         }
     },
 };

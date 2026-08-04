@@ -1,7 +1,6 @@
 const {
     SlashCommandBuilder,
-    EmbedBuilder,
-    MessageFlags
+    EmbedBuilder
 } = require("discord.js");
 
 const Tracker = require("../models/TrackerSchema");
@@ -24,7 +23,7 @@ module.exports = {
             if (!confirmar) {
                 return await interaction.reply({
                     content: "❌ Cancelado. Debes usar `/tracker-limpiar confirmar:true` para borrar los trackers.",
-                    flags: MessageFlags.Ephemeral
+                    ephemeral: true
                 });
             }
 
@@ -58,7 +57,7 @@ module.exports = {
             } else {
                 await interaction.reply({
                     content: "❌ Error limpiando trackers.",
-                    flags: MessageFlags.Ephemeral
+                    ephemeral: true
                 });
             }
         }

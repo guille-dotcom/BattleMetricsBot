@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require("discord.js");
+const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const ServerConfig = require("../models/ServerConfig");
 
 module.exports = {
@@ -14,8 +14,8 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
-    // Deferimos la respuesta inmediatamente para ganar tiempo y evitar el error de los 3 segundos
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    // Usamos el formato clásico y compatible con cualquier versión de Discord.js
+    await interaction.deferReply({ ephemeral: true });
 
     const input = interaction.options.getString("serverid").trim();
 

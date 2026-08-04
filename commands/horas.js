@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { getSteamProfile } = require("../services/steam.js"); 
 const { searchBattleMetricsPlayer, getBattleMetricsPlayerStatus } = require("../services/battlemetrics.js"); 
 const ServerConfig = require("../models/ServerConfig");
@@ -14,21 +14,22 @@ module.exports = {
         ),
  
     async execute(interaction) { 
-        const steamId = interaction.options.getString("steamid").trim(); 
+        // Deferimos inmediatamente de forma pública o privada según prefieras (aquí público)
         await interaction.deferReply();
 
-        let serverId = "433255"; 
-        
-        try {
-            const dbConfig = await ServerConfig.findOne({ guildId: interaction.guild.id });
-            if (dbConfig && dbConfig.battleMetricsServerId) {
-                serverId = dbConfig.battleMetricsServerId;
-            }
-        } catch (error) {
-            console.log("Error consultando MongoDB para la configuración del servidor:", error.message);
-        }
-
         try { 
+            const steamId = interaction.options.getString("steamid").trim(); 
+            let serverId = "433255"; 
+            
+            try {
+                const dbConfig = await ServerConfig.findOne({ guildId: interaction.guild.id });
+                if (dbConfig && dbConfig.battleMetricsServerId) {
+                    serverId = dbConfig.battleMetricsServerId;
+                }
+            } catch (error) {
+                console.log("Error consultando MongoDB para la configuración del servidor:", error.message);
+            }
+
             const perfilSteam = await getSteamProfile(steamId); 
             if (!perfilSteam || !perfilSteam.name) {
                 return await interaction.editReply("❌ ID no encontrado en Steam."); 
@@ -119,14 +120,12 @@ module.exports = {
         } catch (error) { 
             console.error("Error en comando /horas:", error); 
             
+            // Usamos formato seguro clásico si falla el bloque principal
             if (interaction.deferred || interaction.replied) {
-                return await interaction.editReply("❌ Error interno al procesar el comando.");
+                return await interaction.editReply({ content: "❌ Error interno al procesar el comando." });
             } else {
-                return await interaction.reply({
-                    content: "❌ Error interno al procesar el comando.",
-                    flags: MessageFlags.Ephemeral
-                });
+                return await interaction.reply({ content: "❌ Error interno al procesar el comando.", ephemeral: true });
             }
         } 
     } 
-};  
+};
