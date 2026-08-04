@@ -13,8 +13,14 @@ module.exports = {
         const configuracion = new EmbedBuilder()
             .setTitle("⚙️ Configuración Inicial")
             .setDescription(
-                "Antes de usar los comandos del servidor, debes configurar el servidor de Rust predeterminado.\n\n" +
-                "👉 **/configurar-servidor** — Establece el servidor activo."
+                "Antes de usar los comandos, debes configurar tu entorno:\n\n" +
+                "👉 **/configurar-servidor** — Establece el servidor de Rust activo.\n" +
+                "👉 **/setupsheet** — Configura la planilla de Google Sheets para este servidor.\n\n" +
+                "💡 **Para administradores (Planilla de Google Sheets):**\n" +
+                "1. Crea un Google Sheet nuevo.\n" +
+                "2. Dale permisos de **Editor** al correo:\n" +
+                "`bot-rustlogix@solid-groove-447515-t7.iam.gserviceaccount.com`\n" +
+                "3. Usa `/setupsheet` y pega el enlace de tu planilla."
             )
             .setColor(0x3498DB);
 
@@ -38,10 +44,11 @@ module.exports = {
             )
             .setColor(0x57F287);
 
-        // 4. Consultas Externas
-        const battlemetrics = new EmbedBuilder()
-            .setTitle("🔎 Consultas BattleMetrics")
+        // 4. Registro y Consultas
+        const registroYConsultas = new EmbedBuilder()
+            .setTitle("📋 Registro y Consultas")
             .setDescription(
+                "📝 **/registrar** — Registra un jugador en la planilla configurada.\n" +
                 "🔎 **/horasbm** — Consulta estadísticas globales mediante un enlace de perfil."
             )
             .setColor(0x9B59B6);
@@ -64,7 +71,7 @@ module.exports = {
                 configuracion,
                 servidor,
                 tracker,
-                battlemetrics,
+                registroYConsultas,
                 informacion
             ]
         });
