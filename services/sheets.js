@@ -1,3 +1,5 @@
+const path = require("path");
+const fs = require("fs");
 const { google } = require("googleapis");
 const ServerConfig = require("../models/ServerConfig");
 
@@ -21,10 +23,14 @@ async function agregarFilaAPlanilla(guildId, battlemetricsUrl, motivo, streamMod
             throw new Error("Este servidor no tiene configurada una planilla de Google Sheets.");
         }
 
-        // Autenticación mediante la variable de entorno GOOGLE_CREDENTIALS
-        const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+        // Ruta exacta donde Render guarda los Secret Files
+        const secretFilePath = "/etc/secrets/credentials.json";
+        const localFilePath = path.join(__dirname, "../credentials.json");
+
+        const keyFile = fs.existsSync(secretFilePath) ? secretFilePath : localFilePath;
+
         const auth = new google.auth.GoogleAuth({
-            credentials,
+            keyFile,
             scopes: ["https://www.googleapis.com/auth/spreadsheets"],
         });
 
