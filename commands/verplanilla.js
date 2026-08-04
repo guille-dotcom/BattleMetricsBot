@@ -7,7 +7,8 @@ module.exports = {
         .setDescription('Muestra el enlace de la planilla de Google Sheets de este servidor'),
 
     async execute(interaction) {
-        await interaction.deferReply({ ephemeral: true });
+        // Se quita { ephemeral: true } para que la respuesta sea visible para todos
+        await interaction.deferReply();
 
         const guildId = interaction.guild.id;
 

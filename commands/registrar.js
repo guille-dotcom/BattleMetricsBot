@@ -27,7 +27,8 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        await interaction.deferReply({ ephemeral: true });
+        // Se quita { ephemeral: true } para que el indicador de "pensando" sea público
+        await interaction.deferReply();
 
         // Capturar los valores que el usuario escribe en Discord
         const steamId64 = interaction.options.getString('steamid');
