@@ -14,7 +14,6 @@ module.exports = {
         ),
  
     async execute(interaction) { 
-        // Deferimos inmediatamente de forma pública o privada según prefieras (aquí público)
         await interaction.deferReply();
 
         try { 
@@ -39,7 +38,28 @@ module.exports = {
             const horasSteamTexto = horasSteamNum > 0 ? `\`${horasSteamNum}h\`` : "`🔒 Privado`";
 
             const paisTexto = perfilSteam.loccountrycode ? `:flag_${perfilSteam.loccountrycode.toLowerCase()}: (${perfilSteam.loccountrycode})` : "Desconocido";
-            const creacionSteamTexto = perfilSteam.creationDate || "No disponible";
+            
+            // --- CÁLCULO DE DÍAS DE CREACIÓN DE CUENTA ---
+            let creacionSteamTexto = "No disponible";
+            if (perfilSteam.creationDate) {
+                const fechaCreacion = new Date(perfilSteam.creationDate);
+                if (!isNaN(fechaCreacion.getTime())) {
+                    const ahora = new Date();
+                    const diferenciaTiempo = ahora - fechaCreacion;
+                    const diasTotales = Math.floor(diferenciaTiempo / (1000 * 60 * 60 * 24));
+                    const anos = Math.floor(diasTotales / 365);
+                    const diasRestantes = diasTotales % 365;
+
+                    if (anos > 0) {
+                        creacionSteamTexto = `${diasTotales} días (${anos} años y ${diasRestantes}d)`;
+                    } else {
+                        creacionSteamTexto = `${diasTotales} días`;
+                    }
+                } else {
+                    creacionSteamTexto = perfilSteam.creationDate;
+                }
+            }
+            // ---------------------------------------------
             
             let vacTexto = "✅ Sin Baneos";
             if (perfilSteam.vacBanned && perfilSteam.gameBansCount > 0) {
@@ -63,7 +83,7 @@ module.exports = {
                         { name: "🖥️ Estado", value: "`🔴 Desconectado`", inline: true },
                         { name: "🌍 País", value: paisTexto, inline: true },
                         { name: "🛡️ Baneos", value: `\`${vacTexto}\``, inline: true },
-                        { name: "📅 Creación Cuenta", value: `\`${creacionSteamTexto}\``, inline: true }
+                        { name: "📅 Antigüedad", value: `\`${creacionSteamTexto}\``, inline: true }
                     )
                     .setTimestamp()
                     .setFooter({ text: "RustLogix" });
@@ -107,7 +127,7 @@ module.exports = {
                     { name: "📊 Horas (Steam)", value: horasSteamTexto, inline: true },
                     { name: "⚖️ Diferencia", value: diferenciaTexto, inline: true },
                     { name: "🛡️ Estado Baneos", value: `\`${vacTexto}\``, inline: true },
-                    { name: "📅 Creación Cuenta", value: `\`${creacionSteamTexto}\``, inline: true },
+                    { name: "📅 Antigüedad", value: `\`${creacionSteamTexto}\``, inline: true },
                     { name: "📝 Historial de Nombres", value: historialTexto, inline: false }
                 )
                 .setTimestamp()
@@ -122,7 +142,6 @@ module.exports = {
         } catch (error) { 
             console.error("Error en comando /horas:", error); 
             
-            // Usamos formato seguro clásico si falla el bloque principal
             if (interaction.deferred || interaction.replied) {
                 return await interaction.editReply({ content: "❌ Error interno al procesar el comando." });
             } else {
