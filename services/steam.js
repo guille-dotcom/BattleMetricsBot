@@ -3,9 +3,7 @@ const axios = require("axios");
 
 async function getSteamProfile(steamId){
     try {
-        // ----------------------------
         // 1. Perfil de Steam (Resumen y País)
-        // ----------------------------
         const profileResponse = await axios.get(
             "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/",
             {
@@ -21,18 +19,11 @@ async function getSteamProfile(steamId){
             return null;
         }
 
-        // Obtener fecha de creación (Oficial o consultando SteamDB para perfiles privados)
-        let creationDateText = "No disponible";
-        if (player.timecreated) {
-            const fecha = new Date(player.timecreated * 1000);
-            creationDateText = fecha.toLocaleDateString("es-ES", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric"
-            });
-        } else {
+        // Obtener la fecha de creación en formato de marca de tiempo numérica (timestamp en segundos)
+        let timeCreatedSeconds = player.timecreated || null;
+
+        if (!timeCreatedSeconds) {
             try {
-                // Petición al calculador público de SteamDB para extraer la fecha real indexada
                 const steamDbRes = await axios.get(`https://steamdb.info/api/calculator/?player=${steamId}`, {
                     headers: {
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -43,23 +34,32 @@ async function getSteamProfile(steamId){
                 if (steamDbRes.data && steamDbRes.data.success && steamDbRes.data.data) {
                     const profileData = steamDbRes.data.data;
                     if (profileData.timecreated) {
-                        const fecha = new Date(profileData.timecreated * 1000);
-                        creationDateText = fecha.toLocaleDateString("es-ES", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric"
-                        });
+                        timeCreatedSeconds = profileData.timecreated;
                     }
                 }
             } catch (err) {
                 console.log("No se pudo obtener la fecha desde SteamDB:", err.message);
-                creationDateText = "No disponible (Privado)";
             }
         }
 
-        // ----------------------------
+        // Calcular los días y años de antigüedad
+        let creationDateText = "No disponible";
+        if (timeCreatedSeconds) {
+            const fechaCreacion = new Date(timeCreatedSeconds * 1000);
+            const ahora = new Date();
+            const diferenciaTiempo = ahora - fechaCreacion;
+            const diasTotales = Math.floor(diferenciaTiempo / (1000 * 60 * 60 * 24));
+            const anos = Math.floor(diasTotales / 365);
+            const diasRestantes = diasTotales % 365;
+
+            if (anos > 0) {
+                creationDateText = `${diasTotales} días (${anos} años y ${diasRestantes}d)`;
+            } else {
+                creationDateText = `${diasTotales} días`;
+            }
+        }
+
         // 2. Baneos de Steam (VAC / Game Bans)
-        // ----------------------------
         let vacBanned = false;
         let gameBansCount = 0;
         try {
@@ -81,9 +81,7 @@ async function getSteamProfile(steamId){
             console.log("No se pudieron obtener los baneos:", e.message);
         }
 
-        // ----------------------------
         // 3. Horas de Rust
-        // ----------------------------
         let rustHours = null;
         try {
             const gamesResponse = await axios.get(
