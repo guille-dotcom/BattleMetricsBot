@@ -36,7 +36,7 @@ module.exports = {
             }
 
             const horasSteamNum = parseFloat(perfilSteam.rustHours) || 0;
-            const horasSteamTexto = horasSteamNum > 0 ? `${horasSteamNum}h` : "🔒 Privado";
+            const horasSteamTexto = horasSteamNum > 0 ? `\`${horasSteamNum}h\`` : "`🔒 Privado`";
 
             const paisTexto = perfilSteam.loccountrycode ? `:flag_${perfilSteam.loccountrycode.toLowerCase()}: (${perfilSteam.loccountrycode})` : "Desconocido";
             const creacionSteamTexto = perfilSteam.creationDate || "No disponible";
@@ -47,7 +47,7 @@ module.exports = {
             } else if (perfilSteam.vacBanned) {
                 vacTexto = "⚠️ Baneo VAC";
             } else if (perfilSteam.gameBansCount > 0) {
-                vacTexto = `⚠️ ${perfilSteam.gameBansCount} Game Ban`;
+                vacTexto = `${perfilSteam.gameBansCount} Game Ban`;
             }
 
             const jugadorBM = await searchBattleMetricsPlayer(perfilSteam.name, serverId); 
@@ -60,10 +60,10 @@ module.exports = {
                     .addFields(
                         { name: "🆔 Steam ID", value: `[${steamId}](https://steamcommunity.com/profiles/${steamId})`, inline: true },
                         { name: "📊 Horas Steam", value: horasSteamTexto, inline: true },
-                        { name: "🖥️ Estado", value: "🔴 Desconectado", inline: true },
+                        { name: "🖥️ Estado", value: "`🔴 Desconectado`", inline: true },
                         { name: "🌍 País", value: paisTexto, inline: true },
-                        { name: "🛡️ Baneos", value: vacTexto, inline: true },
-                        { name: "📅 Creación Cuenta", value: creacionSteamTexto, inline: true }
+                        { name: "🛡️ Baneos", value: `\`${vacTexto}\``, inline: true },
+                        { name: "📅 Creación Cuenta", value: `\`${creacionSteamTexto}\``, inline: true }
                     )
                     .setTimestamp()
                     .setFooter({ text: "RustLogix" });
@@ -85,7 +85,9 @@ module.exports = {
 
             if (horasSteamNum > 0) {
                 const diff = Math.abs(horasSteamNum - horasBMNum);
-                diferenciaTexto = `${diff.toFixed(0)}h`;
+                diferenciaTexto = `\`${diff.toFixed(0)}h\``;
+            } else {
+                diferenciaTexto = "`N/A`";
             }
 
             const historialTexto = datosFinales.historialNombres && datosFinales.historialNombres.length > 0 
@@ -99,13 +101,13 @@ module.exports = {
                     { name: "🎮 Servidor", value: datosFinales.server || "Desconocido", inline: false },
                     { name: "🆔 BattleMetrics", value: `[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})`, inline: true },
                     { name: "🆔 Steam ID", value: `[${steamId}](https://steamcommunity.com/profiles/${steamId})`, inline: true },
-                    { name: "⏱️ Sesión Actual", value: `${datosFinales.jugando}`, inline: true },
+                    { name: "⏱️ Sesión Actual", value: `\`${datosFinales.jugando}\``, inline: true },
                     { name: "🌍 País", value: paisTexto, inline: true },
-                    { name: "📈 Horas (BM)", value: `${datosFinales.horasTotalesBM}h`, inline: true },
+                    { name: "📈 Horas (BM)", value: `\`${datosFinales.horasTotalesBM}h\``, inline: true },
                     { name: "📊 Horas (Steam)", value: horasSteamTexto, inline: true },
                     { name: "⚖️ Diferencia", value: diferenciaTexto, inline: true },
-                    { name: "🛡️ Estado Baneos", value: vacTexto, inline: true },
-                    { name: "📅 Creación Cuenta", value: creacionSteamTexto, inline: true },
+                    { name: "🛡️ Estado Baneos", value: `\`${vacTexto}\``, inline: true },
+                    { name: "📅 Creación Cuenta", value: `\`${creacionSteamTexto}\``, inline: true },
                     { name: "📝 Historial de Nombres", value: historialTexto, inline: false }
                 )
                 .setTimestamp()

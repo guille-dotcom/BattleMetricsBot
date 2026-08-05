@@ -32,6 +32,9 @@ module.exports = {
             // Texto dinámico: si está jugando muestra "Servidor Actual", si está offline muestra "Último Servidor"
             const tituloServidor = datos.online ? "🌐 Servidor Actual" : "🌐 Último Servidor Jugado";
             const servidoresEncontrados = datos.servidores?.rust?.datos?.servidoresEncontrados || "N/A";
+            
+            // Formateamos la sesión actual para que mantenga el estilo de cajita
+            const sesionTexto = datos.online ? `${datos.jugando}` : "Offline";
 
             const embed = new EmbedBuilder()
                 .setTitle("🎮 Perfil BattleMetrics")
@@ -39,9 +42,9 @@ module.exports = {
                 .addFields(
                     { name: "👤 Jugador", value: `[${datos.nombre}](https://www.battlemetrics.com/players/${datos.id})`, inline: false },
                     { name: tituloServidor, value: datos.servidor || "Desconocido", inline: false },
-                    { name: "⏱️ Sesión Actual", value: datos.online ? datos.jugando : "🔴 Offline", inline: true },
-                    { name: "📈 Horas battlemetrics", value: `${datos.totalHoras || 0}h`, inline: true },
-                    { name: "🖥️ Servidores Jugados", value: `${servidoresEncontrados}`, inline: true }
+                    { name: "⏱️ Sesión Actual", value: `\`${sesionTexto}\``, inline: true },
+                    { name: "📈 Horas battlemetrics", value: `\`${datos.totalHoras || 0}h\``, inline: true },
+                    { name: "🖥️ Servidores Jugados", value: `\`${servidoresEncontrados}\``, inline: true }
                 )
                 .setTimestamp()
                 .setFooter({ text: "RustLogix" });
