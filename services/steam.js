@@ -42,21 +42,14 @@ async function getSteamProfile(steamId){
             }
         }
 
-        // Calcular los días y años de antigüedad
+        // Calcular solo los días totales de antigüedad
         let creationDateText = "No disponible";
         if (timeCreatedSeconds) {
             const fechaCreacion = new Date(timeCreatedSeconds * 1000);
             const ahora = new Date();
             const diferenciaTiempo = ahora - fechaCreacion;
             const diasTotales = Math.floor(diferenciaTiempo / (1000 * 60 * 60 * 24));
-            const anos = Math.floor(diasTotales / 365);
-            const diasRestantes = diasTotales % 365;
-
-            if (anos > 0) {
-                creationDateText = `${diasTotales} días (${anos} años y ${diasRestantes}d)`;
-            } else {
-                creationDateText = `${diasTotales} días`;
-            }
+            creationDateText = `${diasTotales} días`;
         }
 
         // 2. Baneos de Steam (VAC / Game Bans)
