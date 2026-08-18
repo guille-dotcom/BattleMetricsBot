@@ -227,15 +227,20 @@ client.on("interactionCreate", async interaction => {
     if (!command) return;
 
     try { 
-        await command.execute(interaction); 
+        const executionPromise = command.execute(interaction);
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("TIME_OUT_COMANDO")), 12000)
+        );
+
+        await Promise.race([executionPromise, timeoutPromise]);
     } catch(error) { 
         console.log("ERROR EJECUTANDO COMANDO:", error); 
 
         try { 
             if (interaction.deferred || interaction.replied) { 
-                await interaction.editReply({ content: "❌ Error ejecutando comando" }); 
+                await interaction.editReply({ content: "❌ El comando tardó demasiado en responder o hubo un error interno." }); 
             } else { 
-                await interaction.reply({ content: "❌ Error ejecutando comando", ephemeral: true }); 
+                await interaction.reply({ content: "❌ El comando tardó demasiado en responder o hubo un error interno.", ephemeral: true }); 
             } 
         } catch(err) { 
             console.log("ERROR RESPONDIENDO DISCORD:", err.message); 

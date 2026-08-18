@@ -28,7 +28,15 @@ module.exports = {
             console.log("Error MongoDB:", error.message);
         }
 
-        const perfilSteam = await getSteamProfile(steamId); 
+        // Obtener perfil de Steam con control de errores por si la API falla
+        let perfilSteam;
+        try {
+            perfilSteam = await getSteamProfile(steamId); 
+        } catch (err) {
+            console.error("Error API Steam:", err.message);
+            return await interaction.editReply("❌ Error al conectar con la API de Steam.");
+        }
+
         if (!perfilSteam || !perfilSteam.name) {
             return await interaction.editReply("❌ ID no encontrado en Steam."); 
         }
@@ -47,17 +55,23 @@ module.exports = {
             vacTexto = `${perfilSteam.gameBansCount} Game Ban`;
         }
 
-        const jugadorBM = await searchBattleMetricsPlayer(perfilSteam.name, serverId); 
+        // Búsqueda en BattleMetrics protegida para que no cuelgue el bot si la API externa falla
+        let jugadorBM = null;
+        try {
+            jugadorBM = await searchBattleMetricsPlayer(perfilSteam.name, serverId); 
+        } catch (err) {
+            console.error("Error buscando en BattleMetrics:", err.message);
+        }
 
         if (!jugadorBM) {
             const embedOffline = new EmbedBuilder()
                 .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
                 .setColor("#FF0000")
-                .setDescription(`⚠️ El jugador **no está online** actualmente en el servidor.`)
+                .setDescription(`⚠️ El jugador **no está online** en el servidor o BattleMetrics no respondió a tiempo.`)
                 .addFields(
                     { name: "🆔 Steam ID", value: `[${steamId}](https://steamcommunity.com/profiles/${steamId})`, inline: true },
                     { name: "📊 Horas Steam", value: horasSteamTexto, inline: true },
-                    { name: "🖥️ Estado", value: "`🔴 Desconectado`", inline: true },
+                    { name: "🖥️ Estado", value: "`🔴 Desconocido / Offline`", inline: true },
                     { name: "🌍 País", value: paisTexto, inline: true },
                     { name: "🛡️ Baneos", value: `\`${vacTexto}\``, inline: true },
                     { name: "📅 Antigüedad", value: `\`${creacionSteamTexto}\``, inline: true }
@@ -72,7 +86,13 @@ module.exports = {
             return await interaction.editReply({ embeds: [embedOffline] });
         }
 
-        const datosFinales = await getBattleMetricsPlayerStatus(jugadorBM.id); 
+        let datosFinales = null;
+        try {
+            datosFinales = await getBattleMetricsPlayerStatus(jugadorBM.id); 
+        } catch (err) {
+            console.error("Error obteniendo detalles BattleMetrics:", err.message);
+        }
+
         if (!datosFinales) {
             return await interaction.editReply("❌ Error al obtener datos detallados de BattleMetrics."); 
         }
