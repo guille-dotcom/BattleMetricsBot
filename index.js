@@ -50,7 +50,9 @@ server.listen(PORT, "0.0.0.0", () => {
 
 const client = new Client({ 
     intents: [
-        GatewayIntentBits.Guilds
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildPresences
     ] 
 }); 
 
@@ -227,7 +229,6 @@ client.on("interactionCreate", async interaction => {
     if (!command) return;
 
     try { 
-        // Aumentado el tiempo de espera global a 30 segundos para evitar cortes prematuros
         const executionPromise = command.execute(interaction);
         const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error("TIME_OUT_COMANDO")), 30000)
@@ -276,4 +277,7 @@ process.on("uncaughtException", (error) => {
 
 connectDB(); 
 
-client.login(process.env.TOKEN);
+client.login(process.env.TOKEN)
+    .catch(error => {
+        console.error("❌ ERROR CRÍTICO AL INICIAR SESIÓN EN DISCORD:", error);
+    });
