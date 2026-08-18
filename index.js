@@ -11,6 +11,7 @@ const {
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
+const https = require("https");
 
 // ======================
 // CONEXIÓN A MONGODB
@@ -558,6 +559,73 @@ async function iniciarBot() {
         );
 
         await connectDB();
+
+        // ======================
+        // PRUEBA DE CONEXIÓN A DISCORD
+        // ======================
+
+        console.log(
+            "🌐 Probando conexión con Discord..."
+        );
+
+        await new Promise((resolve) => {
+
+            const request = https.get(
+                "https://discord.com/api/v10/gateway",
+                (res) => {
+
+                    console.log(
+                        `🌐 Discord HTTP STATUS: ${res.statusCode}`
+                    );
+
+                    let data = "";
+
+                    res.on("data", chunk => {
+                        data += chunk;
+                    });
+
+                    res.on("end", () => {
+
+                        console.log(
+                            "🌐 Respuesta Gateway Discord:",
+                            data
+                        );
+
+                        resolve();
+
+                    });
+
+                }
+            );
+
+            request.setTimeout(10000, () => {
+
+                console.error(
+                    "❌ TIMEOUT: Discord no respondió en 10 segundos."
+                );
+
+                request.destroy();
+
+                resolve();
+
+            });
+
+            request.on("error", error => {
+
+                console.error(
+                    "❌ ERROR CONECTANDO A DISCORD:",
+                    error.message
+                );
+
+                resolve();
+
+            });
+
+        });
+
+        // ======================
+        // LOGIN DISCORD
+        // ======================
 
         console.log(
             "🔑 Iniciando sesión en Discord..."
