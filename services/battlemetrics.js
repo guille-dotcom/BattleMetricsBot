@@ -1,7 +1,7 @@
 require("dotenv").config();
 const axios = require("axios");
 
-// 1. Buscar jugador online por su nombre de Steam en el servidor configurado
+// 1. Buscar jugador online/registrado en el servidor por su nombre de Steam
 async function searchBattleMetricsPlayer(playerName, serverId) {
     try {
         const token = process.env.BATTLEMETRICS_TOKEN;
@@ -9,7 +9,8 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
             `https://api.battlemetrics.com/servers/${serverId}`,
             {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
-                params: { include: "player" }
+                params: { include: "player" },
+                timeout: 4000
             }
         );
 
@@ -21,34 +22,26 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
             return nombreBM === nombreBuscado;
         });
 
-        if (!encontrado) {
-            console.log("No está online en el servidor BM:", playerName);
-            return null;
-        }
-
-        return encontrado;
+        return encontrado || null;
     } catch (error) {
-        console.error("Error buscando en BM:", error.response?.data || error.message);
+        console.error("Error buscando en BM:", error.message);
         return null;
     }
 }
 
-// 2. Obtener estado, sesión actual, servidor, horas totales e historial de nombres
+// 2. Obtener estado y horas usando el ID interno de BattleMetrics del jugador encontrado
 async function getBattleMetricsPlayerStatus(playerId) {
     try {
         const token = process.env.BATTLEMETRICS_TOKEN;
-        const headers = {
-            "Content-Type": "application/json"
-        };
-        if (token) {
-            headers["Authorization"] = `Bearer ${token}`;
-        }
+        const headers = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
 
         const [playerRes, sessionRes] = await Promise.all([
-            axios.get(`https://api.battlemetrics.com/players/${playerId}?include=server,identifier`, { headers }),
+            axios.get(`https://api.battlemetrics.com/players/${playerId}?include=server`, { headers, timeout: 4000 }),
             axios.get(`https://api.battlemetrics.com/players/${playerId}/relationships/sessions`, { 
                 headers, 
-                params: { "page[size]": 50 } 
+                params: { "page[size]": 10 },
+                timeout: 4000
             }).catch(() => null)
         ]);
 
@@ -60,7 +53,6 @@ async function getBattleMetricsPlayerStatus(playerId) {
         const servidoresContados = new Set();
         let nombreServidorActual = "Desconocido";
         let activeServerId = player.relationships?.server?.data?.id;
-        const historialNombresSet = new Set();
 
         for (const item of incluidos) {
             if (item.type === "server") {
@@ -73,15 +65,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
                 if (servidoresContados.has(servidorId)) continue;
                 servidoresContados.add(servidorId);
                 
-                const tiempo = item.meta?.timePlayed || 0;
-                segundosTotales += tiempo;
-            }
-
-            if (item.type === "identifier" && item.attributes?.type === "steamID") {
-                const nombreSteam = item.attributes?.metadata?.name;
-                if (nombreSteam) {
-                    historialNombresSet.add(nombreSteam);
-                }
+                segundosTotales += item.meta?.timePlayed || 0;
             }
         }
 
@@ -95,25 +79,11 @@ async function getBattleMetricsPlayerStatus(playerId) {
         if (sesionActiva) {
             online = true;
             const inicio = new Date(sesionActiva.attributes.start);
-            const ahora = new Date();
-            const segundos = Math.floor((ahora - inicio) / 1000);
+            const segundos = Math.floor((new Date() - inicio) / 1000);
             const h = Math.floor(segundos / 3600);
             const m = Math.floor((segundos % 3600) / 60);
             tiempoJugando = h > 0 ? `${h}h ${m}m` : `${m}m`;
-
-            if (nombreServidorActual === "Desconocido") {
-                const sessionServerId = sesionActiva.relationships?.server?.data?.id;
-                if (sessionServerId) {
-                    activeServerId = sessionServerId;
-                    const servidorSesion = incluidos.find(s => s.type === "server" && s.id === sessionServerId);
-                    if (servidorSesion) {
-                        nombreServidorActual = servidorSesion.attributes?.name || "Desconocido";
-                    }
-                }
-            }
         }
-
-        const historialNombres = Array.from(historialNombresSet);
 
         return {
             id: player.id,
@@ -122,28 +92,23 @@ async function getBattleMetricsPlayerStatus(playerId) {
             jugando: tiempoJugando,
             horasTotalesBM: horasTotalesCalculadas,
             server: nombreServidorActual,
-            historialNombres: historialNombres
+            historialNombres: []
         };
 
     } catch (error) {
-        console.error("Error obteniendo status BM:", error.response?.data || error.message);
+        console.error("Error obteniendo status BM:", error.message);
         return null;
     }
 }
 
-// 3. Obtener el ranking de forma rápida y precisa extrayendo el tiempo exacto por servidor
 async function getServerLeaderboard(serverId) {
     try {
         const token = process.env.BATTLEMETRICS_TOKEN;
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-        // Obtenemos los jugadores online actuales del servidor
         const response = await axios.get(
             `https://api.battlemetrics.com/servers/${serverId}`,
-            {
-                headers,
-                params: { include: "player" }
-            }
+            { headers, params: { include: "player" }, timeout: 4000 }
         );
 
         const included = response.data.included || [];
@@ -151,54 +116,17 @@ async function getServerLeaderboard(serverId) {
 
         if (players.length === 0) return [];
 
-        // Para evitar que sea lento pero asegurar que traiga las horas reales, consultamos en bloques paralelos eficientes de 5
-        const batchSize = 5;
-        const validResults = [];
+        const validResults = players.map(player => ({
+            id: player.id,
+            name: player.attributes?.name || "Desconocido",
+            timePlayedSeconds: player.meta?.timePlayed || 0
+        }));
 
-        for (let i = 0; i < players.length; i += batchSize) {
-            const batch = players.slice(i, i + batchSize);
-            const batchPromises = batch.map(async (player) => {
-                try {
-                    const playerId = player.id;
-                    const playerName = player.attributes?.name || "Desconocido";
-
-                    // Consultamos el perfil del jugador con sus servidores incluidos (igual que /horas)
-                    const playerRes = await axios.get(
-                        `https://api.battlemetrics.com/players/${playerId}?include=server`,
-                        { headers }
-                    );
-
-                    const playerIncluded = playerRes.data.included || [];
-                    let segundosEnServidor = 0;
-
-                    for (const item of playerIncluded) {
-                        if (item.type === "server" && String(item.id) === String(serverId)) {
-                            segundosEnServidor = item.meta?.timePlayed || 0;
-                            break;
-                        }
-                    }
-
-                    return {
-                        id: playerId,
-                        name: playerName,
-                        timePlayedSeconds: segundosEnServidor
-                    };
-                } catch (err) {
-                    return null;
-                }
-            });
-
-            const batchResults = await Promise.all(batchPromises);
-            validResults.push(...batchResults.filter(r => r !== null));
-        }
-
-        // Ordenar de mayor a menor tiempo jugado en el servidor
         validResults.sort((a, b) => b.timePlayedSeconds - a.timePlayedSeconds);
-
         return validResults;
 
     } catch (error) {
-        console.error("Error obteniendo ranking del servidor:", error.response?.data || error.message);
+        console.error("Error obteniendo ranking del servidor:", error.message);
         return [];
     }
 }
