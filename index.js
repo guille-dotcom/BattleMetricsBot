@@ -281,7 +281,7 @@ async function iniciarBot() {
         await connectDB();
         
         console.log("🔑 Iniciando sesión en Discord...");
-        await client.login(process.env.TOKEN);
+        client.login(process.env.TOKEN); // <-- Sin await para evitar el bloqueo del hilo
         
     } catch (error) {
         console.error("❌ ERROR CRÍTICO EN EL INICIO:", error);
