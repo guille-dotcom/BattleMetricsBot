@@ -71,6 +71,19 @@ client.on("shardError", error => {
     console.error("❌ ERROR SHARD DISCORD:", error);
 });
 
+client.on("shardDisconnect", (event, id) => {
+    console.error(
+        `🔴 SHARD ${id} DESCONECTADO:`,
+        event
+    );
+});
+
+client.on("shardReconnecting", id => {
+    console.log(
+        `🔄 SHARD ${id} INTENTANDO RECONEXIÓN...`
+    );
+});
+
 client.on("invalidated", () => {
     console.error("❌ SESIÓN DE DISCORD INVALIDADA");
 });
@@ -550,8 +563,13 @@ async function iniciarBot() {
             "🔑 Iniciando sesión en Discord..."
         );
 
-        await client.login(
+        const loginResult = await client.login(
             process.env.TOKEN
+        );
+
+        console.log(
+            "🔐 LOGIN RESULT:",
+            loginResult
         );
 
     } catch (error) {
