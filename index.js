@@ -272,12 +272,20 @@ process.on("uncaughtException", (error) => {
 
 
 // ====================== // 
-// LOGIN                  // 
+// INICIO Y LOGIN         // 
 // ====================== // 
 
-connectDB(); 
+async function iniciarBot() {
+    try {
+        console.log("🔄 Conectando a MongoDB...");
+        await connectDB();
+        
+        console.log("🔑 Iniciando sesión en Discord...");
+        await client.login(process.env.TOKEN);
+        
+    } catch (error) {
+        console.error("❌ ERROR CRÍTICO EN EL INICIO:", error);
+    }
+}
 
-client.login(process.env.TOKEN)
-    .catch(error => {
-        console.error("❌ ERROR CRÍTICO AL INICIAR SESIÓN EN DISCORD:", error);
-    });
+iniciarBot();
