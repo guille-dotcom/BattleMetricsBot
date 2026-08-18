@@ -14,6 +14,7 @@ module.exports = {
         ),
  
     async execute(interaction) { 
+        // 1. Diferir la respuesta inmediatamente en la primera línea absoluta
         await interaction.deferReply();
 
         try { 
@@ -39,27 +40,8 @@ module.exports = {
 
             const paisTexto = perfilSteam.loccountrycode ? `:flag_${perfilSteam.loccountrycode.toLowerCase()}: (${perfilSteam.loccountrycode})` : "Desconocido";
             
-            // --- CÁLCULO DE DÍAS DE CREACIÓN DE CUENTA ---
-            let creacionSteamTexto = "No disponible";
-            if (perfilSteam.creationDate) {
-                const fechaCreacion = new Date(perfilSteam.creationDate);
-                if (!isNaN(fechaCreacion.getTime())) {
-                    const ahora = new Date();
-                    const diferenciaTiempo = ahora - fechaCreacion;
-                    const diasTotales = Math.floor(diferenciaTiempo / (1000 * 60 * 60 * 24));
-                    const anos = Math.floor(diasTotales / 365);
-                    const diasRestantes = diasTotales % 365;
-
-                    if (anos > 0) {
-                        creacionSteamTexto = `${diasTotales} días (${anos} años y ${diasRestantes}d)`;
-                    } else {
-                        creacionSteamTexto = `${diasTotales} días`;
-                    }
-                } else {
-                    creacionSteamTexto = perfilSteam.creationDate;
-                }
-            }
-            // ---------------------------------------------
+            // Usamos directamente el texto limpio que viene del servicio de Steam (ej: "1460 días")
+            const creacionSteamTexto = perfilSteam.creationDate || "No disponible";
             
             let vacTexto = "✅ Sin Baneos";
             if (perfilSteam.vacBanned && perfilSteam.gameBansCount > 0) {
@@ -141,12 +123,7 @@ module.exports = {
 
         } catch (error) { 
             console.error("Error en comando /horas:", error); 
-            
-            if (interaction.deferred || interaction.replied) {
-                return await interaction.editReply({ content: "❌ Error interno al procesar el comando." });
-            } else {
-                return await interaction.reply({ content: "❌ Error interno al procesar el comando.", ephemeral: true });
-            }
+            return await interaction.editReply({ content: "❌ Error interno al procesar el comando." }).catch(() => {});
         } 
     } 
 };
