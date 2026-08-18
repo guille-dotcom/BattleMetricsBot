@@ -227,9 +227,10 @@ client.on("interactionCreate", async interaction => {
     if (!command) return;
 
     try { 
+        // Aumentado el tiempo de espera global a 30 segundos para evitar cortes prematuros
         const executionPromise = command.execute(interaction);
         const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("TIME_OUT_COMANDO")), 12000)
+            setTimeout(() => reject(new Error("TIME_OUT_COMANDO")), 30000)
         );
 
         await Promise.race([executionPromise, timeoutPromise]);
@@ -237,10 +238,11 @@ client.on("interactionCreate", async interaction => {
         console.log("ERROR EJECUTANDO COMANDO:", error); 
 
         try { 
+            const errorMsg = "❌ El comando tardó demasiado en responder o hubo un error interno.";
             if (interaction.deferred || interaction.replied) { 
-                await interaction.editReply({ content: "❌ El comando tardó demasiado en responder o hubo un error interno." }); 
+                await interaction.editReply({ content: errorMsg }); 
             } else { 
-                await interaction.reply({ content: "❌ El comando tardó demasiado en responder o hubo un error interno.", ephemeral: true }); 
+                await interaction.reply({ content: errorMsg, ephemeral: true }); 
             } 
         } catch(err) { 
             console.log("ERROR RESPONDIENDO DISCORD:", err.message); 
