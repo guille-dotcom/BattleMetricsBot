@@ -11,6 +11,7 @@ const {
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
+const https = require("https");
 
 // ======================
 // CONEXIÓN A MONGODB
@@ -602,6 +603,73 @@ async function iniciarBot() {
         );
 
         await connectDB();
+
+        // ======================
+        // PRUEBA HTTPS DISCORD
+        // ======================
+
+        console.log(
+            "🌐 PROBANDO CONEXIÓN HTTPS A DISCORD DESDE RENDER..."
+        );
+
+        await new Promise((resolve) => {
+
+            const request = https.get(
+                "https://discord.com/api/v10/gateway",
+                (res) => {
+
+                    console.log(
+                        `🌐 DISCORD RESPONDIÓ CON STATUS: ${res.statusCode}`
+                    );
+
+                    let data = "";
+
+                    res.on("data", chunk => {
+                        data += chunk;
+                    });
+
+                    res.on("end", () => {
+
+                        console.log(
+                            "🌐 RESPUESTA DE DISCORD:",
+                            data
+                        );
+
+                        resolve();
+
+                    });
+
+                }
+            );
+
+            request.setTimeout(15000, () => {
+
+                console.error(
+                    "❌ TIMEOUT HTTPS: Discord no respondió en 15 segundos."
+                );
+
+                request.destroy();
+
+                resolve();
+
+            });
+
+            request.on("error", error => {
+
+                console.error(
+                    "❌ ERROR HTTPS DISCORD:",
+                    error.message
+                );
+
+                resolve();
+
+            });
+
+        });
+
+        // ======================
+        // LOGIN DISCORD
+        // ======================
 
         console.log(
             "🔑 Iniciando sesión en Discord..."
