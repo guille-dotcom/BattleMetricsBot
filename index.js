@@ -88,10 +88,17 @@ client.on("invalidated", () => {
     console.error("❌ SESIÓN DE DISCORD INVALIDADA");
 });
 
+client.on("error", error => {
+    console.error(
+        "❌ ERROR DISCORD:",
+        error
+    );
+});
+
 client.commands = new Collection();
 
 // ======================
-// CARGAR Y REGISTRAR
+// CARGAR COMANDOS
 // ======================
 
 const commandsPath = path.join(__dirname, "commands");
@@ -110,11 +117,18 @@ for (const file of commandFiles) {
 
         if ("data" in command && "execute" in command) {
 
-            client.commands.set(command.data.name, command);
+            client.commands.set(
+                command.data.name,
+                command
+            );
 
-            commandsArray.push(command.data.toJSON());
+            commandsArray.push(
+                command.data.toJSON()
+            );
 
-            console.log(`✅ Comando cargado: ${command.data.name}`);
+            console.log(
+                `✅ Comando cargado: ${command.data.name}`
+            );
 
         } else {
 
@@ -140,7 +154,9 @@ for (const file of commandFiles) {
 
 client.once("ready", async () => {
 
-    console.log(`✅ Bot conectado como ${client.user.tag}`);
+    console.log(
+        `✅ Bot conectado como ${client.user.tag}`
+    );
 
     // ======================
     // REGISTRAR COMANDOS
@@ -150,18 +166,26 @@ client.once("ready", async () => {
 
         const rest = new REST({
             version: "10"
-        }).setToken(process.env.TOKEN);
+        }).setToken(
+            process.env.TOKEN
+        );
 
-        console.log("🔄 Sincronizando comandos globalmente...");
+        console.log(
+            "🔄 Sincronizando comandos globalmente..."
+        );
 
         await rest.put(
-            Routes.applicationCommands(client.user.id),
+            Routes.applicationCommands(
+                client.user.id
+            ),
             {
                 body: commandsArray
             }
         );
 
-        console.log("✨ ¡Comandos sincronizados sin duplicados!");
+        console.log(
+            "✨ ¡Comandos sincronizados sin duplicados!"
+        );
 
     } catch (error) {
 
@@ -191,7 +215,9 @@ client.once("ready", async () => {
 
         });
 
-        console.log("🟢 Estado ONLINE establecido");
+        console.log(
+            "🟢 Estado ONLINE establecido"
+        );
 
     } catch (error) {
 
@@ -206,7 +232,9 @@ client.once("ready", async () => {
     // TRACKER AUTOMÁTICO
     // ======================
 
-    console.log("🔎 Tracker iniciado cada 30 segundos");
+    console.log(
+        "🔎 Tracker iniciado cada 30 segundos"
+    );
 
     let trackerRevisando = false;
 
@@ -262,9 +290,11 @@ client.once("ready", async () => {
 // NUEVOS SERVIDORES
 // ======================
 
-client.on("guildCreate", async (guild) => {
+client.on("guildCreate", async guild => {
 
-    console.log(`📥 Nuevo servidor: ${guild.name}`);
+    console.log(
+        `📥 Nuevo servidor: ${guild.name}`
+    );
 
     try {
 
@@ -351,40 +381,75 @@ para ver todos los comandos disponibles.`,
 // INTERACCIONES
 // ======================
 
-client.on("interactionCreate", async interaction => {
+client.on(
+    "interactionCreate",
+    async interaction => {
 
-    // ======================
-    // BOTONES
-    // ======================
+        // ======================
+        // BOTONES
+        // ======================
 
-    if (interaction.isButton()) {
+        if (interaction.isButton()) {
 
-        if (
-            interaction.customId.startsWith(
-                "eliminar_tracker_"
-            )
-        ) {
+            if (
+                interaction.customId.startsWith(
+                    "eliminar_tracker_"
+                )
+            ) {
 
-            const id = interaction.customId.replace(
-                "eliminar_tracker_",
-                ""
-            );
+                const id =
+                    interaction.customId.replace(
+                        "eliminar_tracker_",
+                        ""
+                    );
 
-            const Tracker = require(
-                "./models/TrackerSchema"
-            );
+                const Tracker =
+                    require(
+                        "./models/TrackerSchema"
+                    );
 
-            try {
+                try {
 
-                const trackerEliminado =
-                    await Tracker.findByIdAndDelete(id);
+                    const trackerEliminado =
+                        await Tracker.findByIdAndDelete(
+                            id
+                        );
 
-                if (!trackerEliminado) {
+                    if (!trackerEliminado) {
+
+                        return interaction.reply({
+
+                            content:
+                                "❌ Ese tracker ya no existe o ya fue eliminado.",
+
+                            ephemeral: true
+
+                        });
+
+                    }
+
+                    return interaction.update({
+
+                        content:
+                            `🗑️ Tracker eliminado: **${trackerEliminado.nombre || id}**`,
+
+                        embeds: [],
+
+                        components: []
+
+                    });
+
+                } catch (error) {
+
+                    console.error(
+                        "Error al eliminar tracker por botón:",
+                        error
+                    );
 
                     return interaction.reply({
 
                         content:
-                            "❌ Ese tracker ya no existe o ya fue eliminado.",
+                            "❌ Ocurrió un error al intentar eliminar el tracker.",
 
                         ephemeral: true
 
@@ -392,158 +457,137 @@ client.on("interactionCreate", async interaction => {
 
                 }
 
-                return interaction.update({
-
-                    content:
-                        `🗑️ Tracker eliminado: **${trackerEliminado.nombre || id}**`,
-
-                    embeds: [],
-
-                    components: []
-
-                });
-
-            } catch (error) {
-
-                console.error(
-                    "Error al eliminar tracker por botón:",
-                    error
-                );
-
-                return interaction.reply({
-
-                    content:
-                        "❌ Ocurrió un error al intentar eliminar el tracker.",
-
-                    ephemeral: true
-
-                });
-
             }
+
+            return;
 
         }
 
-        return;
+        // ======================
+        // SLASH COMMANDS
+        // ======================
 
-    }
+        if (
+            !interaction.isChatInputCommand()
+        ) {
 
-    // ======================
-    // SLASH COMMANDS
-    // ======================
+            return;
 
-    if (!interaction.isChatInputCommand()) {
-        return;
-    }
+        }
 
-    const command = client.commands.get(
-        interaction.commandName
-    );
-
-    if (!command) {
-        return;
-    }
-
-    try {
-
-        const executionPromise =
-            command.execute(interaction);
-
-        const timeoutPromise =
-            new Promise((_, reject) =>
-
-                setTimeout(
-                    () =>
-                        reject(
-                            new Error(
-                                "TIME_OUT_COMANDO"
-                            )
-                        ),
-                    30000
-                )
-
+        const command =
+            client.commands.get(
+                interaction.commandName
             );
 
-        await Promise.race([
-            executionPromise,
-            timeoutPromise
-        ]);
+        if (!command) {
 
-    } catch (error) {
+            return;
 
-        console.log(
-            "ERROR EJECUTANDO COMANDO:",
-            error
-        );
+        }
 
         try {
 
-            const errorMsg =
-                "❌ El comando tardó demasiado en responder o hubo un error interno.";
+            const executionPromise =
+                command.execute(
+                    interaction
+                );
 
-            if (
-                interaction.deferred ||
-                interaction.replied
-            ) {
+            const timeoutPromise =
+                new Promise(
+                    (_, reject) =>
 
-                await interaction.editReply({
-                    content: errorMsg
-                });
+                        setTimeout(
+                            () =>
+                                reject(
+                                    new Error(
+                                        "TIME_OUT_COMANDO"
+                                    )
+                                ),
+                            30000
+                        )
 
-            } else {
+                );
 
-                await interaction.reply({
+            await Promise.race([
+                executionPromise,
+                timeoutPromise
+            ]);
 
-                    content: errorMsg,
-
-                    ephemeral: true
-
-                });
-
-            }
-
-        } catch (err) {
+        } catch (error) {
 
             console.log(
-                "ERROR RESPONDIENDO DISCORD:",
-                err.message
+                "ERROR EJECUTANDO COMANDO:",
+                error
             );
+
+            try {
+
+                const errorMsg =
+                    "❌ El comando tardó demasiado en responder o hubo un error interno.";
+
+                if (
+                    interaction.deferred ||
+                    interaction.replied
+                ) {
+
+                    await interaction.editReply({
+                        content: errorMsg
+                    });
+
+                } else {
+
+                    await interaction.reply({
+
+                        content: errorMsg,
+
+                        ephemeral: true
+
+                    });
+
+                }
+
+            } catch (err) {
+
+                console.log(
+                    "ERROR RESPONDIENDO DISCORD:",
+                    err.message
+                );
+
+            }
 
         }
 
     }
-
-});
+);
 
 // ======================
-// ERRORES
+// ERRORES GLOBALES
 // ======================
 
-client.on("error", error => {
+process.on(
+    "unhandledRejection",
+    reason => {
 
-    console.error(
-        "❌ Error Discord:",
-        error
-    );
+        console.error(
+            "❌ Unhandled Promise:",
+            reason
+        );
 
-});
+    }
+);
 
-process.on("unhandledRejection", reason => {
+process.on(
+    "uncaughtException",
+    error => {
 
-    console.error(
-        "❌ Unhandled Promise:",
-        reason
-    );
+        console.error(
+            "❌ Uncaught Exception:",
+            error
+        );
 
-});
-
-process.on("uncaughtException", error => {
-
-    console.error(
-        "❌ Uncaught Exception:",
-        error
-    );
-
-});
+    }
+);
 
 // ======================
 // INICIO Y LOGIN
@@ -559,17 +603,52 @@ async function iniciarBot() {
 
         await connectDB();
 
-        // ======================
-        // LOGIN DISCORD
-        // ======================
-
         console.log(
             "🔑 Iniciando sesión en Discord..."
         );
 
-        const loginResult = await client.login(
-            process.env.TOKEN
+        if (!process.env.TOKEN) {
+
+            throw new Error(
+                "❌ La variable TOKEN no existe en las variables de entorno."
+            );
+
+        }
+
+        console.log(
+            "🔐 TOKEN encontrado correctamente."
         );
+
+        const loginPromise =
+            client.login(
+                process.env.TOKEN
+            );
+
+        const timeoutPromise =
+            new Promise(
+                (_, reject) => {
+
+                    setTimeout(
+                        () => {
+
+                            reject(
+                                new Error(
+                                    "⏰ TIMEOUT: Discord no completó la conexión después de 60 segundos."
+                                )
+                            );
+
+                        },
+                        60000
+                    );
+
+                }
+            );
+
+        const loginResult =
+            await Promise.race([
+                loginPromise,
+                timeoutPromise
+            ]);
 
         console.log(
             "🔐 LOGIN RESULT:",
@@ -579,9 +658,14 @@ async function iniciarBot() {
     } catch (error) {
 
         console.error(
-            "❌ ERROR CRÍTICO EN EL INICIO:",
+            "❌ ERROR CRÍTICO EN EL INICIO:"
+        );
+
+        console.error(
             error
         );
+
+        process.exit(1);
 
     }
 
