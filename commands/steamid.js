@@ -24,13 +24,10 @@ module.exports = {
 
         .addStringOption(option =>
             option
-
                 .setName("steamid")
-
                 .setDescription(
                     "SteamID64 del jugador"
                 )
-
                 .setRequired(true)
         ),
 
@@ -85,7 +82,7 @@ module.exports = {
 
 
             // ---------------------------------------------
-            // ERROR DE VARIABLES DE ENTORNO
+            // ERROR API KEY
             // ---------------------------------------------
 
             if (
@@ -100,6 +97,10 @@ module.exports = {
 
             }
 
+
+            // ---------------------------------------------
+            // ERROR MYID
+            // ---------------------------------------------
 
             if (
                 error.message?.includes(
@@ -132,14 +133,11 @@ module.exports = {
         const profile =
             data.profile || {};
 
-
         const bans =
             data.profile_bans || {};
 
-
         const steamData =
             data.steamid_data || {};
-
 
         const watch =
             data.custom_watch_list || {};
@@ -203,7 +201,7 @@ module.exports = {
 
 
         // =================================================
-        // PERFIL STEAM
+        // PERFIL
         // =================================================
 
         const steamId64 =
@@ -226,18 +224,25 @@ module.exports = {
             "No disponible";
 
 
-        const steamProfileUrl =
+        // =================================================
+        // PERFIL STEAMID.UK
+        // =================================================
+
+        const steamIdUkUrl =
             profile.steamidurl ||
-            `https://steamid.uk/profile/${steamId}`;
-
-
-        const inviteUrl =
-            profile.inviteurl ||
-            null;
+            `https://steamid.uk/profile/${steamId64}`;
 
 
         // =================================================
-        // ESTADÍSTICAS
+        // PERFIL STEAM
+        // =================================================
+
+        const steamProfileUrl =
+            `https://steamcommunity.com/profiles/${steamId64}`;
+
+
+        // =================================================
+        // ESTADÍSTICAS DE AMIGOS
         // =================================================
 
         const friendCount =
@@ -276,7 +281,48 @@ module.exports = {
 
 
         // =================================================
-        // CREAR EMBED
+        // DETECTAR PRIVACIDAD DE AMIGOS
+        // =================================================
+        //
+        // SteamID.uk puede devolver 0 cuando Steam
+        // mantiene los amigos privados.
+        //
+        // En ese caso mostramos:
+        //
+        // 🔒 Steam Friends - Private
+        //
+        // Si existen datos, mostramos el número.
+        // =================================================
+
+        let friendHistoryTexto;
+
+
+        const friendCountNumber =
+            parseInt(friendCount, 10) || 0;
+
+
+        const friendHistoryNumber =
+            parseInt(friendHistory, 10) || 0;
+
+
+        if (
+            friendCountNumber === 0 &&
+            friendHistoryNumber === 0
+        ) {
+
+            friendHistoryTexto =
+                "🔒 Steam Friends - Private";
+
+        } else {
+
+            friendHistoryTexto =
+                `\`${friendHistoryNumber}\``;
+
+        }
+
+
+        // =================================================
+        // EMBED
         // =================================================
 
         const embed =
@@ -345,22 +391,17 @@ module.exports = {
                         name: "🔗 Perfil SteamID.uk",
 
                         value:
-                            `[Abrir perfil](${steamProfileUrl})`,
+                            `[Abrir perfil](${steamIdUkUrl})`,
 
                         inline: true
                     },
 
 
                     {
-                        name: "📨 Invite URL",
+                        name: "🎮 Perfil de Steam",
 
                         value:
-
-                            inviteUrl
-
-                                ? `[Invitar](${inviteUrl})`
-
-                                : "No disponible",
+                            `[Abrir perfil](${steamProfileUrl})`,
 
                         inline: true
                     },
@@ -502,7 +543,7 @@ module.exports = {
                         name: "📚 Historial de amigos",
 
                         value:
-                            `\`${friendHistory}\``,
+                            friendHistoryTexto,
 
                         inline: true
                     },

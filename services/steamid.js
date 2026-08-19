@@ -72,11 +72,9 @@ async function getSteamIDData(input) {
         }
 
         if (response.data.auth.auth !== "ok") {
-
             throw new Error(
                 "SteamID.uk rechazó la solicitud."
             );
-
         }
 
         return response.data;

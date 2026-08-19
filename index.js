@@ -56,8 +56,21 @@ const client = new Client({
 // DIAGNÓSTICO DISCORD
 // ======================
 
+// Discord.js puede enviar información sensible mediante el evento debug.
+// Filtramos cualquier mensaje que contenga tokens.
 client.on("debug", info => {
-    console.log("🔧 DISCORD DEBUG:", info);
+
+    const texto = String(info);
+
+    if (
+        texto.includes("Provided token") ||
+        texto.includes("LOGIN RESULT") ||
+        texto.includes("token:")
+    ) {
+        return;
+    }
+
+    console.log("🔧 DISCORD DEBUG:", texto);
 });
 
 client.on("warn", info => {
@@ -152,8 +165,10 @@ for (const file of commandFiles) {
 // ======================
 // BOT READY
 // ======================
+// discord.js v15 utiliza clientReady
+// en lugar del evento ready.
 
-client.once("ready", async () => {
+client.once("clientReady", async () => {
 
     console.log(
         `✅ Bot conectado como ${client.user.tag}`
@@ -712,15 +727,17 @@ async function iniciarBot() {
                 }
             );
 
-        const loginResult =
-            await Promise.race([
-                loginPromise,
-                timeoutPromise
-            ]);
+        await Promise.race([
+            loginPromise,
+            timeoutPromise
+        ]);
+
+        // IMPORTANTE:
+        // No mostramos el resultado de client.login()
+        // porque puede contener información sensible.
 
         console.log(
-            "🔐 LOGIN RESULT:",
-            loginResult
+            "✅ Login de Discord completado correctamente."
         );
 
     } catch (error) {
