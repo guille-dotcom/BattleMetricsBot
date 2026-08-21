@@ -134,6 +134,27 @@ async function getBattleMetricsPlayerStatus(playerId) {
             );
 
 
+        // =================================================
+        // DEBUG TEMPORAL
+        // =================================================
+
+        console.log(
+            "================ BM PLAYER DATA ================"
+        );
+
+        console.log(
+            JSON.stringify(
+                playerResponse.data,
+                null,
+                2
+            )
+        );
+
+        console.log(
+            "================================================="
+        );
+
+
         const player =
             playerResponse.data?.data;
 
@@ -156,14 +177,6 @@ async function getBattleMetricsPlayerStatus(playerId) {
         // HORAS TOTALES
         // =================================================
 
-        /*
-         * BattleMetrics normalmente entrega el tiempo
-         * jugado mediante meta.timePlayed.
-         *
-         * Lo obtenemos directamente del jugador cuando
-         * está disponible.
-         */
-
         let segundosTotales =
             Number(
                 player.meta?.timePlayed
@@ -171,50 +184,16 @@ async function getBattleMetricsPlayerStatus(playerId) {
 
 
         /*
-         * Algunas respuestas pueden no traer meta.timePlayed
-         * directamente. En ese caso intentamos obtenerlo
-         * mediante los servidores relacionados.
+         * IMPORTANTE:
+         *
+         * Por ahora NO hacemos consultas adicionales
+         * a relationships/servers para las horas.
+         *
+         * BattleMetrics está devolviendo 405 en ese endpoint.
+         *
+         * Primero necesitamos comprobar mediante el debug
+         * exactamente dónde está entregando el tiempo.
          */
-
-        if (segundosTotales <= 0) {
-
-            try {
-
-                const serverResponse =
-                    await axios.get(
-                        `${BM_API}/players/${playerId}/relationships/servers`,
-                        {
-                            headers: getHeaders(),
-
-                            params: {
-                                "page[size]": 100
-                            },
-
-                            timeout: 7000
-                        }
-                    );
-
-
-                const servidores =
-                    serverResponse.data?.data || [];
-
-
-                for (const servidor of servidores) {
-
-                    segundosTotales +=
-                        Number(
-                            servidor.meta?.timePlayed
-                        ) || 0;
-                }
-
-            } catch (error) {
-
-                console.log(
-                    "⚠️ No se pudo obtener tiempo por servidores:",
-                    error.message
-                );
-            }
-        }
 
 
         const horasTotalesBM =
@@ -248,6 +227,16 @@ async function getBattleMetricsPlayerStatus(playerId) {
                 );
 
 
+                /*
+                 * IMPORTANTE:
+                 *
+                 * BattleMetrics está rechazando
+                 * "page[number]".
+                 *
+                 * Lo dejamos temporalmente sin ese parámetro
+                 * para comprobar la respuesta real de la API.
+                 */
+
                 const sessionResponse =
                     await axios.get(
                         `${BM_API}/players/${playerId}/relationships/sessions`,
@@ -255,8 +244,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
                             headers: getHeaders(),
 
                             params: {
-                                "page[size]": 100,
-                                "page[number]": pagina
+                                "page[size]": 100
                             },
 
                             timeout: 7000
@@ -266,6 +254,11 @@ async function getBattleMetricsPlayerStatus(playerId) {
 
                 const sesiones =
                     sessionResponse.data?.data || [];
+
+
+                console.log(
+                    `📊 Página ${pagina}: ${sesiones.length} sesiones`
+                );
 
 
                 if (
@@ -281,16 +274,14 @@ async function getBattleMetricsPlayerStatus(playerId) {
                 );
 
 
-                if (
-                    sesiones.length < 100
-                ) {
+                /*
+                 * Como no estamos utilizando page[number],
+                 * no debemos pedir repetidamente la misma página.
+                 *
+                 * Por ahora obtenemos solamente la primera respuesta.
+                 */
 
-                    continuar = false;
-
-                } else {
-
-                    pagina++;
-                }
+                continuar = false;
 
 
             } catch (error) {
@@ -627,6 +618,12 @@ async function getBattleMetricsPlayerStatus(playerId) {
                 );
 
 
+            // Evitar advertencia de variable no utilizada
+            if (duracion < 0) {
+                continue;
+            }
+
+
             // =================================================
             // ESTA SEMANA
             // =================================================
@@ -784,53 +781,11 @@ async function getBattleMetricsPlayerStatus(playerId) {
 
 
         /*
-         * BattleMetrics puede no devolver historial de nombres
-         * en todas las respuestas de la API.
-         *
-         * Intentamos obtenerlo desde la relación de identifiers.
+         * Temporalmente no consultamos identifiers porque
+         * BattleMetrics está devolviendo 405.
          */
 
-        try {
-
-            const identifiersResponse =
-                await axios.get(
-                    `${BM_API}/players/${playerId}/relationships/identifiers`,
-                    {
-                        headers: getHeaders(),
-
-                        params: {
-                            "page[size]": 100
-                        },
-
-                        timeout: 5000
-                    }
-                );
-
-
-            const identifiers =
-                identifiersResponse.data?.data || [];
-
-
-            const nombres =
-                identifiers
-                    .map(identifier =>
-                        identifier.attributes?.identifier
-                    )
-                    .filter(Boolean);
-
-
-            historialNombres =
-                [...new Set(nombres)]
-                    .slice(0, 3);
-
-
-        } catch (error) {
-
-            console.log(
-                "⚠️ No se pudo obtener historial de nombres:",
-                error.message
-            );
-        }
+        historialNombres = [];
 
 
         // =================================================
