@@ -1,12 +1,18 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
 
-const BASE_URL = "https://rusthelp.com/es-ES/items";
+const BASE_URL =
+    "https://rusthelp.com/es-ES/items";
+
 
 const HEADERS = {
+
     "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36",
-    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8"
+
+    "Accept-Language":
+        "es-ES,es;q=0.9,en;q=0.8"
+
 };
 
 
@@ -17,23 +23,40 @@ const HEADERS = {
 function normalizarTexto(texto) {
 
     return String(texto || "")
+
         .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
+
+        .replace(
+            /[\u0300-\u036f]/g,
+            ""
+        )
+
         .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, " ")
-        .replace(/\s+/g, " ")
+
+        .replace(
+            /[^a-z0-9\s]/g,
+            " "
+        )
+
+        .replace(
+            /\s+/g,
+            " "
+        )
+
         .trim();
+
 }
 
 
 // =====================================================
-// CONVERTIR NOMBRE A SLUG
+// SLUG
 // =====================================================
 
 function convertirSlug(nombre) {
 
     return normalizarTexto(nombre)
         .replace(/\s+/g, "-");
+
 }
 
 
@@ -43,52 +66,84 @@ function convertirSlug(nombre) {
 
 const ALIASES = {
 
-    "tc": "tool-cupboard",
+    "tc":
+        "tool-cupboard",
 
-    "armario": "tool-cupboard",
-    "armario de herramientas": "tool-cupboard",
+    "armario":
+        "tool-cupboard",
 
-    "puerta blindada": "armored-door",
+    "armario de herramientas":
+        "tool-cupboard",
 
-    "puerta de garaje": "garage-door",
-    "puerta garaje": "garage-door",
+    "puerta blindada":
+        "armored-door",
 
-    "puerta de chapa": "sheet-metal-door",
-    "puerta chapa": "sheet-metal-door",
+    "puerta de garaje":
+        "garage-door",
 
-    "puerta de metal": "sheet-metal-door",
+    "puerta garaje":
+        "garage-door",
 
-    "puerta de madera": "wooden-door",
-    "puerta madera": "wooden-door",
+    "puerta de chapa":
+        "sheet-metal-door",
 
-    "doble puerta de chapa": "sheet-metal-double-door",
-    "puerta doble de chapa": "sheet-metal-double-door",
+    "puerta chapa":
+        "sheet-metal-door",
 
-    "puerta doble blindada": "armored-double-door",
+    "puerta de metal":
+        "sheet-metal-door",
 
-    "muro blindado": "armored-wall",
-    "pared blindada": "armored-wall",
+    "puerta de madera":
+        "wooden-door",
 
-    "pared de chapa": "sheet-metal-wall",
-    "pared metalica": "sheet-metal-wall",
+    "puerta madera":
+        "wooden-door",
 
-    "pared de piedra": "stone-wall",
+    "doble puerta de chapa":
+        "sheet-metal-double-door",
 
-    "pared de madera": "wooden-wall",
+    "puerta doble de chapa":
+        "sheet-metal-double-door",
 
-    "porton": "armored-garage-door",
-    "porton blindado": "armored-garage-door"
+    "puerta doble blindada":
+        "armored-double-door",
+
+    "muro blindado":
+        "armored-wall",
+
+    "pared blindada":
+        "armored-wall",
+
+    "pared de chapa":
+        "sheet-metal-wall",
+
+    "pared metalica":
+        "sheet-metal-wall",
+
+    "pared de piedra":
+        "stone-wall",
+
+    "pared de madera":
+        "wooden-wall",
+
+    "porton":
+        "armored-garage-door",
+
+    "porton blindado":
+        "armored-garage-door"
+
 };
 
 
 // =====================================================
-// OBTENER PAGINA
+// OBTENER PÁGINA
 // =====================================================
 
 async function obtenerPagina(slug) {
 
     const url =
         `${BASE_URL}/${slug}`;
+
 
     try {
 
@@ -101,15 +156,22 @@ async function obtenerPagina(slug) {
                 }
             );
 
+
         return {
+
             url,
-            html: response.data
+
+            html:
+                response.data
+
         };
 
-    } catch (error) {
+    } catch {
 
         return null;
+
     }
+
 }
 
 
@@ -120,42 +182,43 @@ async function obtenerPagina(slug) {
 async function buscarItemRustHelp(nombre) {
 
     const original =
-        String(nombre || "").trim();
+        String(nombre || "")
+            .trim();
+
 
     if (!original) {
+
         return null;
+
     }
 
+
     const normalizado =
-        normalizarTexto(original);
+        normalizarTexto(
+            original
+        );
 
-
-    // =================================================
-    // ALIAS
-    // =================================================
 
     let slug =
-        ALIASES[normalizado];
+        ALIASES[
+            normalizado
+        ];
 
-
-    // =================================================
-    // SLUG DIRECTO
-    // =================================================
 
     if (!slug) {
 
         slug =
-            convertirSlug(original);
+            convertirSlug(
+                original
+            );
 
     }
 
 
-    // =================================================
-    // URL DIRECTA
-    // =================================================
-
     let pagina =
-        await obtenerPagina(slug);
+        await obtenerPagina(
+            slug
+        );
 
 
     if (pagina) {
@@ -165,18 +228,27 @@ async function buscarItemRustHelp(nombre) {
                 pagina.html
             );
 
+
         const titulo =
             $("h1")
                 .first()
                 .text()
                 .trim();
 
+
         if (titulo) {
 
             return {
-                nombre: titulo,
-                url: pagina.url,
-                html: pagina.html
+
+                nombre:
+                    titulo,
+
+                url:
+                    pagina.url,
+
+                html:
+                    pagina.html
+
             };
 
         }
@@ -184,21 +256,19 @@ async function buscarItemRustHelp(nombre) {
     }
 
 
-    // =================================================
-    // VARIANTES
-    // =================================================
-
     const variantes = [
 
-        normalizado.replace(
-            /\bde\b/g,
-            ""
-        ),
+        normalizado
+            .replace(
+                /\bde\b/g,
+                ""
+            ),
 
-        normalizado.replace(
-            /\bthe\b/g,
-            ""
-        ),
+        normalizado
+            .replace(
+                /\bthe\b/g,
+                ""
+            ),
 
         normalizado
             .replace(
@@ -231,13 +301,17 @@ async function buscarItemRustHelp(nombre) {
                 variante
             );
 
+
         if (
             slugsProbados.has(
                 varianteSlug
             )
         ) {
+
             continue;
+
         }
+
 
         slugsProbados.add(
             varianteSlug
@@ -257,18 +331,27 @@ async function buscarItemRustHelp(nombre) {
                     pagina.html
                 );
 
+
             const titulo =
                 $("h1")
                     .first()
                     .text()
                     .trim();
 
+
             if (titulo) {
 
                 return {
-                    nombre: titulo,
-                    url: pagina.url,
-                    html: pagina.html
+
+                    nombre:
+                        titulo,
+
+                    url:
+                        pagina.url,
+
+                    html:
+                        pagina.html
+
                 };
 
             }
@@ -279,96 +362,131 @@ async function buscarItemRustHelp(nombre) {
 
 
     return null;
+
 }
 
 
 // =====================================================
-// EXTRAER NUMERO
+// EXTRAER NÚMERO
 // =====================================================
 
 function extraerNumero(texto) {
 
     if (!texto) {
+
         return 0;
+
     }
+
 
     const limpio =
         String(texto)
-            .replace(/[×x]/gi, "")
-            .replace(/\./g, "")
-            .replace(/,/g, "")
-            .replace(/[^\d]/g, "");
+
+            .replace(
+                /[×x]/gi,
+                ""
+            )
+
+            .replace(
+                /\./g,
+                ""
+            )
+
+            .replace(
+                /,/g,
+                ""
+            )
+
+            .replace(
+                /[^\d]/g,
+                ""
+            );
+
 
     return Number(limpio) || 0;
+
 }
 
 
 // =====================================================
-// EXTRAER COSTO DE AZUFRE
-// =====================================================
-//
-// RustHelp identifica el material mediante el href
-// de los enlaces.
-//
-// /items/sulfur = azufre
-// /items/charcoal = carbon
-// etc.
-//
+// EXTRAER AZUFRE
 // =====================================================
 
-function obtenerAzufreDeCelda($, celda) {
+function obtenerAzufreDeCelda(
+    $,
+    celda
+) {
 
     let azufre = 0;
 
+
     $(celda)
         .find("a")
-        .each((i, enlace) => {
+        .each(
+            (i, enlace) => {
 
-            const href =
-                $(enlace)
-                    .attr("href") || "";
-
-            const texto =
-                $(enlace)
-                    .text()
-                    .trim();
-
-            const objetivo =
-                normalizarTexto(
-                    `${href} ${texto}`
-                );
+                const href =
+                    $(enlace)
+                        .attr("href") || "";
 
 
-            const esAzufre =
-                objetivo.includes("sulfur") ||
-                objetivo.includes("azufre") ||
-                objetivo.includes("sulphur");
+                const texto =
+                    $(enlace)
+                        .text()
+                        .trim();
 
 
-            if (!esAzufre) {
-                return;
+                const objetivo =
+                    normalizarTexto(
+                        `${href} ${texto}`
+                    );
+
+
+                const esAzufre =
+                    objetivo.includes(
+                        "sulfur"
+                    ) ||
+                    objetivo.includes(
+                        "azufre"
+                    ) ||
+                    objetivo.includes(
+                        "sulphur"
+                    );
+
+
+                if (!esAzufre) {
+
+                    return;
+
+                }
+
+
+                const cantidad =
+                    extraerNumero(
+                        $(enlace).text()
+                    );
+
+
+                if (
+                    cantidad > azufre
+                ) {
+
+                    azufre =
+                        cantidad;
+
+                }
+
             }
-
-
-            const cantidad =
-                extraerNumero(
-                    $(enlace).text()
-                );
-
-
-            if (cantidad > azufre) {
-                azufre = cantidad;
-            }
-
-        });
+        );
 
 
     return azufre;
+
 }
 
 
 // =====================================================
-// EXTRAER FILAS DE RAID
+// EXTRAER COSTOS
 // =====================================================
 
 function extraerCostosRaid(html) {
@@ -381,10 +499,6 @@ function extraerCostosRaid(html) {
 
     const filas = [];
 
-
-    // =================================================
-    // BUSCAR TABLA "RAIDING COST"
-    // =================================================
 
     $("table").each(
         (indice, tabla) => {
@@ -406,47 +520,29 @@ function extraerCostosRaid(html) {
 
 
             if (
+
                 !textoNormalizado.includes(
                     "herramienta de raideos"
                 ) &&
+
                 !textoNormalizado.includes(
                     "raid tool"
                 ) &&
+
                 !textoNormalizado.includes(
                     "costo de raideo"
                 ) &&
+
                 !textoNormalizado.includes(
                     "raiding cost"
                 )
+
             ) {
 
                 return;
+
             }
 
-
-            // =================================================
-            // CABECERAS
-            // =================================================
-
-            const headers =
-                [];
-
-            $(tabla)
-                .find("thead th")
-                .each((i, th) => {
-
-                    headers.push(
-                        normalizarTexto(
-                            $(th).text()
-                        )
-                    );
-
-                });
-
-
-            // =================================================
-            // FILAS
-            // =================================================
 
             $(tabla)
                 .find("tbody tr")
@@ -462,7 +558,9 @@ function extraerCostosRaid(html) {
                         if (
                             celdas.length < 3
                         ) {
+
                             return;
+
                         }
 
 
@@ -532,7 +630,9 @@ function extraerCostosRaid(html) {
                         if (
                             !herramienta
                         ) {
+
                             return;
+
                         }
 
 
@@ -567,6 +667,7 @@ function extraerCostosRaid(html) {
 
 
     return filas;
+
 }
 
 
@@ -577,30 +678,93 @@ function extraerCostosRaid(html) {
 function clasificarRaid(filas) {
 
     const explosivos = [];
+
     const melee = [];
+
     const balas = [];
 
 
-    const palabrasExplosivos = [
+    // =================================================
+    // EXPLOSIVOS VÁLIDOS
+    // =================================================
+    //
+    // Solo cosas que un jugador puede utilizar
+    // normalmente para raidear.
+    //
+    // NO:
+    // - Torpedo
+    // - Mina terrestre
+    // - Catapulta
+    // - Balista
+    // - Vehículos
+    // - Proyectiles especiales
+    //
+    // =================================================
 
-        "torpedo",
-        "misil",
-        "rocket",
-        "cohete",
+    const explosivosPermitidos = [
 
-        "carga explosiva",
-        "timed explosive",
+        "c4",
 
-        "bolsa explosiva",
+        "carga explosiva con temporizador",
+
+        "timed explosive charge",
+
         "satchel",
 
+        "bolsa explosiva",
+
+        "rocket",
+
+        "cohete",
+
+        "misil",
+
+        "high velocity rocket",
+
+        "misil de alta velocidad",
+
+        "bomba explosiva de propano",
+
+        "propane explosive bomb",
+
+        "beancan grenade",
+
+        "granada de lata"
+
+    ];
+
+
+    // =================================================
+    // EXCLUSIONES
+    // =================================================
+
+    const explosivosExcluidos = [
+
+        "torpedo",
+
+        "mina",
+
         "mina terrestre",
-        "minas",
 
-        "bomba explosiva",
-        "granada",
+        "catapult",
 
-        "explosivo"
+        "catapulta",
+
+        "launched from catapult",
+
+        "ballista",
+
+        "balista",
+
+        "mounted",
+
+        "turret",
+
+        "vehicle",
+
+        "vehiculo",
+
+        "vehículo"
 
     ];
 
@@ -608,15 +772,23 @@ function clasificarRaid(filas) {
     const palabrasMelee = [
 
         "hacha",
+
         "pico",
+
         "martillo",
+
         "machete",
+
         "espada",
+
         "lanza",
+
         "melee",
+
         "cuerpo a cuerpo",
+
         "ariete",
-        "balista",
+
         "antorcha"
 
     ];
@@ -625,9 +797,13 @@ function clasificarRaid(filas) {
     const palabrasBalas = [
 
         "municion",
+
         "munición",
+
         "bala",
+
         "ammo",
+
         "cartucho"
 
     ];
@@ -645,18 +821,46 @@ function clasificarRaid(filas) {
 
 
         // =================================================
-        // EXPLOSIVOS
+        // EXCLUIR COSAS NO UTILIZABLES
         // =================================================
 
-        if (
-            palabrasExplosivos.some(
+        const estaExcluido =
+            explosivosExcluidos.some(
                 palabra =>
                     texto.includes(
                         normalizarTexto(
                             palabra
                         )
                     )
-            )
+            );
+
+
+        if (
+            estaExcluido
+        ) {
+
+            continue;
+
+        }
+
+
+        // =================================================
+        // EXPLOSIVOS
+        // =================================================
+
+        const esExplosivo =
+            explosivosPermitidos.some(
+                palabra =>
+                    texto.includes(
+                        normalizarTexto(
+                            palabra
+                        )
+                    )
+            );
+
+
+        if (
+            esExplosivo
         ) {
 
             explosivos.push(
@@ -664,6 +868,7 @@ function clasificarRaid(filas) {
             );
 
             continue;
+
         }
 
 
@@ -687,6 +892,7 @@ function clasificarRaid(filas) {
             );
 
             continue;
+
         }
 
 
@@ -715,10 +921,15 @@ function clasificarRaid(filas) {
 
 
     return {
+
         explosivos,
+
         melee,
+
         balas
+
     };
+
 }
 
 
@@ -726,53 +937,71 @@ function clasificarRaid(filas) {
 // ORDENAR POR AZUFRE
 // =====================================================
 
-function ordenarPorAzufre(filas) {
+function ordenarPorAzufre(
+    filas
+) {
 
     return [...filas]
+
         .filter(
             fila =>
-                Number(fila.azufre) > 0
+                Number(
+                    fila.azufre
+                ) > 0
         )
+
         .sort(
             (a, b) => {
 
+                const diferenciaAzufre =
+                    Number(a.azufre) -
+                    Number(b.azufre);
+
+
                 if (
-                    a.azufre !==
-                    b.azufre
+                    diferenciaAzufre !== 0
                 ) {
 
-                    return (
-                        a.azufre -
-                        b.azufre
-                    );
+                    return diferenciaAzufre;
 
                 }
 
 
                 return (
-                    a.cantidadNumero -
-                    b.cantidadNumero
+                    Number(
+                        a.cantidadNumero
+                    ) -
+                    Number(
+                        b.cantidadNumero
+                    )
                 );
 
             }
         );
+
 }
 
 
 // =====================================================
-// ORDENAR MELEE
+// CONVERTIR TIEMPO
 // =====================================================
 
-function convertirTiempoASegundos(texto) {
+function convertirTiempoASegundos(
+    texto
+) {
 
     if (!texto) {
+
         return Infinity;
+
     }
+
 
     const normalizado =
         normalizarTexto(
             texto
         );
+
 
     let segundos = 0;
 
@@ -782,10 +1011,12 @@ function convertirTiempoASegundos(texto) {
             /(\d+)\s*h/
         );
 
+
     const minutos =
         normalizado.match(
             /(\d+)\s*m/
         );
+
 
     const segundosMatch =
         normalizado.match(
@@ -794,28 +1025,50 @@ function convertirTiempoASegundos(texto) {
 
 
     if (horas) {
+
         segundos +=
-            Number(horas[1]) * 3600;
+            Number(
+                horas[1]
+            ) * 3600;
+
     }
+
 
     if (minutos) {
+
         segundos +=
-            Number(minutos[1]) * 60;
+            Number(
+                minutos[1]
+            ) * 60;
+
     }
 
+
     if (segundosMatch) {
+
         segundos +=
-            Number(segundosMatch[1]);
+            Number(
+                segundosMatch[1]
+            );
+
     }
 
 
     return segundos;
+
 }
 
 
-function ordenarMelee(filas) {
+// =====================================================
+// ORDENAR MELEE
+// =====================================================
+
+function ordenarMelee(
+    filas
+) {
 
     return [...filas]
+
         .sort(
             (a, b) =>
                 convertirTiempoASegundos(
@@ -825,6 +1078,7 @@ function ordenarMelee(filas) {
                     b.tiempo
                 )
         );
+
 }
 
 
@@ -832,7 +1086,9 @@ function ordenarMelee(filas) {
 // CONSULTAR RAID
 // =====================================================
 
-async function consultarRaid(nombre) {
+async function consultarRaid(
+    nombre
+) {
 
     try {
 
@@ -849,6 +1105,7 @@ async function consultarRaid(nombre) {
             );
 
             return null;
+
         }
 
 
@@ -904,6 +1161,7 @@ async function consultarRaid(nombre) {
 
         };
 
+
     } catch (error) {
 
         console.error(
@@ -912,7 +1170,9 @@ async function consultarRaid(nombre) {
         );
 
         return null;
+
     }
+
 }
 
 

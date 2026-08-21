@@ -62,18 +62,11 @@ const client = new Client({
 // ======================
 // DIAGNÓSTICO DISCORD
 // ======================
-//
-// Discord.js genera muchos mensajes DEBUG normales,
-// como heartbeats, conexión del WebSocket, etc.
-//
-// Los filtramos para mantener Render limpio.
-// ======================
 
 client.on("debug", info => {
 
     const texto = String(info);
 
-    // Ignorar mensajes normales del WebSocket
     if (
         texto.includes("[WS => Shard") ||
         texto.includes("Heartbeat acknowledged") ||
@@ -87,7 +80,6 @@ client.on("debug", info => {
         return;
     }
 
-    // Solo mostrar DEBUG que no haya sido filtrado
     console.log(
         "🔧 DISCORD DEBUG:",
         texto
@@ -257,9 +249,6 @@ for (const file of commandFiles) {
 
 // ======================
 // BOT READY
-// ======================
-//
-// discord.js v15 utiliza clientReady.
 // ======================
 
 client.once(
@@ -481,6 +470,10 @@ Después podrás usar:
 🔎 \`/horasbm\`
 
 
+💣 **Raid Calculator**
+💣 \`/raid\`
+
+
 📚 Usa:
 
 \`/help\`
@@ -526,13 +519,99 @@ client.on(
     "interactionCreate",
     async interaction => {
 
-        // ======================
+        // =====================================================
         // BOTONES
-        // ======================
+        // =====================================================
 
         if (
             interaction.isButton()
         ) {
+
+            // =================================================
+            // BOTONES DEL RAID CALCULATOR
+            // =================================================
+
+            if (
+                interaction.customId === "raid_explosivos" ||
+                interaction.customId === "raid_melee"
+            ) {
+
+                try {
+
+                    const comandoRaid =
+                        client.commands.get(
+                            "raid"
+                        );
+
+                    if (
+                        !comandoRaid ||
+                        typeof comandoRaid.manejarBotonRaid !== "function"
+                    ) {
+
+                        console.error(
+                            "❌ No se encontró manejarBotonRaid en el comando /raid."
+                        );
+
+                        return interaction.reply({
+
+                            content:
+                                "❌ El sistema de Raid Calculator no está disponible.",
+
+                            ephemeral:
+                                true
+
+                        });
+
+                    }
+
+                    await comandoRaid.manejarBotonRaid(
+                        interaction
+                    );
+
+                } catch (error) {
+
+                    console.error(
+                        "❌ Error manejando botón de /raid:",
+                        error
+                    );
+
+                    try {
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+
+                                content:
+                                    "❌ Ocurrió un error al cambiar la sección del raid.",
+
+                                ephemeral:
+                                    true
+
+                            });
+
+                        }
+
+                    } catch (err) {
+
+                        console.error(
+                            "❌ Error respondiendo botón /raid:",
+                            err.message
+                        );
+
+                    }
+
+                }
+
+                return;
+            }
+
+
+            // =================================================
+            // ELIMINAR TRACKER
+            // =================================================
 
             if (
                 interaction.customId.startsWith(
@@ -610,9 +689,9 @@ client.on(
 
         }
 
-        // ======================
+        // =====================================================
         // SLASH COMMANDS
-        // ======================
+        // =====================================================
 
         if (
             !interaction.isChatInputCommand()
@@ -797,9 +876,6 @@ async function iniciarBot() {
                                 "end",
                                 () => {
 
-                                    // No mostramos el cuerpo completo
-                                    // porque no es necesario para el bot.
-
                                     resolve();
 
                                 }
@@ -894,9 +970,6 @@ async function iniciarBot() {
             timeoutPromise
 
         ]);
-
-        // No mostramos el resultado de client.login()
-        // porque puede contener información sensible.
 
         console.log(
             "✅ Login de Discord completado correctamente."

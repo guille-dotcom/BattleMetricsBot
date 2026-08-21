@@ -19,11 +19,12 @@ function formatearNumero(numero) {
 
     return Number(numero || 0)
         .toLocaleString("es-CL");
+
 }
 
 
 // =====================================================
-// CREAR EMBED EXPLOSIVOS
+// EMBED EXPLOSIVOS
 // =====================================================
 
 function crearEmbedExplosivos(resultado) {
@@ -50,61 +51,57 @@ function crearEmbedExplosivos(resultado) {
     ) {
 
         embed.setDescription(
-            "❌ RustHelp no encontró métodos explosivos para este objeto."
+            "❌ RustHelp no encontró explosivos válidos para este objeto."
         );
 
         return embed;
+
     }
+
+
+    const posiciones = [
+        "🥇",
+        "🥈",
+        "🥉",
+        "4️⃣",
+        "5️⃣"
+    ];
 
 
     let texto = "";
 
 
     resultado.explosivos
-        .forEach(
-            (raid, indice) => {
+        .slice(0, 5)
+        .forEach((raid, indice) => {
 
-                const posiciones = [
-                    "🥇",
-                    "🥈",
-                    "🥉",
-                    "4️⃣",
-                    "5️⃣"
-                ];
+            texto +=
+                `${posiciones[indice]} **${raid.herramienta}**\n`;
 
+            texto +=
+                `└ Cantidad: **${raid.cantidad}**`;
 
-                texto +=
-                    `${posiciones[indice] || `${indice + 1}️⃣`} **${raid.herramienta}**\n`;
-
+            if (
+                Number(raid.azufre) > 0
+            ) {
 
                 texto +=
-                    `└ Cantidad: **${raid.cantidad}**`;
-
-
-                if (
-                    raid.azufre > 0
-                ) {
-
-                    texto +=
-                        ` • 🪨 Azufre: **${formatearNumero(raid.azufre)}**`;
-
-                }
-
-
-                if (
-                    raid.tiempo
-                ) {
-
-                    texto +=
-                        ` • ⏱️ **${raid.tiempo}**`;
-
-                }
-
-
-                texto += "\n\n";
+                    ` • 🪨 Azufre: **${formatearNumero(raid.azufre)}**`;
 
             }
-        );
+
+            if (
+                raid.tiempo
+            ) {
+
+                texto +=
+                    ` • ⏱️ **${raid.tiempo}**`;
+
+            }
+
+            texto += "\n\n";
+
+        });
 
 
     embed.setDescription(
@@ -118,7 +115,7 @@ function crearEmbedExplosivos(resultado) {
             "💰 Criterio",
 
         value:
-            "Ordenado de menor a mayor cantidad de **azufre total**."
+            "Top 5 ordenados de menor a mayor cantidad de **azufre total**."
 
     });
 
@@ -135,11 +132,12 @@ function crearEmbedExplosivos(resultado) {
 
 
     return embed;
+
 }
 
 
 // =====================================================
-// CREAR EMBED MELEE
+// EMBED MELEE
 // =====================================================
 
 function crearEmbedMelee(resultado) {
@@ -170,47 +168,44 @@ function crearEmbedMelee(resultado) {
         );
 
         return embed;
+
     }
+
+
+    const posiciones = [
+        "🥇",
+        "🥈",
+        "🥉",
+        "4️⃣",
+        "5️⃣"
+    ];
 
 
     let texto = "";
 
 
     resultado.melee
-        .forEach(
-            (raid, indice) => {
+        .slice(0, 5)
+        .forEach((raid, indice) => {
 
-                const posiciones = [
-                    "🥇",
-                    "🥈",
-                    "🥉",
-                    "4️⃣",
-                    "5️⃣"
-                ];
+            texto +=
+                `${posiciones[indice]} **${raid.herramienta}**\n`;
 
+            texto +=
+                `└ Cantidad: **${raid.cantidad}**`;
 
-                texto +=
-                    `${posiciones[indice] || `${indice + 1}️⃣`} **${raid.herramienta}**\n`;
-
+            if (
+                raid.tiempo
+            ) {
 
                 texto +=
-                    `└ Cantidad: **${raid.cantidad}**`;
-
-
-                if (
-                    raid.tiempo
-                ) {
-
-                    texto +=
-                        ` • ⏱️ **${raid.tiempo}**`;
-
-                }
-
-
-                texto += "\n\n";
+                    ` • ⏱️ **${raid.tiempo}**`;
 
             }
-        );
+
+            texto += "\n\n";
+
+        });
 
 
     embed.setDescription(
@@ -224,7 +219,7 @@ function crearEmbedMelee(resultado) {
             "🔨 Criterio",
 
         value:
-            "Ordenado de menor a mayor **tiempo de raideo**."
+            "Top 5 ordenados de menor a mayor **tiempo de raideo**."
 
     });
 
@@ -241,6 +236,7 @@ function crearEmbedMelee(resultado) {
 
 
     return embed;
+
 }
 
 
@@ -251,6 +247,7 @@ function crearEmbedMelee(resultado) {
 function crearBotones() {
 
     return new ActionRowBuilder()
+
         .addComponents(
 
             new ButtonBuilder()
@@ -291,11 +288,12 @@ function crearBotones() {
                 )
 
         );
+
 }
 
 
 // =====================================================
-// COMANDO
+// COMANDO /RAID
 // =====================================================
 
 module.exports = {
@@ -364,10 +362,6 @@ module.exports = {
                 );
 
 
-            const botones =
-                crearBotones();
-
-
             await interaction.editReply({
 
                 embeds: [
@@ -375,7 +369,7 @@ module.exports = {
                 ],
 
                 components: [
-                    botones
+                    crearBotones()
                 ]
 
             });
@@ -409,19 +403,17 @@ module.exports = {
         ) {
 
             return false;
+
         }
 
 
         if (
-            ![
-                "raid_explosivos",
-                "raid_melee"
-            ].includes(
-                interaction.customId
-            )
+            interaction.customId !== "raid_explosivos" &&
+            interaction.customId !== "raid_melee"
         ) {
 
             return false;
+
         }
 
 
@@ -440,11 +432,13 @@ module.exports = {
                 content:
                     "❌ No pude obtener los datos del raid.",
 
-                ephemeral: true
+                ephemeral:
+                    true
 
             });
 
             return true;
+
         }
 
 
@@ -459,11 +453,13 @@ module.exports = {
                 content:
                     "❌ No pude identificar el objeto.",
 
-                ephemeral: true
+                ephemeral:
+                    true
 
             });
 
             return true;
+
         }
 
 
@@ -471,10 +467,6 @@ module.exports = {
 
 
         try {
-
-            // =================================================
-            // EXTRAER SLUG DESDE URL
-            // =================================================
 
             const partes =
                 url.split("/");
@@ -494,7 +486,8 @@ module.exports = {
 
             if (!resultado) {
 
-                return;
+                return true;
+
             }
 
 
@@ -545,6 +538,7 @@ module.exports = {
 
 
         return true;
+
     }
 
 };
