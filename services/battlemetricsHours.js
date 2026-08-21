@@ -154,8 +154,6 @@ function obtenerInicioSemanaChile(fechaActual) {
     const dia =
         partes.day;
 
-    // Crear una fecha aproximada en UTC
-    // usando las partes de Chile.
     const fechaChile =
         new Date(
             Date.UTC(
@@ -181,13 +179,6 @@ function obtenerInicioSemanaChile(fechaActual) {
         fechaChile.getUTCDate() -
         diasDesdeLunes
     );
-
-    /*
-     * Chile puede cambiar UTC-3 / UTC-4.
-     *
-     * Buscamos el instante UTC que corresponde
-     * a las 00:00 de Chile mediante Intl.
-     */
 
     return convertirChileLocalAUTC(
         fechaChile.getUTCFullYear(),
@@ -234,14 +225,6 @@ function convertirChileLocalAUTC(
     minute = 0,
     second = 0
 ) {
-
-    /*
-     * Primera aproximación.
-     *
-     * Chile actualmente utiliza cambios estacionales,
-     * por lo que comprobamos el offset real usando
-     * Intl.DateTimeFormat.
-     */
 
     const aproximacion =
         new Date(
@@ -316,19 +299,16 @@ async function searchBattleMetricsPlayer(
                 }
             );
 
-
         const players =
             response.data?.included?.filter(
                 item =>
                     item.type === "player"
             ) || [];
 
-
         const nombreBuscado =
             playerName
                 .toLowerCase()
                 .trim();
-
 
         const encontrados =
             players.filter(
@@ -372,7 +352,7 @@ async function searchBattleMetricsPlayer(
     } catch (error) {
 
         console.error(
-            "Error buscando jugador en BM:",
+            "❌ Error buscando jugador en BM:",
             error.response?.data ||
             error.message
         );
@@ -393,7 +373,7 @@ async function getBattleMetricsPlayerStatus(
     try {
 
         console.log(
-            `🔎 Obteniendo datos BM del jugador ${playerId}...`
+            `🔎 BM | Consultando jugador ${playerId}...`
         );
 
 
@@ -423,28 +403,11 @@ async function getBattleMetricsPlayerStatus(
         if (!player) {
 
             console.log(
-                "❌ BattleMetrics no devolvió el jugador."
+                "❌ BM | No se encontró el jugador."
             );
 
             return null;
         }
-
-
-        console.log(
-            "================ BM PLAYER DATA ================"
-        );
-
-        console.log(
-            JSON.stringify(
-                playerResponse.data,
-                null,
-                2
-            )
-        );
-
-        console.log(
-            "================================================="
-        );
 
 
         const playerAttributes =
@@ -504,7 +467,6 @@ async function getBattleMetricsPlayerStatus(
         const limitePaginas =
             50;
 
-
         let nextUrl =
             `${BM_API}/players/${playerId}/relationships/sessions?page[size]=100`;
 
@@ -515,11 +477,6 @@ async function getBattleMetricsPlayerStatus(
         ) {
 
             try {
-
-                console.log(
-                    `📥 Obteniendo sesiones BM página ${pagina}...`
-                );
-
 
                 const sessionResponse =
                     await axios.get(
@@ -536,11 +493,6 @@ async function getBattleMetricsPlayerStatus(
                 const sesiones =
                     sessionResponse.data?.data ||
                     [];
-
-
-                console.log(
-                    `📊 Página ${pagina}: ${sesiones.length} sesiones`
-                );
 
 
                 if (
@@ -567,7 +519,7 @@ async function getBattleMetricsPlayerStatus(
             } catch (error) {
 
                 console.error(
-                    `❌ Error obteniendo página ${pagina}:`,
+                    `❌ BM | Error obteniendo sesiones página ${pagina}:`,
                     error.response?.data ||
                     error.message
                 );
@@ -578,7 +530,7 @@ async function getBattleMetricsPlayerStatus(
 
 
         console.log(
-            `📊 Sesiones obtenidas: ${todasLasSesiones.length}`
+            `📊 BM | Sesiones obtenidas: ${todasLasSesiones.length}`
         );
 
 
@@ -813,7 +765,7 @@ async function getBattleMetricsPlayerStatus(
                 } catch (error) {
 
                     console.log(
-                        "⚠️ No se pudo obtener nombre del servidor:",
+                        "⚠️ BM | No se pudo obtener nombre del servidor:",
                         error.message
                     );
                 }
@@ -1026,17 +978,6 @@ async function getBattleMetricsPlayerStatus(
         // =================================================
         // CORRECCIÓN IMPORTANTE DE HORAS BM
         // =================================================
-        //
-        // Si las sesiones entregan más tiempo que los
-        // servidores incluidos, utilizamos las sesiones.
-        //
-        // Esto evita casos como:
-        //
-        // BM incluido -> 0h
-        // Sesiones     -> 9594h
-        //
-        // Resultado correcto -> 9594h
-        // =================================================
 
         if (
             segundosSesionesTotales >
@@ -1137,10 +1078,10 @@ async function getBattleMetricsPlayerStatus(
 
         } catch (error) {
 
-            console.log(
-                "⚠️ No se pudo obtener historial de nombres:",
-                error.message
-            );
+            // No mostramos el error 405 para mantener
+            // los logs limpios. Simplemente dejamos
+            // el historial vacío.
+            historialNombres = [];
         }
 
 
@@ -1183,33 +1124,12 @@ async function getBattleMetricsPlayerStatus(
         };
 
 
+        // =================================================
+        // LOG FINAL LIMPIO
+        // =================================================
+
         console.log(
-            "✅ Datos BM obtenidos:",
-            {
-                id:
-                    resultado.id,
-
-                nombre:
-                    resultado.name,
-
-                online:
-                    resultado.online,
-
-                servidor:
-                    resultado.server,
-
-                horas:
-                    resultado.horasTotalesBM,
-
-                semana:
-                    resultado.horasSemana,
-
-                mes:
-                    resultado.horasMes,
-
-                ultimaConexion:
-                    resultado.ultimaConexion
-            }
+            `✅ BM | ${resultado.name} | ${resultado.horasTotalesBM}h | Semana: ${resultado.horasSemana}h | Mes: ${resultado.horasMes}h | ${resultado.online ? "🟢 Online" : "🔴 Offline"} | ${resultado.server}`
         );
 
 
@@ -1307,7 +1227,7 @@ async function getServerLeaderboard(
     } catch (error) {
 
         console.error(
-            "Error obteniendo ranking del servidor:",
+            "❌ Error obteniendo ranking del servidor:",
             error.response?.data ||
             error.message
         );
