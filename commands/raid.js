@@ -12,7 +12,7 @@ const {
 
 
 // =====================================================
-// FORMATEAR NUMEROS
+// FORMATEAR NÚMEROS
 // =====================================================
 
 function formatearNumero(numero) {
@@ -81,6 +81,7 @@ function crearEmbedExplosivos(resultado) {
             texto +=
                 `└ Cantidad: **${raid.cantidad}**`;
 
+
             if (
                 Number(raid.azufre) > 0
             ) {
@@ -90,6 +91,7 @@ function crearEmbedExplosivos(resultado) {
 
             }
 
+
             if (
                 raid.tiempo
             ) {
@@ -98,6 +100,7 @@ function crearEmbedExplosivos(resultado) {
                     ` • ⏱️ **${raid.tiempo}**`;
 
             }
+
 
             texto += "\n\n";
 
@@ -194,6 +197,7 @@ function crearEmbedMelee(resultado) {
             texto +=
                 `└ Cantidad: **${raid.cantidad}**`;
 
+
             if (
                 raid.tiempo
             ) {
@@ -202,6 +206,7 @@ function crearEmbedMelee(resultado) {
                     ` • ⏱️ **${raid.tiempo}**`;
 
             }
+
 
             texto += "\n\n";
 
@@ -393,7 +398,7 @@ module.exports = {
 
 
     // =================================================
-    // MANEJAR BOTONES
+    // MANEJAR BOTONES RAID
     // =================================================
 
     async manejarBotonRaid(interaction) {
@@ -408,8 +413,10 @@ module.exports = {
 
 
         if (
-            interaction.customId !== "raid_explosivos" &&
-            interaction.customId !== "raid_melee"
+            interaction.customId !==
+                "raid_explosivos" &&
+            interaction.customId !==
+                "raid_melee"
         ) {
 
             return false;
