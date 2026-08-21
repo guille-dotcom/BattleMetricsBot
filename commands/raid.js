@@ -11,10 +11,11 @@ const {
 } = require("../services/rusthelp");
 
 // =====================================================
-// CACHE TEMPORAL DE RAIDS
+// CACHE
 // =====================================================
 
-const raidsCache = new Map();
+const raidsCache =
+    new Map();
 
 const CACHE_TIEMPO =
     30 * 60 * 1000;
@@ -37,9 +38,11 @@ function limpiarCache() {
     ) {
 
         if (
-            ahora - datos.creado >
+            ahora -
+            datos.creado >
             CACHE_TIEMPO
         ) {
+
             raidsCache.delete(
                 mensajeId
             );
@@ -51,7 +54,9 @@ function limpiarCache() {
 // FORMATEAR NÚMEROS
 // =====================================================
 
-function formatearNumero(numero) {
+function formatearNumero(
+    numero
+) {
 
     return Number(
         numero || 0
@@ -61,10 +66,12 @@ function formatearNumero(numero) {
 }
 
 // =====================================================
-// CREAR TEXTO DE RECETA
+// RECETA
 // =====================================================
 
-function crearTextoReceta(raid) {
+function crearTextoReceta(
+    raid
+) {
 
     if (
         !raid.receta
@@ -78,33 +85,19 @@ function crearTextoReceta(raid) {
 }
 
 // =====================================================
-// CREAR EMBED ECONOMÍA
+// TEXTO RAID
 // =====================================================
 
-function crearEmbedEconomia(resultado) {
-
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                `💰 Raid Calculator — ${resultado.nombre}`
-            )
-            .setURL(
-                resultado.url
-            )
-            .setColor(
-                0x2ecc71
-            );
+function crearTextoRaids(
+    raids
+) {
 
     if (
-        !resultado.explosivosEconomia ||
-        resultado.explosivosEconomia.length === 0
+        !raids ||
+        raids.length === 0
     ) {
 
-        embed.setDescription(
-            "❌ RustHelp no encontró explosivos válidos para este objeto."
-        );
-
-        return embed;
+        return null;
     }
 
     const posiciones = [
@@ -117,7 +110,7 @@ function crearEmbedEconomia(resultado) {
 
     let texto = "";
 
-    resultado.explosivosEconomia
+    raids
         .slice(0, 5)
         .forEach(
             (raid, indice) => {
@@ -129,7 +122,9 @@ function crearEmbedEconomia(resultado) {
                     `└ Cantidad: **${raid.cantidad}**`;
 
                 if (
-                    raid.polvora > 0
+                    Number(
+                        raid.polvora
+                    ) > 0
                 ) {
 
                     texto +=
@@ -152,6 +147,68 @@ function crearEmbedEconomia(resultado) {
                 texto +=
                     "\n\n";
             }
+        );
+
+    return texto.trim();
+}
+
+// =====================================================
+// EMBED BASE
+// =====================================================
+
+function crearEmbedBase(
+    resultado,
+    titulo,
+    color
+) {
+
+    return new EmbedBuilder()
+        .setTitle(
+            `${titulo} — ${resultado.nombre}`
+        )
+        .setURL(
+            resultado.url
+        )
+        .setColor(
+            color
+        )
+        .setFooter({
+            text:
+                "Datos obtenidos de RustHelp"
+        })
+        .setTimestamp();
+}
+
+// =====================================================
+// ECONOMÍA
+// =====================================================
+
+function crearEmbedEconomia(
+    resultado
+) {
+
+    const embed =
+        crearEmbedBase(
+            resultado,
+            "💰 Raid Calculator",
+            0x2ecc71
+        );
+
+    if (
+        !resultado.explosivosEconomia ||
+        resultado.explosivosEconomia.length === 0
+    ) {
+
+        embed.setDescription(
+            "❌ RustHelp no pudo obtener métodos explosivos válidos para este objeto."
+        );
+
+        return embed;
+    }
+
+    const texto =
+        crearTextoRaids(
+            resultado.explosivosEconomia
         );
 
     embed.setDescription(
@@ -162,36 +219,26 @@ function crearEmbedEconomia(resultado) {
         name:
             "💰 Economía",
         value:
-            "Top 5 métodos que requieren **menos pólvora total** para fabricar el explosivo necesario."
+            "Ordenado por la **menor cantidad de pólvora total** necesaria."
     });
-
-    embed.setFooter({
-        text:
-            "Datos obtenidos de RustHelp"
-    });
-
-    embed.setTimestamp();
 
     return embed;
 }
 
 // =====================================================
-// CREAR EMBED CANTIDAD
+// CANTIDAD
 // =====================================================
 
-function crearEmbedCantidad(resultado) {
+function crearEmbedCantidad(
+    resultado
+) {
 
     const embed =
-        new EmbedBuilder()
-            .setTitle(
-                `📦 Raid Calculator — ${resultado.nombre}`
-            )
-            .setURL(
-                resultado.url
-            )
-            .setColor(
-                0x3498db
-            );
+        crearEmbedBase(
+            resultado,
+            "📦 Raid Calculator",
+            0x3498db
+        );
 
     if (
         !resultado.explosivosCantidad ||
@@ -199,57 +246,15 @@ function crearEmbedCantidad(resultado) {
     ) {
 
         embed.setDescription(
-            "❌ RustHelp no encontró explosivos válidos para este objeto."
+            "❌ RustHelp no pudo obtener métodos explosivos válidos para este objeto."
         );
 
         return embed;
     }
 
-    const posiciones = [
-        "🥇",
-        "🥈",
-        "🥉",
-        "4️⃣",
-        "5️⃣"
-    ];
-
-    let texto = "";
-
-    resultado.explosivosCantidad
-        .slice(0, 5)
-        .forEach(
-            (raid, indice) => {
-
-                texto +=
-                    `${posiciones[indice]} **${raid.herramienta}**\n`;
-
-                texto +=
-                    `└ Cantidad: **${raid.cantidad}**`;
-
-                if (
-                    raid.polvora > 0
-                ) {
-
-                    texto +=
-                        ` • 💥 Pólvora: **${formatearNumero(raid.polvora)}**`;
-                }
-
-                if (
-                    raid.tiempo
-                ) {
-
-                    texto +=
-                        ` • ⏱️ **${raid.tiempo}**`;
-                }
-
-                texto +=
-                    crearTextoReceta(
-                        raid
-                    );
-
-                texto +=
-                    "\n\n";
-            }
+    const texto =
+        crearTextoRaids(
+            resultado.explosivosCantidad
         );
 
     embed.setDescription(
@@ -260,24 +265,19 @@ function crearEmbedCantidad(resultado) {
         name:
             "📦 Cantidad",
         value:
-            "Top 5 métodos que requieren **menos unidades de explosivos** para raidear este objeto."
+            "Ordenado por la **menor cantidad de explosivos** necesarios."
     });
-
-    embed.setFooter({
-        text:
-            "Datos obtenidos de RustHelp"
-    });
-
-    embed.setTimestamp();
 
     return embed;
 }
 
 // =====================================================
-// EMBED EXPLOSIVOS
+// EXPLOSIVOS
 // =====================================================
 
-function crearEmbedExplosivos(resultado) {
+function crearEmbedExplosivos(
+    resultado
+) {
 
     return crearEmbedEconomia(
         resultado
@@ -285,22 +285,19 @@ function crearEmbedExplosivos(resultado) {
 }
 
 // =====================================================
-// EMBED MELEE
+// MELEE
 // =====================================================
 
-function crearEmbedMelee(resultado) {
+function crearEmbedMelee(
+    resultado
+) {
 
     const embed =
-        new EmbedBuilder()
-            .setTitle(
-                `🔨 Raid Calculator — ${resultado.nombre}`
-            )
-            .setURL(
-                resultado.url
-            )
-            .setColor(
-                0x8b5a2b
-            );
+        crearEmbedBase(
+            resultado,
+            "🔨 Raid Calculator",
+            0x8b5a2b
+        );
 
     if (
         !resultado.melee ||
@@ -349,22 +346,15 @@ function crearEmbedMelee(resultado) {
         );
 
     embed.setDescription(
-        texto
+        texto.trim()
     );
 
     embed.addFields({
         name:
             "🔨 Criterio",
         value:
-            "Top 5 ordenados de menor a mayor **tiempo de raideo**."
+            "Ordenado de menor a mayor **tiempo de raideo**."
     });
-
-    embed.setFooter({
-        text:
-            "Datos obtenidos de RustHelp"
-    });
-
-    embed.setTimestamp();
 
     return embed;
 }
@@ -375,7 +365,7 @@ function crearEmbedMelee(resultado) {
 
 function crearBotones() {
 
-    const fila1 =
+    const fila =
         new ActionRowBuilder()
             .addComponents(
 
@@ -437,12 +427,12 @@ function crearBotones() {
             );
 
     return [
-        fila1
+        fila
     ];
 }
 
 // =====================================================
-// COMANDO /RAID
+// COMANDO
 // =====================================================
 
 module.exports = {
@@ -462,14 +452,16 @@ module.exports = {
                             "item"
                         )
                         .setDescription(
-                            "Nombre del objeto que quieres raidear"
+                            "Objeto de Rust, por ejemplo: puerta de madera"
                         )
                         .setRequired(
                             true
                         )
             ),
 
-    async execute(interaction) {
+    async execute(
+        interaction
+    ) {
 
         await interaction.deferReply();
 
@@ -480,9 +472,9 @@ module.exports = {
 
         try {
 
-            // =================================================
-            // CONSULTAR RUSTHELP
-            // =================================================
+            console.log(
+                `🎯 /raid solicitado: ${nombre}`
+            );
 
             const resultado =
                 await consultarRaid(
@@ -496,18 +488,10 @@ module.exports = {
                 );
             }
 
-            // =================================================
-            // EMBED INICIAL
-            // =================================================
-
             const embed =
                 crearEmbedEconomia(
                     resultado
                 );
-
-            // =================================================
-            // ENVIAR
-            // =================================================
 
             await interaction.editReply({
 
@@ -517,19 +501,10 @@ module.exports = {
 
                 components:
                     crearBotones()
-
             });
-
-            // =================================================
-            // OBTENER MENSAJE
-            // =================================================
 
             const mensaje =
                 await interaction.fetchReply();
-
-            // =================================================
-            // CACHE
-            // =================================================
 
             limpiarCache();
 
@@ -553,17 +528,25 @@ module.exports = {
                 error
             );
 
-            await interaction.editReply(
-                "❌ Ocurrió un error consultando RustHelp."
-            );
+            try {
+
+                await interaction.editReply(
+                    "❌ Ocurrió un error consultando RustHelp."
+                );
+
+            } catch {
+                // evitar segundo error
+            }
         }
     },
 
     // =================================================
-    // MANEJAR BOTONES
+    // BOTONES
     // =================================================
 
-    async manejarBotonRaid(interaction) {
+    async manejarBotonRaid(
+        interaction
+    ) {
 
         if (
             !interaction.isButton()
@@ -586,10 +569,6 @@ module.exports = {
             return false;
         }
 
-        // =================================================
-        // CACHE
-        // =================================================
-
         limpiarCache();
 
         const datos =
@@ -606,7 +585,6 @@ module.exports = {
 
                 ephemeral:
                     true
-
             });
 
             return true;
@@ -615,56 +593,48 @@ module.exports = {
         const resultado =
             datos.resultado;
 
-        // =================================================
-        // CREAR EMBED
-        // =================================================
-
         let nuevoEmbed;
 
-        if (
-            interaction.customId ===
-            "raid_economia"
+        switch (
+            interaction.customId
         ) {
 
-            nuevoEmbed =
-                crearEmbedEconomia(
-                    resultado
-                );
+            case "raid_economia":
 
-        } else if (
-            interaction.customId ===
-            "raid_cantidad"
-        ) {
+                nuevoEmbed =
+                    crearEmbedEconomia(
+                        resultado
+                    );
 
-            nuevoEmbed =
-                crearEmbedCantidad(
-                    resultado
-                );
+                break;
 
-        } else if (
-            interaction.customId ===
-            "raid_explosivos"
-        ) {
+            case "raid_cantidad":
 
-            nuevoEmbed =
-                crearEmbedExplosivos(
-                    resultado
-                );
+                nuevoEmbed =
+                    crearEmbedCantidad(
+                        resultado
+                    );
 
-        } else if (
-            interaction.customId ===
-            "raid_melee"
-        ) {
+                break;
 
-            nuevoEmbed =
-                crearEmbedMelee(
-                    resultado
-                );
+            case "raid_explosivos":
+
+                nuevoEmbed =
+                    crearEmbedExplosivos(
+                        resultado
+                    );
+
+                break;
+
+            case "raid_melee":
+
+                nuevoEmbed =
+                    crearEmbedMelee(
+                        resultado
+                    );
+
+                break;
         }
-
-        // =================================================
-        // ACTUALIZAR
-        // =================================================
 
         try {
 
@@ -676,7 +646,6 @@ module.exports = {
 
                 components:
                     crearBotones()
-
             });
 
         } catch (error) {
@@ -685,6 +654,25 @@ module.exports = {
                 "❌ Error botón /raid:",
                 error
             );
+
+            if (
+                !interaction.replied &&
+                !interaction.deferred
+            ) {
+
+                try {
+
+                    await interaction.reply({
+                        content:
+                            "❌ No pude actualizar el cálculo.",
+                        ephemeral:
+                            true
+                    });
+
+                } catch {
+                    // ignorar
+                }
+            }
         }
 
         return true;
