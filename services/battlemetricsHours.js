@@ -1,6 +1,6 @@
 require("dotenv").config();
-const axios = require("axios");
 
+const axios = require("axios");
 
 // =====================================================
 // CONFIGURACIÓN API
@@ -24,25 +24,66 @@ function getHeaders() {
 
 
 // =====================================================
-// 1. BUSCAR JUGADOR EN EL SERVIDOR
+// FORMATEAR FECHA A HORA DE CHILE
 // =====================================================
 
-async function searchBattleMetricsPlayer(playerName, serverId) {
+function formatearFechaChile(fecha) {
+
+    if (!fecha) {
+        return "Nunca";
+    }
 
     try {
 
-        const response = await axios.get(
-            `${BM_API}/servers/${serverId}`,
+        return new Intl.DateTimeFormat(
+            "es-CL",
             {
-                headers: getHeaders(),
-
-                params: {
-                    include: "player"
-                },
-
-                timeout: 5000
+                timeZone: "America/Santiago",
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false
             }
+        ).format(fecha);
+
+    } catch (error) {
+
+        console.error(
+            "Error formateando fecha Chile:",
+            error.message
         );
+
+        return "No disponible";
+    }
+}
+
+
+// =====================================================
+// 1. BUSCAR JUGADOR EN EL SERVIDOR
+// =====================================================
+
+async function searchBattleMetricsPlayer(
+    playerName,
+    serverId
+) {
+
+    try {
+
+        const response =
+            await axios.get(
+                `${BM_API}/servers/${serverId}`,
+                {
+                    headers: getHeaders(),
+
+                    params: {
+                        include: "player"
+                    },
+
+                    timeout: 5000
+                }
+            );
 
 
         const players =
@@ -74,7 +115,7 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
 
 
         // =================================================
-        // SI HAY MÁS DE UN JUGADOR CON EL MISMO NOMBRE
+        // NOMBRE DUPLICADO
         // =================================================
 
         if (encontrados.length > 1) {
@@ -110,7 +151,9 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
 // 2. OBTENER DATOS COMPLETOS DEL JUGADOR
 // =====================================================
 
-async function getBattleMetricsPlayerStatus(playerId) {
+async function getBattleMetricsPlayerStatus(
+    playerId
+) {
 
     try {
 
@@ -123,20 +166,34 @@ async function getBattleMetricsPlayerStatus(playerId) {
         // DATOS DEL JUGADOR
         // =================================================
 
-        const playerResponse =
+        let playerResponse =
             await axios.get(
                 `${BM_API}/players/${playerId}`,
                 {
                     headers: getHeaders(),
+
+                    params: {
+                        include: "server"
+                    },
 
                     timeout: 7000
                 }
             );
 
 
-        // =================================================
-        // DEBUG TEMPORAL
-        // =================================================
+        const player =
+            playerResponse.data?.data;
+
+
+        if (!player) {
+
+            console.log(
+                "❌ BattleMetrics no devolvió el jugador."
+            );
+
+            return null;
+        }
+
 
         console.log(
             "================ BM PLAYER DATA ================"
@@ -155,173 +212,74 @@ async function getBattleMetricsPlayerStatus(playerId) {
         );
 
 
-        const player =
-            playerResponse.data?.data;
-
-
-        if (!player) {
-
-            console.log(
-                "❌ BattleMetrics no devolvió el jugador."
-            );
-
-            return null;
-        }
-
-
         const playerAttributes =
             player.attributes || {};
+
+
+        // =================================================
+        // SERVIDORES INCLUIDOS
+        // =================================================
+
+        const servidoresIncluidos =
+            playerResponse.data?.included?.filter(
+                item =>
+                    item.type === "server"
+            ) || [];
 
 
         // =================================================
         // HORAS TOTALES
         // =================================================
 
-        let segundosTotales =
-            Number(
-                player.meta?.timePlayed
-            ) || 0;
-
-
         /*
          * IMPORTANTE:
          *
-         * Por ahora NO hacemos consultas adicionales
-         * a relationships/servers para las horas.
+         * BattleMetrics no siempre entrega
+         * player.meta.timePlayed.
          *
-         * BattleMetrics está devolviendo 405 en ese endpoint.
-         *
-         * Primero necesitamos comprobar mediante el debug
-         * exactamente dónde está entregando el tiempo.
+         * Por eso primero intentamos obtener
+         * el tiempo desde los servidores incluidos.
          */
 
-
-        const horasTotalesBM =
-            Math.floor(
-                segundosTotales / 3600
-            );
+        let segundosTotales = 0;
 
 
-        // =================================================
-        // SESIONES
-        // =================================================
+        for (
+            const servidor
+            of servidoresIncluidos
+        ) {
+
+            const tiempo =
+                Number(
+                    servidor.meta?.timePlayed
+                ) || 0;
+
+
+            if (tiempo > 0) {
+
+                segundosTotales += tiempo;
+
+            }
+
+        }
+
+
+        /*
+         * Si BattleMetrics no entregó tiempo
+         * mediante los servidores incluidos,
+         * utilizamos las sesiones.
+         *
+         * Esto permite calcular las horas reales
+         * sumando las sesiones.
+         */
 
         let todasLasSesiones = [];
 
         let pagina = 1;
 
-        const limitePaginas = 20;
+        const limitePaginas = 50;
 
         let continuar = true;
-
-
-        while (
-            continuar &&
-            pagina <= limitePaginas
-        ) {
-
-            try {
-
-                console.log(
-                    `📥 Obteniendo sesiones BM página ${pagina}...`
-                );
-
-
-                /*
-                 * IMPORTANTE:
-                 *
-                 * BattleMetrics está rechazando
-                 * "page[number]".
-                 *
-                 * Lo dejamos temporalmente sin ese parámetro
-                 * para comprobar la respuesta real de la API.
-                 */
-
-                const sessionResponse =
-                    await axios.get(
-                        `${BM_API}/players/${playerId}/relationships/sessions`,
-                        {
-                            headers: getHeaders(),
-
-                            params: {
-                                "page[size]": 100
-                            },
-
-                            timeout: 7000
-                        }
-                    );
-
-
-                const sesiones =
-                    sessionResponse.data?.data || [];
-
-
-                console.log(
-                    `📊 Página ${pagina}: ${sesiones.length} sesiones`
-                );
-
-
-                if (
-                    sesiones.length === 0
-                ) {
-
-                    break;
-                }
-
-
-                todasLasSesiones.push(
-                    ...sesiones
-                );
-
-
-                /*
-                 * Como no estamos utilizando page[number],
-                 * no debemos pedir repetidamente la misma página.
-                 *
-                 * Por ahora obtenemos solamente la primera respuesta.
-                 */
-
-                continuar = false;
-
-
-            } catch (error) {
-
-                console.error(
-                    `❌ Error obteniendo sesiones página ${pagina}:`,
-                    error.response?.data ||
-                    error.message
-                );
-
-                continuar = false;
-            }
-        }
-
-
-        // =================================================
-        // ORDENAR SESIONES
-        // =================================================
-
-        todasLasSesiones.sort(
-            (a, b) => {
-
-                const fechaA =
-                    new Date(
-                        a.attributes?.start || 0
-                    );
-
-                const fechaB =
-                    new Date(
-                        b.attributes?.start || 0
-                    );
-
-                return fechaB - fechaA;
-            }
-        );
-
-
-        console.log(
-            `📊 Sesiones obtenidas: ${todasLasSesiones.length}`
-        );
 
 
         // =================================================
@@ -365,7 +323,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
 
 
         // =================================================
-        // INICIO DE MES
+        // INICIO DEL MES
         // =================================================
 
         const inicioMes =
@@ -378,6 +336,240 @@ async function getBattleMetricsPlayerStatus(playerId) {
                 0,
                 0
             );
+
+
+        // =================================================
+        // SESIONES
+        // =================================================
+
+        while (
+            continuar &&
+            pagina <= limitePaginas
+        ) {
+
+            try {
+
+                console.log(
+                    `📥 Obteniendo sesiones BM página ${pagina}...`
+                );
+
+
+                /*
+                 * IMPORTANTE:
+                 *
+                 * BattleMetrics rechaza page[number].
+                 *
+                 * Utilizamos solamente page[size]
+                 * y seguimos el enlace "next" que devuelve
+                 * la API.
+                 */
+
+                const params = {
+                    "page[size]": 100
+                };
+
+
+                const sessionResponse =
+                    await axios.get(
+                        `${BM_API}/players/${playerId}/relationships/sessions`,
+                        {
+                            headers: getHeaders(),
+
+                            params,
+
+                            timeout: 7000
+                        }
+                    );
+
+
+                const sesiones =
+                    sessionResponse.data?.data || [];
+
+
+                console.log(
+                    `📊 Página ${pagina}: ${sesiones.length} sesiones`
+                );
+
+
+                if (
+                    sesiones.length === 0
+                ) {
+
+                    break;
+                }
+
+
+                todasLasSesiones.push(
+                    ...sesiones
+                );
+
+
+                // =================================================
+                // PAGINACIÓN MEDIANTE LINKS DE BATTLEMETRICS
+                // =================================================
+
+                const siguiente =
+                    sessionResponse.data?.links?.next;
+
+
+                if (
+                    siguiente &&
+                    pagina < limitePaginas
+                ) {
+
+                    /*
+                     * BattleMetrics puede devolver una URL
+                     * completa para la siguiente página.
+                     */
+
+                    pagina++;
+
+
+                    // Guardamos la URL para la siguiente petición
+                    // mediante una variable especial.
+                    sessionResponse._nextUrl =
+                        siguiente;
+
+
+                    // Continuamos abajo utilizando nextUrl
+                    continuar = true;
+
+
+                } else {
+
+                    continuar = false;
+                }
+
+
+                // =================================================
+                // GUARDAR URL NEXT
+                // =================================================
+
+                if (
+                    continuar &&
+                    sessionResponse._nextUrl
+                ) {
+
+                    let nextUrl =
+                        sessionResponse._nextUrl;
+
+
+                    /*
+                     * Hacemos las siguientes páginas directamente
+                     * utilizando la URL proporcionada por BM.
+                     */
+
+                    while (
+                        nextUrl &&
+                        pagina <= limitePaginas
+                    ) {
+
+                        try {
+
+                            console.log(
+                                `📥 Obteniendo sesiones BM página ${pagina}...`
+                            );
+
+
+                            const nextResponse =
+                                await axios.get(
+                                    nextUrl,
+                                    {
+                                        headers:
+                                            getHeaders(),
+
+                                        timeout: 7000
+                                    }
+                                );
+
+
+                            const siguientesSesiones =
+                                nextResponse.data?.data ||
+                                [];
+
+
+                            console.log(
+                                `📊 Página ${pagina}: ${siguientesSesiones.length} sesiones`
+                            );
+
+
+                            if (
+                                siguientesSesiones.length === 0
+                            ) {
+
+                                nextUrl = null;
+                                break;
+                            }
+
+
+                            todasLasSesiones.push(
+                                ...siguientesSesiones
+                            );
+
+
+                            nextUrl =
+                                nextResponse.data?.links?.next ||
+                                null;
+
+
+                            pagina++;
+
+
+                        } catch (error) {
+
+                            console.error(
+                                `❌ Error obteniendo página ${pagina}:`,
+                                error.response?.data ||
+                                error.message
+                            );
+
+                            nextUrl = null;
+                        }
+                    }
+
+
+                    continuar = false;
+                }
+
+
+            } catch (error) {
+
+                console.error(
+                    `❌ Error obteniendo sesiones página ${pagina}:`,
+                    error.response?.data ||
+                    error.message
+                );
+
+                continuar = false;
+            }
+        }
+
+
+        console.log(
+            `📊 Sesiones obtenidas: ${todasLasSesiones.length}`
+        );
+
+
+        // =================================================
+        // ORDENAR SESIONES
+        // =================================================
+
+        todasLasSesiones.sort(
+            (a, b) => {
+
+                const fechaA =
+                    new Date(
+                        a.attributes?.start || 0
+                    );
+
+                const fechaB =
+                    new Date(
+                        b.attributes?.start || 0
+                    );
+
+                return fechaB - fechaA;
+            }
+        );
 
 
         // =================================================
@@ -459,23 +651,27 @@ async function getBattleMetricsPlayerStatus(playerId) {
 
 
             // =================================================
-            // SERVIDOR DE LA SESIÓN ACTIVA
+            // SERVIDOR DE LA SESIÓN
             // =================================================
 
             const serverRelationship =
-                sesionActiva.relationships?.server?.data;
+                sesionActiva.relationships
+                    ?.server
+                    ?.data;
 
 
-            if (serverRelationship?.id) {
+            if (
+                serverRelationship?.id
+            ) {
 
                 servidorActual =
                     serverRelationship.id;
             }
 
 
-            // Algunas respuestas pueden traerlo directamente
-
-            if (!servidorActual) {
+            if (
+                !servidorActual
+            ) {
 
                 servidorActual =
                     sesionActiva.attributes?.serverId ||
@@ -485,7 +681,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
 
 
         // =================================================
-        // OBTENER NOMBRE DEL SERVIDOR
+        // OBTENER NOMBRE SERVIDOR
         // =================================================
 
         let nombreServidor =
@@ -494,46 +690,71 @@ async function getBattleMetricsPlayerStatus(playerId) {
 
         if (servidorActual) {
 
-            try {
+            const servidorEncontrado =
+                servidoresIncluidos.find(
+                    servidor =>
+                        servidor.id ===
+                        servidorActual
+                );
 
-                const serverResponse =
-                    await axios.get(
-                        `${BM_API}/servers/${servidorActual}`,
-                        {
-                            headers: getHeaders(),
 
-                            timeout: 5000
-                        }
-                    );
-
+            if (
+                servidorEncontrado
+            ) {
 
                 nombreServidor =
-                    serverResponse.data?.data?.attributes?.name ||
+                    servidorEncontrado
+                        .attributes?.name ||
                     "Desconocido";
+            }
 
 
-            } catch (error) {
+            // Si no estaba incluido, consultar directamente
+            if (
+                nombreServidor ===
+                "Desconocido"
+            ) {
 
-                console.log(
-                    "⚠️ No se pudo obtener nombre del servidor:",
-                    error.message
-                );
+                try {
+
+                    const serverResponse =
+                        await axios.get(
+                            `${BM_API}/servers/${servidorActual}`,
+                            {
+                                headers:
+                                    getHeaders(),
+
+                                timeout: 5000
+                            }
+                        );
+
+
+                    nombreServidor =
+                        serverResponse.data?.data
+                            ?.attributes?.name ||
+                        "Desconocido";
+
+
+                } catch (error) {
+
+                    console.log(
+                        "⚠️ No se pudo obtener nombre del servidor:",
+                        error.message
+                    );
+                }
             }
         }
 
 
         // =================================================
-        // HORAS SEMANA / MES
+        // CALCULAR HORAS DESDE SESIONES
         // =================================================
+
+        let segundosSesionesTotales = 0;
 
         let segundosSemana = 0;
 
         let segundosMes = 0;
-
-
-        // =================================================
-        // ÚLTIMA CONEXIÓN
-        // =================================================
 
         let ultimaConexion = null;
 
@@ -547,7 +768,9 @@ async function getBattleMetricsPlayerStatus(playerId) {
                 sesion.attributes || {};
 
 
-            if (!atributos.start) {
+            if (
+                !atributos.start
+            ) {
 
                 continue;
             }
@@ -569,10 +792,12 @@ async function getBattleMetricsPlayerStatus(playerId) {
             }
 
 
-            let fin;
+            let fin = null;
 
 
-            if (atributos.stop) {
+            if (
+                atributos.stop
+            ) {
 
                 fin =
                     new Date(
@@ -585,14 +810,11 @@ async function getBattleMetricsPlayerStatus(playerId) {
 
                 fin =
                     ahora;
-
-            } else {
-
-                continue;
             }
 
 
             if (
+                !fin ||
                 isNaN(
                     fin.getTime()
                 )
@@ -601,10 +823,6 @@ async function getBattleMetricsPlayerStatus(playerId) {
                 continue;
             }
 
-
-            // =================================================
-            // DURACIÓN
-            // =================================================
 
             const duracion =
                 Math.max(
@@ -618,10 +836,12 @@ async function getBattleMetricsPlayerStatus(playerId) {
                 );
 
 
-            // Evitar advertencia de variable no utilizada
-            if (duracion < 0) {
-                continue;
-            }
+            // =================================================
+            // TOTAL SESIONES
+            // =================================================
+
+            segundosSesionesTotales +=
+                duracion;
 
 
             // =================================================
@@ -712,9 +932,32 @@ async function getBattleMetricsPlayerStatus(playerId) {
         }
 
 
+        /*
+         * Si no conseguimos horas mediante
+         * los servidores pero sí mediante sesiones,
+         * utilizamos las sesiones.
+         */
+
+        if (
+            segundosTotales <= 0 &&
+            segundosSesionesTotales > 0
+        ) {
+
+            segundosTotales =
+                segundosSesionesTotales;
+        }
+
+
         // =================================================
         // CONVERTIR HORAS
         // =================================================
+
+        const horasTotalesBM =
+            Math.floor(
+                segundosTotales /
+                3600
+            );
+
 
         const horasSemana =
             Math.floor(
@@ -731,46 +974,13 @@ async function getBattleMetricsPlayerStatus(playerId) {
 
 
         // =================================================
-        // FORMATEAR ÚLTIMA CONEXIÓN
+        // ÚLTIMA CONEXIÓN
         // =================================================
 
-        let ultimaConexionTexto =
-            "Nunca";
-
-
-        if (ultimaConexion) {
-
-            const dia =
-                String(
-                    ultimaConexion.getDate()
-                ).padStart(2, "0");
-
-
-            const mes =
-                String(
-                    ultimaConexion.getMonth() + 1
-                ).padStart(2, "0");
-
-
-            const anio =
-                ultimaConexion.getFullYear();
-
-
-            const hora =
-                String(
-                    ultimaConexion.getHours()
-                ).padStart(2, "0");
-
-
-            const minutos =
-                String(
-                    ultimaConexion.getMinutes()
-                ).padStart(2, "0");
-
-
-            ultimaConexionTexto =
-                `${dia}/${mes}/${anio} ${hora}:${minutos}`;
-        }
+        const ultimaConexionTexto =
+            formatearFechaChile(
+                ultimaConexion
+            );
 
 
         // =================================================
@@ -780,12 +990,54 @@ async function getBattleMetricsPlayerStatus(playerId) {
         let historialNombres = [];
 
 
-        /*
-         * Temporalmente no consultamos identifiers porque
-         * BattleMetrics está devolviendo 405.
-         */
+        try {
 
-        historialNombres = [];
+            const identifiersResponse =
+                await axios.get(
+                    `${BM_API}/players/${playerId}/relationships/identifiers`,
+                    {
+                        headers:
+                            getHeaders(),
+
+                        params: {
+                            "page[size]": 100
+                        },
+
+                        timeout: 5000
+                    }
+                );
+
+
+            const identifiers =
+                identifiersResponse.data?.data ||
+                [];
+
+
+            const nombres =
+                identifiers
+                    .map(
+                        identifier =>
+                            identifier.attributes
+                                ?.identifier
+                    )
+                    .filter(Boolean);
+
+
+            historialNombres =
+                [
+                    ...new Set(
+                        nombres
+                    )
+                ].slice(0, 3);
+
+
+        } catch (error) {
+
+            console.log(
+                "⚠️ No se pudo obtener historial de nombres:",
+                error.message
+            );
+        }
 
 
         // =================================================
@@ -830,13 +1082,27 @@ async function getBattleMetricsPlayerStatus(playerId) {
         console.log(
             "✅ Datos BM obtenidos:",
             {
-                id: resultado.id,
-                nombre: resultado.name,
-                online: resultado.online,
-                servidor: resultado.server,
-                horas: resultado.horasTotalesBM,
-                semana: resultado.horasSemana,
-                mes: resultado.horasMes,
+                id:
+                    resultado.id,
+
+                nombre:
+                    resultado.name,
+
+                online:
+                    resultado.online,
+
+                servidor:
+                    resultado.server,
+
+                horas:
+                    resultado.horasTotalesBM,
+
+                semana:
+                    resultado.horasSemana,
+
+                mes:
+                    resultado.horasMes,
+
                 ultimaConexion:
                     resultado.ultimaConexion
             }
@@ -863,7 +1129,9 @@ async function getBattleMetricsPlayerStatus(playerId) {
 // 3. RANKING DEL SERVIDOR
 // =====================================================
 
-async function getServerLeaderboard(serverId) {
+async function getServerLeaderboard(
+    serverId
+) {
 
     try {
 
@@ -871,7 +1139,8 @@ async function getServerLeaderboard(serverId) {
             await axios.get(
                 `${BM_API}/servers/${serverId}`,
                 {
-                    headers: getHeaders(),
+                    headers:
+                        getHeaders(),
 
                     params: {
                         include: "player"
@@ -902,21 +1171,22 @@ async function getServerLeaderboard(serverId) {
 
 
         const validResults =
-            players.map(player => ({
+            players.map(
+                player => ({
 
-                id:
-                    player.id,
+                    id:
+                        player.id,
 
-                name:
-                    player.attributes?.name ||
-                    "Desconocido",
+                    name:
+                        player.attributes?.name ||
+                        "Desconocido",
 
-                timePlayedSeconds:
-                    Number(
-                        player.meta?.timePlayed
-                    ) || 0
-
-            }));
+                    timePlayedSeconds:
+                        Number(
+                            player.meta?.timePlayed
+                        ) || 0
+                })
+            );
 
 
         validResults.sort(
