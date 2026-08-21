@@ -12,6 +12,40 @@ const {
 
 
 // =====================================================
+// CACHE TEMPORAL DE RAIDS
+// =====================================================
+
+// Guarda los resultados de los /raid activos en memoria.
+// NO se guarda en MongoDB.
+// Se elimina automáticamente después de 30 minutos.
+
+const raidsCache = new Map();
+
+const CACHE_TIEMPO = 30 * 60 * 1000;
+
+
+// =====================================================
+// LIMPIAR CACHE ANTIGUA
+// =====================================================
+
+function limpiarCache() {
+
+    const ahora = Date.now();
+
+    for (const [mensajeId, datos] of raidsCache.entries()) {
+
+        if (ahora - datos.creado > CACHE_TIEMPO) {
+
+            raidsCache.delete(mensajeId);
+
+        }
+
+    }
+
+}
+
+
+// =====================================================
 // FORMATEAR NÚMEROS
 // =====================================================
 
@@ -493,6 +527,10 @@ module.exports = {
 
         try {
 
+            // =========================================
+            // CONSULTAR RUSTHELP SOLO UNA VEZ
+            // =========================================
+
             const resultado =
                 await consultarRaid(
                     nombre
@@ -508,11 +546,19 @@ module.exports = {
             }
 
 
+            // =========================================
+            // CREAR EMBED INICIAL
+            // =========================================
+
             const embed =
                 crearEmbedEconomia(
                     resultado
                 );
 
+
+            // =========================================
+            // ENVIAR MENSAJE
+            // =========================================
 
             await interaction.editReply({
 
@@ -524,6 +570,42 @@ module.exports = {
                     crearBotones()
 
             });
+
+
+            // =========================================
+            // OBTENER MENSAJE REAL
+            // =========================================
+
+            const mensaje =
+                await interaction.fetchReply();
+
+
+            // =========================================
+            // GUARDAR RESULTADO EN MEMORIA
+            // =========================================
+
+            limpiarCache();
+
+
+            raidsCache.set(
+
+                mensaje.id,
+
+                {
+
+                    resultado,
+
+                    creado:
+                        Date.now()
+
+                }
+
+            );
+
+
+            console.log(
+                `✅ Raid guardado en cache: ${mensaje.id} → ${resultado.nombre}`
+            );
 
 
         } catch (error) {
@@ -579,20 +661,25 @@ module.exports = {
         }
 
 
-        const mensaje =
-            interaction.message;
+        // =============================================
+        // BUSCAR RESULTADO EN CACHE
+        // =============================================
+
+        limpiarCache();
 
 
-        const embedActual =
-            mensaje.embeds?.[0];
+        const datos =
+            raidsCache.get(
+                interaction.message.id
+            );
 
 
-        if (!embedActual) {
+        if (!datos) {
 
             await interaction.reply({
 
                 content:
-                    "❌ No pude obtener los datos del raid.",
+                    "❌ Los datos de este raid ya no están disponibles. Ejecuta nuevamente `/raid`.",
 
                 ephemeral:
                     true
@@ -604,124 +691,76 @@ module.exports = {
         }
 
 
-        const url =
-            embedActual.url;
+        const resultado =
+            datos.resultado;
 
 
-        if (!url) {
+        // =============================================
+        // CREAR NUEVO EMBED
+        // =============================================
 
-            await interaction.reply({
+        let nuevoEmbed;
 
-                content:
-                    "❌ No pude identificar el objeto.",
 
-                ephemeral:
-                    true
+        if (
+            interaction.customId ===
+            "raid_economia"
+        ) {
 
-            });
-
-            return true;
+            nuevoEmbed =
+                crearEmbedEconomia(
+                    resultado
+                );
 
         }
 
 
-        await interaction.deferUpdate();
+        else if (
+            interaction.customId ===
+            "raid_cantidad"
+        ) {
 
+            nuevoEmbed =
+                crearEmbedCantidad(
+                    resultado
+                );
+
+        }
+
+
+        else if (
+            interaction.customId ===
+            "raid_explosivos"
+        ) {
+
+            nuevoEmbed =
+                crearEmbedExplosivos(
+                    resultado
+                );
+
+        }
+
+
+        else if (
+            interaction.customId ===
+            "raid_melee"
+        ) {
+
+            nuevoEmbed =
+                crearEmbedMelee(
+                    resultado
+                );
+
+        }
+
+
+        // =============================================
+        // ACTUALIZAR MENSAJE
+        // =============================================
 
         try {
 
-            const partes =
-                url.split("/");
-
-
-            const slug =
-                partes[
-                    partes.length - 1
-                ];
-
-
-            const resultado =
-                await consultarRaid(
-                    slug
-                );
-
-
-            if (!resultado) {
-
-                return true;
-
-            }
-
-
-            let nuevoEmbed;
-
-
-            // =========================================
-            // ECONOMÍA
-            // =========================================
-
-            if (
-                interaction.customId ===
-                "raid_economia"
-            ) {
-
-                nuevoEmbed =
-                    crearEmbedEconomia(
-                        resultado
-                    );
-
-            }
-
-
-            // =========================================
-            // CANTIDAD
-            // =========================================
-
-            else if (
-                interaction.customId ===
-                "raid_cantidad"
-            ) {
-
-                nuevoEmbed =
-                    crearEmbedCantidad(
-                        resultado
-                    );
-
-            }
-
-
-            // =========================================
-            // EXPLOSIVOS
-            // =========================================
-
-            else if (
-                interaction.customId ===
-                "raid_explosivos"
-            ) {
-
-                nuevoEmbed =
-                    crearEmbedExplosivos(
-                        resultado
-                    );
-
-            }
-
-
-            // =========================================
-            // MELEE
-            // =========================================
-
-            else {
-
-                nuevoEmbed =
-                    crearEmbedMelee(
-                        resultado
-                    );
-
-            }
-
-
-            await interaction.editReply({
+            await interaction.update({
 
                 embeds: [
                     nuevoEmbed
@@ -731,7 +770,6 @@ module.exports = {
                     crearBotones()
 
             });
-
 
         } catch (error) {
 
