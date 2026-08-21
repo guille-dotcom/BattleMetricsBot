@@ -24,16 +24,16 @@ function formatearNumero(numero) {
 
 
 // =====================================================
-// EMBED EXPLOSIVOS
+// CREAR EMBED ECONOMÍA
 // =====================================================
 
-function crearEmbedExplosivos(resultado) {
+function crearEmbedEconomia(resultado) {
 
     const embed =
         new EmbedBuilder()
 
             .setTitle(
-                `💣 Raid Calculator — ${resultado.nombre}`
+                `💰 Raid Calculator — ${resultado.nombre}`
             )
 
             .setURL(
@@ -41,13 +41,13 @@ function crearEmbedExplosivos(resultado) {
             )
 
             .setColor(
-                0xff5500
+                0x2ecc71
             );
 
 
     if (
-        !resultado.explosivos ||
-        resultado.explosivos.length === 0
+        !resultado.explosivosEconomia ||
+        resultado.explosivosEconomia.length === 0
     ) {
 
         embed.setDescription(
@@ -71,7 +71,7 @@ function crearEmbedExplosivos(resultado) {
     let texto = "";
 
 
-    resultado.explosivos
+    resultado.explosivosEconomia
         .slice(0, 5)
         .forEach((raid, indice) => {
 
@@ -81,26 +81,15 @@ function crearEmbedExplosivos(resultado) {
             texto +=
                 `└ Cantidad: **${raid.cantidad}**`;
 
+            texto +=
+                ` • 🪨 Azufre: **${formatearNumero(raid.azufre)}**`;
 
-            if (
-                Number(raid.azufre) > 0
-            ) {
-
-                texto +=
-                    ` • 🪨 Azufre: **${formatearNumero(raid.azufre)}**`;
-
-            }
-
-
-            if (
-                raid.tiempo
-            ) {
+            if (raid.tiempo) {
 
                 texto +=
                     ` • ⏱️ **${raid.tiempo}**`;
 
             }
-
 
             texto += "\n\n";
 
@@ -115,10 +104,10 @@ function crearEmbedExplosivos(resultado) {
     embed.addFields({
 
         name:
-            "💰 Criterio",
+            "💰 Economía",
 
         value:
-            "Top 5 ordenados de menor a mayor cantidad de **azufre total**."
+            "Top 5 métodos que requieren **menos azufre total** para raidear este objeto."
 
     });
 
@@ -135,6 +124,124 @@ function crearEmbedExplosivos(resultado) {
 
 
     return embed;
+
+}
+
+
+// =====================================================
+// CREAR EMBED CANTIDAD
+// =====================================================
+
+function crearEmbedCantidad(resultado) {
+
+    const embed =
+        new EmbedBuilder()
+
+            .setTitle(
+                `📦 Raid Calculator — ${resultado.nombre}`
+            )
+
+            .setURL(
+                resultado.url
+            )
+
+            .setColor(
+                0x3498db
+            );
+
+
+    if (
+        !resultado.explosivosCantidad ||
+        resultado.explosivosCantidad.length === 0
+    ) {
+
+        embed.setDescription(
+            "❌ RustHelp no encontró explosivos válidos para este objeto."
+        );
+
+        return embed;
+
+    }
+
+
+    const posiciones = [
+        "🥇",
+        "🥈",
+        "🥉",
+        "4️⃣",
+        "5️⃣"
+    ];
+
+
+    let texto = "";
+
+
+    resultado.explosivosCantidad
+        .slice(0, 5)
+        .forEach((raid, indice) => {
+
+            texto +=
+                `${posiciones[indice]} **${raid.herramienta}**\n`;
+
+            texto +=
+                `└ Cantidad: **${raid.cantidad}**`;
+
+            texto +=
+                ` • 🪨 Azufre: **${formatearNumero(raid.azufre)}**`;
+
+            if (raid.tiempo) {
+
+                texto +=
+                    ` • ⏱️ **${raid.tiempo}**`;
+
+            }
+
+            texto += "\n\n";
+
+        });
+
+
+    embed.setDescription(
+        texto
+    );
+
+
+    embed.addFields({
+
+        name:
+            "📦 Cantidad",
+
+        value:
+            "Top 5 métodos que requieren **menos unidades de explosivos** para raidear este objeto."
+
+    });
+
+
+    embed.setFooter({
+
+        text:
+            "Datos obtenidos de RustHelp"
+
+    });
+
+
+    embed.setTimestamp();
+
+
+    return embed;
+
+}
+
+
+// =====================================================
+// EMBED EXPLOSIVOS
+// =====================================================
+
+function crearEmbedExplosivos(resultado) {
+
+    return crearEmbedEconomia(
+        resultado
+    );
 
 }
 
@@ -197,16 +304,12 @@ function crearEmbedMelee(resultado) {
             texto +=
                 `└ Cantidad: **${raid.cantidad}**`;
 
-
-            if (
-                raid.tiempo
-            ) {
+            if (raid.tiempo) {
 
                 texto +=
                     ` • ⏱️ **${raid.tiempo}**`;
 
             }
-
 
             texto += "\n\n";
 
@@ -251,48 +354,92 @@ function crearEmbedMelee(resultado) {
 
 function crearBotones() {
 
-    return new ActionRowBuilder()
+    const fila1 =
+        new ActionRowBuilder()
 
-        .addComponents(
+            .addComponents(
 
-            new ButtonBuilder()
+                new ButtonBuilder()
 
-                .setCustomId(
-                    "raid_explosivos"
-                )
+                    .setCustomId(
+                        "raid_economia"
+                    )
 
-                .setLabel(
-                    "Explosivos"
-                )
+                    .setLabel(
+                        "Economía"
+                    )
 
-                .setEmoji(
-                    "💣"
-                )
+                    .setEmoji(
+                        "💰"
+                    )
 
-                .setStyle(
-                    ButtonStyle.Danger
-                ),
+                    .setStyle(
+                        ButtonStyle.Success
+                    ),
 
 
-            new ButtonBuilder()
+                new ButtonBuilder()
 
-                .setCustomId(
-                    "raid_melee"
-                )
+                    .setCustomId(
+                        "raid_cantidad"
+                    )
 
-                .setLabel(
-                    "Melee"
-                )
+                    .setLabel(
+                        "Cantidad"
+                    )
 
-                .setEmoji(
-                    "🔨"
-                )
+                    .setEmoji(
+                        "📦"
+                    )
 
-                .setStyle(
-                    ButtonStyle.Secondary
-                )
+                    .setStyle(
+                        ButtonStyle.Primary
+                    ),
 
-        );
+
+                new ButtonBuilder()
+
+                    .setCustomId(
+                        "raid_explosivos"
+                    )
+
+                    .setLabel(
+                        "Explosivos"
+                    )
+
+                    .setEmoji(
+                        "💣"
+                    )
+
+                    .setStyle(
+                        ButtonStyle.Danger
+                    ),
+
+
+                new ButtonBuilder()
+
+                    .setCustomId(
+                        "raid_melee"
+                    )
+
+                    .setLabel(
+                        "Melee"
+                    )
+
+                    .setEmoji(
+                        "🔨"
+                    )
+
+                    .setStyle(
+                        ButtonStyle.Secondary
+                    )
+
+            );
+
+
+    return [
+        fila1
+    ];
 
 }
 
@@ -362,7 +509,7 @@ module.exports = {
 
 
             const embed =
-                crearEmbedExplosivos(
+                crearEmbedEconomia(
                     resultado
                 );
 
@@ -373,9 +520,8 @@ module.exports = {
                     embed
                 ],
 
-                components: [
+                components:
                     crearBotones()
-                ]
 
             });
 
@@ -412,11 +558,20 @@ module.exports = {
         }
 
 
+        const botonesValidos = [
+
+            "raid_economia",
+            "raid_cantidad",
+            "raid_explosivos",
+            "raid_melee"
+
+        ];
+
+
         if (
-            interaction.customId !==
-                "raid_explosivos" &&
-            interaction.customId !==
-                "raid_melee"
+            !botonesValidos.includes(
+                interaction.customId
+            )
         ) {
 
             return false;
@@ -501,7 +656,45 @@ module.exports = {
             let nuevoEmbed;
 
 
+            // =========================================
+            // ECONOMÍA
+            // =========================================
+
             if (
+                interaction.customId ===
+                "raid_economia"
+            ) {
+
+                nuevoEmbed =
+                    crearEmbedEconomia(
+                        resultado
+                    );
+
+            }
+
+
+            // =========================================
+            // CANTIDAD
+            // =========================================
+
+            else if (
+                interaction.customId ===
+                "raid_cantidad"
+            ) {
+
+                nuevoEmbed =
+                    crearEmbedCantidad(
+                        resultado
+                    );
+
+            }
+
+
+            // =========================================
+            // EXPLOSIVOS
+            // =========================================
+
+            else if (
                 interaction.customId ===
                 "raid_explosivos"
             ) {
@@ -511,7 +704,14 @@ module.exports = {
                         resultado
                     );
 
-            } else {
+            }
+
+
+            // =========================================
+            // MELEE
+            // =========================================
+
+            else {
 
                 nuevoEmbed =
                     crearEmbedMelee(
@@ -527,9 +727,8 @@ module.exports = {
                     nuevoEmbed
                 ],
 
-                components: [
+                components:
                     crearBotones()
-                ]
 
             });
 
