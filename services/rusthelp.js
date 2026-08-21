@@ -38,7 +38,7 @@ function convertirSlug(nombre) {
 
 
 // =====================================================
-// ALIAS DE ITEMS COMUNES
+// ALIAS
 // =====================================================
 
 const ALIASES = {
@@ -67,21 +67,16 @@ const ALIASES = {
     "puerta doble blindada": "armored-double-door",
 
     "muro blindado": "armored-wall",
-
     "pared blindada": "armored-wall",
 
     "pared de chapa": "sheet-metal-wall",
-
     "pared metalica": "sheet-metal-wall",
 
     "pared de piedra": "stone-wall",
 
     "pared de madera": "wooden-wall",
 
-    "pared de madera": "wooden-wall",
-
     "porton": "armored-garage-door",
-
     "porton blindado": "armored-garage-door"
 };
 
@@ -125,8 +120,7 @@ async function obtenerPagina(slug) {
 async function buscarItemRustHelp(nombre) {
 
     const original =
-        String(nombre || "")
-            .trim();
+        String(nombre || "").trim();
 
     if (!original) {
         return null;
@@ -137,7 +131,7 @@ async function buscarItemRustHelp(nombre) {
 
 
     // =================================================
-    // 1. ALIAS
+    // ALIAS
     // =================================================
 
     let slug =
@@ -145,7 +139,7 @@ async function buscarItemRustHelp(nombre) {
 
 
     // =================================================
-    // 2. SLUG DIRECTO
+    // SLUG DIRECTO
     // =================================================
 
     if (!slug) {
@@ -157,7 +151,7 @@ async function buscarItemRustHelp(nombre) {
 
 
     // =================================================
-    // INTENTAR URL DIRECTA
+    // URL DIRECTA
     // =================================================
 
     let pagina =
@@ -191,7 +185,7 @@ async function buscarItemRustHelp(nombre) {
 
 
     // =================================================
-    // 3. VARIANTES
+    // VARIANTES
     // =================================================
 
     const variantes = [
@@ -289,12 +283,95 @@ async function buscarItemRustHelp(nombre) {
 
 
 // =====================================================
-// EXTRAER COSTOS DE RAID
+// EXTRAER NUMERO
 // =====================================================
 
-function extraerCostosRaid(
-    html
-) {
+function extraerNumero(texto) {
+
+    if (!texto) {
+        return 0;
+    }
+
+    const limpio =
+        String(texto)
+            .replace(/[×x]/gi, "")
+            .replace(/\./g, "")
+            .replace(/,/g, "")
+            .replace(/[^\d]/g, "");
+
+    return Number(limpio) || 0;
+}
+
+
+// =====================================================
+// EXTRAER COSTO DE AZUFRE
+// =====================================================
+//
+// RustHelp identifica el material mediante el href
+// de los enlaces.
+//
+// /items/sulfur = azufre
+// /items/charcoal = carbon
+// etc.
+//
+// =====================================================
+
+function obtenerAzufreDeCelda($, celda) {
+
+    let azufre = 0;
+
+    $(celda)
+        .find("a")
+        .each((i, enlace) => {
+
+            const href =
+                $(enlace)
+                    .attr("href") || "";
+
+            const texto =
+                $(enlace)
+                    .text()
+                    .trim();
+
+            const objetivo =
+                normalizarTexto(
+                    `${href} ${texto}`
+                );
+
+
+            const esAzufre =
+                objetivo.includes("sulfur") ||
+                objetivo.includes("azufre") ||
+                objetivo.includes("sulphur");
+
+
+            if (!esAzufre) {
+                return;
+            }
+
+
+            const cantidad =
+                extraerNumero(
+                    $(enlace).text()
+                );
+
+
+            if (cantidad > azufre) {
+                azufre = cantidad;
+            }
+
+        });
+
+
+    return azufre;
+}
+
+
+// =====================================================
+// EXTRAER FILAS DE RAID
+// =====================================================
+
+function extraerCostosRaid(html) {
 
     const $ =
         cheerio.load(
@@ -306,7 +383,7 @@ function extraerCostosRaid(
 
 
     // =================================================
-    // BUSCAR TABLAS
+    // BUSCAR TABLA "RAIDING COST"
     // =================================================
 
     $("table").each(
@@ -328,13 +405,18 @@ function extraerCostosRaid(
                 );
 
 
-            // Solo tablas de Raiding Cost
             if (
                 !textoNormalizado.includes(
                     "herramienta de raideos"
                 ) &&
                 !textoNormalizado.includes(
                     "raid tool"
+                ) &&
+                !textoNormalizado.includes(
+                    "costo de raideo"
+                ) &&
+                !textoNormalizado.includes(
+                    "raiding cost"
                 )
             ) {
 
@@ -342,59 +424,140 @@ function extraerCostosRaid(
             }
 
 
+            // =================================================
+            // CABECERAS
+            // =================================================
+
+            const headers =
+                [];
+
+            $(tabla)
+                .find("thead th")
+                .each((i, th) => {
+
+                    headers.push(
+                        normalizarTexto(
+                            $(th).text()
+                        )
+                    );
+
+                });
+
+
+            // =================================================
+            // FILAS
+            // =================================================
+
             $(tabla)
                 .find("tbody tr")
                 .each(
                     (i, fila) => {
 
-                        const columnas = [];
-
-
-                        $(fila)
-                            .find("td")
-                            .each(
-                                (j, celda) => {
-
-                                    columnas.push(
-                                        $(celda)
-                                            .text()
-                                            .replace(
-                                                /\s+/g,
-                                                " "
-                                            )
-                                            .trim()
-                                    );
-
-                                }
-                            );
+                        const celdas =
+                            $(fila)
+                                .find("td")
+                                .toArray();
 
 
                         if (
-                            columnas.length >= 3
+                            celdas.length < 3
                         ) {
-
-                            filas.push({
-
-                                herramienta:
-                                    columnas[0],
-
-                                cantidad:
-                                    columnas[1],
-
-                                tiempo:
-                                    columnas[2],
-
-                                costo:
-                                    columnas[3] ||
-                                    "",
-
-                                material:
-                                    columnas[4] ||
-                                    ""
-
-                            });
-
+                            return;
                         }
+
+
+                        const herramienta =
+                            $(celdas[0])
+                                .text()
+                                .replace(
+                                    /\s+/g,
+                                    " "
+                                )
+                                .trim();
+
+
+                        const cantidad =
+                            $(celdas[1])
+                                .text()
+                                .replace(
+                                    /\s+/g,
+                                    " "
+                                )
+                                .trim();
+
+
+                        const tiempo =
+                            $(celdas[2])
+                                .text()
+                                .replace(
+                                    /\s+/g,
+                                    " "
+                                )
+                                .trim();
+
+
+                        const costoRaid =
+                            celdas[3]
+                                ? $(celdas[3])
+                                    .text()
+                                    .replace(
+                                        /\s+/g,
+                                        " "
+                                    )
+                                    .trim()
+                                : "";
+
+
+                        const costoMaterial =
+                            celdas[4]
+                                ? $(celdas[4])
+                                    .text()
+                                    .replace(
+                                        /\s+/g,
+                                        " "
+                                    )
+                                    .trim()
+                                : "";
+
+
+                        const azufre =
+                            celdas[4]
+                                ? obtenerAzufreDeCelda(
+                                    $,
+                                    celdas[4]
+                                )
+                                : 0;
+
+
+                        if (
+                            !herramienta
+                        ) {
+                            return;
+                        }
+
+
+                        filas.push({
+
+                            herramienta,
+
+                            cantidad,
+
+                            cantidadNumero:
+                                extraerNumero(
+                                    cantidad
+                                ),
+
+                            tiempo,
+
+                            costo:
+                                costoRaid,
+
+                            material:
+                                costoMaterial,
+
+                            azufre
+
+                        });
 
                     }
                 );
@@ -411,9 +574,7 @@ function extraerCostosRaid(
 // CLASIFICAR RAID
 // =====================================================
 
-function clasificarRaid(
-    filas
-) {
+function clasificarRaid(filas) {
 
     const explosivos = [];
     const melee = [];
@@ -452,8 +613,11 @@ function clasificarRaid(
         "machete",
         "espada",
         "lanza",
-        "arma cuerpo",
-        "melee"
+        "melee",
+        "cuerpo a cuerpo",
+        "ariete",
+        "balista",
+        "antorcha"
 
     ];
 
@@ -480,6 +644,10 @@ function clasificarRaid(
             );
 
 
+        // =================================================
+        // EXPLOSIVOS
+        // =================================================
+
         if (
             palabrasExplosivos.some(
                 palabra =>
@@ -499,24 +667,9 @@ function clasificarRaid(
         }
 
 
-        if (
-            palabrasMelee.some(
-                palabra =>
-                    texto.includes(
-                        normalizarTexto(
-                            palabra
-                        )
-                    )
-            )
-        ) {
-
-            melee.push(
-                fila
-            );
-
-            continue;
-        }
-
+        // =================================================
+        // BALAS
+        // =================================================
 
         if (
             palabrasBalas.some(
@@ -530,6 +683,29 @@ function clasificarRaid(
         ) {
 
             balas.push(
+                fila
+            );
+
+            continue;
+        }
+
+
+        // =================================================
+        // MELEE
+        // =================================================
+
+        if (
+            palabrasMelee.some(
+                palabra =>
+                    texto.includes(
+                        normalizarTexto(
+                            palabra
+                        )
+                    )
+            )
+        ) {
+
+            melee.push(
                 fila
             );
 
@@ -547,12 +723,116 @@ function clasificarRaid(
 
 
 // =====================================================
+// ORDENAR POR AZUFRE
+// =====================================================
+
+function ordenarPorAzufre(filas) {
+
+    return [...filas]
+        .filter(
+            fila =>
+                Number(fila.azufre) > 0
+        )
+        .sort(
+            (a, b) => {
+
+                if (
+                    a.azufre !==
+                    b.azufre
+                ) {
+
+                    return (
+                        a.azufre -
+                        b.azufre
+                    );
+
+                }
+
+
+                return (
+                    a.cantidadNumero -
+                    b.cantidadNumero
+                );
+
+            }
+        );
+}
+
+
+// =====================================================
+// ORDENAR MELEE
+// =====================================================
+
+function convertirTiempoASegundos(texto) {
+
+    if (!texto) {
+        return Infinity;
+    }
+
+    const normalizado =
+        normalizarTexto(
+            texto
+        );
+
+    let segundos = 0;
+
+
+    const horas =
+        normalizado.match(
+            /(\d+)\s*h/
+        );
+
+    const minutos =
+        normalizado.match(
+            /(\d+)\s*m/
+        );
+
+    const segundosMatch =
+        normalizado.match(
+            /(\d+)\s*s/
+        );
+
+
+    if (horas) {
+        segundos +=
+            Number(horas[1]) * 3600;
+    }
+
+    if (minutos) {
+        segundos +=
+            Number(minutos[1]) * 60;
+    }
+
+    if (segundosMatch) {
+        segundos +=
+            Number(segundosMatch[1]);
+    }
+
+
+    return segundos;
+}
+
+
+function ordenarMelee(filas) {
+
+    return [...filas]
+        .sort(
+            (a, b) =>
+                convertirTiempoASegundos(
+                    a.tiempo
+                ) -
+                convertirTiempoASegundos(
+                    b.tiempo
+                )
+        );
+}
+
+
+// =====================================================
 // CONSULTAR RAID
 // =====================================================
 
-async function consultarRaid(
-    nombre
-) {
+async function consultarRaid(nombre) {
 
     try {
 
@@ -584,6 +864,18 @@ async function consultarRaid(
             );
 
 
+        const explosivosOrdenados =
+            ordenarPorAzufre(
+                clasificacion.explosivos
+            );
+
+
+        const meleeOrdenado =
+            ordenarMelee(
+                clasificacion.melee
+            );
+
+
         return {
 
             nombre:
@@ -596,10 +888,16 @@ async function consultarRaid(
                 filas,
 
             explosivos:
-                clasificacion.explosivos,
+                explosivosOrdenados.slice(
+                    0,
+                    5
+                ),
 
             melee:
-                clasificacion.melee,
+                meleeOrdenado.slice(
+                    0,
+                    5
+                ),
 
             balas:
                 clasificacion.balas
