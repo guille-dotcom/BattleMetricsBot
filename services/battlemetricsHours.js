@@ -8,6 +8,16 @@ const axios = require("axios");
 
 const BM_API = "https://api.battlemetrics.com";
 
+// =====================================================
+// ZONA HORARIA OFICIAL DEL BOT
+// =====================================================
+
+const TIMEZONE_CHILE = "America/Santiago";
+
+// =====================================================
+// HEADERS
+// =====================================================
+
 function getHeaders() {
 
     const token = process.env.BATTLEMETRICS_TOKEN;
@@ -35,10 +45,24 @@ function formatearFechaChile(fecha) {
 
     try {
 
+        const fechaReal =
+            fecha instanceof Date
+                ? fecha
+                : new Date(fecha);
+
+        if (
+            isNaN(
+                fechaReal.getTime()
+            )
+        ) {
+
+            return "No disponible";
+        }
+
         return new Intl.DateTimeFormat(
             "es-CL",
             {
-                timeZone: "America/Santiago",
+                timeZone: TIMEZONE_CHILE,
                 day: "2-digit",
                 month: "2-digit",
                 year: "numeric",
@@ -46,7 +70,7 @@ function formatearFechaChile(fecha) {
                 minute: "2-digit",
                 hour12: false
             }
-        ).format(fecha);
+        ).format(fechaReal);
 
     } catch (error) {
 
@@ -57,6 +81,213 @@ function formatearFechaChile(fecha) {
 
         return "No disponible";
     }
+}
+
+
+// =====================================================
+// OBTENER PARTES DE UNA FECHA EN HORA CHILE
+// =====================================================
+
+function obtenerPartesFechaChile(fecha) {
+
+    const fechaReal =
+        fecha instanceof Date
+            ? fecha
+            : new Date(fecha);
+
+    const partes =
+        new Intl.DateTimeFormat(
+            "en-US",
+            {
+                timeZone: TIMEZONE_CHILE,
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false
+            }
+        ).formatToParts(fechaReal);
+
+    const resultado = {};
+
+    for (
+        const parte
+        of partes
+    ) {
+
+        if (
+            parte.type !== "literal"
+        ) {
+
+            resultado[parte.type] =
+                Number(parte.value);
+        }
+    }
+
+    return resultado;
+}
+
+
+// =====================================================
+// OBTENER INICIO DE SEMANA EN CHILE
+// =====================================================
+//
+// La semana comienza el lunes a las 00:00,
+// considerando la zona horaria de Chile.
+// =====================================================
+
+function obtenerInicioSemanaChile(fechaActual) {
+
+    const partes =
+        obtenerPartesFechaChile(
+            fechaActual
+        );
+
+    const anio =
+        partes.year;
+
+    const mes =
+        partes.month;
+
+    const dia =
+        partes.day;
+
+    // Crear una fecha aproximada en UTC
+    // usando las partes de Chile.
+    const fechaChile =
+        new Date(
+            Date.UTC(
+                anio,
+                mes - 1,
+                dia,
+                0,
+                0,
+                0,
+                0
+            )
+        );
+
+    const diaSemana =
+        fechaChile.getUTCDay();
+
+    const diasDesdeLunes =
+        diaSemana === 0
+            ? 6
+            : diaSemana - 1;
+
+    fechaChile.setUTCDate(
+        fechaChile.getUTCDate() -
+        diasDesdeLunes
+    );
+
+    /*
+     * Chile puede cambiar UTC-3 / UTC-4.
+     *
+     * Buscamos el instante UTC que corresponde
+     * a las 00:00 de Chile mediante Intl.
+     */
+
+    return convertirChileLocalAUTC(
+        fechaChile.getUTCFullYear(),
+        fechaChile.getUTCMonth() + 1,
+        fechaChile.getUTCDate(),
+        0,
+        0,
+        0
+    );
+}
+
+
+// =====================================================
+// OBTENER INICIO DEL MES EN CHILE
+// =====================================================
+
+function obtenerInicioMesChile(fechaActual) {
+
+    const partes =
+        obtenerPartesFechaChile(
+            fechaActual
+        );
+
+    return convertirChileLocalAUTC(
+        partes.year,
+        partes.month,
+        1,
+        0,
+        0,
+        0
+    );
+}
+
+
+// =====================================================
+// CONVERTIR FECHA/HORA DE CHILE A UTC
+// =====================================================
+
+function convertirChileLocalAUTC(
+    year,
+    month,
+    day,
+    hour = 0,
+    minute = 0,
+    second = 0
+) {
+
+    /*
+     * Primera aproximación.
+     *
+     * Chile actualmente utiliza cambios estacionales,
+     * por lo que comprobamos el offset real usando
+     * Intl.DateTimeFormat.
+     */
+
+    const aproximacion =
+        new Date(
+            Date.UTC(
+                year,
+                month - 1,
+                day,
+                hour,
+                minute,
+                second
+            )
+        );
+
+    const partes =
+        obtenerPartesFechaChile(
+            aproximacion
+        );
+
+    const comoUTC =
+        Date.UTC(
+            partes.year,
+            partes.month - 1,
+            partes.day,
+            partes.hour,
+            partes.minute,
+            partes.second
+        );
+
+    const objetivo =
+        Date.UTC(
+            year,
+            month - 1,
+            day,
+            hour,
+            minute,
+            second
+        );
+
+    const diferencia =
+        objetivo -
+        comoUTC;
+
+    return new Date(
+        aproximacion.getTime() +
+        diferencia
+    );
 }
 
 
@@ -100,25 +331,29 @@ async function searchBattleMetricsPlayer(
 
 
         const encontrados =
-            players.filter(player => {
+            players.filter(
+                player => {
 
-                const nombreBM =
-                    player.attributes?.name
-                        ?.toLowerCase()
-                        .trim();
+                    const nombreBM =
+                        player.attributes?.name
+                            ?.toLowerCase()
+                            .trim();
 
-                return (
-                    nombreBM ===
-                    nombreBuscado
-                );
-            });
+                    return (
+                        nombreBM ===
+                        nombreBuscado
+                    );
+                }
+            );
 
 
         // =================================================
         // NOMBRE DUPLICADO
         // =================================================
 
-        if (encontrados.length > 1) {
+        if (
+            encontrados.length > 1
+        ) {
 
             console.log(
                 `⚠️ Nombre duplicado en BM: ${playerName}`
@@ -166,7 +401,7 @@ async function getBattleMetricsPlayerStatus(
         // DATOS DEL JUGADOR
         // =================================================
 
-        let playerResponse =
+        const playerResponse =
             await axios.get(
                 `${BM_API}/players/${playerId}`,
                 {
@@ -228,20 +463,11 @@ async function getBattleMetricsPlayerStatus(
 
 
         // =================================================
-        // HORAS TOTALES
+        // HORAS TOTALES DESDE SERVIDORES
         // =================================================
 
-        /*
-         * IMPORTANTE:
-         *
-         * BattleMetrics no siempre entrega
-         * player.meta.timePlayed.
-         *
-         * Por eso primero intentamos obtener
-         * el tiempo desde los servidores incluidos.
-         */
-
-        let segundosTotales = 0;
+        let segundosTotales =
+            0;
 
 
         for (
@@ -255,95 +481,36 @@ async function getBattleMetricsPlayerStatus(
                 ) || 0;
 
 
-            if (tiempo > 0) {
+            if (
+                tiempo > 0
+            ) {
 
-                segundosTotales += tiempo;
-
+                segundosTotales +=
+                    tiempo;
             }
-
         }
 
 
-        /*
-         * Si BattleMetrics no entregó tiempo
-         * mediante los servidores incluidos,
-         * utilizamos las sesiones.
-         *
-         * Esto permite calcular las horas reales
-         * sumando las sesiones.
-         */
-
-        let todasLasSesiones = [];
-
-        let pagina = 1;
-
-        const limitePaginas = 50;
-
-        let continuar = true;
-
-
         // =================================================
-        // FECHAS
+        // OBTENER SESIONES
         // =================================================
 
-        const ahora =
-            new Date();
+        let todasLasSesiones =
+            [];
+
+        let pagina =
+            1;
+
+        const limitePaginas =
+            50;
 
 
-        // =================================================
-        // INICIO DE SEMANA
-        // =================================================
+        let nextUrl =
+            `${BM_API}/players/${playerId}/relationships/sessions?page[size]=100`;
 
-        const inicioSemana =
-            new Date(ahora);
-
-
-        const diaSemana =
-            inicioSemana.getDay();
-
-
-        const diasDesdeLunes =
-            diaSemana === 0
-                ? 6
-                : diaSemana - 1;
-
-
-        inicioSemana.setDate(
-            inicioSemana.getDate() -
-            diasDesdeLunes
-        );
-
-
-        inicioSemana.setHours(
-            0,
-            0,
-            0,
-            0
-        );
-
-
-        // =================================================
-        // INICIO DEL MES
-        // =================================================
-
-        const inicioMes =
-            new Date(
-                ahora.getFullYear(),
-                ahora.getMonth(),
-                1,
-                0,
-                0,
-                0,
-                0
-            );
-
-
-        // =================================================
-        // SESIONES
-        // =================================================
 
         while (
-            continuar &&
+            nextUrl &&
             pagina <= limitePaginas
         ) {
 
@@ -354,28 +521,12 @@ async function getBattleMetricsPlayerStatus(
                 );
 
 
-                /*
-                 * IMPORTANTE:
-                 *
-                 * BattleMetrics rechaza page[number].
-                 *
-                 * Utilizamos solamente page[size]
-                 * y seguimos el enlace "next" que devuelve
-                 * la API.
-                 */
-
-                const params = {
-                    "page[size]": 100
-                };
-
-
                 const sessionResponse =
                     await axios.get(
-                        `${BM_API}/players/${playerId}/relationships/sessions`,
+                        nextUrl,
                         {
-                            headers: getHeaders(),
-
-                            params,
+                            headers:
+                                getHeaders(),
 
                             timeout: 7000
                         }
@@ -383,7 +534,8 @@ async function getBattleMetricsPlayerStatus(
 
 
                 const sesiones =
-                    sessionResponse.data?.data || [];
+                    sessionResponse.data?.data ||
+                    [];
 
 
                 console.log(
@@ -404,143 +556,23 @@ async function getBattleMetricsPlayerStatus(
                 );
 
 
-                // =================================================
-                // PAGINACIÓN MEDIANTE LINKS DE BATTLEMETRICS
-                // =================================================
-
-                const siguiente =
-                    sessionResponse.data?.links?.next;
+                nextUrl =
+                    sessionResponse.data?.links?.next ||
+                    null;
 
 
-                if (
-                    siguiente &&
-                    pagina < limitePaginas
-                ) {
-
-                    /*
-                     * BattleMetrics puede devolver una URL
-                     * completa para la siguiente página.
-                     */
-
-                    pagina++;
-
-
-                    // Guardamos la URL para la siguiente petición
-                    // mediante una variable especial.
-                    sessionResponse._nextUrl =
-                        siguiente;
-
-
-                    // Continuamos abajo utilizando nextUrl
-                    continuar = true;
-
-
-                } else {
-
-                    continuar = false;
-                }
-
-
-                // =================================================
-                // GUARDAR URL NEXT
-                // =================================================
-
-                if (
-                    continuar &&
-                    sessionResponse._nextUrl
-                ) {
-
-                    let nextUrl =
-                        sessionResponse._nextUrl;
-
-
-                    /*
-                     * Hacemos las siguientes páginas directamente
-                     * utilizando la URL proporcionada por BM.
-                     */
-
-                    while (
-                        nextUrl &&
-                        pagina <= limitePaginas
-                    ) {
-
-                        try {
-
-                            console.log(
-                                `📥 Obteniendo sesiones BM página ${pagina}...`
-                            );
-
-
-                            const nextResponse =
-                                await axios.get(
-                                    nextUrl,
-                                    {
-                                        headers:
-                                            getHeaders(),
-
-                                        timeout: 7000
-                                    }
-                                );
-
-
-                            const siguientesSesiones =
-                                nextResponse.data?.data ||
-                                [];
-
-
-                            console.log(
-                                `📊 Página ${pagina}: ${siguientesSesiones.length} sesiones`
-                            );
-
-
-                            if (
-                                siguientesSesiones.length === 0
-                            ) {
-
-                                nextUrl = null;
-                                break;
-                            }
-
-
-                            todasLasSesiones.push(
-                                ...siguientesSesiones
-                            );
-
-
-                            nextUrl =
-                                nextResponse.data?.links?.next ||
-                                null;
-
-
-                            pagina++;
-
-
-                        } catch (error) {
-
-                            console.error(
-                                `❌ Error obteniendo página ${pagina}:`,
-                                error.response?.data ||
-                                error.message
-                            );
-
-                            nextUrl = null;
-                        }
-                    }
-
-
-                    continuar = false;
-                }
+                pagina++;
 
 
             } catch (error) {
 
                 console.error(
-                    `❌ Error obteniendo sesiones página ${pagina}:`,
+                    `❌ Error obteniendo página ${pagina}:`,
                     error.response?.data ||
                     error.message
                 );
 
-                continuar = false;
+                break;
             }
         }
 
@@ -548,6 +580,34 @@ async function getBattleMetricsPlayerStatus(
         console.log(
             `📊 Sesiones obtenidas: ${todasLasSesiones.length}`
         );
+
+
+        // =================================================
+        // FECHA ACTUAL
+        // =================================================
+
+        const ahora =
+            new Date();
+
+
+        // =================================================
+        // INICIO DE SEMANA CHILE
+        // =================================================
+
+        const inicioSemana =
+            obtenerInicioSemanaChile(
+                ahora
+            );
+
+
+        // =================================================
+        // INICIO DE MES CHILE
+        // =================================================
+
+        const inicioMes =
+            obtenerInicioMesChile(
+                ahora
+            );
 
 
         // =================================================
@@ -567,7 +627,10 @@ async function getBattleMetricsPlayerStatus(
                         b.attributes?.start || 0
                     );
 
-                return fechaB - fechaA;
+                return (
+                    fechaB -
+                    fechaA
+                );
             }
         );
 
@@ -591,16 +654,22 @@ async function getBattleMetricsPlayerStatus(
             );
 
 
-        let online = false;
+        let online =
+            false;
 
-        let tiempoJugando = "0m";
+        let tiempoJugando =
+            "0m";
 
-        let servidorActual = null;
+        let servidorActual =
+            null;
 
 
-        if (sesionActiva) {
+        if (
+            sesionActiva
+        ) {
 
-            online = true;
+            online =
+                true;
 
 
             const inicio =
@@ -674,21 +743,24 @@ async function getBattleMetricsPlayerStatus(
             ) {
 
                 servidorActual =
-                    sesionActiva.attributes?.serverId ||
+                    sesionActiva.attributes
+                        ?.serverId ||
                     null;
             }
         }
 
 
         // =================================================
-        // OBTENER NOMBRE SERVIDOR
+        // OBTENER NOMBRE DEL SERVIDOR
         // =================================================
 
         let nombreServidor =
             "Desconocido";
 
 
-        if (servidorActual) {
+        if (
+            servidorActual
+        ) {
 
             const servidorEncontrado =
                 servidoresIncluidos.find(
@@ -709,7 +781,10 @@ async function getBattleMetricsPlayerStatus(
             }
 
 
-            // Si no estaba incluido, consultar directamente
+            // =================================================
+            // CONSULTA DIRECTA SI NO ESTABA INCLUIDO
+            // =================================================
+
             if (
                 nombreServidor ===
                 "Desconocido"
@@ -750,13 +825,17 @@ async function getBattleMetricsPlayerStatus(
         // CALCULAR HORAS DESDE SESIONES
         // =================================================
 
-        let segundosSesionesTotales = 0;
+        let segundosSesionesTotales =
+            0;
 
-        let segundosSemana = 0;
+        let segundosSemana =
+            0;
 
-        let segundosMes = 0;
+        let segundosMes =
+            0;
 
-        let ultimaConexion = null;
+        let ultimaConexion =
+            null;
 
 
         for (
@@ -792,8 +871,13 @@ async function getBattleMetricsPlayerStatus(
             }
 
 
-            let fin = null;
+            let fin =
+                null;
 
+
+            // =================================================
+            // SESIÓN TERMINADA
+            // =================================================
 
             if (
                 atributos.stop
@@ -804,7 +888,14 @@ async function getBattleMetricsPlayerStatus(
                         atributos.stop
                     );
 
-            } else if (
+            }
+
+
+            // =================================================
+            // SESIÓN ACTIVA
+            // =================================================
+
+            else if (
                 sesion === sesionActiva
             ) {
 
@@ -837,7 +928,7 @@ async function getBattleMetricsPlayerStatus(
 
 
             // =================================================
-            // TOTAL SESIONES
+            // TOTAL
             // =================================================
 
             segundosSesionesTotales +=
@@ -932,15 +1023,24 @@ async function getBattleMetricsPlayerStatus(
         }
 
 
-        /*
-         * Si no conseguimos horas mediante
-         * los servidores pero sí mediante sesiones,
-         * utilizamos las sesiones.
-         */
+        // =================================================
+        // CORRECCIÓN IMPORTANTE DE HORAS BM
+        // =================================================
+        //
+        // Si las sesiones entregan más tiempo que los
+        // servidores incluidos, utilizamos las sesiones.
+        //
+        // Esto evita casos como:
+        //
+        // BM incluido -> 0h
+        // Sesiones     -> 9594h
+        //
+        // Resultado correcto -> 9594h
+        // =================================================
 
         if (
-            segundosTotales <= 0 &&
-            segundosSesionesTotales > 0
+            segundosSesionesTotales >
+            segundosTotales
         ) {
 
             segundosTotales =
@@ -987,7 +1087,8 @@ async function getBattleMetricsPlayerStatus(
         // HISTORIAL DE NOMBRES
         // =================================================
 
-        let historialNombres = [];
+        let historialNombres =
+            [];
 
 
         try {
@@ -1028,7 +1129,10 @@ async function getBattleMetricsPlayerStatus(
                     ...new Set(
                         nombres
                     )
-                ].slice(0, 3);
+                ].slice(
+                    0,
+                    3
+                );
 
 
         } catch (error) {
@@ -1041,7 +1145,7 @@ async function getBattleMetricsPlayerStatus(
 
 
         // =================================================
-        // RESULTADO
+        // RESULTADO FINAL
         // =================================================
 
         const resultado = {
@@ -1152,7 +1256,8 @@ async function getServerLeaderboard(
 
 
         const included =
-            response.data?.included || [];
+            response.data?.included ||
+            [];
 
 
         const players =
