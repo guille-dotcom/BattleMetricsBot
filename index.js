@@ -28,6 +28,7 @@ const {
 const PORT = process.env.PORT || 3000;
 
 const server = http.createServer((req, res) => {
+
     res.writeHead(200, {
         "Content-Type": "text/plain",
         "Content-Length": "2",
@@ -38,31 +39,47 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-    console.log(`🌐 Servidor web activo en puerto ${PORT}`);
+
+    console.log(
+        `🌐 Servidor web activo en puerto ${PORT}`
+    );
+
 });
 
 // ======================
 // CLIENTE DISCORD
 // ======================
 const client = new Client({
+
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildPresences
     ]
+
 });
 
 // ======================
 // DIAGNÓSTICO DISCORD
 // ======================
+//
+// Discord.js genera muchos mensajes DEBUG normales,
+// como heartbeats, conexión del WebSocket, etc.
+//
+// Los filtramos para mantener Render limpio.
+// ======================
 
-// Discord.js puede enviar información sensible mediante el evento debug.
-// Filtramos cualquier mensaje que contenga tokens.
 client.on("debug", info => {
 
     const texto = String(info);
 
+    // Ignorar mensajes normales del WebSocket
     if (
+        texto.includes("[WS => Shard") ||
+        texto.includes("Heartbeat acknowledged") ||
+        texto.includes("First heartbeat sent") ||
+        texto.includes("Waiting for event ready") ||
+        texto.includes("Shard received all its guilds") ||
         texto.includes("Provided token") ||
         texto.includes("LOGIN RESULT") ||
         texto.includes("token:")
@@ -70,44 +87,105 @@ client.on("debug", info => {
         return;
     }
 
-    console.log("🔧 DISCORD DEBUG:", texto);
+    // Solo mostrar DEBUG que no haya sido filtrado
+    console.log(
+        "🔧 DISCORD DEBUG:",
+        texto
+    );
+
 });
+
+// ======================
+// WARNINGS DISCORD
+// ======================
 
 client.on("warn", info => {
-    console.log("⚠️ DISCORD WARN:", info);
+
+    console.log(
+        "⚠️ DISCORD WARN:",
+        info
+    );
+
 });
+
+// ======================
+// SHARD READY
+// ======================
 
 client.on("shardReady", id => {
-    console.log(`🟢 SHARD ${id} CONECTADO`);
+
+    console.log(
+        `🟢 SHARD ${id} CONECTADO`
+    );
+
 });
+
+// ======================
+// ERROR SHARD
+// ======================
 
 client.on("shardError", error => {
-    console.error("❌ ERROR SHARD DISCORD:", error);
+
+    console.error(
+        "❌ ERROR SHARD DISCORD:",
+        error
+    );
+
 });
 
+// ======================
+// SHARD DESCONECTADO
+// ======================
+
 client.on("shardDisconnect", (event, id) => {
+
     console.error(
         `🔴 SHARD ${id} DESCONECTADO:`,
         event
     );
+
 });
 
+// ======================
+// RECONEXIÓN
+// ======================
+
 client.on("shardReconnecting", id => {
+
     console.log(
         `🔄 SHARD ${id} INTENTANDO RECONEXIÓN...`
     );
+
 });
+
+// ======================
+// SESIÓN INVALIDADA
+// ======================
 
 client.on("invalidated", () => {
-    console.error("❌ SESIÓN DE DISCORD INVALIDADA");
+
+    console.error(
+        "❌ SESIÓN DE DISCORD INVALIDADA"
+    );
+
 });
 
+// ======================
+// ERROR DISCORD
+// ======================
+
 client.on("error", error => {
+
     console.error(
         "❌ ERROR DISCORD:",
         error
     );
+
 });
+
+// ======================
+// COLECCIÓN DE COMANDOS
+// ======================
 
 client.commands = new Collection();
 
@@ -115,11 +193,19 @@ client.commands = new Collection();
 // CARGAR COMANDOS
 // ======================
 
-const commandsPath = path.join(__dirname, "commands");
+const commandsPath =
+    path.join(
+        __dirname,
+        "commands"
+    );
 
-const commandFiles = fs
-    .readdirSync(commandsPath)
-    .filter(file => file.endsWith(".js"));
+const commandFiles =
+    fs
+        .readdirSync(commandsPath)
+        .filter(
+            file =>
+                file.endsWith(".js")
+        );
 
 const commandsArray = [];
 
@@ -127,9 +213,15 @@ for (const file of commandFiles) {
 
     try {
 
-        const command = require(`./commands/${file}`);
+        const command =
+            require(
+                `./commands/${file}`
+            );
 
-        if ("data" in command && "execute" in command) {
+        if (
+            "data" in command &&
+            "execute" in command
+        ) {
 
             client.commands.set(
                 command.data.name,
@@ -160,179 +252,208 @@ for (const file of commandFiles) {
         );
 
     }
+
 }
 
 // ======================
 // BOT READY
 // ======================
-// discord.js v15 utiliza clientReady
-// en lugar del evento ready.
+//
+// discord.js v15 utiliza clientReady.
+// ======================
 
-client.once("clientReady", async () => {
-
-    console.log(
-        `✅ Bot conectado como ${client.user.tag}`
-    );
-
-    // ======================
-    // REGISTRAR COMANDOS
-    // ======================
-
-    try {
-
-        const rest = new REST({
-            version: "10"
-        }).setToken(
-            process.env.TOKEN
-        );
+client.once(
+    "clientReady",
+    async () => {
 
         console.log(
-            "🔄 Sincronizando comandos globalmente..."
+            `✅ Bot conectado como ${client.user.tag}`
         );
 
-        await rest.put(
-            Routes.applicationCommands(
-                client.user.id
-            ),
-            {
-                body: commandsArray
-            }
-        );
-
-        console.log(
-            "✨ ¡Comandos sincronizados sin duplicados!"
-        );
-
-    } catch (error) {
-
-        console.error(
-            "❌ Error al registrar comandos:",
-            error
-        );
-
-    }
-
-    // ======================
-    // PRESENCIA
-    // ======================
-
-    try {
-
-        await client.user.setPresence({
-
-            status: "online",
-
-            activities: [
-                {
-                    name: "chivando siempre 👀",
-                    type: 0
-                }
-            ]
-
-        });
-
-        console.log(
-            "🟢 Estado ONLINE establecido"
-        );
-
-    } catch (error) {
-
-        console.log(
-            "⚠️ Error presencia:",
-            error.message
-        );
-
-    }
-
-    // ======================
-    // TRACKER AUTOMÁTICO
-    // ======================
-
-    console.log(
-        "🔎 Tracker iniciado cada 30 segundos"
-    );
-
-    let trackerRevisando = false;
-
-    try {
-
-        await revisarTrackers(client);
-
-    } catch (error) {
-
-        console.log(
-            "❌ Error revisión inicial tracker:",
-            error.message
-        );
-
-    }
-
-    setInterval(async () => {
-
-        if (trackerRevisando) {
-
-            console.log(
-                "⏳ Tracker anterior todavía ejecutándose..."
-            );
-
-            return;
-
-        }
-
-        trackerRevisando = true;
+        // ======================
+        // REGISTRAR COMANDOS
+        // ======================
 
         try {
 
-            await revisarTrackers(client);
+            const rest =
+                new REST({
+                    version: "10"
+                }).setToken(
+                    process.env.TOKEN
+                );
+
+            console.log(
+                "🔄 Sincronizando comandos globalmente..."
+            );
+
+            await rest.put(
+                Routes.applicationCommands(
+                    client.user.id
+                ),
+                {
+                    body: commandsArray
+                }
+            );
+
+            console.log(
+                "✨ ¡Comandos sincronizados sin duplicados!"
+            );
+
+        } catch (error) {
+
+            console.error(
+                "❌ Error al registrar comandos:",
+                error
+            );
+
+        }
+
+        // ======================
+        // PRESENCIA
+        // ======================
+
+        try {
+
+            await client.user.setPresence({
+
+                status: "online",
+
+                activities: [
+                    {
+                        name: "chivando siempre 👀",
+                        type: 0
+                    }
+                ]
+
+            });
+
+            console.log(
+                "🟢 Estado ONLINE establecido"
+            );
 
         } catch (error) {
 
             console.log(
-                "❌ Error tracker automático:",
+                "⚠️ Error presencia:",
                 error.message
             );
 
-        } finally {
+        }
 
-            trackerRevisando = false;
+        // ======================
+        // TRACKER AUTOMÁTICO
+        // ======================
+
+        console.log(
+            "🔎 Tracker iniciado cada 30 segundos"
+        );
+
+        let trackerRevisando = false;
+
+        // ======================
+        // PRIMERA REVISIÓN
+        // ======================
+
+        try {
+
+            await revisarTrackers(
+                client
+            );
+
+        } catch (error) {
+
+            console.log(
+                "❌ Error revisión inicial tracker:",
+                error.message
+            );
 
         }
 
-    }, 30 * 1000);
+        // ======================
+        // REVISIÓN CADA 30 SEGUNDOS
+        // ======================
 
-});
+        setInterval(
+            async () => {
+
+                if (trackerRevisando) {
+
+                    console.log(
+                        "⏳ Tracker anterior todavía ejecutándose..."
+                    );
+
+                    return;
+
+                }
+
+                trackerRevisando = true;
+
+                try {
+
+                    await revisarTrackers(
+                        client
+                    );
+
+                } catch (error) {
+
+                    console.log(
+                        "❌ Error tracker automático:",
+                        error.message
+                    );
+
+                } finally {
+
+                    trackerRevisando = false;
+
+                }
+
+            },
+            30 * 1000
+        );
+
+    }
+);
 
 // ======================
 // NUEVOS SERVIDORES
 // ======================
 
-client.on("guildCreate", async guild => {
+client.on(
+    "guildCreate",
+    async guild => {
 
-    console.log(
-        `📥 Nuevo servidor: ${guild.name}`
-    );
-
-    try {
-
-        const canal = guild.channels.cache.find(
-            channel =>
-                channel.isTextBased() &&
-                channel
-                    .permissionsFor(guild.members.me)
-                    ?.has("SendMessages")
+        console.log(
+            `📥 Nuevo servidor: ${guild.name}`
         );
 
-        if (canal) {
+        try {
 
-            await canal.send({
+            const canal =
+                guild.channels.cache.find(
+                    channel =>
+                        channel.isTextBased() &&
+                        channel
+                            .permissionsFor(
+                                guild.members.me
+                            )
+                            ?.has(
+                                "SendMessages"
+                            )
+                );
 
-                embeds: [
+            if (canal) {
 
-                    {
+                await canal.send({
 
-                        title: "🎯 Bienvenido a RustLogix",
+                    embeds: [
 
-                        description:
+                        {
+
+                            title:
+                                "🎯 Bienvenido a RustLogix",
+
+                            description:
 `Gracias por agregar RustLogix 🤖
 
 ⚙️ **Primer paso obligatorio**
@@ -366,32 +487,36 @@ Después podrás usar:
 
 para ver todos los comandos disponibles.`,
 
-                        color: 0x3498DB,
+                            color:
+                                0x3498DB,
 
-                        footer: {
-                            text: "RustLogix"
-                        },
+                            footer: {
+                                text:
+                                    "RustLogix"
+                            },
 
-                        timestamp: new Date()
+                            timestamp:
+                                new Date()
 
-                    }
+                        }
 
-                ]
+                    ]
 
-            });
+                });
+
+            }
+
+        } catch (error) {
+
+            console.log(
+                "❌ Error enviando bienvenida:",
+                error.message
+            );
 
         }
 
-    } catch (error) {
-
-        console.log(
-            "❌ Error enviando bienvenida:",
-            error.message
-        );
-
     }
-
-});
+);
 
 // ======================
 // INTERACCIONES
@@ -405,7 +530,9 @@ client.on(
         // BOTONES
         // ======================
 
-        if (interaction.isButton()) {
+        if (
+            interaction.isButton()
+        ) {
 
             if (
                 interaction.customId.startsWith(
@@ -431,14 +558,17 @@ client.on(
                             id
                         );
 
-                    if (!trackerEliminado) {
+                    if (
+                        !trackerEliminado
+                    ) {
 
                         return interaction.reply({
 
                             content:
                                 "❌ Ese tracker ya no existe o ya fue eliminado.",
 
-                            ephemeral: true
+                            ephemeral:
+                                true
 
                         });
 
@@ -458,7 +588,7 @@ client.on(
                 } catch (error) {
 
                     console.error(
-                        "Error al eliminar tracker por botón:",
+                        "❌ Error al eliminar tracker por botón:",
                         error
                     );
 
@@ -467,7 +597,8 @@ client.on(
                         content:
                             "❌ Ocurrió un error al intentar eliminar el tracker.",
 
-                        ephemeral: true
+                        ephemeral:
+                            true
 
                     });
 
@@ -526,8 +657,11 @@ client.on(
                 );
 
             await Promise.race([
+
                 executionPromise,
+
                 timeoutPromise
+
             ]);
 
         } catch (error) {
@@ -548,16 +682,21 @@ client.on(
                 ) {
 
                     await interaction.editReply({
-                        content: errorMsg
+
+                        content:
+                            errorMsg
+
                     });
 
                 } else {
 
                     await interaction.reply({
 
-                        content: errorMsg,
+                        content:
+                            errorMsg,
 
-                        ephemeral: true
+                        ephemeral:
+                            true
 
                     });
 
@@ -613,6 +752,10 @@ async function iniciarBot() {
 
     try {
 
+        // ======================
+        // MONGODB
+        // ======================
+
         console.log(
             "🔄 Conectando a MongoDB..."
         );
@@ -624,63 +767,78 @@ async function iniciarBot() {
         // ======================
 
         console.log(
-            "🌐 PROBANDO CONEXIÓN HTTPS A DISCORD DESDE RENDER..."
+            "🌐 Probando conexión HTTPS a Discord..."
         );
 
-        await new Promise((resolve) => {
+        await new Promise(
+            resolve => {
 
-            const request = https.get(
-                "https://discord.com/api/v10/gateway",
-                (res) => {
+                const request =
+                    https.get(
+                        "https://discord.com/api/v10/gateway",
+                        res => {
 
-                    console.log(
-                        `🌐 DISCORD RESPONDIÓ CON STATUS: ${res.statusCode}`
+                            console.log(
+                                `🌐 Discord respondió: ${res.statusCode}`
+                            );
+
+                            let data = "";
+
+                            res.on(
+                                "data",
+                                chunk => {
+
+                                    data += chunk;
+
+                                }
+                            );
+
+                            res.on(
+                                "end",
+                                () => {
+
+                                    // No mostramos el cuerpo completo
+                                    // porque no es necesario para el bot.
+
+                                    resolve();
+
+                                }
+                            );
+
+                        }
                     );
 
-                    let data = "";
+                request.setTimeout(
+                    15000,
+                    () => {
 
-                    res.on("data", chunk => {
-                        data += chunk;
-                    });
+                        console.error(
+                            "❌ TIMEOUT HTTPS: Discord no respondió en 15 segundos."
+                        );
 
-                    res.on("end", () => {
+                        request.destroy();
 
-                        console.log(
-                            "🌐 RESPUESTA DE DISCORD:",
-                            data
+                        resolve();
+
+                    }
+                );
+
+                request.on(
+                    "error",
+                    error => {
+
+                        console.error(
+                            "❌ ERROR HTTPS DISCORD:",
+                            error.message
                         );
 
                         resolve();
 
-                    });
-
-                }
-            );
-
-            request.setTimeout(15000, () => {
-
-                console.error(
-                    "❌ TIMEOUT HTTPS: Discord no respondió en 15 segundos."
+                    }
                 );
 
-                request.destroy();
-
-                resolve();
-
-            });
-
-            request.on("error", error => {
-
-                console.error(
-                    "❌ ERROR HTTPS DISCORD:",
-                    error.message
-                );
-
-                resolve();
-
-            });
-
-        });
+            }
+        );
 
         // ======================
         // LOGIN DISCORD
@@ -690,7 +848,9 @@ async function iniciarBot() {
             "🔑 Iniciando sesión en Discord..."
         );
 
-        if (!process.env.TOKEN) {
+        if (
+            !process.env.TOKEN
+        ) {
 
             throw new Error(
                 "❌ La variable TOKEN no existe en las variables de entorno."
@@ -728,11 +888,13 @@ async function iniciarBot() {
             );
 
         await Promise.race([
+
             loginPromise,
+
             timeoutPromise
+
         ]);
 
-        // IMPORTANTE:
         // No mostramos el resultado de client.login()
         // porque puede contener información sensible.
 
@@ -755,5 +917,9 @@ async function iniciarBot() {
     }
 
 }
+
+// ======================
+// INICIAR BOT
+// ======================
 
 iniciarBot();
