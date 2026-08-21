@@ -3,10 +3,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { getSteamProfile } = require("../services/steam.js");
 
 const {
-    searchBattleMetricsPlayer
-} = require("../services/battlemetrics.js");
-
-const {
+    searchBattleMetricsPlayer,
     getBattleMetricsPlayerStatus
 } = require("../services/battlemetricsHours.js");
 
@@ -190,7 +187,26 @@ module.exports = {
 
 
         // =====================================================
-        // NO ENCONTRADO / OFFLINE
+        // NOMBRE DUPLICADO
+        // =====================================================
+
+        if (
+            jugadorBM &&
+            jugadorBM.duplicate
+        ) {
+
+            return await interaction.editReply({
+
+                content:
+                    `⚠️ El nombre **${perfilSteam.name}** aparece más de una vez en el servidor.\n\n` +
+                    `Usa **/horasbm** con el enlace de BattleMetrics del jugador para obtener sus datos exactos.`
+
+            });
+        }
+
+
+        // =====================================================
+        // NO ENCONTRADO
         // =====================================================
 
         if (!jugadorBM) {
@@ -205,7 +221,7 @@ module.exports = {
                     .setColor("#FF0000")
 
                     .setDescription(
-                        `⚠️ El jugador **no está online** en el servidor o BattleMetrics no respondió a tiempo.`
+                        `⚠️ El jugador **no está online** en el servidor configurado o BattleMetrics no respondió a tiempo.`
                     )
 
                     .addFields(
@@ -320,14 +336,17 @@ module.exports = {
 
 
         /*
-         * IMPORTANTE:
+         * =====================================================
+         * IMPORTANTE
          *
-         * La diferencia es:
+         * La diferencia es únicamente:
          *
          * |Horas Steam - Horas BattleMetrics|
          *
-         * NO utiliza las horas semanales
-         * ni las horas mensuales.
+         * NO utiliza:
+         * - horas semanales
+         * - horas mensuales
+         * =====================================================
          */
 
         const diferenciaTexto =
@@ -357,7 +376,7 @@ module.exports = {
 
 
         // =====================================================
-        // NUEVAS ESTADÍSTICAS
+        // ESTADÍSTICAS
         // =====================================================
 
         const horasSemana =
