@@ -62,7 +62,6 @@ const client = new Client({
 // ======================
 // DIAGNÓSTICO DISCORD
 // ======================
-
 client.on("debug", info => {
 
     const texto = String(info);
@@ -90,7 +89,6 @@ client.on("debug", info => {
 // ======================
 // WARNINGS DISCORD
 // ======================
-
 client.on("warn", info => {
 
     console.log(
@@ -103,7 +101,6 @@ client.on("warn", info => {
 // ======================
 // SHARD READY
 // ======================
-
 client.on("shardReady", id => {
 
     console.log(
@@ -115,7 +112,6 @@ client.on("shardReady", id => {
 // ======================
 // ERROR SHARD
 // ======================
-
 client.on("shardError", error => {
 
     console.error(
@@ -128,7 +124,6 @@ client.on("shardError", error => {
 // ======================
 // SHARD DESCONECTADO
 // ======================
-
 client.on("shardDisconnect", (event, id) => {
 
     console.error(
@@ -141,7 +136,6 @@ client.on("shardDisconnect", (event, id) => {
 // ======================
 // RECONEXIÓN
 // ======================
-
 client.on("shardReconnecting", id => {
 
     console.log(
@@ -153,7 +147,6 @@ client.on("shardReconnecting", id => {
 // ======================
 // SESIÓN INVALIDADA
 // ======================
-
 client.on("invalidated", () => {
 
     console.error(
@@ -165,7 +158,6 @@ client.on("invalidated", () => {
 // ======================
 // ERROR DISCORD
 // ======================
-
 client.on("error", error => {
 
     console.error(
@@ -178,13 +170,11 @@ client.on("error", error => {
 // ======================
 // COLECCIÓN DE COMANDOS
 // ======================
-
 client.commands = new Collection();
 
 // ======================
 // CARGAR COMANDOS
 // ======================
-
 const commandsPath =
     path.join(
         __dirname,
@@ -250,7 +240,6 @@ for (const file of commandFiles) {
 // ======================
 // BOT READY
 // ======================
-
 client.once(
     "clientReady",
     async () => {
@@ -262,7 +251,6 @@ client.once(
         // ======================
         // REGISTRAR COMANDOS
         // ======================
-
         try {
 
             const rest =
@@ -301,7 +289,6 @@ client.once(
         // ======================
         // PRESENCIA
         // ======================
-
         try {
 
             await client.user.setPresence({
@@ -333,7 +320,6 @@ client.once(
         // ======================
         // TRACKER AUTOMÁTICO
         // ======================
-
         console.log(
             "🔎 Tracker iniciado cada 30 segundos"
         );
@@ -343,7 +329,6 @@ client.once(
         // ======================
         // PRIMERA REVISIÓN
         // ======================
-
         try {
 
             await revisarTrackers(
@@ -362,7 +347,6 @@ client.once(
         // ======================
         // REVISIÓN CADA 30 SEGUNDOS
         // ======================
-
         setInterval(
             async () => {
 
@@ -407,7 +391,6 @@ client.once(
 // ======================
 // NUEVOS SERVIDORES
 // ======================
-
 client.on(
     "guildCreate",
     async guild => {
@@ -514,7 +497,6 @@ para ver todos los comandos disponibles.`,
 // ======================
 // INTERACCIONES
 // ======================
-
 client.on(
     "interactionCreate",
     async interaction => {
@@ -522,16 +504,14 @@ client.on(
         // =====================================================
         // BOTONES
         // =====================================================
-
-        if (
-            interaction.isButton()
-        ) {
+        if (interaction.isButton()) {
 
             // =================================================
             // BOTONES DEL RAID CALCULATOR
             // =================================================
-
             if (
+                interaction.customId === "raid_economia" ||
+                interaction.customId === "raid_cantidad" ||
                 interaction.customId === "raid_explosivos" ||
                 interaction.customId === "raid_melee"
             ) {
@@ -552,15 +532,24 @@ client.on(
                             "❌ No se encontró manejarBotonRaid en el comando /raid."
                         );
 
-                        return interaction.reply({
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
 
-                            content:
-                                "❌ El sistema de Raid Calculator no está disponible.",
+                            await interaction.reply({
 
-                            ephemeral:
-                                true
+                                content:
+                                    "❌ El sistema de Raid Calculator no está disponible.",
 
-                        });
+                                ephemeral:
+                                    true
+
+                            });
+
+                        }
+
+                        return;
 
                     }
 
@@ -606,13 +595,12 @@ client.on(
                 }
 
                 return;
-            }
 
+            }
 
             // =================================================
             // ELIMINAR TRACKER
             // =================================================
-
             if (
                 interaction.customId.startsWith(
                     "eliminar_tracker_"
@@ -692,7 +680,6 @@ client.on(
         // =====================================================
         // SLASH COMMANDS
         // =====================================================
-
         if (
             !interaction.isChatInputCommand()
         ) {
@@ -721,18 +708,22 @@ client.on(
 
             const timeoutPromise =
                 new Promise(
-                    (_, reject) =>
+                    (_, reject) => {
 
                         setTimeout(
-                            () =>
+                            () => {
+
                                 reject(
                                     new Error(
                                         "TIME_OUT_COMANDO"
                                     )
-                                ),
-                            30000
-                        )
+                                );
 
+                            },
+                            30000
+                        );
+
+                    }
                 );
 
             await Promise.race([
@@ -798,7 +789,6 @@ client.on(
 // ======================
 // ERRORES GLOBALES
 // ======================
-
 process.on(
     "unhandledRejection",
     reason => {
@@ -826,7 +816,6 @@ process.on(
 // ======================
 // INICIO Y LOGIN
 // ======================
-
 async function iniciarBot() {
 
     try {
@@ -834,7 +823,6 @@ async function iniciarBot() {
         // ======================
         // MONGODB
         // ======================
-
         console.log(
             "🔄 Conectando a MongoDB..."
         );
@@ -844,7 +832,6 @@ async function iniciarBot() {
         // ======================
         // PRUEBA HTTPS DISCORD
         // ======================
-
         console.log(
             "🌐 Probando conexión HTTPS a Discord..."
         );
@@ -919,7 +906,6 @@ async function iniciarBot() {
         // ======================
         // LOGIN DISCORD
         // ======================
-
         console.log(
             "🔑 Iniciando sesión en Discord..."
         );
@@ -994,5 +980,4 @@ async function iniciarBot() {
 // ======================
 // INICIAR BOT
 // ======================
-
 iniciarBot();
