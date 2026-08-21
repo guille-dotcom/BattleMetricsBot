@@ -1,129 +1,577 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { getSteamProfile } = require("../services/steam.js"); 
-const { searchBattleMetricsPlayer, getBattleMetricsPlayerStatus } = require("../services/battlemetrics.js"); 
+
+const { getSteamProfile } = require("../services/steam.js");
+
+const {
+    searchBattleMetricsPlayer
+} = require("../services/battlemetrics.js");
+
+const {
+    getBattleMetricsPlayerStatus
+} = require("../services/battlemetricsHours.js");
+
 const ServerConfig = require("../models/ServerConfig");
 
-module.exports = { 
+module.exports = {
+
     data: new SlashCommandBuilder()
+
         .setName("horas")
-        .setDescription("Obtiene las horas de BattleMetrics buscando al usuario de Steam en el servidor")
-        .addStringOption(option => 
-            option.setName("steamid")
-                .setDescription("El SteamID del jugador (Ej: 76561198818187993)")
+
+        .setDescription(
+            "Obtiene las horas de BattleMetrics buscando al usuario de Steam en el servidor"
+        )
+
+        .addStringOption(option =>
+            option
+                .setName("steamid")
+                .setDescription(
+                    "El SteamID del jugador (Ej: 76561198818187993)"
+                )
                 .setRequired(true)
         ),
- 
-    async execute(interaction) { 
+
+    async execute(interaction) {
+
         await interaction.deferReply();
 
-        const steamId = interaction.options.getString("steamid").trim(); 
-        let serverId = "433255"; 
-        
+        const steamId =
+            interaction.options
+                .getString("steamid")
+                .trim();
+
+        let serverId = "433255";
+
+
+        // =====================================================
+        // OBTENER SERVIDOR CONFIGURADO
+        // =====================================================
+
         try {
-            const dbConfig = await ServerConfig.findOne({ guildId: interaction.guild.id });
-            if (dbConfig && dbConfig.battleMetricsServerId) {
-                serverId = dbConfig.battleMetricsServerId;
+
+            const dbConfig =
+                await ServerConfig.findOne({
+                    guildId: interaction.guild.id
+                });
+
+            if (
+                dbConfig &&
+                dbConfig.battleMetricsServerId
+            ) {
+
+                serverId =
+                    dbConfig.battleMetricsServerId;
             }
+
         } catch (error) {
-            console.log("Error MongoDB:", error.message);
+
+            console.log(
+                "Error MongoDB:",
+                error.message
+            );
         }
 
-        // Obtener perfil de Steam con control de errores por si la API falla
+
+        // =====================================================
+        // STEAM
+        // =====================================================
+
         let perfilSteam;
+
         try {
-            perfilSteam = await getSteamProfile(steamId); 
+
+            perfilSteam =
+                await getSteamProfile(steamId);
+
         } catch (err) {
-            console.error("Error API Steam:", err.message);
-            return await interaction.editReply("❌ Error al conectar con la API de Steam.");
+
+            console.error(
+                "Error API Steam:",
+                err.message
+            );
+
+            return await interaction.editReply(
+                "❌ Error al conectar con la API de Steam."
+            );
         }
 
-        if (!perfilSteam || !perfilSteam.name) {
-            return await interaction.editReply("❌ ID no encontrado en Steam."); 
+
+        if (
+            !perfilSteam ||
+            !perfilSteam.name
+        ) {
+
+            return await interaction.editReply(
+                "❌ ID no encontrado en Steam."
+            );
         }
 
-        const horasSteamNum = parseFloat(perfilSteam.rustHours) || 0;
-        const horasSteamTexto = horasSteamNum > 0 ? `\`${horasSteamNum}h\`` : "`🔒 Privado`";
-        const paisTexto = perfilSteam.loccountrycode ? `:flag_${perfilSteam.loccountrycode.toLowerCase()}: (${perfilSteam.loccountrycode})` : "Desconocido";
-        const creacionSteamTexto = perfilSteam.creationDate || "No disponible";
-        
-        let vacTexto = "✅ Sin Baneos";
-        if (perfilSteam.vacBanned && perfilSteam.gameBansCount > 0) {
-            vacTexto = "⚠️ VAC & Game";
-        } else if (perfilSteam.vacBanned) {
-            vacTexto = "⚠️ Baneo VAC";
-        } else if (perfilSteam.gameBansCount > 0) {
-            vacTexto = `${perfilSteam.gameBansCount} Game Ban`;
+
+        // =====================================================
+        // DATOS STEAM
+        // =====================================================
+
+        const horasSteamNum =
+            parseFloat(
+                perfilSteam.rustHours
+            ) || 0;
+
+
+        const horasSteamTexto =
+            horasSteamNum > 0
+                ? `\`${horasSteamNum}h\``
+                : "`🔒 Privado`";
+
+
+        const paisTexto =
+            perfilSteam.loccountrycode
+                ? `:flag_${perfilSteam.loccountrycode.toLowerCase()}: (${perfilSteam.loccountrycode})`
+                : "Desconocido";
+
+
+        const creacionSteamTexto =
+            perfilSteam.creationDate ||
+            "No disponible";
+
+
+        // =====================================================
+        // BANEOS
+        // =====================================================
+
+        let vacTexto =
+            "✅ Sin Baneos";
+
+
+        if (
+            perfilSteam.vacBanned &&
+            perfilSteam.gameBansCount > 0
+        ) {
+
+            vacTexto =
+                "⚠️ VAC & Game";
+
+        } else if (
+            perfilSteam.vacBanned
+        ) {
+
+            vacTexto =
+                "⚠️ Baneo VAC";
+
+        } else if (
+            perfilSteam.gameBansCount > 0
+        ) {
+
+            vacTexto =
+                `${perfilSteam.gameBansCount} Game Ban`;
         }
 
-        // Búsqueda en BattleMetrics protegida para que no cuelgue el bot si la API externa falla
+
+        // =====================================================
+        // BUSCAR EN BATTLEMETRICS
+        // =====================================================
+
         let jugadorBM = null;
+
         try {
-            jugadorBM = await searchBattleMetricsPlayer(perfilSteam.name, serverId); 
+
+            jugadorBM =
+                await searchBattleMetricsPlayer(
+                    perfilSteam.name,
+                    serverId
+                );
+
         } catch (err) {
-            console.error("Error buscando en BattleMetrics:", err.message);
+
+            console.error(
+                "Error buscando en BattleMetrics:",
+                err.message
+            );
         }
+
+
+        // =====================================================
+        // NO ENCONTRADO / OFFLINE
+        // =====================================================
 
         if (!jugadorBM) {
-            const embedOffline = new EmbedBuilder()
-                .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
-                .setColor("#FF0000")
-                .setDescription(`⚠️ El jugador **no está online** en el servidor o BattleMetrics no respondió a tiempo.`)
-                .addFields(
-                    { name: "🆔 Steam ID", value: `[${steamId}](https://steamcommunity.com/profiles/${steamId})`, inline: true },
-                    { name: "📊 Horas Steam", value: horasSteamTexto, inline: true },
-                    { name: "🖥️ Estado", value: "`🔴 Desconocido / Offline`", inline: true },
-                    { name: "🌍 País", value: paisTexto, inline: true },
-                    { name: "🛡️ Baneos", value: `\`${vacTexto}\``, inline: true },
-                    { name: "📅 Antigüedad", value: `\`${creacionSteamTexto}\``, inline: true }
-                )
-                .setTimestamp()
-                .setFooter({ text: "RustLogix" });
 
-            if (perfilSteam.avatar || perfilSteam.avatarfull) {
-                embedOffline.setThumbnail(perfilSteam.avatarfull || perfilSteam.avatar);
+            const embedOffline =
+                new EmbedBuilder()
+
+                    .setTitle(
+                        `🔍 Resultado para: ${perfilSteam.name}`
+                    )
+
+                    .setColor("#FF0000")
+
+                    .setDescription(
+                        `⚠️ El jugador **no está online** en el servidor o BattleMetrics no respondió a tiempo.`
+                    )
+
+                    .addFields(
+
+                        {
+                            name: "🆔 Steam ID",
+                            value:
+                                `[${steamId}](https://steamcommunity.com/profiles/${steamId})`,
+                            inline: true
+                        },
+
+                        {
+                            name: "📊 Horas Steam",
+                            value:
+                                horasSteamTexto,
+                            inline: true
+                        },
+
+                        {
+                            name: "🖥️ Estado",
+                            value:
+                                "`🔴 Desconocido / Offline`",
+                            inline: true
+                        },
+
+                        {
+                            name: "🌍 País",
+                            value:
+                                paisTexto,
+                            inline: true
+                        },
+
+                        {
+                            name: "🛡️ Baneos",
+                            value:
+                                `\`${vacTexto}\``,
+                            inline: true
+                        },
+
+                        {
+                            name: "📅 Antigüedad",
+                            value:
+                                `\`${creacionSteamTexto}\``,
+                            inline: true
+                        }
+
+                    )
+
+                    .setTimestamp()
+
+                    .setFooter({
+                        text: "RustLogix"
+                    });
+
+
+            if (
+                perfilSteam.avatar ||
+                perfilSteam.avatarfull
+            ) {
+
+                embedOffline.setThumbnail(
+                    perfilSteam.avatarfull ||
+                    perfilSteam.avatar
+                );
             }
 
-            return await interaction.editReply({ embeds: [embedOffline] });
+
+            return await interaction.editReply({
+                embeds: [embedOffline]
+            });
         }
+
+
+        // =====================================================
+        // DATOS DETALLADOS BATTLEMETRICS
+        // =====================================================
 
         let datosFinales = null;
+
         try {
-            datosFinales = await getBattleMetricsPlayerStatus(jugadorBM.id); 
+
+            datosFinales =
+                await getBattleMetricsPlayerStatus(
+                    jugadorBM.id
+                );
+
         } catch (err) {
-            console.error("Error obteniendo detalles BattleMetrics:", err.message);
+
+            console.error(
+                "Error obteniendo detalles BattleMetrics:",
+                err.message
+            );
         }
+
 
         if (!datosFinales) {
-            return await interaction.editReply("❌ Error al obtener datos detallados de BattleMetrics."); 
+
+            return await interaction.editReply(
+                "❌ Error al obtener datos detallados de BattleMetrics."
+            );
         }
 
-        const horasBMNum = parseFloat(datosFinales.horasTotalesBM) || 0;
-        let diferenciaTexto = horasSteamNum > 0 ? `\`${Math.abs(horasSteamNum - horasBMNum).toFixed(0)}h\`` : "`N/A`";
-        const historialTexto = datosFinales.historialNombres && datosFinales.historialNombres.length > 0 ? datosFinales.historialNombres.slice(0, 3).join(", ") : "No disponible";
 
-        const embedOnline = new EmbedBuilder()
-            .setTitle(`🔍 Resultado para: ${perfilSteam.name}`)
-            .setColor("#57F287")
-            .addFields(
-                { name: "🎮 Servidor", value: datosFinales.server || "Desconocido", inline: false },
-                { name: "🆔 BattleMetrics", value: `[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})`, inline: true },
-                { name: "🆔 Steam ID", value: `[${steamId}](https://steamcommunity.com/profiles/${steamId})`, inline: true },
-                { name: "⏱️ Sesión Actual", value: `\`${datosFinales.jugando}\``, inline: true },
-                { name: "🌍 País", value: paisTexto, inline: true },
-                { name: "📈 Horas (BM)", value: `\`${datosFinales.horasTotalesBM}h\``, inline: true },
-                { name: "📊 Horas (Steam)", value: horasSteamTexto, inline: true },
-                { name: "⚖️ Diferencia", value: diferenciaTexto, inline: true },
-                { name: "🛡️ Estado Baneos", value: `\`${vacTexto}\``, inline: true },
-                { name: "📅 Antigüedad", value: `\`${creacionSteamTexto}\``, inline: true },
-                { name: "📝 Historial de Nombres", value: historialTexto, inline: false }
-            )
-            .setTimestamp()
-            .setFooter({ text: "RustLogix" });
+        // =====================================================
+        // DIFERENCIA STEAM / BATTLEMETRICS
+        // =====================================================
 
-        if (perfilSteam.avatar || perfilSteam.avatarfull) {
-            embedOnline.setThumbnail(perfilSteam.avatarfull || perfilSteam.avatar);
+        const horasBMNum =
+            parseFloat(
+                datosFinales.horasTotalesBM
+            ) || 0;
+
+
+        /*
+         * IMPORTANTE:
+         *
+         * La diferencia es:
+         *
+         * |Horas Steam - Horas BattleMetrics|
+         *
+         * NO utiliza las horas semanales
+         * ni las horas mensuales.
+         */
+
+        const diferenciaTexto =
+            horasSteamNum > 0
+
+                ? `\`${Math.abs(
+                    horasSteamNum -
+                    horasBMNum
+                ).toFixed(0)}h\``
+
+                : "`N/A`";
+
+
+        // =====================================================
+        // HISTORIAL DE NOMBRES
+        // =====================================================
+
+        const historialTexto =
+            datosFinales.historialNombres &&
+            datosFinales.historialNombres.length > 0
+
+                ? datosFinales.historialNombres
+                    .slice(0, 3)
+                    .join(", ")
+
+                : "No disponible";
+
+
+        // =====================================================
+        // NUEVAS ESTADÍSTICAS
+        // =====================================================
+
+        const horasSemana =
+            datosFinales.horasSemana !== undefined
+                ? datosFinales.horasSemana
+                : 0;
+
+
+        const horasMes =
+            datosFinales.horasMes !== undefined
+                ? datosFinales.horasMes
+                : 0;
+
+
+        const ultimaConexion =
+            datosFinales.ultimaConexion ||
+            "Nunca";
+
+
+        // =====================================================
+        // ESTADO ACTUAL
+        // =====================================================
+
+        const estadoActual =
+            datosFinales.online
+
+                ? `🟢 Jugando · ${datosFinales.jugando}`
+
+                : "🔴 Offline";
+
+
+        // =====================================================
+        // EMBED
+        // =====================================================
+
+        const embedOnline =
+            new EmbedBuilder()
+
+                .setTitle(
+                    `🔍 Resultado para: ${perfilSteam.name}`
+                )
+
+                .setColor(
+                    datosFinales.online
+                        ? "#57F287"
+                        : "#FF0000"
+                )
+
+                .addFields(
+
+                    // -----------------------------------------
+                    // SERVIDOR
+                    // -----------------------------------------
+
+                    {
+                        name: "🎮 Servidor",
+                        value:
+                            datosFinales.server ||
+                            "Desconocido",
+                        inline: false
+                    },
+
+
+                    // -----------------------------------------
+                    // IDENTIFICADORES
+                    // -----------------------------------------
+
+                    {
+                        name: "🆔 BattleMetrics",
+                        value:
+                            `[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})`,
+                        inline: true
+                    },
+
+                    {
+                        name: "🆔 Steam ID",
+                        value:
+                            `[${steamId}](https://steamcommunity.com/profiles/${steamId})`,
+                        inline: true
+                    },
+
+
+                    // -----------------------------------------
+                    // ESTADO
+                    // -----------------------------------------
+
+                    {
+                        name: "🎮 Estado",
+                        value:
+                            `\`${estadoActual}\``,
+                        inline: true
+                    },
+
+
+                    // -----------------------------------------
+                    // HORAS
+                    // -----------------------------------------
+
+                    {
+                        name: "📈 Horas (BM)",
+                        value:
+                            `\`${datosFinales.horasTotalesBM}h\``,
+                        inline: true
+                    },
+
+                    {
+                        name: "📊 Horas (Steam)",
+                        value:
+                            horasSteamTexto,
+                        inline: true
+                    },
+
+                    {
+                        name: "⚖️ Diferencia",
+                        value:
+                            diferenciaTexto,
+                        inline: true
+                    },
+
+
+                    // -----------------------------------------
+                    // ACTIVIDAD
+                    // -----------------------------------------
+
+                    {
+                        name: "📈 Esta Semana",
+                        value:
+                            `\`${horasSemana}h\``,
+                        inline: true
+                    },
+
+                    {
+                        name: "📆 Este Mes",
+                        value:
+                            `\`${horasMes}h\``,
+                        inline: true
+                    },
+
+                    {
+                        name: "🕐 Última Conexión",
+                        value:
+                            `\`${ultimaConexion}\``,
+                        inline: true
+                    },
+
+
+                    // -----------------------------------------
+                    // STEAM
+                    // -----------------------------------------
+
+                    {
+                        name: "🌍 País",
+                        value:
+                            paisTexto,
+                        inline: true
+                    },
+
+                    {
+                        name: "🛡️ Estado Baneos",
+                        value:
+                            `\`${vacTexto}\``,
+                        inline: true
+                    },
+
+                    {
+                        name: "📅 Antigüedad",
+                        value:
+                            `\`${creacionSteamTexto}\``,
+                        inline: true
+                    },
+
+
+                    // -----------------------------------------
+                    // HISTORIAL
+                    // -----------------------------------------
+
+                    {
+                        name: "📝 Historial de Nombres",
+                        value:
+                            historialTexto,
+                        inline: false
+                    }
+
+                )
+
+                .setTimestamp()
+
+                .setFooter({
+                    text: "RustLogix"
+                });
+
+
+        // =====================================================
+        // AVATAR
+        // =====================================================
+
+        if (
+            perfilSteam.avatar ||
+            perfilSteam.avatarfull
+        ) {
+
+            embedOnline.setThumbnail(
+                perfilSteam.avatarfull ||
+                perfilSteam.avatar
+            );
         }
 
-        return await interaction.editReply({ embeds: [embedOnline] }); 
-    } 
+
+        // =====================================================
+        // ENVIAR RESPUESTA
+        // =====================================================
+
+        return await interaction.editReply({
+            embeds: [embedOnline]
+        });
+    }
 };
