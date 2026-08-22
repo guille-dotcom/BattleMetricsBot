@@ -14,8 +14,7 @@ const {
 // CACHE
 // =====================================================
 
-const raidsCache =
-    new Map();
+const raidsCache = new Map();
 
 const CACHE_TIEMPO =
     30 * 60 * 1000;
@@ -26,8 +25,7 @@ const CACHE_TIEMPO =
 
 function limpiarCache() {
 
-    const ahora =
-        Date.now();
+    const ahora = Date.now();
 
     for (
         const [
@@ -38,8 +36,7 @@ function limpiarCache() {
     ) {
 
         if (
-            ahora -
-            datos.creado >
+            ahora - datos.creado >
             CACHE_TIEMPO
         ) {
 
@@ -54,9 +51,7 @@ function limpiarCache() {
 // FORMATEAR NÚMEROS
 // =====================================================
 
-function formatearNumero(
-    numero
-) {
+function formatearNumero(numero) {
 
     return Number(
         numero || 0
@@ -69,13 +64,9 @@ function formatearNumero(
 // RECETA
 // =====================================================
 
-function crearTextoReceta(
-    raid
-) {
+function crearTextoReceta(raid) {
 
-    if (
-        !raid.receta
-    ) {
+    if (!raid.receta) {
         return "";
     }
 
@@ -88,9 +79,7 @@ function crearTextoReceta(
 // TEXTO RAID
 // =====================================================
 
-function crearTextoRaids(
-    raids
-) {
+function crearTextoRaids(raids) {
 
     if (
         !raids ||
@@ -129,6 +118,16 @@ function crearTextoRaids(
 
                     texto +=
                         ` • 💥 Pólvora: **${formatearNumero(raid.polvora)}**`;
+                }
+
+                if (
+                    Number(
+                        raid.azufre
+                    ) > 0
+                ) {
+
+                    texto +=
+                        ` • 🟡 Azufre: **${formatearNumero(raid.azufre)}**`;
                 }
 
                 if (
@@ -183,9 +182,7 @@ function crearEmbedBase(
 // ECONOMÍA
 // =====================================================
 
-function crearEmbedEconomia(
-    resultado
-) {
+function crearEmbedEconomia(resultado) {
 
     const embed =
         crearEmbedBase(
@@ -229,9 +226,7 @@ function crearEmbedEconomia(
 // CANTIDAD
 // =====================================================
 
-function crearEmbedCantidad(
-    resultado
-) {
+function crearEmbedCantidad(resultado) {
 
     const embed =
         crearEmbedBase(
@@ -275,22 +270,48 @@ function crearEmbedCantidad(
 // EXPLOSIVOS
 // =====================================================
 
-function crearEmbedExplosivos(
-    resultado
-) {
+function crearEmbedExplosivos(resultado) {
 
-    return crearEmbedEconomia(
-        resultado
+    const embed =
+        crearEmbedBase(
+            resultado,
+            "💣 Raid Calculator",
+            0xe74c3c
+        );
+
+    if (
+        !resultado.explosivos ||
+        resultado.explosivos.length === 0
+    ) {
+
+        embed.setDescription(
+            "❌ RustHelp no encontró métodos explosivos para este objeto."
+        );
+
+        return embed;
+    }
+
+    embed.setDescription(
+        crearTextoRaids(
+            resultado.explosivos
+        )
     );
+
+    embed.addFields({
+        name:
+            "💣 Explosivos",
+        value:
+            "Métodos explosivos disponibles para raidear este objeto."
+    });
+
+    return embed;
 }
 
 // =====================================================
 // MELEE
 // =====================================================
 
-function crearEmbedMelee(
-    resultado
-) {
+function crearEmbedMelee(resultado) {
 
     const embed =
         crearEmbedBase(
@@ -332,9 +353,7 @@ function crearEmbedMelee(
                 texto +=
                     `└ Cantidad: **${raid.cantidad}**`;
 
-                if (
-                    raid.tiempo
-                ) {
+                if (raid.tiempo) {
 
                     texto +=
                         ` • ⏱️ **${raid.tiempo}**`;
@@ -439,29 +458,21 @@ module.exports = {
 
     data:
         new SlashCommandBuilder()
-            .setName(
-                "raid"
-            )
+            .setName("raid")
             .setDescription(
                 "Consulta cuánto cuesta raidear un objeto de Rust"
             )
             .addStringOption(
                 option =>
                     option
-                        .setName(
-                            "item"
-                        )
+                        .setName("item")
                         .setDescription(
                             "Objeto de Rust, por ejemplo: puerta de madera"
                         )
-                        .setRequired(
-                            true
-                        )
+                        .setRequired(true)
             ),
 
-    async execute(
-        interaction
-    ) {
+    async execute(interaction) {
 
         await interaction.deferReply();
 
@@ -501,6 +512,7 @@ module.exports = {
 
                 components:
                     crearBotones()
+
             });
 
             const mensaje =
@@ -530,9 +542,25 @@ module.exports = {
 
             try {
 
-                await interaction.editReply(
-                    "❌ Ocurrió un error consultando RustHelp."
-                );
+                if (
+                    interaction.deferred ||
+                    interaction.replied
+                ) {
+
+                    await interaction.editReply(
+                        "❌ Ocurrió un error consultando RustHelp."
+                    );
+
+                } else {
+
+                    await interaction.reply({
+                        content:
+                            "❌ Ocurrió un error consultando RustHelp.",
+                        ephemeral:
+                            true
+                    });
+
+                }
 
             } catch {
                 // evitar segundo error
@@ -544,9 +572,7 @@ module.exports = {
     // BOTONES
     // =================================================
 
-    async manejarBotonRaid(
-        interaction
-    ) {
+    async manejarBotonRaid(interaction) {
 
         if (
             !interaction.isButton()
@@ -585,6 +611,7 @@ module.exports = {
 
                 ephemeral:
                     true
+
             });
 
             return true;
@@ -646,6 +673,7 @@ module.exports = {
 
                 components:
                     crearBotones()
+
             });
 
         } catch (error) {
