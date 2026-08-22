@@ -138,6 +138,8 @@ const NOMBRES_RUST = [
         nombre: "Satchel Charge"
     },
 
+    // IMPORTANTE:
+    // HV Rocket debe ir ANTES de Rocket.
     {
         buscar: [
             "high velocity rocket",
@@ -148,7 +150,8 @@ const NOMBRES_RUST = [
 
     {
         buscar: [
-            "rocket"
+            "rocket",
+            "missile"
         ],
         nombre: "Rocket"
     },
@@ -632,6 +635,7 @@ function convertirNombreRust(nombre) {
         normalizado ===
             "explosive 556 rifle ammo"
     ) {
+
         return "Explosive 5.56 Rifle Ammo";
     }
 
@@ -646,6 +650,7 @@ function convertirNombreRust(nombre) {
                         normalizarTexto(palabra)
                 )
             ) {
+
                 return entrada.nombre;
             }
 
@@ -756,6 +761,7 @@ async function buscarItemRustHelp(nombre) {
             .trim();
 
     if (sinDe) {
+
         slugs.push(
             convertirSlug(sinDe)
         );
@@ -768,8 +774,24 @@ async function buscarItemRustHelp(nombre) {
             .trim();
 
     if (sinThe) {
+
         slugs.push(
             convertirSlug(sinThe)
+        );
+    }
+
+    // =================================================
+    // FALLBACK ESPECÍFICO PARA ROCKET
+    // =================================================
+
+    if (
+        normalizado === "rocket" ||
+        normalizado === "misil"
+    ) {
+
+        slugs.push(
+            "rocket",
+            "missile"
         );
     }
 
@@ -808,6 +830,7 @@ async function buscarItemRustHelp(nombre) {
         );
 
         return {
+
             nombre: titulo,
 
             nombreRust:
@@ -815,9 +838,11 @@ async function buscarItemRustHelp(nombre) {
                     titulo
                 ),
 
-            url: pagina.url,
+            url:
+                pagina.url,
 
-            html: pagina.html
+            html:
+                pagina.html
         };
     }
 
@@ -843,21 +868,6 @@ function extraerNumero(texto) {
             .replace(/\s+/g, " ")
             .trim();
 
-    /*
-     * IMPORTANTE:
-     *
-     * RustHelp puede utilizar:
-     *
-     * 1,400
-     * 1.400
-     * 1400
-     *
-     * y también:
-     *
-     * ×1,400
-     * x1,400
-     */
-
     const match =
         limpio.match(
             /(?:[x×]\s*)?(\d[\d,.]*)/i
@@ -869,12 +879,6 @@ function extraerNumero(texto) {
 
     let numero =
         match[1];
-
-    /*
-     * Si contiene coma y punto,
-     * asumimos que son separadores
-     * de miles.
-     */
 
     if (
         numero.includes(",") &&
@@ -966,6 +970,7 @@ function extraerCantidadRaid(texto) {
             Number.isFinite(numero) &&
             numero >= 0
         ) {
+
             return numero;
         }
     }
@@ -1166,7 +1171,9 @@ function extraerCantidadMaterial(
     // -------------------------------------------------
 
     $(elemento)
-        .find("[data-amount], [data-quantity], [data-count]")
+        .find(
+            "[data-amount], [data-quantity], [data-count]"
+        )
         .each((i, hijo) => {
 
             for (const atributo of atributos) {
@@ -1212,6 +1219,7 @@ function extraerCantidadMaterial(
                 Number.isFinite(cantidad) &&
                 cantidad > 0
             ) {
+
                 return cantidad;
             }
         }
@@ -1241,12 +1249,146 @@ function extraerCantidadMaterial(
                 Number.isFinite(cantidad) &&
                 cantidad > 0
             ) {
+
                 return cantidad;
             }
         }
     }
 
     return 0;
+}
+
+// =====================================================
+// EXTRAER NUMEROS DEL TEXTO
+// =====================================================
+
+function extraerNumerosTexto(texto) {
+
+    if (!texto) {
+        return [];
+    }
+
+    const limpio =
+        String(texto)
+            .replace(/\u00a0/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+    const coincidencias =
+        limpio.match(
+            /(?:[x×]\s*)?\d[\d,.]*/gi
+        ) || [];
+
+    return coincidencias
+        .map(valor =>
+            extraerNumero(valor)
+        )
+        .filter(
+            valor =>
+                Number.isFinite(valor) &&
+                valor > 0
+        );
+}
+
+// =====================================================
+// FALLBACK ROCKET
+// =====================================================
+
+function extraerIngredientesRocketFallback(
+    $,
+    celda
+) {
+
+    const ingredientes = [];
+
+    if (!celda) {
+        return ingredientes;
+    }
+
+    const texto =
+        $(celda)
+            .text()
+            .replace(/\u00a0/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+    if (!texto) {
+        return ingredientes;
+    }
+
+    /*
+     * RustHelp puede representar Rocket como
+     * "missile" internamente y no siempre entregar
+     * los materiales como enlaces detectables.
+     *
+     * El orden del Raw Material Cost del Rocket es:
+     *
+     * 1. Sulfur
+     * 2. Low Grade Fuel
+     * 3. Charcoal
+     * 4. Metal Fragments
+     * 5. Metal Pipe
+     *
+     * Ejemplo:
+     *
+     * ×1,400 ×30 ×1,950 ×100 ×2
+     */
+
+    const numeros =
+        extraerNumerosTexto(texto);
+
+    if (numeros.length < 5) {
+        return ingredientes;
+    }
+
+    const materialesRocket = [
+        "Sulfur",
+        "Low Grade Fuel",
+        "Charcoal",
+        "Metal Fragments",
+        "Metal Pipe"
+    ];
+
+    for (
+        let i = 0;
+        i < materialesRocket.length;
+        i++
+    ) {
+
+        const cantidad =
+            numeros[i];
+
+        if (
+            !Number.isFinite(cantidad) ||
+            cantidad <= 0
+        ) {
+            continue;
+        }
+
+        ingredientes.push({
+            nombre:
+                materialesRocket[i],
+
+            cantidad,
+
+            href: ""
+        });
+    }
+
+    if (ingredientes.length > 0) {
+
+        console.log(
+            "🚀 RustHelp: fallback Rocket detectado:",
+            ingredientes
+                .map(
+                    material =>
+                        `${material.nombre}=${material.cantidad}`
+                )
+                .join(", ")
+        );
+    }
+
+    return ingredientes;
 }
 
 // =====================================================
@@ -1264,21 +1406,9 @@ function extraerIngredientesRaw(
         return ingredientes;
     }
 
-    /*
-     * RustHelp representa el Raw Material Cost
-     * mediante enlaces a los materiales.
-     *
-     * Ejemplo Rocket:
-     *
-     * sulfur -> ×1,400
-     * low-grade-fuel -> ×30
-     * charcoal -> ×1,950
-     * metal-fragments -> ×100
-     * metal-pipe -> ×2
-     *
-     * NO debemos buscar simplemente
-     * "el primer número" del enlace.
-     */
+    // -------------------------------------------------
+    // ENLACES A MATERIALES
+    // -------------------------------------------------
 
     $(celda)
         .find("a")
@@ -1322,11 +1452,9 @@ function extraerIngredientesRaw(
             });
         });
 
-    /*
-     * --------------------------------------------------
-     * TAMBIÉN BUSCAR ELEMENTOS CON DATA ATTRIBUTES
-     * --------------------------------------------------
-     */
+    // -------------------------------------------------
+    // DATA ATTRIBUTES
+    // -------------------------------------------------
 
     $(celda)
         .find(
@@ -1384,11 +1512,9 @@ function extraerIngredientesRaw(
             });
         });
 
-    /*
-     * --------------------------------------------------
-     * FALLBACK DE TEXTO
-     * --------------------------------------------------
-     */
+    // -------------------------------------------------
+    // FALLBACK DE TEXTO
+    // -------------------------------------------------
 
     const textoCelda =
         $(celda)
@@ -1439,11 +1565,9 @@ function extraerIngredientesRaw(
         }
     }
 
-    /*
-     * --------------------------------------------------
-     * UNIFICAR
-     * --------------------------------------------------
-     */
+    // -------------------------------------------------
+    // UNIFICAR
+    // -------------------------------------------------
 
     const mapa =
         new Map();
@@ -1475,11 +1599,9 @@ function extraerIngredientesRaw(
         }
 
         /*
-         * IMPORTANTE:
-         *
-         * El mismo material puede aparecer
-         * varias veces porque lo detectamos
-         * por distintos métodos.
+         * El mismo material puede aparecer varias
+         * veces porque lo detectamos por distintos
+         * métodos.
          *
          * NO sumamos.
          *
@@ -1498,9 +1620,105 @@ function extraerIngredientesRaw(
             );
     }
 
-    return [
+    let resultado = [
         ...mapa.values()
     ];
+
+    // -------------------------------------------------
+    // FALLBACK ESPECÍFICO ROCKET / MISSILE
+    // -------------------------------------------------
+
+    const textoCeldaNormalizado =
+        normalizarTexto(
+            textoCelda
+        );
+
+    const pareceRocket =
+        textoCeldaNormalizado.includes("rocket") ||
+        textoCeldaNormalizado.includes("missile");
+
+    /*
+     * Solo aplicamos este fallback cuando:
+     *
+     * - Es Rocket/Missile.
+     * - Faltan materiales.
+     *
+     * No queremos tocar HV Rocket.
+     */
+
+    const esHVRocket =
+        textoCeldaNormalizado.includes(
+            "high velocity"
+        ) ||
+        textoCeldaNormalizado.includes(
+            "hv rocket"
+        );
+
+    if (
+        pareceRocket &&
+        !esHVRocket &&
+        resultado.length < 5
+    ) {
+
+        const fallback =
+            extraerIngredientesRocketFallback(
+                $,
+                celda
+            );
+
+        if (fallback.length > 0) {
+
+            const mapaFinal =
+                new Map();
+
+            for (const ingrediente of [
+                ...resultado,
+                ...fallback
+            ]) {
+
+                const clave =
+                    normalizarTexto(
+                        ingrediente.nombre
+                    );
+
+                if (!clave) {
+                    continue;
+                }
+
+                const existente =
+                    mapaFinal.get(clave);
+
+                if (!existente) {
+
+                    mapaFinal.set(
+                        clave,
+                        {
+                            ...ingrediente
+                        }
+                    );
+
+                    continue;
+                }
+
+                existente.cantidad =
+                    Math.max(
+                        Number(
+                            existente.cantidad
+                        ) || 0,
+
+                        Number(
+                            ingrediente.cantidad
+                        ) || 0
+                    );
+            }
+
+            resultado = [
+                ...mapaFinal.values()
+            ];
+        }
+    }
+
+    return resultado;
 }
 
 // =====================================================
@@ -1530,6 +1748,7 @@ function encontrarCeldaMaterial(
 ) {
 
     let mejorCelda = null;
+
     let mayorCantidadMateriales = 0;
 
     /*
@@ -1647,6 +1866,7 @@ function extraerCostosRaid(html) {
                 );
 
             const esTablaRaid =
+
                 normalizado.includes(
                     "raid tool"
                 ) ||
@@ -1700,9 +1920,9 @@ function extraerCostosRaid(html) {
         }
     );
 
-    /*
-     * FALLBACK
-     */
+    // -------------------------------------------------
+    // FALLBACK
+    // -------------------------------------------------
 
     if (filas.length === 0) {
 
@@ -1823,11 +2043,100 @@ function procesarFilaRaid(
             celdas
         );
 
-    const ingredientes =
+    let ingredientes =
         extraerIngredientesRaw(
             $,
             celdaMaterial
         );
+
+    // =================================================
+    // FALLBACK DIRECTO PARA ROCKET
+    // =================================================
+
+    const herramientaNormalizada =
+        normalizarTexto(
+            `${herramientaOriginal} ${herramienta}`
+        );
+
+    const esRocket =
+        (
+            herramientaNormalizada.includes(
+                "rocket"
+            ) ||
+            herramientaNormalizada.includes(
+                "missile"
+            )
+        ) &&
+        !herramientaNormalizada.includes(
+            "high velocity"
+        ) &&
+        !herramientaNormalizada.includes(
+            "hv rocket"
+        );
+
+    if (
+        esRocket &&
+        ingredientes.length < 5 &&
+        celdaMaterial
+    ) {
+
+        const fallback =
+            extraerIngredientesRocketFallback(
+                $,
+                celdaMaterial
+            );
+
+        if (fallback.length > 0) {
+
+            const mapa =
+                new Map();
+
+            for (const ingrediente of [
+                ...ingredientes,
+                ...fallback
+            ]) {
+
+                const clave =
+                    normalizarTexto(
+                        ingrediente.nombre
+                    );
+
+                if (!clave) {
+                    continue;
+                }
+
+                const existente =
+                    mapa.get(clave);
+
+                if (!existente) {
+
+                    mapa.set(
+                        clave,
+                        {
+                            ...ingrediente
+                        }
+                    );
+
+                    continue;
+                }
+
+                existente.cantidad =
+                    Math.max(
+                        Number(
+                            existente.cantidad
+                        ) || 0,
+
+                        Number(
+                            ingrediente.cantidad
+                        ) || 0
+                    );
+            }
+
+            ingredientes = [
+                ...mapa.values()
+            ];
+        }
+    }
 
     // =================================================
     // DEBUG
@@ -1921,7 +2230,9 @@ function procesarFilaRaid(
 function clasificarRaid(filas) {
 
     const explosivos = [];
+
     const melee = [];
+
     const balas = [];
 
     const explosivosPermitidos = [
@@ -1933,6 +2244,7 @@ function clasificarRaid(filas) {
         "satchel",
 
         "rocket",
+
         "hv rocket",
         "high velocity rocket",
 
