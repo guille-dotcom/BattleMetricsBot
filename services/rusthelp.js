@@ -30,6 +30,7 @@ const HEADERS = {
 // =====================================================
 
 function normalizarTexto(texto) {
+
     return String(texto || "")
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
@@ -44,6 +45,7 @@ function normalizarTexto(texto) {
 // =====================================================
 
 function convertirSlug(nombre) {
+
     return normalizarTexto(nombre)
         .replace(/\s+/g, "-");
 }
@@ -53,38 +55,71 @@ function convertirSlug(nombre) {
 // =====================================================
 
 const ALIASES = {
+
     "tc": "tool-cupboard",
-    "armario": "tool-cupboard",
-    "armario de herramientas": "tool-cupboard",
 
-    "puerta blindada": "armored-door",
+    "armario":
+        "tool-cupboard",
 
-    "puerta de garaje": "garage-door",
-    "puerta garaje": "garage-door",
+    "armario de herramientas":
+        "tool-cupboard",
 
-    "puerta de chapa": "sheet-metal-door",
-    "puerta chapa": "sheet-metal-door",
-    "puerta de metal": "sheet-metal-door",
+    "puerta blindada":
+        "armored-door",
 
-    "puerta de madera": "wooden-door",
-    "puerta madera": "wooden-door",
+    "puerta de garaje":
+        "garage-door",
 
-    "doble puerta de chapa": "sheet-metal-double-door",
-    "puerta doble de chapa": "sheet-metal-double-door",
+    "puerta garaje":
+        "garage-door",
 
-    "puerta doble blindada": "armored-double-door",
+    "puerta de chapa":
+        "sheet-metal-door",
 
-    "muro blindado": "armored-wall",
-    "pared blindada": "armored-wall",
+    "puerta chapa":
+        "sheet-metal-door",
 
-    "pared de chapa": "sheet-metal-wall",
-    "pared metalica": "sheet-metal-wall",
+    "puerta de metal":
+        "sheet-metal-door",
 
-    "pared de piedra": "stone-wall",
-    "pared de madera": "wooden-wall",
+    "puerta de madera":
+        "wooden-door",
 
-    "porton": "armored-garage-door",
-    "porton blindado": "armored-garage-door"
+    "puerta madera":
+        "wooden-door",
+
+    "doble puerta de chapa":
+        "sheet-metal-double-door",
+
+    "puerta doble de chapa":
+        "sheet-metal-double-door",
+
+    "puerta doble blindada":
+        "armored-double-door",
+
+    "muro blindado":
+        "armored-wall",
+
+    "pared blindada":
+        "armored-wall",
+
+    "pared de chapa":
+        "sheet-metal-wall",
+
+    "pared metalica":
+        "sheet-metal-wall",
+
+    "pared de piedra":
+        "stone-wall",
+
+    "pared de madera":
+        "wooden-wall",
+
+    "porton":
+        "armored-garage-door",
+
+    "porton blindado":
+        "armored-garage-door"
 };
 
 // =====================================================
@@ -92,6 +127,7 @@ const ALIASES = {
 // =====================================================
 
 const NOMBRES_RUST = [
+
     {
         buscar: [
             "timed explosive charge",
@@ -148,10 +184,9 @@ const NOMBRES_RUST = [
     },
 
     {
-        buscar: [
-            "explosive 5.56",
-            "explosive ammo",
-            "explosive ammunition"
+        buscarExacto: [
+            "explosive 5.56 rifle ammo",
+            "explosive 556 rifle ammo"
         ],
         nombre: "Explosive 5.56 Rifle Ammo"
     },
@@ -308,6 +343,43 @@ function limpiarNombreRust(nombre) {
         }
     }
 
+    // =================================================
+    // LIMPIAR ESTADOS DE ANTORCHA
+    // =================================================
+    //
+    // Ejemplos:
+    //
+    // Torch Lit
+    // Torch Light
+    // Torch (Lit)
+    // Torch (Light)
+    // Torch - Lit
+    // Torch - Light
+    // Torch | Lit
+    // Torch | Light
+    //
+    // Todos terminan siendo "Torch".
+    //
+
+    texto = texto
+        .replace(
+            /\s*[-–—|]\s*(?:lit|light)\s*$/i,
+            ""
+        )
+        .replace(
+            /\s*[\(\[]\s*(?:lit|light)\s*[\)\]]\s*$/i,
+            ""
+        )
+        .replace(
+            /\s+(?:lit|light)\s*$/i,
+            ""
+        )
+        .replace(
+            /\s+/g,
+            " "
+        )
+        .trim();
+
     return texto;
 }
 
@@ -327,20 +399,61 @@ function convertirNombreRust(nombre) {
     const normalizado =
         normalizarTexto(original);
 
+    // =================================================
+    // MUNICIÓN
+    // =================================================
+
+    if (
+        normalizado ===
+            "explosive 5 56 rifle ammo" ||
+
+        normalizado ===
+            "explosive 556 rifle ammo"
+    ) {
+
+        return "Explosive 5.56 Rifle Ammo";
+    }
+
+    // =================================================
+    // RESTO DE ITEMS
+    // =================================================
+
     for (const entrada of NOMBRES_RUST) {
 
-        const coincide =
-            entrada.buscar.some(
-                palabra =>
-                    normalizado.includes(
+        if (entrada.buscarExacto) {
+
+            const coincide =
+                entrada.buscarExacto.some(
+                    palabra =>
+                        normalizado ===
                         normalizarTexto(
                             palabra
                         )
-                    )
-            );
+                );
 
-        if (coincide) {
-            return entrada.nombre;
+            if (coincide) {
+                return entrada.nombre;
+            }
+
+            continue;
+        }
+
+        if (entrada.buscar) {
+
+            const coincide =
+                entrada.buscar.some(
+                    palabra =>
+                        normalizado.includes(
+                            normalizarTexto(
+                                palabra
+                            )
+                        )
+                );
+
+            if (coincide) {
+
+                return entrada.nombre;
+            }
         }
     }
 
@@ -370,6 +483,7 @@ async function obtenerPagina(slug) {
                     {
                         headers: HEADERS,
                         timeout: 15000,
+
                         validateStatus:
                             status =>
                                 status >= 200 &&
@@ -434,9 +548,7 @@ async function buscarItemRustHelp(nombre) {
     if (sinDe) {
 
         slugs.push(
-            convertirSlug(
-                sinDe
-            )
+            convertirSlug(sinDe)
         );
     }
 
@@ -449,9 +561,7 @@ async function buscarItemRustHelp(nombre) {
     if (sinThe) {
 
         slugs.push(
-            convertirSlug(
-                sinThe
-            )
+            convertirSlug(sinThe)
         );
     }
 
@@ -514,36 +624,154 @@ async function buscarItemRustHelp(nombre) {
 }
 
 // =====================================================
-// EXTRAER NUMERO
+// EXTRAER NUMERO SEGURO
 // =====================================================
 
 function extraerNumero(texto) {
 
-    if (!texto) {
+    if (
+        texto === null ||
+        texto === undefined
+    ) {
         return 0;
     }
 
-    let limpio =
+    const limpio =
         String(texto)
-            .replace(
-                /[×x]/gi,
-                ""
-            )
+            .replace(/\u00a0/g, " ")
+            .replace(/,/g, "")
             .trim();
 
-    limpio =
-        limpio.replace(
-            /[^\d]/g,
-            ""
+    /*
+     * Busca el primer número válido.
+     *
+     * Ejemplos:
+     * 1
+     * 10
+     * 1,000
+     * x10
+     * ×10
+     */
+
+    const valor =
+        limpio.match(
+            /\d+(?:\.\d+)?/
         );
 
-    return (
-        Number(limpio) || 0
-    );
+    if (!valor) {
+        return 0;
+    }
+
+    const numero =
+        Number(valor[0]);
+
+    return Number.isFinite(numero)
+        ? numero
+        : 0;
 }
 
 // =====================================================
-// MATERIALES RAW MATERIAL COST
+// EXTRAER CANTIDAD RAID
+// =====================================================
+
+function extraerCantidadRaid(texto) {
+
+    if (
+        texto === null ||
+        texto === undefined
+    ) {
+        return 0;
+    }
+
+    const limpio =
+        String(texto)
+            .replace(/\u00a0/g, " ")
+            .replace(/,/g, "")
+            .trim();
+
+    if (!limpio) {
+        return 0;
+    }
+
+    /*
+     * RustHelp puede entregar cantidades
+     * con diferentes formatos:
+     *
+     * 1
+     * x1
+     * 1x
+     * ×1
+     * 1 ×
+     * 2 C4
+     * 10 Rockets
+     *
+     * Lo importante es obtener el número
+     * asociado a la cantidad, no intentar
+     * convertir toda la celda en Number().
+     */
+
+    const patrones = [
+
+        // x1 / ×1
+        /^[x×]\s*(\d+(?:\.\d+)?)/i,
+
+        // 1x / 1×
+        /^(\d+(?:\.\d+)?)\s*[x×]\b/i,
+
+        // 1 C4 / 10 Rockets / 2 Satchels
+        /^(\d+(?:\.\d+)?)\b/i
+    ];
+
+    for (const patron of patrones) {
+
+        const match =
+            limpio.match(patron);
+
+        if (!match) {
+            continue;
+        }
+
+        const numero =
+            Number(match[1]);
+
+        if (
+            Number.isFinite(numero) &&
+            numero >= 0
+        ) {
+            return numero;
+        }
+    }
+
+    /*
+     * Último fallback:
+     * si la celda contiene un número pero
+     * tiene texto delante, buscamos el primer
+     * número válido.
+     */
+
+    const fallback =
+        limpio.match(
+            /\b(\d+(?:\.\d+)?)\b/
+        );
+
+    if (fallback) {
+
+        const numero =
+            Number(fallback[1]);
+
+        if (
+            Number.isFinite(numero) &&
+            numero >= 0
+        ) {
+            return numero;
+        }
+    }
+
+    return 0;
+}
+
+// =====================================================
+// RAW MATERIAL COST
 // =====================================================
 
 function esMaterialRaw(
@@ -583,7 +811,6 @@ function esMaterialRaw(
         "cuerda",
 
         "tech trash",
-        "tech-trash",
 
         "gears",
         "gear",
@@ -608,7 +835,7 @@ function esMaterialRaw(
 }
 
 // =====================================================
-// NORMALIZAR NOMBRE MATERIAL
+// NORMALIZAR MATERIAL
 // =====================================================
 
 function normalizarNombreMaterial(
@@ -625,68 +852,76 @@ function normalizarNombreMaterial(
         normalizarTexto(texto);
 
     if (
-        normalizado === "sulfur" ||
-        normalizado === "sulphur" ||
-        normalizado === "azufre"
+        [
+            "sulfur",
+            "sulphur",
+            "azufre"
+        ].includes(normalizado)
     ) {
         return "Sulfur";
     }
 
     if (
-        normalizado === "charcoal" ||
-        normalizado === "carbon"
+        [
+            "charcoal",
+            "carbon"
+        ].includes(normalizado)
     ) {
         return "Charcoal";
     }
 
     if (
-        normalizado ===
-            "metal fragments" ||
-        normalizado ===
-            "metal fragment" ||
-        normalizado ===
+        [
+            "metal fragments",
+            "metal fragment",
             "fragmentos de metal"
+        ].includes(normalizado)
     ) {
         return "Metal Fragments";
     }
 
     if (
-        normalizado ===
-            "metal pipe" ||
-        normalizado ===
-            "tubo de metal" ||
-        normalizado ===
+        [
+            "metal pipe",
+            "tubo de metal",
             "tuberia metalica"
+        ].includes(normalizado)
     ) {
         return "Metal Pipe";
     }
 
     if (
-        normalizado ===
-            "low grade fuel" ||
-        normalizado ===
+        [
+            "low grade fuel",
             "low grade"
+        ].includes(normalizado)
     ) {
         return "Low Grade Fuel";
     }
 
     if (
-        normalizado === "cloth" ||
-        normalizado === "tela"
+        [
+            "cloth",
+            "tela"
+        ].includes(normalizado)
     ) {
         return "Cloth";
     }
 
     if (
-        normalizado === "rope" ||
-        normalizado === "cuerda"
+        [
+            "rope",
+            "cuerda"
+        ].includes(normalizado)
     ) {
         return "Rope";
     }
 
     if (
-        normalizado === "tech trash" ||
-        normalizado === "tech-trash"
+        [
+            "tech trash",
+            "tech-trash"
+        ].includes(normalizado)
     ) {
         return "Tech Trash";
     }
@@ -699,17 +934,12 @@ function normalizarNombreMaterial(
                 .filter(Boolean);
 
         const slug =
-            partes[
-                partes.length - 1
-            ];
+            partes[partes.length - 1];
 
         if (slug) {
 
             return slug
-                .replace(
-                    /-/g,
-                    " "
-                )
+                .replace(/-/g, " ")
                 .replace(
                     /\b\w/g,
                     letra =>
@@ -743,16 +973,12 @@ function extraerIngredientesRaw(
 
                 const href =
                     $(enlace)
-                        .attr("href") ||
-                    "";
+                        .attr("href") || "";
 
                 const texto =
                     $(enlace)
                         .text()
-                        .replace(
-                            /\s+/g,
-                            " "
-                        )
+                        .replace(/\s+/g, " ")
                         .trim();
 
                 if (!texto) {
@@ -767,16 +993,6 @@ function extraerIngredientesRaw(
                 ) {
                     return;
                 }
-
-                /*
-                 * IMPORTANTE:
-                 *
-                 * RustHelp ya muestra aquí
-                 * el RAW MATERIAL COST TOTAL.
-                 *
-                 * NO multiplicamos por la
-                 * cantidad del explosivo.
-                 */
 
                 const cantidad =
                     extraerNumero(
@@ -808,9 +1024,7 @@ function extraerIngredientesRaw(
                     nombre =
                         href
                             .split("/")
-                            .filter(
-                                Boolean
-                            )
+                            .filter(Boolean)
                             .pop() ||
                         "Material";
                 }
@@ -830,7 +1044,7 @@ function extraerIngredientesRaw(
         );
 
     // =================================================
-    // ELIMINAR DUPLICADOS
+    // UNIFICAR MATERIALES
     // =================================================
 
     const mapa =
@@ -861,10 +1075,13 @@ function extraerIngredientesRaw(
 
         } else {
 
-            mapa.get(
-                clave
-            ).cantidad +=
-                ingrediente.cantidad;
+            const existente =
+                mapa.get(clave);
+
+            existente.cantidad +=
+                Number(
+                    ingrediente.cantidad
+                ) || 0;
         }
     }
 
@@ -891,20 +1108,6 @@ function encontrarCeldaMaterial(
         const celda =
             celdas[indice];
 
-        const texto =
-            $(celda)
-                .text()
-                .replace(
-                    /\s+/g,
-                    " "
-                )
-                .trim();
-
-        const normalizado =
-            normalizarTexto(
-                texto
-            );
-
         const tieneMaterial =
             $(celda)
                 .find("a")
@@ -913,10 +1116,10 @@ function encontrarCeldaMaterial(
                     enlace =>
                         esMaterialRaw(
                             $(enlace)
-                                .attr(
-                                    "href"
-                                ),
-                            $(enlace).text()
+                                .attr("href"),
+
+                            $(enlace)
+                                .text()
                         )
                 );
 
@@ -924,31 +1127,24 @@ function encontrarCeldaMaterial(
             return celda;
         }
 
+        const texto =
+            $(celda)
+                .text()
+                .replace(/\s+/g, " ")
+                .trim();
+
+        const normalizado =
+            normalizarTexto(texto);
+
         if (
-            normalizado.includes(
-                "sulfur"
-            ) ||
-            normalizado.includes(
-                "charcoal"
-            ) ||
-            normalizado.includes(
-                "metal pipe"
-            ) ||
-            normalizado.includes(
-                "metal fragments"
-            ) ||
-            normalizado.includes(
-                "low grade"
-            ) ||
-            normalizado.includes(
-                "cloth"
-            ) ||
-            normalizado.includes(
-                "rope"
-            ) ||
-            normalizado.includes(
-                "tech trash"
-            )
+            normalizado.includes("sulfur") ||
+            normalizado.includes("charcoal") ||
+            normalizado.includes("metal pipe") ||
+            normalizado.includes("metal fragments") ||
+            normalizado.includes("low grade") ||
+            normalizado.includes("cloth") ||
+            normalizado.includes("rope") ||
+            normalizado.includes("tech trash")
         ) {
             return celda;
         }
@@ -965,10 +1161,12 @@ const VARIANTES_RAID_EXCLUIDAS = [
 
     "launched from catapult",
     "launched from catapulta",
+
     "catapult",
     "catapulta",
 
     "launched from ballista",
+
     "ballista",
     "balista",
 
@@ -981,6 +1179,7 @@ const VARIANTES_RAID_EXCLUIDAS = [
     "vehicle",
     "vehiculo",
     "vehículo",
+
     "from vehicle",
 
     "dispenser"
@@ -991,9 +1190,7 @@ function esFilaRaidExcluida(
 ) {
 
     const normalizado =
-        normalizarTexto(
-            texto
-        );
+        normalizarTexto(texto);
 
     return VARIANTES_RAID_EXCLUIDAS.some(
         variante =>
@@ -1014,9 +1211,7 @@ function extraerCostosRaid(
 ) {
 
     const $ =
-        cheerio.load(
-            html
-        );
+        cheerio.load(html);
 
     const filas = [];
 
@@ -1026,10 +1221,7 @@ function extraerCostosRaid(
             const textoTabla =
                 $(tabla)
                     .text()
-                    .replace(
-                        /\s+/g,
-                        " "
-                    )
+                    .replace(/\s+/g, " ")
                     .trim();
 
             const normalizado =
@@ -1126,10 +1318,7 @@ function procesarFilaRaid(
     const textoFila =
         $(fila)
             .text()
-            .replace(
-                /\s+/g,
-                " "
-            )
+            .replace(/\s+/g, " ")
             .trim();
 
     if (
@@ -1140,13 +1329,14 @@ function procesarFilaRaid(
         return;
     }
 
+    // =================================================
+    // HERRAMIENTA
+    // =================================================
+
     const herramientaOriginal =
         $(celdas[0])
             .text()
-            .replace(
-                /\s+/g,
-                " "
-            )
+            .replace(/\s+/g, " ")
             .trim();
 
     if (!herramientaOriginal) {
@@ -1158,27 +1348,40 @@ function procesarFilaRaid(
             herramientaOriginal
         );
 
-    const cantidad =
+    if (!herramienta) {
+        return;
+    }
+
+    // =================================================
+    // CANTIDAD
+    // =================================================
+
+    const cantidadTexto =
         $(celdas[1])
             .text()
-            .replace(
-                /\s+/g,
-                " "
-            )
+            .replace(/\s+/g, " ")
             .trim();
 
     const cantidadNumero =
-        extraerNumero(
-            cantidad
+        extraerCantidadRaid(
+            cantidadTexto
         );
+
+    const cantidadSegura =
+        Number.isFinite(
+            Number(cantidadNumero)
+        )
+            ? Number(cantidadNumero)
+            : 0;
+
+    // =================================================
+    // TIEMPO
+    // =================================================
 
     const tiempo =
         $(celdas[2])
             .text()
-            .replace(
-                /\s+/g,
-                " "
-            )
+            .replace(/\s+/g, " ")
             .trim();
 
     // =================================================
@@ -1232,9 +1435,13 @@ function procesarFilaRaid(
 
         herramientaOriginal,
 
-        cantidad,
+        cantidad:
+            cantidadSegura,
 
-        cantidadNumero,
+        cantidadTexto,
+
+        cantidadNumero:
+            cantidadSegura,
 
         tiempo,
 
@@ -1242,13 +1449,6 @@ function procesarFilaRaid(
 
         costoAzufre:
             azufre,
-
-        /*
-         * Se conserva por compatibilidad.
-         *
-         * Ya NO representa pólvora
-         * de fabricación.
-         */
 
         polvora: 0,
 
@@ -1349,6 +1549,7 @@ function clasificarRaid(
     const explosivosExcluidos = [
 
         "torpedo",
+
         "mine",
         "mina",
         "land mine",
@@ -1377,15 +1578,27 @@ function clasificarRaid(
         of filas
     ) {
 
+        /*
+         * Usamos el nombre original para
+         * clasificación, pero también el nombre
+         * normalizado/canónico.
+         */
+
+        const originalLimpio =
+            limpiarNombreRust(
+                fila.herramientaOriginal ||
+                ""
+            );
+
+        const herramientaLimpia =
+            limpiarNombreRust(
+                fila.herramienta ||
+                ""
+            );
+
         const texto =
             normalizarTexto(
-                `${
-                    fila.herramientaOriginal ||
-                    ""
-                } ${
-                    fila.herramienta ||
-                    ""
-                }`
+                `${originalLimpio} ${herramientaLimpia}`
             );
 
         if (
@@ -1401,6 +1614,10 @@ function clasificarRaid(
             continue;
         }
 
+        // =================================================
+        // MUNICIÓN PRIMERO
+        // =================================================
+
         if (
             palabrasBalas.some(
                 palabra =>
@@ -1413,11 +1630,22 @@ function clasificarRaid(
         ) {
 
             balas.push(
-                fila
+                {
+                    ...fila,
+                    herramienta:
+                        limpiarNombreRust(
+                            fila.herramientaOriginal ||
+                            fila.herramienta
+                        )
+                }
             );
 
             continue;
         }
+
+        // =================================================
+        // EXPLOSIVOS
+        // =================================================
 
         if (
             explosivosPermitidos.some(
@@ -1437,16 +1665,51 @@ function clasificarRaid(
             continue;
         }
 
-        if (
+        // =================================================
+        // MELEE
+        // =================================================
+
+        /*
+         * Importante:
+         *
+         * "light" o "lit" por sí solos NO son una
+         * herramienta melee.
+         *
+         * Solo se acepta Antorcha si realmente
+         * aparece "torch" o ya fue convertida a
+         * "Antorcha".
+         */
+
+        const esAntorcha =
+            texto.includes("torch") ||
+            texto.includes("antorcha");
+
+        const esMelee =
             palabrasMelee.some(
-                palabra =>
-                    texto.includes(
+                palabra => {
+
+                    const palabraNormalizada =
                         normalizarTexto(
                             palabra
-                        )
-                    )
-            )
-        ) {
+                        );
+
+                    if (
+                        palabraNormalizada ===
+                            "torch" ||
+                        palabraNormalizada ===
+                            "antorcha"
+                    ) {
+
+                        return esAntorcha;
+                    }
+
+                    return texto.includes(
+                        palabraNormalizada
+                    );
+                }
+            );
+
+        if (esMelee) {
 
             melee.push(
                 fila
@@ -1455,17 +1718,20 @@ function clasificarRaid(
     }
 
     return {
+
         explosivos,
+
         melee,
+
         balas
     };
 }
 
 // =====================================================
-// ELIMINAR DUPLICADOS EXPLOSIVOS
+// DEDUPLICAR
 // =====================================================
 
-function eliminarDuplicadosExplosivos(
+function eliminarDuplicados(
     filas
 ) {
 
@@ -1477,25 +1743,50 @@ function eliminarDuplicadosExplosivos(
         of filas
     ) {
 
+        /*
+         * Siempre canonicalizamos el nombre
+         * antes de crear la clave.
+         *
+         * Así:
+         *
+         * Torch
+         * Torch Lit
+         * Torch Light
+         * Torch - Lit
+         * Torch (Light)
+         *
+         * terminan siendo la misma entrada.
+         */
+
+        const nombre =
+            convertirNombreRust(
+                fila.herramientaOriginal ||
+                fila.herramienta
+            );
+
         const clave =
             normalizarTexto(
-                fila.herramienta
+                nombre
             );
 
         if (!clave) {
             continue;
         }
 
+        const filaLimpia = {
+            ...fila,
+            herramienta:
+                nombre
+        };
+
         const existente =
-            mapa.get(
-                clave
-            );
+            mapa.get(clave);
 
         if (!existente) {
 
             mapa.set(
                 clave,
-                fila
+                filaLimpia
             );
 
             continue;
@@ -1503,13 +1794,27 @@ function eliminarDuplicadosExplosivos(
 
         const azufreActual =
             Number(
-                fila.azufre
+                filaLimpia.azufre
             ) || 0;
 
         const azufreExistente =
             Number(
                 existente.azufre
             ) || 0;
+
+        const cantidadActual =
+            Number(
+                filaLimpia.cantidadNumero
+            ) || 0;
+
+        const cantidadExistente =
+            Number(
+                existente.cantidadNumero
+            ) || 0;
+
+        /*
+         * Conservamos la variante con mejor costo.
+         */
 
         if (
             azufreActual <
@@ -1518,7 +1823,7 @@ function eliminarDuplicadosExplosivos(
 
             mapa.set(
                 clave,
-                fila
+                filaLimpia
             );
 
             continue;
@@ -1526,23 +1831,15 @@ function eliminarDuplicadosExplosivos(
 
         if (
             azufreActual ===
-            azufreExistente
+                azufreExistente &&
+            cantidadActual <
+                cantidadExistente
         ) {
 
-            if (
-                Number(
-                    fila.cantidadNumero
-                ) <
-                Number(
-                    existente.cantidadNumero
-                )
-            ) {
-
-                mapa.set(
-                    clave,
-                    fila
-                );
-            }
+            mapa.set(
+                clave,
+                filaLimpia
+            );
         }
     }
 
@@ -1552,7 +1849,109 @@ function eliminarDuplicadosExplosivos(
 }
 
 // =====================================================
-// ORDENAR ECONOMIA
+// DEDUPLICAR MUNICIÓN
+// =====================================================
+
+function eliminarDuplicadosMunicion(
+    filas
+) {
+
+    const mapa =
+        new Map();
+
+    for (
+        const fila
+        of filas
+    ) {
+
+        /*
+         * La munición conserva su nombre original,
+         * pero eliminamos estados/variantes de nombre
+         * para que la misma munición no aparezca
+         * varias veces.
+         */
+
+        const nombre =
+            limpiarNombreRust(
+                fila.herramientaOriginal ||
+                fila.herramienta
+            );
+
+        const nombreCanonico =
+            convertirNombreRust(
+                nombre
+            );
+
+        const clave =
+            normalizarTexto(
+                nombreCanonico
+            );
+
+        if (!clave) {
+            continue;
+        }
+
+        const existente =
+            mapa.get(clave);
+
+        if (!existente) {
+
+            mapa.set(
+                clave,
+                {
+                    ...fila,
+
+                    herramienta:
+                        nombreCanonico
+                }
+            );
+
+            continue;
+        }
+
+        /*
+         * Si aparece la misma munición más de una vez,
+         * conservamos la que tenga menor cantidad.
+         */
+
+        const cantidadActual =
+            Number(
+                fila.cantidadNumero
+            ) || 0;
+
+        const cantidadExistente =
+            Number(
+                existente.cantidadNumero
+            ) || 0;
+
+        if (
+            cantidadActual > 0 &&
+            (
+                cantidadExistente <= 0 ||
+                cantidadActual <
+                    cantidadExistente
+            )
+        ) {
+
+            mapa.set(
+                clave,
+                {
+                    ...fila,
+
+                    herramienta:
+                        nombreCanonico
+                }
+            );
+        }
+    }
+
+    return [
+        ...mapa.values()
+    ];
+}
+
+// =====================================================
+// ORDENAR ECONOMÍA
 // =====================================================
 
 function ordenarPorEconomia(
@@ -1562,9 +1961,7 @@ function ordenarPorEconomia(
     return [...filas]
         .filter(
             fila =>
-                Number(
-                    fila.azufre
-                ) > 0 ||
+                Number(fila.azufre) > 0 ||
                 Number(
                     fila.cantidadNumero
                 ) > 0
@@ -1596,10 +1993,12 @@ function ordenarPorEconomia(
                 return (
                     Number(
                         a.cantidadNumero
-                    ) -
+                    ) || 0
+                ) -
+                (
                     Number(
                         b.cantidadNumero
-                    )
+                    ) || 0
                 );
             }
         );
@@ -1615,35 +2014,54 @@ function ordenarPorCantidad(
 
     return [...filas]
         .filter(
-            fila =>
-                Number(
-                    fila.cantidadNumero
-                ) > 0
+            fila => {
+
+                const cantidad =
+                    Number(
+                        fila.cantidadNumero
+                    );
+
+                return (
+                    Number.isFinite(
+                        cantidad
+                    ) &&
+                    cantidad > 0
+                );
+            }
         )
         .sort(
             (a, b) => {
 
-                const diferencia =
+                const cantidadA =
                     Number(
                         a.cantidadNumero
-                    ) -
+                    ) || 0;
+
+                const cantidadB =
                     Number(
                         b.cantidadNumero
-                    );
+                    ) || 0;
 
                 if (
-                    diferencia !== 0
+                    cantidadA !==
+                    cantidadB
                 ) {
-                    return diferencia;
+
+                    return (
+                        cantidadA -
+                        cantidadB
+                    );
                 }
 
                 return (
                     Number(
                         a.azufre
-                    ) -
+                    ) || 0
+                ) -
+                (
                     Number(
                         b.azufre
-                    )
+                    ) || 0
                 );
             }
         );
@@ -1775,7 +2193,7 @@ async function consultarRaid(
             );
 
         console.log(
-            `💣 Explosivos detectados: ${clasificacion.explosivos.length}`
+            `💣 Métodos explosivos detectados: ${clasificacion.explosivos.length}`
         );
 
         console.log(
@@ -1783,33 +2201,67 @@ async function consultarRaid(
         );
 
         console.log(
-            `🔫 Balas detectadas: ${clasificacion.balas.length}`
+            `🔫 Munición detectada: ${clasificacion.balas.length}`
         );
 
-        const sinDuplicados =
-            eliminarDuplicadosExplosivos(
+        // =================================================
+        // MÉTODOS EXPLOSIVOS
+        // =================================================
+
+        /*
+         * Economía y Cantidad siguen utilizando los
+         * métodos explosivos internamente.
+         *
+         * Ya no existe una categoría/botón separado
+         * de "Explosivos" en el comando.
+         */
+
+        const explosivosUnicos =
+            eliminarDuplicados(
                 clasificacion.explosivos
             );
 
         const economia =
             ordenarPorEconomia(
-                sinDuplicados
+                explosivosUnicos
             );
 
         const cantidad =
             ordenarPorCantidad(
-                sinDuplicados
+                explosivosUnicos
+            );
+
+        // =================================================
+        // MELEE
+        // =================================================
+
+        const meleeUnico =
+            eliminarDuplicados(
+                clasificacion.melee
             );
 
         const melee =
             ordenarMelee(
-                clasificacion.melee
+                meleeUnico
+            );
+
+        // =================================================
+        // MUNICIÓN
+        // =================================================
+
+        const municionUnica =
+            eliminarDuplicadosMunicion(
+                clasificacion.balas
             );
 
         const balas =
             ordenarPorCantidad(
-                clasificacion.balas
+                municionUnica
             );
+
+        // =================================================
+        // RESULTADO
+        // =================================================
 
         return {
 
@@ -1825,35 +2277,29 @@ async function consultarRaid(
             todos:
                 filas,
 
+            /*
+             * Se mantienen estos dos campos porque
+             * Economía y Cantidad los necesitan.
+             *
+             * "explosivos" queda solo como compatibilidad
+             * interna; el comando ya no muestra un botón
+             * de Explosivos.
+             */
+
             explosivos:
-                economia.slice(
-                    0,
-                    10
-                ),
+                economia.slice(0, 10),
 
             explosivosEconomia:
-                economia.slice(
-                    0,
-                    10
-                ),
+                economia.slice(0, 10),
 
             explosivosCantidad:
-                cantidad.slice(
-                    0,
-                    10
-                ),
+                cantidad.slice(0, 10),
 
             melee:
-                melee.slice(
-                    0,
-                    10
-                ),
+                melee.slice(0, 10),
 
             balas:
-                balas.slice(
-                    0,
-                    10
-                )
+                balas.slice(0, 10)
         };
 
     } catch (error) {
@@ -1879,5 +2325,7 @@ module.exports = {
 
     extraerCostosRaid,
 
-    clasificarRaid
+    clasificarRaid,
+
+    extraerCantidadRaid
 };

@@ -594,7 +594,6 @@ client.on(
                 [
                     "raid_economia",
                     "raid_cantidad",
-                    "raid_explosivos",
                     "raid_melee",
                     "raid_municion"
                 ].includes(
