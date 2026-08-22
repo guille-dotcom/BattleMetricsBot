@@ -66,172 +66,381 @@ function formatearNumero(
 }
 
 // =====================================================
-// MATERIALES
+// NORMALIZAR TEXTO
 // =====================================================
 
-function crearTextoMateriales(
+function normalizarTexto(
+    texto
+) {
+
+    return String(
+        texto || ""
+    )
+        .normalize("NFD")
+        .replace(
+            /[\u0300-\u036f]/g,
+            ""
+        )
+        .toLowerCase()
+        .replace(
+            /[^a-z0-9\s]/g,
+            " "
+        )
+        .replace(
+            /\s+/g,
+            " "
+        )
+        .trim();
+}
+
+// =====================================================
+// OBTENER COMPONENTES DE AMOUNT
+// =====================================================
+//
+// Ejemplo:
+//
+// Rocket ×1
+// Explosive 5.56 ×8
+//
+// Se muestra:
+//
+// 🚀 Rocket ×1
+// 🔫 Explosive 5.56 ×8
+//
+// =====================================================
+
+function obtenerComponentesRaid(
     raid
 ) {
 
     if (
-        !raid ||
-        !Array.isArray(
-            raid.ingredientes
-        ) ||
-        raid.ingredientes.length === 0
+        !raid
     ) {
-
-        return "Sin materiales.";
+        return [];
     }
 
-    const lineas = [];
-
-    for (
-        const ingrediente
-        of raid.ingredientes
+    if (
+        Array.isArray(
+            raid.componentes
+        ) &&
+        raid.componentes.length > 0
     ) {
 
-        const nombre =
-            String(
-                ingrediente.nombre ||
-                ""
-            )
-                .replace(
-                    /\s+/g,
-                    " "
-                )
-                .trim();
+        return raid.componentes;
+    }
 
-        const cantidad =
-            Number(
-                ingrediente.cantidad ||
-                0
-            );
+    if (
+        Array.isArray(
+            raid.amount
+        ) &&
+        raid.amount.length > 0
+    ) {
 
-        if (
-            !nombre ||
-            cantidad <= 0
-        ) {
-            continue;
-        }
+        return raid.amount;
+    }
 
-        const normalizado =
+    if (
+        Array.isArray(
+            raid.ingredientes
+        ) &&
+        raid.ingredientes.length > 0
+    ) {
+
+        return raid.ingredientes;
+    }
+
+    return [];
+}
+
+// =====================================================
+// EMOJI DE ITEM
+// =====================================================
+
+function obtenerEmojiItem(
+    nombre
+) {
+
+    const normalizado =
+        normalizarTexto(
             nombre
-                .toLowerCase()
-                .normalize("NFD")
-                .replace(
-                    /[\u0300-\u036f]/g,
+        );
+
+    if (
+        normalizado.includes(
+            "rocket"
+        ) &&
+        !normalizado.includes(
+            "hv"
+        )
+    ) {
+
+        return "🚀";
+    }
+
+    if (
+        normalizado.includes(
+            "high velocity"
+        ) ||
+        normalizado.includes(
+            "hv rocket"
+        )
+    ) {
+
+        return "🚀";
+    }
+
+    if (
+        normalizado.includes(
+            "c4"
+        ) ||
+        normalizado.includes(
+            "timed explosive"
+        )
+    ) {
+
+        return "💣";
+    }
+
+    if (
+        normalizado.includes(
+            "explosive 5 56"
+        ) ||
+        normalizado.includes(
+            "explosive 556"
+        )
+    ) {
+
+        return "🔫";
+    }
+
+    if (
+        normalizado.includes(
+            "satchel"
+        )
+    ) {
+
+        return "💰";
+    }
+
+    if (
+        normalizado.includes(
+            "beancan"
+        )
+    ) {
+
+        return "💣";
+    }
+
+    if (
+        normalizado.includes(
+            "grenade"
+        )
+    ) {
+
+        return "💣";
+    }
+
+    if (
+        normalizado.includes(
+            "propane"
+        )
+    ) {
+
+        return "🛢️";
+    }
+
+    if (
+        normalizado.includes(
+            "pickaxe"
+        ) ||
+        normalizado.includes(
+            "pico"
+        ) ||
+        normalizado.includes(
+            "icepick"
+        ) ||
+        normalizado.includes(
+            "piolet"
+        )
+    ) {
+
+        return "⛏️";
+    }
+
+    if (
+        normalizado.includes(
+            "hatchet"
+        ) ||
+        normalizado.includes(
+            "hacha"
+        )
+    ) {
+
+        return "🪓";
+    }
+
+    if (
+        normalizado.includes(
+            "chainsaw"
+        ) ||
+        normalizado.includes(
+            "motosierra"
+        )
+    ) {
+
+        return "🪚";
+    }
+
+    if (
+        normalizado.includes(
+            "jackhammer"
+        )
+    ) {
+
+        return "🔨";
+    }
+
+    if (
+        normalizado.includes(
+            "hammer"
+        ) ||
+        normalizado.includes(
+            "martillo"
+        )
+    ) {
+
+        return "🔨";
+    }
+
+    if (
+        normalizado.includes(
+            "sword"
+        ) ||
+        normalizado.includes(
+            "espada"
+        )
+    ) {
+
+        return "⚔️";
+    }
+
+    if (
+        normalizado.includes(
+            "spear"
+        ) ||
+        normalizado.includes(
+            "lanza"
+        )
+    ) {
+
+        return "🔱";
+    }
+
+    if (
+        normalizado.includes(
+            "machete"
+        )
+    ) {
+
+        return "🔪";
+    }
+
+    return "📦";
+}
+
+// =====================================================
+// CREAR TEXTO DE AMOUNT
+// =====================================================
+
+function crearTextoAmount(
+    raid
+) {
+
+    const componentes =
+        obtenerComponentesRaid(
+            raid
+        );
+
+    // =================================================
+    // SI TENEMOS COMPONENTES
+    // =================================================
+
+    if (
+        componentes.length > 0
+    ) {
+
+        const lineas = [];
+
+        for (
+            const componente
+            of componentes
+        ) {
+
+            const nombre =
+                String(
+                    componente.nombre ||
                     ""
+                )
+                    .replace(
+                        /\s+/g,
+                        " "
+                    )
+                    .trim();
+
+            const cantidad =
+                Number(
+                    componente.cantidad ||
+                    0
                 );
 
-        let emoji =
-            "📦";
+            if (
+                !nombre ||
+                cantidad <= 0
+            ) {
+                continue;
+            }
 
-        if (
-            normalizado.includes(
-                "sulfur"
-            ) ||
-            normalizado.includes(
-                "azufre"
-            )
-        ) {
+            const emoji =
+                obtenerEmojiItem(
+                    nombre
+                );
 
-            emoji =
-                "🪨";
-
-        } else if (
-            normalizado.includes(
-                "charcoal"
-            ) ||
-            normalizado.includes(
-                "carbon"
-            )
-        ) {
-
-            emoji =
-                "🪵";
-
-        } else if (
-            normalizado.includes(
-                "metal fragments"
-            ) ||
-            normalizado.includes(
-                "metal fragment"
-            ) ||
-            normalizado.includes(
-                "fragmentos de metal"
-            )
-        ) {
-
-            emoji =
-                "🔩";
-
-        } else if (
-            normalizado.includes(
-                "metal pipe"
-            ) ||
-            normalizado.includes(
-                "tubo de metal"
-            ) ||
-            normalizado.includes(
-                "tuberia metalica"
-            )
-        ) {
-
-            emoji =
-                "🔧";
-
-        } else if (
-            normalizado.includes(
-                "low grade"
-            )
-        ) {
-
-            emoji =
-                "🛢️";
-
-        } else if (
-            normalizado.includes(
-                "cloth"
-            ) ||
-            normalizado.includes(
-                "tela"
-            )
-        ) {
-
-            emoji =
-                "🧵";
-
-        } else if (
-            normalizado.includes(
-                "rope"
-            ) ||
-            normalizado.includes(
-                "cuerda"
-            )
-        ) {
-
-            emoji =
-                "🪢";
-
-        } else if (
-            normalizado.includes(
-                "tech trash"
-            )
-        ) {
-
-            emoji =
-                "💻";
+            lineas.push(
+                `${emoji} **${nombre}:** ×${formatearNumero(cantidad)}`
+            );
         }
 
-        lineas.push(
-            `${emoji} **${nombre}:** ${formatearNumero(cantidad)}`
-        );
+        if (
+            lineas.length > 0
+        ) {
+
+            return lineas.join(
+                "\n"
+            );
+        }
     }
 
-    return lineas.length > 0
-        ? lineas.join("\n")
-        : "Sin materiales.";
+    // =================================================
+    // FALLBACK
+    // =================================================
+
+    if (
+        raid.cantidadTexto
+    ) {
+
+        return `📦 **${raid.cantidadTexto}**`;
+    }
+
+    if (
+        raid.cantidad
+    ) {
+
+        return `📦 **×${formatearNumero(
+            raid.cantidad
+        )}**`;
+    }
+
+    return "Sin cantidad.";
 }
 
 // =====================================================
@@ -243,7 +452,9 @@ function crearTextoRaids(
 ) {
 
     if (
-        !Array.isArray(raids) ||
+        !Array.isArray(
+            raids
+        ) ||
         raids.length === 0
     ) {
 
@@ -275,16 +486,36 @@ function crearTextoRaids(
 
                 let bloque =
                     `${
-                        posiciones[indice]
+                        posiciones[indice] ||
+                        `${indice + 1}️⃣`
                     } **${
                         raid.herramienta ||
                         "Método desconocido"
                     }**\n`;
 
+                // =================================================
+                // AMOUNT
+                // =================================================
+
                 bloque +=
-                    `> 📦 Cantidad: **${formatearNumero(
-                        raid.cantidad
-                    )}**`;
+                    `> 📦 **Cantidad a usar:**\n`;
+
+                const amount =
+                    crearTextoAmount(
+                        raid
+                    );
+
+                const amountConFormato =
+                    amount
+                        .split("\n")
+                        .map(
+                            linea =>
+                                `> ${linea}`
+                        )
+                        .join("\n");
+
+                bloque +=
+                    amountConFormato;
 
                 // =================================================
                 // TIEMPO
@@ -295,25 +526,7 @@ function crearTextoRaids(
                 ) {
 
                     bloque +=
-                        `\n> ⏱️ Tiempo: **${raid.tiempo}**`;
-                }
-
-                // =================================================
-                // RAW MATERIAL COST
-                // =================================================
-
-                const materiales =
-                    crearTextoMateriales(
-                        raid
-                    );
-
-                if (
-                    materiales !==
-                    "Sin materiales."
-                ) {
-
-                    bloque +=
-                        `\n\n> **Raw Material Cost:**\n${materiales}`;
+                        `\n> ⏱️ **Tiempo:** ${raid.tiempo}`;
                 }
 
                 bloques.push(
@@ -369,6 +582,15 @@ function crearEmbedBase(
 // =====================================================
 // ECONOMIA
 // =====================================================
+//
+// 3 primeras recomendadas de RustHelp
+// +
+// 7 adicionales ordenadas por Raw Material Cost.
+//
+// IMPORTANTE:
+// El Raw Material Cost NO se muestra.
+//
+// =====================================================
 
 function crearEmbedEconomia(
     resultado
@@ -404,10 +626,10 @@ function crearEmbedEconomia(
 
     embed.addFields({
         name:
-            "💰 Orden",
+            "💰 Economía",
 
         value:
-            "Ordenado por el menor costo de **Raw Material Cost**."
+            "Primero las 3 opciones recomendadas de RustHelp y después las 7 alternativas ordenadas por menor costo."
     });
 
     return embed;
@@ -415,6 +637,12 @@ function crearEmbedEconomia(
 
 // =====================================================
 // CANTIDAD
+// =====================================================
+//
+// 3 primeras recomendadas de RustHelp
+// +
+// 7 adicionales ordenadas por cantidad.
+//
 // =====================================================
 
 function crearEmbedCantidad(
@@ -451,10 +679,10 @@ function crearEmbedCantidad(
 
     embed.addFields({
         name:
-            "📦 Orden",
+            "📦 Cantidad",
 
         value:
-            "Ordenado por la menor cantidad de explosivos."
+            "Primero las 3 opciones recomendadas de RustHelp y después las 7 alternativas que requieren menor cantidad."
     });
 
     return embed;
@@ -462,6 +690,13 @@ function crearEmbedCantidad(
 
 // =====================================================
 // MELEE
+// =====================================================
+//
+// NO muestra las 3 recomendadas.
+//
+// Muestra directamente las 7 opciones melee
+// más rápidas según Time to Raid.
+//
 // =====================================================
 
 function crearEmbedMelee(
@@ -471,7 +706,7 @@ function crearEmbedMelee(
     const embed =
         crearEmbedBase(
             resultado,
-            "🔨 Raid Calculator",
+            "⚔️ Raid Calculator",
             0x8b5a2b
         );
 
@@ -490,25 +725,32 @@ function crearEmbedMelee(
         return embed;
     }
 
+    // El servicio ya entrega las 7 más rápidas.
+    const melee =
+        resultado.melee.slice(
+            0,
+            7
+        );
+
     embed.setDescription(
         crearTextoRaids(
-            resultado.melee
+            melee
         )
     );
 
     embed.addFields({
         name:
-            "🔨 Orden",
+            "⚔️ Melee",
 
         value:
-            "Ordenado de menor a mayor tiempo de raideo."
+            "7 opciones ordenadas de menor a mayor tiempo de raideo."
     });
 
     return embed;
 }
 
 // =====================================================
-// MUNICION
+// MUNICIÓN
 // =====================================================
 
 function crearEmbedMunicion(
@@ -600,7 +842,7 @@ function crearBotones() {
                         "Melee"
                     )
                     .setEmoji(
-                        "🔨"
+                        "⚔️"
                     )
                     .setStyle(
                         ButtonStyle.Secondary
@@ -692,6 +934,14 @@ module.exports = {
 
                 return;
             }
+
+            // =================================================
+            // EMBED INICIAL
+            // =================================================
+            //
+            // Por defecto mostramos Economía.
+            //
+            // =================================================
 
             const embed =
                 crearEmbedEconomia(
@@ -811,6 +1061,10 @@ module.exports = {
             interaction.customId
         ) {
 
+            // =================================================
+            // ECONOMÍA
+            // =================================================
+
             case "raid_economia":
 
                 nuevoEmbed =
@@ -819,6 +1073,10 @@ module.exports = {
                     );
 
                 break;
+
+            // =================================================
+            // CANTIDAD
+            // =================================================
 
             case "raid_cantidad":
 
@@ -829,6 +1087,10 @@ module.exports = {
 
                 break;
 
+            // =================================================
+            // MELEE
+            // =================================================
+
             case "raid_melee":
 
                 nuevoEmbed =
@@ -837,6 +1099,10 @@ module.exports = {
                     );
 
                 break;
+
+            // =================================================
+            // MUNICIÓN
+            // =================================================
 
             case "raid_municion":
 
