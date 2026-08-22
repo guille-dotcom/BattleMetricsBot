@@ -1,65 +1,457 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { getBattleMetricsHours } = require("../services/battlemetricsHours.js");
+const {
+    SlashCommandBuilder,
+    EmbedBuilder
+} = require("discord.js");
+
+const {
+    getBattleMetricsHours
+} = require("../services/battlemetricsHours.js");
+
+
+// =====================================================
+// COMANDO /HORASBM
+// =====================================================
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName("horasbm")
-        .setDescription("Muestra las horas y estadísticas de BattleMetrics mediante el link del perfil")
-        .addStringOption(option =>
-            option.setName("link")
-                .setDescription("Link del perfil de BattleMetrics")
-                .setRequired(true)
-        ),
 
-    async execute(interaction) {
-        const linkInput = interaction.options.getString("link").trim();
+    data:
+        new SlashCommandBuilder()
+
+            .setName(
+                "horasbm"
+            )
+
+            .setDescription(
+                "Muestra las horas y estadísticas de BattleMetrics mediante el link del perfil"
+            )
+
+            .addStringOption(
+                option =>
+                    option
+                        .setName(
+                            "link"
+                        )
+
+                        .setDescription(
+                            "Link del perfil de BattleMetrics"
+                        )
+
+                        .setRequired(
+                            true
+                        )
+            ),
+
+
+    // =================================================
+    // EXECUTE
+    // =================================================
+
+    async execute(
+        interaction
+    ) {
+
+        const linkInput =
+            interaction.options
+                .getString(
+                    "link"
+                )
+                ?.trim();
+
+
         await interaction.deferReply();
 
-        const match = linkInput.match(/\/players\/(\d+)/);
-        if (!match || !match[1]) {
-            return await interaction.editReply("❌ El enlace proporcionado no es válido. Asegúrate de que sea un enlace de perfil de BattleMetrics.");
+
+        // =================================================
+        // VALIDAR LINK
+        // =================================================
+
+        if (
+            !linkInput
+        ) {
+
+            return await interaction.editReply(
+                "❌ Debes proporcionar un link de perfil de BattleMetrics."
+            );
         }
 
-        const playerId = match[1];
+
+        /*
+         * Acepta:
+         *
+         * https://www.battlemetrics.com/players/123456789
+         *
+         * https://battlemetrics.com/players/123456789
+         *
+         * También acepta texto adicional después del ID.
+         */
+
+        const match =
+            linkInput.match(
+                /battlemetrics\.com\/players\/(\d+)/i
+            );
+
+
+        if (
+            !match ||
+            !match[1]
+        ) {
+
+            return await interaction.editReply(
+                "❌ El enlace proporcionado no es válido.\n\n" +
+                "Usa un enlace como:\n" +
+                "`https://www.battlemetrics.com/players/123456789`"
+            );
+        }
+
+
+        const playerId =
+            match[1];
+
+
+        // =================================================
+        // CONSULTAR BATTLEMETRICS
+        // =================================================
 
         try {
-            // Llamada al servicio protegido
-            const datos = await getBattleMetricsHours(playerId);
-            if (!datos) {
-                return await interaction.editReply("❌ No se pudieron encontrar datos para ese jugador en BattleMetrics.");
+
+            console.log(
+                `🎯 /horasbm solicitado → Player ID: ${playerId}`
+            );
+
+
+            const datos =
+                await getBattleMetricsHours(
+                    playerId
+                );
+
+
+            if (
+                !datos
+            ) {
+
+                return await interaction.editReply(
+                    "❌ No se pudieron encontrar datos para ese jugador en BattleMetrics."
+                );
             }
 
-            // Texto dinámico: si está jugando muestra "Servidor Actual", si está offline muestra "Último Servidor"
-            const tituloServidor = datos.online ? "🌐 Servidor Actual" : "🌐 Último Servidor Jugado";
-            const servidoresEncontrados = datos.servidores?.rust?.datos?.servidoresEncontrados || "N/A";
-            
-            // Formateamos la sesión actual para que mantenga el estilo de cajita
-            const sesionTexto = datos.online ? `${datos.jugando}` : "Offline";
 
-            const embed = new EmbedBuilder()
-                .setTitle("🎮 Perfil BattleMetrics")
-                .setColor(datos.online ? "#57F287" : "#ED4245")
-                .addFields(
-                    { name: "👤 Jugador", value: `[${datos.nombre}](https://www.battlemetrics.com/players/${datos.id})`, inline: false },
-                    { name: tituloServidor, value: datos.servidor || "Desconocido", inline: false },
-                    { name: "⏱️ Sesión Actual", value: `\`${sesionTexto}\``, inline: true },
-                    { name: "📈 Horas battlemetrics", value: `\`${datos.totalHoras || 0}h\``, inline: true },
-                    { name: "🖥️ Servidores Jugados", value: `\`${servidoresEncontrados}\``, inline: true }
-                )
-                .setTimestamp()
-                .setFooter({ text: "RustLogix" });
+            // =================================================
+            // DATOS
+            // =================================================
 
-            await interaction.editReply({ embeds: [embed] });
+            const nombre =
+                datos.nombre ||
+                datos.name ||
+                "Desconocido";
+
+
+            const servidor =
+                datos.servidor ||
+                datos.server ||
+                "Desconocido";
+
+
+            const horas =
+                Number(
+                    datos.horasTotalesBM ??
+                    datos.totalHoras ??
+                    0
+                );
+
+
+            const horasSemana =
+                Number(
+                    datos.horasSemana ||
+                    0
+                );
+
+
+            const horasMes =
+                Number(
+                    datos.horasMes ||
+                    0
+                );
+
+
+            const servidoresEncontrados =
+                datos.servidoresEncontrados ??
+                datos.servidores?.rust?.datos
+                    ?.servidoresEncontrados ??
+                "N/A";
+
+
+            const online =
+                Boolean(
+                    datos.online
+                );
+
+
+            const sesionTexto =
+                online
+                    ? (
+                        datos.jugando ||
+                        "0m"
+                    )
+                    : "Offline";
+
+
+            const tituloServidor =
+                online
+                    ? "🌐 Servidor Actual"
+                    : "🌐 Último Servidor Jugado";
+
+
+            // =================================================
+            // COLOR
+            // =================================================
+
+            const color =
+                online
+                    ? 0x57F287
+                    : 0xED4245;
+
+
+            // =================================================
+            // EMBED
+            // =================================================
+
+            const embed =
+                new EmbedBuilder()
+
+                    .setTitle(
+                        "🎮 Perfil BattleMetrics"
+                    )
+
+                    .setColor(
+                        color
+                    )
+
+
+                    // =================================================
+                    // JUGADOR
+                    // =================================================
+
+                    .addFields({
+
+                        name:
+                            "👤 Jugador",
+
+                        value:
+                            `[${nombre}](https://www.battlemetrics.com/players/${datos.id || playerId})`,
+
+                        inline:
+                            false
+                    })
+
+
+                    // =================================================
+                    // SERVIDOR
+                    // =================================================
+
+                    .addFields({
+
+                        name:
+                            tituloServidor,
+
+                        value:
+                            servidor,
+
+                        inline:
+                            false
+                    })
+
+
+                    // =================================================
+                    // SESIÓN ACTUAL
+                    // =================================================
+
+                    .addFields({
+
+                        name:
+                            "⏱️ Sesión Actual",
+
+                        value:
+                            `\`${sesionTexto}\``,
+
+                        inline:
+                            true
+                    })
+
+
+                    // =================================================
+                    // HORAS TOTALES
+                    // =================================================
+
+                    .addFields({
+
+                        name:
+                            "📈 Horas BattleMetrics",
+
+                        value:
+                            `\`${horas}h\``,
+
+                        inline:
+                            true
+                    })
+
+
+                    // =================================================
+                    // SERVIDORES
+                    // =================================================
+
+                    .addFields({
+
+                        name:
+                            "🖥️ Servidores Jugados",
+
+                        value:
+                            `\`${servidoresEncontrados}\``,
+
+                        inline:
+                            true
+                    })
+
+
+                    // =================================================
+                    // SEMANA
+                    // =================================================
+
+                    .addFields({
+
+                        name:
+                            "📅 Esta Semana",
+
+                        value:
+                            `\`${horasSemana}h\``,
+
+                        inline:
+                            true
+                    })
+
+
+                    // =================================================
+                    // MES
+                    // =================================================
+
+                    .addFields({
+
+                        name:
+                            "📆 Este Mes",
+
+                        value:
+                            `\`${horasMes}h\``,
+
+                        inline:
+                            true
+                    })
+
+
+                    // =================================================
+                    // ÚLTIMA CONEXIÓN
+                    // =================================================
+
+                    .addFields({
+
+                        name:
+                            "🕐 Última Conexión",
+
+                        value:
+                            `\`${datos.ultimaConexion || "Nunca"}\``,
+
+                        inline:
+                            false
+                    })
+
+
+                    // =================================================
+                    // FOOTER
+                    // =================================================
+
+                    .setTimestamp()
+
+                    .setFooter({
+                        text:
+                            "RustLogix • BattleMetrics"
+                    });
+
+
+            // =================================================
+            // HISTORIAL DE NOMBRES
+            // =================================================
+
+            if (
+                Array.isArray(
+                    datos.historialNombres
+                ) &&
+                datos.historialNombres.length > 0
+            ) {
+
+                embed.addFields({
+
+                    name:
+                        "📝 Historial de nombres",
+
+                    value:
+                        datos.historialNombres
+                            .map(
+                                nombre =>
+                                    `• ${nombre}`
+                            )
+                            .join("\n"),
+
+                    inline:
+                        false
+                });
+            }
+
+
+            // =================================================
+            // RESPUESTA
+            // =================================================
+
+            await interaction.editReply({
+
+                embeds: [
+                    embed
+                ]
+
+            });
+
+
+            console.log(
+                `✅ /horasbm completado → ${nombre} (${horas}h)`
+            );
+
 
         } catch (error) {
-            console.error("Error en comando /horasbm:", error);
-            
-            // Garantizamos una respuesta pase lo que pase para evitar el bloqueo en Discord
-            if (interaction.deferred || interaction.replied) {
-                return await interaction.editReply({
-                    content: "❌ Ocurrió un error al intentar conectar con BattleMetrics. Inténtalo de nuevo más tarde."
+
+            console.error(
+                "❌ Error en comando /horasbm:",
+                error.response?.data ||
+                error.stack ||
+                error.message
+            );
+
+
+            try {
+
+                await interaction.editReply({
+
+                    content:
+                        "❌ Ocurrió un error al intentar conectar con BattleMetrics. Inténtalo de nuevo más tarde."
+
                 });
+
+            } catch (
+                errorRespuesta
+            ) {
+
+                console.error(
+                    "❌ No se pudo enviar el mensaje de error:",
+                    errorRespuesta.message
+                );
             }
         }
     }
+
 };
