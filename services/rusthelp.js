@@ -30,6 +30,7 @@ const HEADERS = {
 // =====================================================
 
 function normalizarTexto(texto) {
+
     return String(texto || "")
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
@@ -37,6 +38,7 @@ function normalizarTexto(texto) {
         .replace(/[^a-z0-9\s]/g, " ")
         .replace(/\s+/g, " ")
         .trim();
+
 }
 
 // =====================================================
@@ -44,8 +46,10 @@ function normalizarTexto(texto) {
 // =====================================================
 
 function convertirSlug(nombre) {
+
     return normalizarTexto(nombre)
         .replace(/\s+/g, "-");
+
 }
 
 // =====================================================
@@ -53,6 +57,7 @@ function convertirSlug(nombre) {
 // =====================================================
 
 const ALIASES = {
+
     "tc": "tool-cupboard",
     "armario": "tool-cupboard",
     "armario de herramientas": "tool-cupboard",
@@ -85,6 +90,7 @@ const ALIASES = {
 
     "porton": "armored-garage-door",
     "porton blindado": "armored-garage-door"
+
 };
 
 // =====================================================
@@ -92,6 +98,7 @@ const ALIASES = {
 // =====================================================
 
 const NOMBRES_RUST = [
+
     {
         buscar: [
             "timed explosive charge",
@@ -263,6 +270,7 @@ const NOMBRES_RUST = [
         ],
         nombre: "Ariete"
     }
+
 ];
 
 // =====================================================
@@ -270,6 +278,7 @@ const NOMBRES_RUST = [
 // =====================================================
 
 function limpiarNombreRust(nombre) {
+
     let texto = String(nombre || "")
         .replace(/\s+/g, " ")
         .trim();
@@ -279,6 +288,7 @@ function limpiarNombreRust(nombre) {
     }
 
     const basura = [
+
         "Cost To Repair Head",
         "Cost to Repair Head",
         "Workbench Refill",
@@ -287,21 +297,31 @@ function limpiarNombreRust(nombre) {
         "Cost to Repair",
         "Repair Cost",
         "Repair cost"
+
     ];
 
     for (const parte of basura) {
-        const indice = texto
-            .toLowerCase()
-            .indexOf(parte.toLowerCase());
+
+        const indice =
+            texto
+                .toLowerCase()
+                .indexOf(
+                    parte.toLowerCase()
+                );
 
         if (indice !== -1) {
-            texto = texto
-                .substring(0, indice)
-                .trim();
+
+            texto =
+                texto
+                    .substring(0, indice)
+                    .trim();
+
         }
+
     }
 
     return texto;
+
 }
 
 // =====================================================
@@ -309,27 +329,38 @@ function limpiarNombreRust(nombre) {
 // =====================================================
 
 function convertirNombreRust(nombre) {
-    const original = limpiarNombreRust(nombre);
+
+    const original =
+        limpiarNombreRust(nombre);
 
     if (!original) {
         return "";
     }
 
-    const normalizado = normalizarTexto(original);
+    const normalizado =
+        normalizarTexto(original);
 
     for (const entrada of NOMBRES_RUST) {
-        const coincide = entrada.buscar.some(palabra => {
-            return normalizado.includes(
-                normalizarTexto(palabra)
+
+        const coincide =
+            entrada.buscar.some(
+                palabra => {
+
+                    return normalizado.includes(
+                        normalizarTexto(palabra)
+                    );
+
+                }
             );
-        });
 
         if (coincide) {
             return entrada.nombre;
         }
+
     }
 
     return original;
+
 }
 
 // =====================================================
@@ -337,21 +368,31 @@ function convertirNombreRust(nombre) {
 // =====================================================
 
 async function obtenerPagina(slug) {
+
     for (const base of BASE_URLS) {
-        const url = `${base}/${slug}`;
+
+        const url =
+            `${base}/${slug}`;
 
         try {
+
             console.log(
                 `🌐 RustHelp: intentando ${url}`
             );
 
-            const response = await axios.get(url, {
-                headers: HEADERS,
-                timeout: 15000,
+            const response =
+                await axios.get(
+                    url,
+                    {
+                        headers: HEADERS,
+                        timeout: 15000,
 
-                validateStatus: status =>
-                    status >= 200 && status < 400
-            });
+                        validateStatus:
+                            status =>
+                                status >= 200 &&
+                                status < 400
+                    }
+                );
 
             if (
                 !response.data ||
@@ -366,13 +407,17 @@ async function obtenerPagina(slug) {
             };
 
         } catch (error) {
+
             console.log(
                 `⚠️ RustHelp no pudo abrir ${url}: ${error.message}`
             );
+
         }
+
     }
 
     return null;
+
 }
 
 // =====================================================
@@ -380,54 +425,81 @@ async function obtenerPagina(slug) {
 // =====================================================
 
 async function buscarItemRustHelp(nombre) {
-    const original = String(nombre || "").trim();
+
+    const original =
+        String(nombre || "").trim();
 
     if (!original) {
         return null;
     }
 
-    const normalizado = normalizarTexto(original);
+    const normalizado =
+        normalizarTexto(original);
 
     let slug =
         ALIASES[normalizado] ||
         convertirSlug(original);
 
-    const slugs = [slug];
+    const slugs = [
+        slug
+    ];
 
-    const sinDe = normalizado
-        .replace(/\bde\b/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
+    const sinDe =
+        normalizado
+            .replace(/\bde\b/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
 
     if (sinDe) {
-        slugs.push(convertirSlug(sinDe));
+
+        slugs.push(
+            convertirSlug(sinDe)
+        );
+
     }
 
-    const sinThe = normalizado
-        .replace(/\bthe\b/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
+    const sinThe =
+        normalizado
+            .replace(/\bthe\b/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
 
     if (sinThe) {
-        slugs.push(convertirSlug(sinThe));
+
+        slugs.push(
+            convertirSlug(sinThe)
+        );
+
     }
 
-    const slugsUnicos = [...new Set(slugs)];
+    const slugsUnicos =
+        [...new Set(slugs)];
 
-    for (const slugActual of slugsUnicos) {
-        const pagina = await obtenerPagina(slugActual);
+    for (
+        const slugActual
+        of slugsUnicos
+    ) {
+
+        const pagina =
+            await obtenerPagina(
+                slugActual
+            );
 
         if (!pagina) {
             continue;
         }
 
-        const $ = cheerio.load(pagina.html);
+        const $ =
+            cheerio.load(
+                pagina.html
+            );
 
-        const titulo = $("h1")
-            .first()
-            .text()
-            .replace(/\s+/g, " ")
-            .trim();
+        const titulo =
+            $("h1")
+                .first()
+                .text()
+                .replace(/\s+/g, " ")
+                .trim();
 
         if (!titulo) {
             continue;
@@ -438,18 +510,27 @@ async function buscarItemRustHelp(nombre) {
         );
 
         return {
-            nombre: titulo,
+
+            nombre:
+                titulo,
 
             nombreRust:
-                convertirNombreRust(titulo),
+                convertirNombreRust(
+                    titulo
+                ),
 
-            url: pagina.url,
+            url:
+                pagina.url,
 
-            html: pagina.html
+            html:
+                pagina.html
+
         };
+
     }
 
     return null;
+
 }
 
 // =====================================================
@@ -457,196 +538,632 @@ async function buscarItemRustHelp(nombre) {
 // =====================================================
 
 function extraerNumero(texto) {
+
     if (!texto) {
         return 0;
     }
 
-    const limpio = String(texto)
-        .replace(/[×x]/gi, "")
-        .replace(/,/g, "")
-        .replace(/[^\d]/g, "");
+    let limpio =
+        String(texto)
+            .replace(/[×x]/gi, "")
+            .trim();
 
-    return Number(limpio) || 0;
+    /*
+     * RustHelp puede entregar:
+     *
+     * ×1,400
+     * ×30
+     * ×1.400
+     * 1,400
+     *
+     * Para cantidades de Rust,
+     * coma y punto son separadores de miles.
+     */
+
+    limpio =
+        limpio.replace(
+            /[^\d]/g,
+            ""
+        );
+
+    return (
+        Number(limpio) || 0
+    );
+
 }
 
 // =====================================================
 // DETECTAR PÓLVORA
 // =====================================================
 
-function esPolvora(href, texto) {
-    const objetivo = normalizarTexto(
-        `${href || ""} ${texto || ""}`
-    );
+function esPolvora(
+    href,
+    texto
+) {
+
+    const objetivo =
+        normalizarTexto(
+            `${href || ""} ${texto || ""}`
+        );
 
     return (
-        objetivo.includes("gun powder") ||
-        objetivo.includes("gunpowder") ||
-        objetivo.includes("polvora")
+
+        objetivo.includes(
+            "gun powder"
+        ) ||
+
+        objetivo.includes(
+            "gunpowder"
+        ) ||
+
+        objetivo.includes(
+            "polvora"
+        )
+
     );
+
 }
 
 // =====================================================
 // DETECTAR AZUFRE
 // =====================================================
 
-function esAzufre(href, texto) {
-    const objetivo = normalizarTexto(
-        `${href || ""} ${texto || ""}`
-    );
+function esAzufre(
+    href,
+    texto
+) {
+
+    const objetivo =
+        normalizarTexto(
+            `${href || ""} ${texto || ""}`
+        );
 
     return (
-        objetivo.includes("sulfur") ||
-        objetivo.includes("sulphur") ||
-        objetivo.includes("azufre")
+
+        objetivo.includes(
+            "sulfur"
+        ) ||
+
+        objetivo.includes(
+            "sulphur"
+        ) ||
+
+        objetivo.includes(
+            "azufre"
+        )
+
     );
+
+}
+
+// =====================================================
+// NORMALIZAR NOMBRE MATERIAL
+// =====================================================
+
+function normalizarNombreMaterial(
+    nombre,
+    href
+) {
+
+    let texto =
+        String(nombre || "")
+            .replace(/\s+/g, " ")
+            .trim();
+
+    const normalizado =
+        normalizarTexto(
+            texto
+        );
+
+    if (
+        normalizado === "sulfur" ||
+        normalizado === "sulphur" ||
+        normalizado === "azufre"
+    ) {
+        return "Sulfur";
+    }
+
+    if (
+        normalizado === "low grade fuel" ||
+        normalizado === "low grade"
+    ) {
+        return "Low Grade Fuel";
+    }
+
+    if (
+        normalizado === "charcoal"
+    ) {
+        return "Charcoal";
+    }
+
+    if (
+        normalizado === "metal fragments" ||
+        normalizado === "metal fragment"
+    ) {
+        return "Metal Fragments";
+    }
+
+    if (
+        normalizado === "metal pipe"
+    ) {
+        return "Metal Pipe";
+    }
+
+    if (
+        !texto &&
+        href
+    ) {
+
+        const partes =
+            String(href)
+                .split("/")
+                .filter(Boolean);
+
+        const slug =
+            partes[partes.length - 1];
+
+        if (slug) {
+
+            return slug
+                .replace(/-/g, " ")
+                .replace(/\b\w/g, letra =>
+                    letra.toUpperCase()
+                );
+
+        }
+
+    }
+
+    return texto;
+
 }
 
 // =====================================================
 // DETECTAR MATERIAL
 // =====================================================
 
-function esMaterial(href, texto) {
-    const objetivo = normalizarTexto(
-        `${href || ""} ${texto || ""}`
-    );
+function esMaterial(
+    href,
+    texto
+) {
+
+    const objetivo =
+        normalizarTexto(
+            `${href || ""} ${texto || ""}`
+        );
 
     return (
-        objetivo.includes("gun powder") ||
-        objetivo.includes("gunpowder") ||
-        objetivo.includes("sulfur") ||
-        objetivo.includes("sulphur") ||
-        objetivo.includes("azufre") ||
-        objetivo.includes("low grade") ||
-        objetivo.includes("lowgrade") ||
-        objetivo.includes("metal fragments") ||
-        objetivo.includes("metal fragment") ||
-        objetivo.includes("metal pipe") ||
-        objetivo.includes("charcoal") ||
-        objetivo.includes("fragmentos de metal") ||
-        objetivo.includes("tuberia metalica") ||
-        objetivo.includes("tubo de metal")
+
+        objetivo.includes(
+            "gun powder"
+        ) ||
+
+        objetivo.includes(
+            "gunpowder"
+        ) ||
+
+        objetivo.includes(
+            "sulfur"
+        ) ||
+
+        objetivo.includes(
+            "sulphur"
+        ) ||
+
+        objetivo.includes(
+            "azufre"
+        ) ||
+
+        objetivo.includes(
+            "low grade"
+        ) ||
+
+        objetivo.includes(
+            "lowgrade"
+        ) ||
+
+        objetivo.includes(
+            "metal fragments"
+        ) ||
+
+        objetivo.includes(
+            "metal fragment"
+        ) ||
+
+        objetivo.includes(
+            "metal pipe"
+        ) ||
+
+        objetivo.includes(
+            "charcoal"
+        ) ||
+
+        objetivo.includes(
+            "fragmentos de metal"
+        ) ||
+
+        objetivo.includes(
+            "tuberia metalica"
+        ) ||
+
+        objetivo.includes(
+            "tubo de metal"
+        )
+
     );
+
 }
 
 // =====================================================
 // OBTENER PÓLVORA DE CELDA
 // =====================================================
 
-function obtenerPolvoraDeCelda($, celda) {
+function obtenerPolvoraDeCelda(
+    $,
+    celda
+) {
+
     let polvora = 0;
 
     $(celda)
         .find("a")
-        .each((i, enlace) => {
-            const href =
-                $(enlace).attr("href") || "";
+        .each(
+            (i, enlace) => {
 
-            const texto =
-                $(enlace)
-                    .text()
-                    .replace(/\s+/g, " ")
-                    .trim();
+                const href =
+                    $(enlace)
+                        .attr("href") || "";
 
-            if (!esPolvora(href, texto)) {
-                return;
+                const texto =
+                    $(enlace)
+                        .text()
+                        .replace(/\s+/g, " ")
+                        .trim();
+
+                if (
+                    !esPolvora(
+                        href,
+                        texto
+                    )
+                ) {
+                    return;
+                }
+
+                const cantidad =
+                    extraerNumero(
+                        texto
+                    );
+
+                if (
+                    cantidad > polvora
+                ) {
+
+                    polvora =
+                        cantidad;
+
+                }
+
             }
-
-            const cantidad =
-                extraerNumero(texto);
-
-            if (cantidad > polvora) {
-                polvora = cantidad;
-            }
-        });
+        );
 
     return polvora;
+
 }
 
 // =====================================================
 // OBTENER AZUFRE DE CELDA
 // =====================================================
 
-function obtenerAzufreDeCelda($, celda) {
+function obtenerAzufreDeCelda(
+    $,
+    celda
+) {
+
     let azufre = 0;
 
     $(celda)
         .find("a")
-        .each((i, enlace) => {
-            const href =
-                $(enlace).attr("href") || "";
+        .each(
+            (i, enlace) => {
 
-            const texto =
-                $(enlace)
-                    .text()
-                    .replace(/\s+/g, " ")
-                    .trim();
+                const href =
+                    $(enlace)
+                        .attr("href") || "";
 
-            if (!esAzufre(href, texto)) {
-                return;
+                const texto =
+                    $(enlace)
+                        .text()
+                        .replace(/\s+/g, " ")
+                        .trim();
+
+                if (
+                    !esAzufre(
+                        href,
+                        texto
+                    )
+                ) {
+                    return;
+                }
+
+                const cantidad =
+                    extraerNumero(
+                        texto
+                    );
+
+                if (
+                    cantidad > azufre
+                ) {
+
+                    azufre =
+                        cantidad;
+
+                }
+
             }
-
-            const cantidad =
-                extraerNumero(texto);
-
-            if (cantidad > azufre) {
-                azufre = cantidad;
-            }
-        });
+        );
 
     return azufre;
+
 }
 
 // =====================================================
 // EXTRAER INGREDIENTES
 // =====================================================
 
-function extraerIngredientes($, celda) {
+function extraerIngredientes(
+    $,
+    celda,
+    multiplicador = 1
+) {
+
     const ingredientes = [];
 
     $(celda)
         .find("a")
-        .each((i, enlace) => {
-            const href =
-                $(enlace).attr("href") || "";
+        .each(
+            (i, enlace) => {
 
-            const texto =
-                $(enlace)
-                    .text()
-                    .replace(/\s+/g, " ")
-                    .trim();
+                const href =
+                    $(enlace)
+                        .attr("href") || "";
 
-            if (!texto) {
-                return;
+                const texto =
+                    $(enlace)
+                        .text()
+                        .replace(/\s+/g, " ")
+                        .trim();
+
+                if (!texto) {
+                    return;
+                }
+
+                /*
+                 * RustHelp muestra normalmente:
+                 *
+                 * Sulfur
+                 * ×1,400
+                 *
+                 * Low Grade Fuel
+                 * ×30
+                 *
+                 * etc.
+                 *
+                 * Dependiendo de la estructura HTML,
+                 * puede venir nombre + cantidad
+                 * dentro del mismo enlace o en elementos
+                 * cercanos.
+                 */
+
+                const cantidadBase =
+                    extraerNumero(
+                        texto
+                    );
+
+                if (
+                    cantidadBase <= 0
+                ) {
+                    return;
+                }
+
+                let nombre =
+                    texto
+                        .replace(
+                            /[×x]\s*[\d,.]+/gi,
+                            ""
+                        )
+                        .replace(
+                            /[\d,.]+/g,
+                            ""
+                        )
+                        .replace(
+                            /\s+/g,
+                            " "
+                        )
+                        .trim();
+
+                /*
+                 * Si el enlace solo contiene la cantidad,
+                 * usamos el href para recuperar el material.
+                 */
+
+                if (
+                    !nombre ||
+                    /^\d+$/.test(nombre)
+                ) {
+
+                    nombre =
+                        href
+                            .split("/")
+                            .filter(Boolean)
+                            .pop() ||
+                        "Material";
+
+                }
+
+                nombre =
+                    normalizarNombreMaterial(
+                        nombre,
+                        href
+                    );
+
+                const cantidadTotal =
+                    cantidadBase *
+                    multiplicador;
+
+                ingredientes.push({
+
+                    nombre,
+
+                    cantidadBase,
+
+                    cantidad:
+                        cantidadTotal,
+
+                    href
+
+                });
+
             }
+        );
 
-            const cantidad =
-                extraerNumero(texto);
+    /*
+     * Eliminar duplicados del mismo material.
+     */
 
-            if (cantidad <= 0) {
-                return;
-            }
+    const mapa =
+        new Map();
 
-            let nombre = texto
-                .replace(/[×x]\s*\d+/gi, "")
-                .replace(/\d+/g, "")
+    for (
+        const ingrediente
+        of ingredientes
+    ) {
+
+        const clave =
+            normalizarTexto(
+                ingrediente.nombre
+            );
+
+        if (!clave) {
+            continue;
+        }
+
+        const existente =
+            mapa.get(
+                clave
+            );
+
+        if (!existente) {
+
+            mapa.set(
+                clave,
+                ingrediente
+            );
+
+        } else {
+
+            existente.cantidad +=
+                ingrediente.cantidad;
+
+        }
+
+    }
+
+    return [
+        ...mapa.values()
+    ];
+
+}
+
+// =====================================================
+// BUSCAR CELDA DE MATERIAL
+// =====================================================
+
+function encontrarCeldaMaterial(
+    $,
+    celdas
+) {
+
+    for (
+        let indice = 3;
+        indice < celdas.length;
+        indice++
+    ) {
+
+        const celda =
+            celdas[indice];
+
+        const textoCelda =
+            $(celda)
+                .text()
                 .replace(/\s+/g, " ")
                 .trim();
 
-            if (!nombre) {
-                nombre = href
-                    .split("/")
-                    .filter(Boolean)
-                    .pop() || "Material";
-            }
+        const enlaces =
+            $(celda)
+                .find("a")
+                .toArray();
 
-            ingredientes.push({
-                nombre,
-                cantidad,
-                href
-            });
-        });
+        const tieneMaterial =
+            enlaces.some(
+                enlace =>
+                    esMaterial(
+                        $(enlace)
+                            .attr("href"),
 
-    return ingredientes;
+                        $(enlace)
+                            .text()
+                    )
+            );
+
+        if (
+            tieneMaterial
+        ) {
+
+            return celda;
+
+        }
+
+        const textoNormalizado =
+            normalizarTexto(
+                textoCelda
+            );
+
+        if (
+
+            textoNormalizado.includes(
+                "gun powder"
+            ) ||
+
+            textoNormalizado.includes(
+                "sulfur"
+            ) ||
+
+            textoNormalizado.includes(
+                "charcoal"
+            ) ||
+
+            textoNormalizado.includes(
+                "metal fragments"
+            ) ||
+
+            textoNormalizado.includes(
+                "metal pipe"
+            ) ||
+
+            textoNormalizado.includes(
+                "low grade"
+            )
+
+        ) {
+
+            return celda;
+
+        }
+
+    }
+
+    return null;
+
 }
 
 // =====================================================
@@ -654,6 +1171,7 @@ function extraerIngredientes($, celda) {
 // =====================================================
 
 const VARIANTES_RAID_EXCLUIDAS = [
+
     "launched from catapult",
     "launched from catapulta",
     "catapult",
@@ -675,91 +1193,161 @@ const VARIANTES_RAID_EXCLUIDAS = [
     "from vehicle",
 
     "dispenser"
+
 ];
 
-function esFilaRaidExcluida(texto) {
+function esFilaRaidExcluida(
+    texto
+) {
+
     const normalizado =
-        normalizarTexto(texto);
+        normalizarTexto(
+            texto
+        );
 
     return VARIANTES_RAID_EXCLUIDAS.some(
         variante =>
             normalizado.includes(
-                normalizarTexto(variante)
+                normalizarTexto(
+                    variante
+                )
             )
     );
+
 }
 
 // =====================================================
 // EXTRAER COSTOS RAID
 // =====================================================
 
-function extraerCostosRaid(html) {
-    const $ = cheerio.load(html);
+function extraerCostosRaid(
+    html
+) {
+
+    const $ =
+        cheerio.load(
+            html
+        );
 
     const filas = [];
 
-    $("table").each((indice, tabla) => {
-        const textoTabla =
+    $("table").each(
+        (indice, tabla) => {
+
+            const textoTabla =
+                $(tabla)
+                    .text()
+                    .replace(/\s+/g, " ")
+                    .trim();
+
+            const normalizado =
+                normalizarTexto(
+                    textoTabla
+                );
+
+            const esTablaRaid =
+
+                normalizado.includes(
+                    "raid tool"
+                ) ||
+
+                normalizado.includes(
+                    "raiding tool"
+                ) ||
+
+                normalizado.includes(
+                    "raiding cost"
+                ) ||
+
+                normalizado.includes(
+                    "raid cost"
+                ) ||
+
+                normalizado.includes(
+                    "herramienta de raideo"
+                ) ||
+
+                normalizado.includes(
+                    "herramienta de raideos"
+                ) ||
+
+                normalizado.includes(
+                    "costo de raideo"
+                );
+
+            if (!esTablaRaid) {
+                return;
+            }
+
+            console.log(
+                "🔎 RustHelp: tabla de raid encontrada"
+            );
+
             $(tabla)
-                .text()
-                .replace(/\s+/g, " ")
-                .trim();
+                .find("tbody tr")
+                .each(
+                    (i, fila) => {
 
-        const normalizado =
-            normalizarTexto(textoTabla);
+                        procesarFilaRaid(
+                            $,
+                            fila,
+                            filas
+                        );
 
-        const esTablaRaid =
-            normalizado.includes("raid tool") ||
-            normalizado.includes("raiding tool") ||
-            normalizado.includes("raiding cost") ||
-            normalizado.includes("raid cost") ||
-            normalizado.includes("herramienta de raideo") ||
-            normalizado.includes("herramienta de raideos") ||
-            normalizado.includes("costo de raideo");
+                    }
+                );
 
-        if (!esTablaRaid) {
-            return;
         }
-
-        console.log(
-            "🔎 RustHelp: tabla de raid encontrada"
-        );
-
-        $(tabla)
-            .find("tbody tr")
-            .each((i, fila) => {
-                procesarFilaRaid($, fila, filas);
-            });
-    });
+    );
 
     // =================================================
     // FALLBACK
     // =================================================
 
-    if (filas.length === 0) {
+    if (
+        filas.length === 0
+    ) {
+
         console.log(
             "⚠️ RustHelp: usando fallback de tablas."
         );
 
-        $("table tr").each((i, fila) => {
-            procesarFilaRaid($, fila, filas);
-        });
+        $("table tr").each(
+            (i, fila) => {
+
+                procesarFilaRaid(
+                    $,
+                    fila,
+                    filas
+                );
+
+            }
+        );
+
     }
 
     return filas;
+
 }
 
 // =====================================================
 // PROCESAR FILA RAID
 // =====================================================
 
-function procesarFilaRaid($, fila, filas) {
+function procesarFilaRaid(
+    $,
+    fila,
+    filas
+) {
+
     const celdas =
         $(fila)
             .find("td")
             .toArray();
 
-    if (celdas.length < 3) {
+    if (
+        celdas.length < 3
+    ) {
         return;
     }
 
@@ -769,7 +1357,11 @@ function procesarFilaRaid($, fila, filas) {
             .replace(/\s+/g, " ")
             .trim();
 
-    if (esFilaRaidExcluida(textoFila)) {
+    if (
+        esFilaRaidExcluida(
+            textoFila
+        )
+    ) {
         return;
     }
 
@@ -779,7 +1371,9 @@ function procesarFilaRaid($, fila, filas) {
             .replace(/\s+/g, " ")
             .trim();
 
-    if (!herramientaOriginal) {
+    if (
+        !herramientaOriginal
+    ) {
         return;
     }
 
@@ -795,7 +1389,9 @@ function procesarFilaRaid($, fila, filas) {
             .trim();
 
     const cantidadNumero =
-        extraerNumero(cantidad);
+        extraerNumero(
+            cantidad
+        );
 
     const tiempo =
         $(celdas[2])
@@ -804,58 +1400,24 @@ function procesarFilaRaid($, fila, filas) {
             .trim();
 
     // =================================================
-    // BUSCAR CELDA DE MATERIAL
+    // CELDA DE MATERIALES
     // =================================================
 
-    let celdaMaterial = null;
+    let celdaMaterial =
+        encontrarCeldaMaterial(
+            $,
+            celdas
+        );
 
-    for (
-        let indice = 3;
-        indice < celdas.length;
-        indice++
+    if (
+        !celdaMaterial
     ) {
-        const celda = celdas[indice];
 
-        const textoCelda =
-            $(celda)
-                .text()
-                .replace(/\s+/g, " ")
-                .trim();
-
-        const enlaces =
-            $(celda)
-                .find("a")
-                .toArray();
-
-        const tieneMaterial =
-            enlaces.some(enlace =>
-                esMaterial(
-                    $(enlace).attr("href"),
-                    $(enlace).text()
-                )
-            );
-
-        if (tieneMaterial) {
-            celdaMaterial = celda;
-            break;
-        }
-
-        if (
-            normalizarTexto(textoCelda).includes(
-                "gun powder"
-            ) ||
-            normalizarTexto(textoCelda).includes(
-                "sulfur"
-            )
-        ) {
-            celdaMaterial = celda;
-            break;
-        }
-    }
-
-    if (!celdaMaterial) {
         celdaMaterial =
-            celdas[celdas.length - 1];
+            celdas[
+                celdas.length - 1
+            ];
+
     }
 
     // =================================================
@@ -864,12 +1426,16 @@ function procesarFilaRaid($, fila, filas) {
 
     let costoTotal = "";
 
-    if (celdas.length >= 4) {
+    if (
+        celdas.length >= 4
+    ) {
+
         costoTotal =
             $(celdas[3])
                 .text()
                 .replace(/\s+/g, " ")
                 .trim();
+
     }
 
     // =================================================
@@ -885,91 +1451,148 @@ function procesarFilaRaid($, fila, filas) {
             : "";
 
     // =================================================
-    // PÓLVORA
-    // =================================================
-
-    const polvora =
-        celdaMaterial
-            ? obtenerPolvoraDeCelda(
-                $,
-                celdaMaterial
-            )
-            : 0;
-
-    // =================================================
-    // AZUFRE
-    // =================================================
-
-    const azufre =
-        celdaMaterial
-            ? obtenerAzufreDeCelda(
-                $,
-                celdaMaterial
-            )
-            : 0;
-
-    // =================================================
     // INGREDIENTES
+    //
+    // IMPORTANTE:
+    // Se multiplica por la cantidad de explosivos.
     // =================================================
 
     const ingredientes =
         celdaMaterial
             ? extraerIngredientes(
                 $,
-                celdaMaterial
+                celdaMaterial,
+                cantidadNumero || 1
             )
             : [];
 
     // =================================================
+    // OBTENER AZUFRE TOTAL
+    // =================================================
+
+    let azufre =
+        0;
+
+    let polvora =
+        0;
+
+    for (
+        const ingrediente
+        of ingredientes
+    ) {
+
+        const nombreNormalizado =
+            normalizarTexto(
+                ingrediente.nombre
+            );
+
+        if (
+
+            nombreNormalizado ===
+                "sulfur" ||
+
+            nombreNormalizado ===
+                "sulphur" ||
+
+            nombreNormalizado ===
+                "azufre"
+
+        ) {
+
+            azufre +=
+                Number(
+                    ingrediente.cantidad
+                ) || 0;
+
+        }
+
+        if (
+
+            nombreNormalizado.includes(
+                "gun powder"
+            ) ||
+
+            nombreNormalizado.includes(
+                "gunpowder"
+            ) ||
+
+            nombreNormalizado.includes(
+                "polvora"
+            )
+
+        ) {
+
+            polvora +=
+                Number(
+                    ingrediente.cantidad
+                ) || 0;
+
+        }
+
+    }
+
+    // =================================================
     // COSTO EN AZUFRE
+    //
+    // Ahora representa exclusivamente
+    // el Sulfur total.
     // =================================================
 
     const costoAzufre =
-        azufre > 0
-            ? azufre
-            : polvora > 0
-                ? polvora
-                : 0;
+        azufre;
 
     // =================================================
     // GUARDAR
     // =================================================
 
     filas.push({
+
         herramienta,
+
         herramientaOriginal,
 
         cantidad,
+
         cantidadNumero,
 
         tiempo,
 
-        costo: costoTotal,
+        costo:
+            costoTotal,
+
         costoTotal,
 
         material,
 
         azufre,
+
         polvora,
 
         costoAzufre,
 
         ingredientes,
 
-        receta: material
+        receta:
+            material
+
     });
+
 }
 
 // =====================================================
 // CLASIFICAR RAID
 // =====================================================
 
-function clasificarRaid(filas) {
+function clasificarRaid(
+    filas
+) {
+
     const explosivos = [];
     const melee = [];
     const balas = [];
 
     const explosivosPermitidos = [
+
         "c4",
         "timed explosive",
 
@@ -991,10 +1614,13 @@ function clasificarRaid(filas) {
         "explosive 5.56",
         "explosive ammo",
         "explosive ammunition"
+
     ];
 
     const explosivosExcluidos = [
+
         "torpedo",
+
         "mine",
         "mina",
         "land mine",
@@ -1016,9 +1642,11 @@ function clasificarRaid(filas) {
         "vehículo",
 
         "dispenser"
+
     ];
 
     const palabrasMelee = [
+
         "hatchet",
         "hacha",
 
@@ -1058,9 +1686,11 @@ function clasificarRaid(filas) {
         "motosierra",
 
         "jackhammer"
+
     ];
 
     const palabrasBalas = [
+
         "ammo",
         "ammunition",
         "municion",
@@ -1068,9 +1698,14 @@ function clasificarRaid(filas) {
         "bullet",
         "bala",
         "cartucho"
+
     ];
 
-    for (const fila of filas) {
+    for (
+        const fila
+        of filas
+    ) {
+
         const texto =
             normalizarTexto(
                 `${fila.herramientaOriginal || ""} ${fila.herramienta || ""}`
@@ -1084,7 +1719,9 @@ function clasificarRaid(filas) {
             explosivosExcluidos.some(
                 palabra =>
                     texto.includes(
-                        normalizarTexto(palabra)
+                        normalizarTexto(
+                            palabra
+                        )
                     )
             )
         ) {
@@ -1099,12 +1736,19 @@ function clasificarRaid(filas) {
             palabrasBalas.some(
                 palabra =>
                     texto.includes(
-                        normalizarTexto(palabra)
+                        normalizarTexto(
+                            palabra
+                        )
                     )
             )
         ) {
-            balas.push(fila);
+
+            balas.push(
+                fila
+            );
+
             continue;
+
         }
 
         // =================================================
@@ -1115,12 +1759,19 @@ function clasificarRaid(filas) {
             explosivosPermitidos.some(
                 palabra =>
                     texto.includes(
-                        normalizarTexto(palabra)
+                        normalizarTexto(
+                            palabra
+                        )
                     )
             )
         ) {
-            explosivos.push(fila);
+
+            explosivos.push(
+                fila
+            );
+
             continue;
+
         }
 
         // =================================================
@@ -1131,29 +1782,49 @@ function clasificarRaid(filas) {
             palabrasMelee.some(
                 palabra =>
                     texto.includes(
-                        normalizarTexto(palabra)
+                        normalizarTexto(
+                            palabra
+                        )
                     )
             )
         ) {
-            melee.push(fila);
+
+            melee.push(
+                fila
+            );
+
         }
+
     }
 
     return {
+
         explosivos,
+
         melee,
+
         balas
+
     };
+
 }
 
 // =====================================================
-// ELIMINAR DUPLICADOS
+// ELIMINAR DUPLICADOS EXPLOSIVOS
 // =====================================================
 
-function eliminarDuplicadosExplosivos(filas) {
-    const mapa = new Map();
+function eliminarDuplicadosExplosivos(
+    filas
+) {
 
-    for (const fila of filas) {
+    const mapa =
+        new Map();
+
+    for (
+        const fila
+        of filas
+    ) {
+
         const clave =
             normalizarTexto(
                 fila.herramienta
@@ -1164,143 +1835,261 @@ function eliminarDuplicadosExplosivos(filas) {
         }
 
         const existente =
-            mapa.get(clave);
+            mapa.get(
+                clave
+            );
 
         if (!existente) {
-            mapa.set(clave, fila);
+
+            mapa.set(
+                clave,
+                fila
+            );
+
             continue;
+
+        }
+
+        /*
+         * Prioridad:
+         *
+         * 1. Menor azufre total.
+         * 2. Menor cantidad.
+         */
+
+        if (
+            Number(fila.azufre) <
+            Number(existente.azufre)
+        ) {
+
+            mapa.set(
+                clave,
+                fila
+            );
+
+            continue;
+
         }
 
         if (
-            Number(fila.polvora) <
-            Number(existente.polvora)
+            Number(fila.azufre) ===
+            Number(existente.azufre)
         ) {
-            mapa.set(clave, fila);
-            continue;
-        }
 
-        if (
-            Number(fila.polvora) ===
-            Number(existente.polvora)
-        ) {
             if (
                 Number(fila.cantidadNumero) <
                 Number(existente.cantidadNumero)
             ) {
-                mapa.set(clave, fila);
+
+                mapa.set(
+                    clave,
+                    fila
+                );
+
             }
+
         }
+
     }
 
-    return [...mapa.values()];
+    return [
+        ...mapa.values()
+    ];
+
 }
 
 // =====================================================
 // ORDENAR POR ECONOMÍA
 // =====================================================
 
-function ordenarPorEconomia(filas) {
+function ordenarPorEconomia(
+    filas
+) {
+
     return [...filas]
-        .filter(fila => {
-            return (
-                Number(fila.polvora) > 0 ||
-                Number(fila.azufre) > 0 ||
-                Number(fila.cantidadNumero) > 0
-            );
-        })
-        .sort((a, b) => {
-            const polvoraA =
-                Number(a.polvora) || 0;
 
-            const polvoraB =
-                Number(b.polvora) || 0;
+        .filter(
+            fila =>
+                Number(
+                    fila.azufre
+                ) > 0 ||
 
-            if (polvoraA !== polvoraB) {
-                return polvoraA - polvoraB;
+                Number(
+                    fila.polvora
+                ) > 0 ||
+
+                Number(
+                    fila.cantidadNumero
+                ) > 0
+        )
+
+        .sort(
+            (a, b) => {
+
+                const azufreA =
+                    Number(
+                        a.azufre
+                    ) || 0;
+
+                const azufreB =
+                    Number(
+                        b.azufre
+                    ) || 0;
+
+                if (
+                    azufreA !==
+                    azufreB
+                ) {
+
+                    return (
+                        azufreA -
+                        azufreB
+                    );
+
+                }
+
+                const cantidadA =
+                    Number(
+                        a.cantidadNumero
+                    ) || 0;
+
+                const cantidadB =
+                    Number(
+                        b.cantidadNumero
+                    ) || 0;
+
+                return (
+                    cantidadA -
+                    cantidadB
+                );
+
             }
+        );
 
-            const cantidadA =
-                Number(a.cantidadNumero) || 0;
-
-            const cantidadB =
-                Number(b.cantidadNumero) || 0;
-
-            return cantidadA - cantidadB;
-        });
 }
 
 // =====================================================
 // ORDENAR POR CANTIDAD
 // =====================================================
 
-function ordenarPorCantidad(filas) {
+function ordenarPorCantidad(
+    filas
+) {
+
     return [...filas]
+
         .filter(
             fila =>
-                Number(fila.cantidadNumero) > 0
+                Number(
+                    fila.cantidadNumero
+                ) > 0
         )
-        .sort((a, b) => {
-            const diferencia =
-                Number(a.cantidadNumero) -
-                Number(b.cantidadNumero);
 
-            if (diferencia !== 0) {
-                return diferencia;
+        .sort(
+            (a, b) => {
+
+                const diferencia =
+                    Number(
+                        a.cantidadNumero
+                    ) -
+                    Number(
+                        b.cantidadNumero
+                    );
+
+                if (
+                    diferencia !== 0
+                ) {
+
+                    return diferencia;
+
+                }
+
+                return (
+                    Number(
+                        a.azufre
+                    ) -
+                    Number(
+                        b.azufre
+                    )
+                );
+
             }
+        );
 
-            return (
-                Number(a.polvora) -
-                Number(b.polvora)
-            );
-        });
 }
 
 // =====================================================
 // TIEMPO A SEGUNDOS
 // =====================================================
 
-function convertirTiempoASegundos(texto) {
+function convertirTiempoASegundos(
+    texto
+) {
+
     if (!texto) {
         return Infinity;
     }
 
     const normalizado =
-        String(texto).toLowerCase();
+        String(texto)
+            .toLowerCase();
 
     let segundos = 0;
 
     const horas =
-        normalizado.match(/(\d+)\s*h/);
+        normalizado.match(
+            /(\d+)\s*h/
+        );
 
     const minutos =
-        normalizado.match(/(\d+)\s*m/);
+        normalizado.match(
+            /(\d+)\s*m/
+        );
 
     const segundosMatch =
-        normalizado.match(/(\d+)\s*s/);
+        normalizado.match(
+            /(\d+)\s*s/
+        );
 
     if (horas) {
+
         segundos +=
-            Number(horas[1]) * 3600;
+            Number(
+                horas[1]
+            ) * 3600;
+
     }
 
     if (minutos) {
+
         segundos +=
-            Number(minutos[1]) * 60;
+            Number(
+                minutos[1]
+            ) * 60;
+
     }
 
     if (segundosMatch) {
+
         segundos +=
-            Number(segundosMatch[1]);
+            Number(
+                segundosMatch[1]
+            );
+
     }
 
     return segundos;
+
 }
 
 // =====================================================
 // ORDENAR MELEE
 // =====================================================
 
-function ordenarMelee(filas) {
+function ordenarMelee(
+    filas
+) {
+
     return [...filas].sort(
         (a, b) =>
             convertirTiempoASegundos(
@@ -1310,27 +2099,36 @@ function ordenarMelee(filas) {
                 b.tiempo
             )
     );
+
 }
 
 // =====================================================
 // CONSULTAR RAID
 // =====================================================
 
-async function consultarRaid(nombre) {
+async function consultarRaid(
+    nombre
+) {
+
     try {
+
         console.log(
             `🔎 RustHelp: consultando "${nombre}"`
         );
 
         const item =
-            await buscarItemRustHelp(nombre);
+            await buscarItemRustHelp(
+                nombre
+            );
 
         if (!item) {
+
             console.log(
                 `❌ RustHelp: no se encontró "${nombre}"`
             );
 
             return null;
+
         }
 
         console.log(
@@ -1347,7 +2145,9 @@ async function consultarRaid(nombre) {
         );
 
         const clasificacion =
-            clasificarRaid(filas);
+            clasificarRaid(
+                filas
+            );
 
         console.log(
             `💣 Explosivos detectados: ${clasificacion.explosivos.length}`
@@ -1382,39 +2182,59 @@ async function consultarRaid(nombre) {
             );
 
         return {
-            nombre: item.nombre,
+
+            nombre:
+                item.nombre,
 
             nombreRust:
                 item.nombreRust,
 
-            url: item.url,
+            url:
+                item.url,
 
-            todos: filas,
+            todos:
+                filas,
 
             explosivos:
-                economia.slice(0, 10),
+                economia.slice(
+                    0,
+                    10
+                ),
 
             explosivosEconomia:
-                economia.slice(0, 10),
+                economia.slice(
+                    0,
+                    10
+                ),
 
             explosivosCantidad:
-                cantidad.slice(0, 10),
+                cantidad.slice(
+                    0,
+                    10
+                ),
 
             melee:
-                melee.slice(0, 10),
+                melee.slice(
+                    0,
+                    10
+                ),
 
             balas:
                 clasificacion.balas
+
         };
 
     } catch (error) {
+
         console.error(
             "❌ Error consultando RustHelp:",
             error
         );
 
         return null;
+
     }
+
 }
 
 // =====================================================
@@ -1422,8 +2242,13 @@ async function consultarRaid(nombre) {
 // =====================================================
 
 module.exports = {
+
     buscarItemRustHelp,
+
     consultarRaid,
+
     extraerCostosRaid,
+
     clasificarRaid
+
 };
