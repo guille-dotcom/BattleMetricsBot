@@ -286,18 +286,9 @@ function crearTextoRaids(
                         raid.cantidad
                     )}**`;
 
-                if (
-                    Number(
-                        raid.azufre ||
-                        0
-                    ) > 0
-                ) {
-
-                    bloque +=
-                        `\n> 🪨 Azufre total: **${formatearNumero(
-                            raid.azufre
-                        )}**`;
-                }
+                // =================================================
+                // TIEMPO
+                // =================================================
 
                 if (
                     raid.tiempo
@@ -306,6 +297,10 @@ function crearTextoRaids(
                     bloque +=
                         `\n> ⏱️ Tiempo: **${raid.tiempo}**`;
                 }
+
+                // =================================================
+                // RAW MATERIAL COST
+                // =================================================
 
                 const materiales =
                     crearTextoMateriales(
@@ -466,53 +461,6 @@ function crearEmbedCantidad(
 }
 
 // =====================================================
-// EXPLOSIVOS
-// =====================================================
-
-function crearEmbedExplosivos(
-    resultado
-) {
-
-    const embed =
-        crearEmbedBase(
-            resultado,
-            "💣 Explosivos",
-            0xe74c3c
-        );
-
-    if (
-        !Array.isArray(
-            resultado.explosivos
-        ) ||
-        resultado.explosivos.length ===
-            0
-    ) {
-
-        embed.setDescription(
-            "❌ No se encontraron explosivos válidos."
-        );
-
-        return embed;
-    }
-
-    embed.setDescription(
-        crearTextoRaids(
-            resultado.explosivos
-        )
-    );
-
-    embed.addFields({
-        name:
-            "💣 Métodos de raideo",
-
-        value:
-            "Explosivos disponibles para destruir este objeto."
-    });
-
-    return embed;
-}
-
-// =====================================================
 // MELEE
 // =====================================================
 
@@ -642,20 +590,6 @@ function crearBotones() {
                     )
                     .setStyle(
                         ButtonStyle.Primary
-                    ),
-
-                new ButtonBuilder()
-                    .setCustomId(
-                        "raid_explosivos"
-                    )
-                    .setLabel(
-                        "Explosivos"
-                    )
-                    .setEmoji(
-                        "💣"
-                    )
-                    .setStyle(
-                        ButtonStyle.Danger
                     ),
 
                 new ButtonBuilder()
@@ -833,8 +767,6 @@ module.exports = {
 
             "raid_cantidad",
 
-            "raid_explosivos",
-
             "raid_melee",
 
             "raid_municion"
@@ -892,15 +824,6 @@ module.exports = {
 
                 nuevoEmbed =
                     crearEmbedCantidad(
-                        resultado
-                    );
-
-                break;
-
-            case "raid_explosivos":
-
-                nuevoEmbed =
-                    crearEmbedExplosivos(
                         resultado
                     );
 
