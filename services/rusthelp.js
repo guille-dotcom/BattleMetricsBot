@@ -1392,16 +1392,16 @@ async function consultarRaid(nombre) {
             todos: filas,
 
             explosivos:
-                economia.slice(0, 5),
+                economia.slice(0, 10),
 
             explosivosEconomia:
-                economia.slice(0, 5),
+                economia.slice(0, 10),
 
             explosivosCantidad:
-                cantidad.slice(0, 5),
+                cantidad.slice(0, 10),
 
             melee:
-                melee.slice(0, 5),
+                melee.slice(0, 10),
 
             balas:
                 clasificacion.balas
