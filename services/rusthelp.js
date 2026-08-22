@@ -30,7 +30,6 @@ const HEADERS = {
 // =====================================================
 
 function normalizarTexto(texto) {
-
     return String(texto || "")
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
@@ -38,7 +37,6 @@ function normalizarTexto(texto) {
         .replace(/[^a-z0-9\s]/g, " ")
         .replace(/\s+/g, " ")
         .trim();
-
 }
 
 // =====================================================
@@ -46,10 +44,8 @@ function normalizarTexto(texto) {
 // =====================================================
 
 function convertirSlug(nombre) {
-
     return normalizarTexto(nombre)
         .replace(/\s+/g, "-");
-
 }
 
 // =====================================================
@@ -59,49 +55,37 @@ function convertirSlug(nombre) {
 const ALIASES = {
 
     "tc": "tool-cupboard",
-
     "armario": "tool-cupboard",
-
     "armario de herramientas": "tool-cupboard",
 
     "puerta blindada": "armored-door",
 
     "puerta de garaje": "garage-door",
-
     "puerta garaje": "garage-door",
 
     "puerta de chapa": "sheet-metal-door",
-
     "puerta chapa": "sheet-metal-door",
-
     "puerta de metal": "sheet-metal-door",
 
     "puerta de madera": "wooden-door",
-
     "puerta madera": "wooden-door",
 
     "doble puerta de chapa": "sheet-metal-double-door",
-
     "puerta doble de chapa": "sheet-metal-double-door",
 
     "puerta doble blindada": "armored-double-door",
 
     "muro blindado": "armored-wall",
-
     "pared blindada": "armored-wall",
 
     "pared de chapa": "sheet-metal-wall",
-
     "pared metalica": "sheet-metal-wall",
 
     "pared de piedra": "stone-wall",
-
     "pared de madera": "wooden-wall",
 
     "porton": "armored-garage-door",
-
     "porton blindado": "armored-garage-door"
-
 };
 
 // =====================================================
@@ -280,7 +264,190 @@ const NOMBRES_RUST = [
         ],
         nombre: "Ariete"
     }
+];
 
+// =====================================================
+// MAPA DE MATERIALES RAW
+// =====================================================
+//
+// IMPORTANTE:
+//
+// RustHelp actualmente muestra los materiales mediante
+// enlaces cuyo texto puede ser solamente:
+//
+// ×400
+// ×480
+// ×2
+//
+// El nombre real del material se encuentra asociado
+// al href del enlace.
+//
+// Por eso NO debemos depender únicamente del texto
+// visible del <a>.
+//
+// =====================================================
+
+const MATERIALES_RAW = [
+
+    {
+        claves: [
+            "sulfur",
+            "sulphur",
+            "azufre"
+        ],
+        nombre: "Sulfur"
+    },
+
+    {
+        claves: [
+            "charcoal",
+            "carbon"
+        ],
+        nombre: "Charcoal"
+    },
+
+    {
+        claves: [
+            "metal-fragments",
+            "metal fragments",
+            "metal-fragment",
+            "metal fragment",
+            "fragmentos de metal"
+        ],
+        nombre: "Metal Fragments"
+    },
+
+    {
+        claves: [
+            "metal-pipe",
+            "metal pipe",
+            "metal-pipes",
+            "tubo de metal",
+            "tuberia metalica"
+        ],
+        nombre: "Metal Pipe"
+    },
+
+    {
+        claves: [
+            "low-grade-fuel",
+            "low grade fuel",
+            "low-grade",
+            "low grade"
+        ],
+        nombre: "Low Grade Fuel"
+    },
+
+    {
+        claves: [
+            "cloth",
+            "tela"
+        ],
+        nombre: "Cloth"
+    },
+
+    {
+        claves: [
+            "rope",
+            "cuerda"
+        ],
+        nombre: "Rope"
+    },
+
+    {
+        claves: [
+            "tech-trash",
+            "tech trash"
+        ],
+        nombre: "Tech Trash"
+    },
+
+    {
+        claves: [
+            "gears",
+            "gear"
+        ],
+        nombre: "Gears"
+    },
+
+    {
+        claves: [
+            "crude-oil",
+            "crude oil"
+        ],
+        nombre: "Crude Oil"
+    },
+
+    {
+        claves: [
+            "animal-fat",
+            "animal fat"
+        ],
+        nombre: "Animal Fat"
+    },
+
+    {
+        claves: [
+            "leather"
+        ],
+        nombre: "Leather"
+    },
+
+    {
+        claves: [
+            "wood"
+        ],
+        nombre: "Wood"
+    },
+
+    {
+        claves: [
+            "metal-spring",
+            "metal spring"
+        ],
+        nombre: "Metal Spring"
+    },
+
+    {
+        claves: [
+            "semi-automatic-body",
+            "semi automatic body"
+        ],
+        nombre: "Semi Automatic Body"
+    },
+
+    {
+        claves: [
+            "rifle-body",
+            "rifle body"
+        ],
+        nombre: "Rifle Body"
+    },
+
+    {
+        claves: [
+            "smg-body",
+            "smg body"
+        ],
+        nombre: "SMG Body"
+    },
+
+    {
+        claves: [
+            "hq-metal",
+            "high quality metal",
+            "high quality metal ore"
+        ],
+        nombre: "High Quality Metal"
+    },
+
+    {
+        claves: [
+            "stone",
+            "piedra"
+        ],
+        nombre: "Stone"
+    }
 ];
 
 // =====================================================
@@ -298,7 +465,6 @@ function limpiarNombreRust(nombre) {
     }
 
     const basura = [
-
         "Cost To Repair Head",
         "Cost to Repair Head",
         "Workbench Refill",
@@ -307,7 +473,6 @@ function limpiarNombreRust(nombre) {
         "Cost to Repair",
         "Repair Cost",
         "Repair cost"
-
     ];
 
     for (const parte of basura) {
@@ -318,14 +483,11 @@ function limpiarNombreRust(nombre) {
                 .indexOf(parte.toLowerCase());
 
         if (indice !== -1) {
-
             texto =
                 texto
                     .substring(0, indice)
                     .trim();
-
         }
-
     }
 
     texto = texto
@@ -348,7 +510,6 @@ function limpiarNombreRust(nombre) {
         .trim();
 
     return texto;
-
 }
 
 // =====================================================
@@ -374,13 +535,11 @@ function convertirNombreRust(nombre) {
     if (
         normalizado ===
             "explosive 5 56 rifle ammo" ||
-
         normalizado ===
             "explosive 556 rifle ammo"
     ) {
 
         return "Explosive 5.56 Rifle Ammo";
-
     }
 
     // =================================================
@@ -400,11 +559,9 @@ function convertirNombreRust(nombre) {
             ) {
 
                 return entrada.nombre;
-
             }
 
             continue;
-
         }
 
         if (entrada.buscar) {
@@ -418,17 +575,12 @@ function convertirNombreRust(nombre) {
                 );
 
             if (coincide) {
-
                 return entrada.nombre;
-
             }
-
         }
-
     }
 
     return original;
-
 }
 
 // =====================================================
@@ -478,13 +630,10 @@ async function obtenerPagina(slug) {
             console.log(
                 `⚠️ RustHelp no pudo abrir ${url}: ${error.message}`
             );
-
         }
-
     }
 
     return null;
-
 }
 
 // =====================================================
@@ -522,7 +671,6 @@ async function buscarItemRustHelp(nombre) {
         slugs.push(
             convertirSlug(sinDe)
         );
-
     }
 
     const sinThe =
@@ -536,7 +684,6 @@ async function buscarItemRustHelp(nombre) {
         slugs.push(
             convertirSlug(sinThe)
         );
-
     }
 
     const slugsUnicos =
@@ -588,13 +735,10 @@ async function buscarItemRustHelp(nombre) {
 
             html:
                 pagina.html
-
         };
-
     }
 
     return null;
-
 }
 
 // =====================================================
@@ -607,16 +751,14 @@ function extraerNumero(texto) {
         texto === null ||
         texto === undefined
     ) {
-
         return 0;
-
     }
 
     const valor =
         String(texto)
             .replace(/\u00a0/g, " ")
             .replace(/,/g, "")
-            .match(/\d+/);
+            .match(/\d+(?:\.\d+)?/);
 
     if (!valor) {
         return 0;
@@ -628,7 +770,6 @@ function extraerNumero(texto) {
     return Number.isFinite(numero)
         ? numero
         : 0;
-
 }
 
 // =====================================================
@@ -641,12 +782,10 @@ function extraerCantidadRaid(texto) {
         texto === null ||
         texto === undefined
     ) {
-
         return 0;
-
     }
 
-    const limpio =
+    let limpio =
         String(texto)
             .replace(/\u00a0/g, " ")
             .replace(/,/g, "")
@@ -659,7 +798,6 @@ function extraerCantidadRaid(texto) {
         /^\s*(\d+)\s*[x×]\b/i,
 
         /^\s*(\d+)\b/
-
     ];
 
     for (const patron of patrones) {
@@ -678,403 +816,136 @@ function extraerCantidadRaid(texto) {
             ) {
 
                 return numero;
-
             }
-
         }
-
     }
 
     return 0;
-
 }
 
 // =====================================================
-// OBTENER SLUG DESDE HREF
+// NORMALIZAR MATERIAL
 // =====================================================
 
-function obtenerSlugDesdeHref(href) {
+function normalizarNombreMaterial(
+    nombre,
+    href
+) {
 
-    if (!href) {
-        return "";
+    let texto =
+        String(nombre || "")
+            .replace(/\s+/g, " ")
+            .trim();
+
+    const objetivo =
+        normalizarTexto(
+            `${href || ""} ${texto || ""}`
+        );
+
+    // =================================================
+    // BUSCAR POR HREF + TEXTO
+    // =================================================
+
+    for (const material of MATERIALES_RAW) {
+
+        const coincide =
+            material.claves.some(
+                clave =>
+                    objetivo.includes(
+                        normalizarTexto(clave)
+                    )
+            );
+
+        if (coincide) {
+            return material.nombre;
+        }
     }
 
-    try {
+    // =================================================
+    // FALLBACK POR HREF
+    // =================================================
 
-        const limpio =
-            String(href)
-                .split("?")[0]
-                .split("#")[0]
-                .replace(/\/+$/, "");
+    if (!texto && href) {
 
         const partes =
-            limpio
+            String(href)
                 .split("/")
                 .filter(Boolean);
 
-        if (!partes.length) {
-            return "";
+        const slug =
+            partes[partes.length - 1];
+
+        if (slug) {
+
+            return slug
+                .replace(/-/g, " ")
+                .replace(
+                    /\b\w/g,
+                    letra =>
+                        letra.toUpperCase()
+                );
         }
-
-        return partes[partes.length - 1];
-
-    } catch (error) {
-
-        return "";
-
     }
 
+    return texto;
 }
 
 // =====================================================
-// NORMALIZAR MATERIAL DESDE HREF
+// IDENTIFICAR MATERIAL POR ENLACE
 // =====================================================
 
-function normalizarMaterialDesdeHref(
-    href,
-    texto
+function identificarMaterialDesdeEnlace(
+    $,
+    enlace
 ) {
 
-    const slug =
+    if (!enlace) {
+        return null;
+    }
+
+    const href =
+        $(enlace)
+            .attr("href") || "";
+
+    const texto =
+        $(enlace)
+            .text()
+            .replace(/\s+/g, " ")
+            .trim();
+
+    const objetivo =
         normalizarTexto(
-            obtenerSlugDesdeHref(href)
+            `${href} ${texto}`
         );
 
-    const textoNormalizado =
-        normalizarTexto(texto);
-
-    // =================================================
-    // SULFUR
-    // =================================================
-
-    if (
-        slug === "sulfur" ||
-        slug === "sulphur" ||
-        slug.includes("sulfur") ||
-        slug.includes("sulphur")
-    ) {
-
-        return "Sulfur";
-
-    }
-
-    // =================================================
-    // CHARCOAL
-    // =================================================
-
-    if (
-        slug === "charcoal" ||
-        slug.includes("charcoal")
-    ) {
-
-        return "Charcoal";
-
-    }
-
-    // =================================================
-    // METAL FRAGMENTS
-    // =================================================
-
-    if (
-        slug === "metal-fragments" ||
-        slug === "metal-fragment" ||
-        slug.includes("metal-fragment")
-    ) {
-
-        return "Metal Fragments";
-
-    }
-
-    // =================================================
-    // METAL PIPE
-    // =================================================
-
-    if (
-        slug === "metal-pipe" ||
-        slug.includes("metal-pipe")
-    ) {
-
-        return "Metal Pipe";
-
-    }
-
-    // =================================================
-    // LOW GRADE FUEL
-    // =================================================
-
-    if (
-        slug === "low-grade-fuel" ||
-        slug === "low-grade"
-    ) {
-
-        return "Low Grade Fuel";
-
-    }
-
-    // =================================================
-    // CLOTH
-    // =================================================
-
-    if (
-        slug === "cloth"
-    ) {
-
-        return "Cloth";
-
-    }
-
-    // =================================================
-    // ROPE
-    // =================================================
-
-    if (
-        slug === "rope"
-    ) {
-
-        return "Rope";
-
-    }
-
-    // =================================================
-    // TECH TRASH
-    // =================================================
-
-    if (
-        slug === "tech-trash" ||
-        slug === "techtrash"
-    ) {
-
-        return "Tech Trash";
-
-    }
-
-    // =================================================
-    // GEARS
-    // =================================================
-
-    if (
-        slug === "gears" ||
-        slug === "gear"
-    ) {
-
-        return "Gears";
-
-    }
-
-    // =================================================
-    // CRUDE OIL
-    // =================================================
-
-    if (
-        slug === "crude-oil" ||
-        slug === "crudeoil"
-    ) {
-
-        return "Crude Oil";
-
-    }
-
-    // =================================================
-    // ANIMAL FAT
-    // =================================================
-
-    if (
-        slug === "animal-fat" ||
-        slug === "animalfat"
-    ) {
-
-        return "Animal Fat";
-
-    }
-
-    // =================================================
-    // LEATHER
-    // =================================================
-
-    if (
-        slug === "leather"
-    ) {
-
-        return "Leather";
-
-    }
-
-    // =================================================
-    // WOOD
-    // =================================================
-
-    if (
-        slug === "wood"
-    ) {
-
-        return "Wood";
-
-    }
-
-    // =================================================
-    // GUNPOWDER
-    // =================================================
-
-    if (
-        slug === "gunpowder"
-    ) {
-
-        return "Gun Powder";
-
-    }
-
-    // =================================================
-    // STONE
-    // =================================================
-
-    if (
-        slug === "stones" ||
-        slug === "stone"
-    ) {
-
-        return "Stone";
-
-    }
-
-    // =================================================
-    // METAL ORE
-    // =================================================
-
-    if (
-        slug === "metal-ore" ||
-        slug === "metal-ore"
-    ) {
-
-        return "Metal Ore";
-
-    }
-
-    // =================================================
-    // HIGH QUALITY METAL
-    // =================================================
-
-    if (
-        slug === "high-quality-metal" ||
-        slug === "hq-metal" ||
-        slug === "hq-metal-ore"
-    ) {
-
-        return "High Quality Metal";
-
-    }
-
-    // =================================================
-    // SULFUR ORE
-    // =================================================
-
-    if (
-        slug === "sulfur-ore" ||
-        slug === "sulphur-ore"
-    ) {
-
-        return "Sulfur Ore";
-
-    }
-
-    // =================================================
-    // SI NO PODEMOS IDENTIFICARLO POR SLUG
-    // =================================================
-
-    if (textoNormalizado) {
-
-        if (
-            textoNormalizado === "sulfur" ||
-            textoNormalizado === "sulphur" ||
-            textoNormalizado === "azufre"
-        ) {
-
-            return "Sulfur";
-
-        }
-
-        if (
-            textoNormalizado === "charcoal" ||
-            textoNormalizado === "carbon"
-        ) {
-
-            return "Charcoal";
-
-        }
-
-        if (
-            textoNormalizado === "metal fragments" ||
-            textoNormalizado === "metal fragment"
-        ) {
-
-            return "Metal Fragments";
-
-        }
-
-        if (
-            textoNormalizado === "metal pipe"
-        ) {
-
-            return "Metal Pipe";
-
-        }
-
-        if (
-            textoNormalizado === "low grade fuel" ||
-            textoNormalizado === "low grade"
-        ) {
-
-            return "Low Grade Fuel";
-
-        }
-
-        if (
-            textoNormalizado === "cloth"
-        ) {
-
-            return "Cloth";
-
-        }
-
-        if (
-            textoNormalizado === "rope"
-        ) {
-
-            return "Rope";
-
-        }
-
-        if (
-            textoNormalizado === "tech trash"
-        ) {
-
-            return "Tech Trash";
-
-        }
-
-    }
-
-    // =================================================
-    // FALLBACK DEL SLUG
-    // =================================================
-
-    if (slug) {
-
-        return slug
-            .replace(/-/g, " ")
-            .replace(
-                /\b\w/g,
-                letra =>
-                    letra.toUpperCase()
+    for (const material of MATERIALES_RAW) {
+
+        const coincide =
+            material.claves.some(
+                clave =>
+                    objetivo.includes(
+                        normalizarTexto(clave)
+                    )
             );
 
+        if (coincide) {
+
+            return {
+                nombre:
+                    material.nombre,
+
+                href,
+
+                texto
+            };
+        }
     }
 
-    return texto || "Material";
-
+    return null;
 }
 
 // =====================================================
-// MATERIALES RAW MATERIAL COST
+// DETECTAR SI ES MATERIAL RAW
 // =====================================================
 
 function esMaterialRaw(
@@ -1087,84 +958,244 @@ function esMaterialRaw(
             `${href || ""} ${texto || ""}`
         );
 
-    const materiales = [
-
-        "sulfur",
-        "sulphur",
-        "azufre",
-
-        "charcoal",
-        "carbon",
-
-        "metal fragments",
-        "metal fragment",
-        "fragmentos de metal",
-
-        "metal pipe",
-        "tubo de metal",
-        "tuberia metalica",
-
-        "low grade fuel",
-        "low grade",
-
-        "cloth",
-        "tela",
-
-        "rope",
-        "cuerda",
-
-        "tech trash",
-
-        "gears",
-        "gear",
-
-        "crude oil",
-
-        "animal fat",
-
-        "leather",
-
-        "wood",
-
-        "gunpowder",
-
-        "stone",
-
-        "metal ore",
-
-        "high quality metal",
-
-        "hq metal",
-
-        "sulfur ore",
-
-        "sulphur ore"
-
-    ];
-
-    return materiales.some(
+    return MATERIALES_RAW.some(
         material =>
-            objetivo.includes(
-                normalizarTexto(material)
+            material.claves.some(
+                clave =>
+                    objetivo.includes(
+                        normalizarTexto(clave)
+                    )
             )
     );
-
 }
 
 // =====================================================
-// NORMALIZAR MATERIAL
+// EXTRAER CANTIDAD DESDE ELEMENTO
 // =====================================================
 
-function normalizarNombreMaterial(
-    nombre,
-    href
+function extraerCantidadDesdeElemento(
+    $,
+    elemento
 ) {
 
-    return normalizarMaterialDesdeHref(
-        href,
-        nombre
-    );
+    if (!elemento) {
+        return 0;
+    }
 
+    // =================================================
+    // TEXTO DEL PROPIO ELEMENTO
+    // =================================================
+
+    const texto =
+        $(elemento)
+            .text()
+            .replace(/\u00a0/g, " ")
+            .replace(/,/g, "")
+            .trim();
+
+    let cantidad =
+        extraerCantidadRaid(texto);
+
+    if (cantidad > 0) {
+        return cantidad;
+    }
+
+    // =================================================
+    // ATRIBUTOS
+    // =================================================
+
+    const atributos = [
+        "title",
+        "aria-label",
+        "data-amount",
+        "data-quantity",
+        "data-count",
+        "value"
+    ];
+
+    for (const atributo of atributos) {
+
+        const valor =
+            $(elemento)
+                .attr(atributo);
+
+        if (!valor) {
+            continue;
+        }
+
+        cantidad =
+            extraerCantidadRaid(
+                valor
+            );
+
+        if (cantidad > 0) {
+            return cantidad;
+        }
+    }
+
+    return 0;
+}
+
+// =====================================================
+// EXTRAER MATERIAL DE UNA ESTRUCTURA
+// =====================================================
+//
+// RustHelp puede estructurar el material de diferentes
+// maneras dependiendo de la versión de la página.
+//
+// Esta función intenta:
+//
+// 1. Nombre dentro del enlace.
+// 2. Nombre en href.
+// 3. Texto alrededor del enlace.
+// 4. Cantidad dentro del enlace.
+// 5. Cantidad en el elemento padre.
+// 6. Atributos data-*.
+//
+// =====================================================
+
+function extraerMaterialDesdeNodo(
+    $,
+    enlace
+) {
+
+    if (!enlace) {
+        return null;
+    }
+
+    const href =
+        $(enlace)
+            .attr("href") || "";
+
+    const textoEnlace =
+        $(enlace)
+            .text()
+            .replace(/\u00a0/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+    const material =
+        identificarMaterialDesdeEnlace(
+            $,
+            enlace
+        );
+
+    // =================================================
+    // SI EL HREF IDENTIFICA EL MATERIAL
+    // =================================================
+
+    if (material) {
+
+        let cantidad =
+            extraerCantidadDesdeElemento(
+                $,
+                enlace
+            );
+
+        // =================================================
+        // BUSCAR CANTIDAD EN PADRES
+        // =================================================
+
+        if (cantidad <= 0) {
+
+            let padre =
+                $(enlace).parent();
+
+            for (
+                let nivel = 0;
+                nivel < 3 && padre.length;
+                nivel++
+            ) {
+
+                const textoPadre =
+                    padre
+                        .text()
+                        .replace(/\u00a0/g, " ")
+                        .replace(/,/g, "")
+                        .replace(/\s+/g, " ")
+                        .trim();
+
+                cantidad =
+                    extraerCantidadRaid(
+                        textoPadre
+                    );
+
+                if (cantidad > 0) {
+                    break;
+                }
+
+                padre =
+                    padre.parent();
+            }
+        }
+
+        // =================================================
+        // BUSCAR DATA ATTRIBUTES EN PADRES
+        // =================================================
+
+        if (cantidad <= 0) {
+
+            let padre =
+                $(enlace).parent();
+
+            for (
+                let nivel = 0;
+                nivel < 3 && padre.length;
+                nivel++
+            ) {
+
+                const atributos = [
+                    "data-amount",
+                    "data-quantity",
+                    "data-count",
+                    "value"
+                ];
+
+                for (const atributo of atributos) {
+
+                    const valor =
+                        padre.attr(
+                            atributo
+                        );
+
+                    if (!valor) {
+                        continue;
+                    }
+
+                    cantidad =
+                        extraerCantidadRaid(
+                            valor
+                        );
+
+                    if (cantidad > 0) {
+                        break;
+                    }
+                }
+
+                if (cantidad > 0) {
+                    break;
+                }
+
+                padre =
+                    padre.parent();
+            }
+        }
+
+        return {
+
+            nombre:
+                material.nombre,
+
+            cantidad,
+
+            href,
+
+            texto:
+                textoEnlace
+        };
+    }
+
+    return null;
 }
 
 // =====================================================
@@ -1182,78 +1213,152 @@ function extraerIngredientesRaw(
         return ingredientes;
     }
 
+    // =================================================
+    // 1. PRIMERA ESTRATEGIA:
+    // TODOS LOS ENLACES DE LA CELDA
+    // =================================================
+
     $(celda)
         .find("a")
-        .each((i, enlace) => {
+        .each(
+            (i, enlace) => {
 
-            const href =
-                $(enlace)
-                    .attr("href") || "";
+                const ingrediente =
+                    extraerMaterialDesdeNodo(
+                        $,
+                        enlace
+                    );
 
-            const texto =
-                $(enlace)
-                    .text()
-                    .replace(/\s+/g, " ")
-                    .trim();
+                if (!ingrediente) {
+                    return;
+                }
 
-            // =================================================
-            // IDENTIFICAR MATERIAL POR HREF
-            // =================================================
+                if (
+                    ingrediente.cantidad <= 0
+                ) {
+                    return;
+                }
 
-            if (
-                !esMaterialRaw(
-                    href,
-                    texto
-                )
-            ) {
-
-                return;
-
+                ingredientes.push(
+                    ingrediente
+                );
             }
+        );
 
-            // =================================================
-            // CANTIDAD
-            // =================================================
+    // =================================================
+    // 2. SEGUNDA ESTRATEGIA:
+    // ELEMENTOS QUE TENGAN HREF
+    // =================================================
 
-            const cantidad =
-                extraerNumero(texto);
+    if (
+        ingredientes.length === 0
+    ) {
 
-            if (cantidad <= 0) {
-                return;
-            }
+        $(celda)
+            .find("[href]")
+            .each(
+                (i, elemento) => {
 
-            // =================================================
-            // NOMBRE DEL MATERIAL
-            //
-            // RustHelp actualmente entrega:
-            //
-            // <a href="/.../sulfur">×400</a>
-            //
-            // Por lo tanto el nombre NO está en el texto.
-            // Se obtiene desde href.
-            // =================================================
+                    const ingrediente =
+                        extraerMaterialDesdeNodo(
+                            $,
+                            elemento
+                        );
 
-            const nombre =
-                normalizarNombreMaterial(
-                    texto,
-                    href
+                    if (!ingrediente) {
+                        return;
+                    }
+
+                    if (
+                        ingrediente.cantidad <= 0
+                    ) {
+                        return;
+                    }
+
+                    ingredientes.push(
+                        ingrediente
+                    );
+                }
+            );
+    }
+
+    // =================================================
+    // 3. TERCERA ESTRATEGIA:
+    // TEXTO COMPLETO DE LA CELDA
+    // =================================================
+    //
+    // Esto sirve como fallback si RustHelp cambia
+    // la estructura HTML.
+    //
+    // =================================================
+
+    if (
+        ingredientes.length === 0
+    ) {
+
+        const textoCompleto =
+            $(celda)
+                .text()
+                .replace(/\u00a0/g, " ")
+                .replace(/,/g, "")
+                .replace(/\s+/g, " ")
+                .trim();
+
+        for (const material of MATERIALES_RAW) {
+
+            const claveEncontrada =
+                material.claves.find(
+                    clave =>
+                        normalizarTexto(
+                            textoCompleto
+                        ).includes(
+                            normalizarTexto(
+                                clave
+                            )
+                        )
                 );
 
-            if (!nombre) {
-                return;
+            if (!claveEncontrada) {
+                continue;
             }
 
-            ingredientes.push({
+            const indice =
+                normalizarTexto(
+                    textoCompleto
+                ).indexOf(
+                    normalizarTexto(
+                        claveEncontrada
+                    )
+                );
 
-                nombre,
+            const parte =
+                textoCompleto.substring(
+                    Math.max(0, indice - 20),
+                    indice + 100
+                );
 
-                cantidad,
+            const cantidad =
+                extraerNumero(
+                    parte
+                );
 
-                href
+            if (cantidad > 0) {
 
-            });
+                ingredientes.push({
 
-        });
+                    nombre:
+                        material.nombre,
+
+                    cantidad,
+
+                    href: "",
+
+                    texto:
+                        parte
+                });
+            }
+        }
+    }
 
     // =================================================
     // UNIFICAR MATERIALES
@@ -1291,15 +1396,12 @@ function extraerIngredientesRaw(
                 Number(
                     ingrediente.cantidad
                 ) || 0;
-
         }
-
     }
 
     return [
         ...mapa.values()
     ];
-
 }
 
 // =====================================================
@@ -1312,44 +1414,8 @@ function encontrarCeldaMaterial(
 ) {
 
     // =================================================
-    // PRIMERO: BUSCAR UNA CELDA QUE TENGA ENLACES
-    // A MATERIALES CONOCIDOS
-    // =================================================
-
-    for (
-        let indice = 0;
-        indice < celdas.length;
-        indice++
-    ) {
-
-        const celda =
-            celdas[indice];
-
-        const tieneMaterial =
-            $(celda)
-                .find("a")
-                .toArray()
-                .some(
-                    enlace =>
-                        esMaterialRaw(
-                            $(enlace)
-                                .attr("href"),
-
-                            $(enlace)
-                                .text()
-                        )
-                );
-
-        if (tieneMaterial) {
-
-            return celda;
-
-        }
-
-    }
-
-    // =================================================
-    // FALLBACK
+    // PRIMERA OPCIÓN:
+    // BUSCAR LA CELDA CON LOS MATERIALES
     // =================================================
 
     for (
@@ -1361,6 +1427,32 @@ function encontrarCeldaMaterial(
         const celda =
             celdas[indice];
 
+        const enlaces =
+            $(celda)
+                .find("a")
+                .toArray();
+
+        for (const enlace of enlaces) {
+
+            if (
+                esMaterialRaw(
+                    $(enlace).attr("href"),
+                    $(enlace).text()
+                )
+            ) {
+
+                return celda;
+            }
+        }
+    }
+
+    // =================================================
+    // SEGUNDA OPCIÓN:
+    // CUALQUIER CELDA CON ALGÚN MATERIAL
+    // =================================================
+
+    for (const celda of celdas) {
+
         const texto =
             $(celda)
                 .text()
@@ -1370,42 +1462,25 @@ function encontrarCeldaMaterial(
         const normalizado =
             normalizarTexto(texto);
 
-        if (
+        const tieneMaterial =
+            MATERIALES_RAW.some(
+                material =>
+                    material.claves.some(
+                        clave =>
+                            normalizado.includes(
+                                normalizarTexto(
+                                    clave
+                                )
+                            )
+                    )
+            );
 
-            normalizado.includes("sulfur") ||
-
-            normalizado.includes("charcoal") ||
-
-            normalizado.includes("metal pipe") ||
-
-            normalizado.includes("metal fragments") ||
-
-            normalizado.includes("low grade") ||
-
-            normalizado.includes("cloth") ||
-
-            normalizado.includes("rope") ||
-
-            normalizado.includes("tech trash") ||
-
-            normalizado.includes("animal fat") ||
-
-            normalizado.includes("crude oil") ||
-
-            normalizado.includes("leather") ||
-
-            normalizado.includes("gears")
-
-        ) {
-
+        if (tieneMaterial) {
             return celda;
-
         }
-
     }
 
     return null;
-
 }
 
 // =====================================================
@@ -1415,37 +1490,29 @@ function encontrarCeldaMaterial(
 const VARIANTES_RAID_EXCLUIDAS = [
 
     "launched from catapult",
-
     "launched from catapulta",
 
     "catapult",
-
     "catapulta",
 
     "launched from ballista",
 
     "ballista",
-
     "balista",
 
     "mounted",
-
     "mounted weapon",
 
     "turret",
-
     "torreta",
 
     "vehicle",
-
     "vehiculo",
-
     "vehículo",
 
     "from vehicle",
 
     "dispenser"
-
 ];
 
 function esFilaRaidExcluida(
@@ -1461,7 +1528,6 @@ function esFilaRaidExcluida(
                 normalizarTexto(variante)
             )
     );
-
 }
 
 // =====================================================
@@ -1476,6 +1542,10 @@ function extraerCostosRaid(
         cheerio.load(html);
 
     const filas = [];
+
+    // =================================================
+    // BUSCAR TABLA RAID
+    // =================================================
 
     $("table").each(
         (indice, tabla) => {
@@ -1531,20 +1601,26 @@ function extraerCostosRaid(
 
             $(tabla)
                 .find("tbody tr")
-                .each((i, fila) => {
+                .each(
+                    (i, fila) => {
 
-                    procesarFilaRaid(
-                        $,
-                        fila,
-                        filas
-                    );
-
-                });
-
+                        procesarFilaRaid(
+                            $,
+                            fila,
+                            filas
+                        );
+                    }
+                );
         }
     );
 
-    if (filas.length === 0) {
+    // =================================================
+    // FALLBACK
+    // =================================================
+
+    if (
+        filas.length === 0
+    ) {
 
         console.log(
             "⚠️ RustHelp: usando fallback de tablas."
@@ -1558,14 +1634,11 @@ function extraerCostosRaid(
                     fila,
                     filas
                 );
-
             }
         );
-
     }
 
     return filas;
-
 }
 
 // =====================================================
@@ -1598,9 +1671,7 @@ function procesarFilaRaid(
             textoFila
         )
     ) {
-
         return;
-
     }
 
     // =================================================
@@ -1675,12 +1746,34 @@ function procesarFilaRaid(
         );
 
     // =================================================
+    // DEBUG RAW
+    // =================================================
+
+    if (
+        ingredientes.length > 0
+    ) {
+
+        console.log(
+            `🧱 Raw Material Cost — ${herramienta}:`,
+            ingredientes
+                .map(
+                    ingrediente =>
+                        `${ingrediente.nombre}=${ingrediente.cantidad}`
+                )
+                .join(", ")
+        );
+    }
+
+    // =================================================
     // AZUFRE
     // =================================================
 
     let azufre = 0;
 
-    for (const ingrediente of ingredientes) {
+    for (
+        const ingrediente
+        of ingredientes
+    ) {
 
         const nombre =
             normalizarTexto(
@@ -1697,30 +1790,11 @@ function procesarFilaRaid(
                 Number(
                     ingrediente.cantidad
                 ) || 0;
-
         }
-
     }
 
     // =================================================
-    // LOG DE DEPURACIÓN
-    // =================================================
-
-    if (ingredientes.length > 0) {
-
-        console.log(
-            `🧾 ${herramienta}: ${ingredientes
-                .map(
-                    material =>
-                        `${material.nombre}=${material.cantidad}`
-                )
-                .join(", ")}`
-        );
-
-    }
-
-    // =================================================
-    // GUARDAR FILA
+    // RESULTADO
     // =================================================
 
     filas.push({
@@ -1744,15 +1818,14 @@ function procesarFilaRaid(
         costoAzufre:
             azufre,
 
-        polvora: 0,
+        polvora:
+            0,
 
         ingredientes,
 
         receta:
             ingredientes
-
     });
-
 }
 
 // =====================================================
@@ -1764,9 +1837,7 @@ function clasificarRaid(
 ) {
 
     const explosivos = [];
-
     const melee = [];
-
     const balas = [];
 
     const explosivosPermitidos = [
@@ -1776,101 +1847,77 @@ function clasificarRaid(
         "timed explosive",
 
         "satchel charge",
-
         "satchel",
 
         "rocket",
 
         "hv rocket",
-
         "high velocity rocket",
 
         "propane tank",
 
         "beancan grenade",
-
         "beancan",
 
         "f1 grenade",
-
         "explosive grenade"
-
     ];
 
     const palabrasBalas = [
 
         "ammo",
-
         "ammunition",
 
         "municion",
-
         "munición",
 
         "bullet",
-
         "bala",
-
         "cartucho"
-
     ];
 
     const palabrasMelee = [
 
         "hatchet",
-
         "hacha",
 
         "pickaxe",
-
         "pico",
 
         "salvaged icepick",
-
         "salvaged pick",
-
         "salvaged pickaxe",
-
         "piolet",
 
         "hammer",
-
         "martillo",
 
         "machete",
 
         "sword",
-
         "espada",
 
         "spear",
-
         "lanza",
 
         "bone club",
-
         "garrote",
 
         "melee",
-
         "cuerpo a cuerpo",
 
         "ram",
-
         "ariete",
 
         "battering ram",
 
         "torch",
-
         "antorcha",
 
         "chainsaw",
-
         "motosierra",
 
         "jackhammer"
-
     ];
 
     const explosivosExcluidos = [
@@ -1878,55 +1925,54 @@ function clasificarRaid(
         "torpedo",
 
         "mine",
-
         "mina",
 
         "land mine",
 
         "catapult",
-
         "catapulta",
 
         "ballista",
-
         "balista",
 
         "mounted",
-
         "mounted weapon",
 
         "turret",
-
         "torreta",
 
         "vehicle",
-
         "vehiculo",
-
         "vehículo",
 
         "dispenser"
-
     ];
 
-    for (const fila of filas) {
+    for (
+        const fila
+        of filas
+    ) {
 
         const texto =
             normalizarTexto(
                 `${fila.herramientaOriginal || ""} ${fila.herramienta || ""}`
             );
 
+        // =================================================
+        // EXCLUIDOS
+        // =================================================
+
         if (
             explosivosExcluidos.some(
                 palabra =>
                     texto.includes(
-                        normalizarTexto(palabra)
+                        normalizarTexto(
+                            palabra
+                        )
                     )
             )
         ) {
-
             continue;
-
         }
 
         // =================================================
@@ -1937,7 +1983,9 @@ function clasificarRaid(
             palabrasBalas.some(
                 palabra =>
                     texto.includes(
-                        normalizarTexto(palabra)
+                        normalizarTexto(
+                            palabra
+                        )
                     )
             )
         ) {
@@ -1945,7 +1993,6 @@ function clasificarRaid(
             balas.push(fila);
 
             continue;
-
         }
 
         // =================================================
@@ -1956,7 +2003,9 @@ function clasificarRaid(
             explosivosPermitidos.some(
                 palabra =>
                     texto.includes(
-                        normalizarTexto(palabra)
+                        normalizarTexto(
+                            palabra
+                        )
                     )
             )
         ) {
@@ -1964,7 +2013,6 @@ function clasificarRaid(
             explosivos.push(fila);
 
             continue;
-
         }
 
         // =================================================
@@ -1975,27 +2023,22 @@ function clasificarRaid(
             palabrasMelee.some(
                 palabra =>
                     texto.includes(
-                        normalizarTexto(palabra)
+                        normalizarTexto(
+                            palabra
+                        )
                     )
             )
         ) {
 
             melee.push(fila);
-
         }
-
     }
 
     return {
-
         explosivos,
-
         melee,
-
         balas
-
     };
-
 }
 
 // =====================================================
@@ -2009,7 +2052,10 @@ function eliminarDuplicados(
     const mapa =
         new Map();
 
-    for (const fila of filas) {
+    for (
+        const fila
+        of filas
+    ) {
 
         let nombre =
             fila.herramienta ||
@@ -2041,14 +2087,17 @@ function eliminarDuplicados(
             );
 
             continue;
-
         }
 
         const azufreActual =
-            Number(fila.azufre) || 0;
+            Number(
+                fila.azufre
+            ) || 0;
 
         const azufreExistente =
-            Number(existente.azufre) || 0;
+            Number(
+                existente.azufre
+            ) || 0;
 
         const cantidadActual =
             Number(
@@ -2071,13 +2120,11 @@ function eliminarDuplicados(
             );
 
             continue;
-
         }
 
         if (
             azufreActual ===
                 azufreExistente &&
-
             cantidadActual <
                 cantidadExistente
         ) {
@@ -2086,15 +2133,12 @@ function eliminarDuplicados(
                 clave,
                 fila
             );
-
         }
-
     }
 
     return [
         ...mapa.values()
     ];
-
 }
 
 // =====================================================
@@ -2108,7 +2152,10 @@ function eliminarDuplicadosMunicion(
     const mapa =
         new Map();
 
-    for (const fila of filas) {
+    for (
+        const fila
+        of filas
+    ) {
 
         const nombre =
             limpiarNombreRust(
@@ -2125,25 +2172,25 @@ function eliminarDuplicadosMunicion(
             continue;
         }
 
-        if (!mapa.has(clave)) {
+        if (
+            !mapa.has(clave)
+        ) {
 
             mapa.set(
                 clave,
                 {
                     ...fila,
+
                     herramienta:
                         nombre
                 }
             );
-
         }
-
     }
 
     return [
         ...mapa.values()
     ];
-
 }
 
 // =====================================================
@@ -2162,37 +2209,36 @@ function ordenarPorEconomia(
                 Number(fila.cantidadNumero) > 0
         )
 
-        .sort((a, b) => {
+        .sort(
+            (a, b) => {
 
-            const azufreA =
-                Number(a.azufre) || 0;
+                const azufreA =
+                    Number(a.azufre) || 0;
 
-            const azufreB =
-                Number(b.azufre) || 0;
+                const azufreB =
+                    Number(b.azufre) || 0;
 
-            if (
-                azufreA !==
-                azufreB
-            ) {
+                if (
+                    azufreA !==
+                    azufreB
+                ) {
+
+                    return (
+                        azufreA -
+                        azufreB
+                    );
+                }
 
                 return (
-                    azufreA -
-                    azufreB
+                    Number(
+                        a.cantidadNumero
+                    ) -
+                    Number(
+                        b.cantidadNumero
+                    )
                 );
-
             }
-
-            return (
-                Number(
-                    a.cantidadNumero
-                ) -
-                Number(
-                    b.cantidadNumero
-                )
-            );
-
-        });
-
+        );
 }
 
 // =====================================================
@@ -2212,43 +2258,41 @@ function ordenarPorCantidad(
                         fila.cantidadNumero
                     )
                 ) &&
-
                 Number(
                     fila.cantidadNumero
                 ) > 0
         )
 
-        .sort((a, b) => {
+        .sort(
+            (a, b) => {
 
-            const cantidadA =
-                Number(
-                    a.cantidadNumero
-                ) || 0;
+                const cantidadA =
+                    Number(
+                        a.cantidadNumero
+                    ) || 0;
 
-            const cantidadB =
-                Number(
-                    b.cantidadNumero
-                ) || 0;
+                const cantidadB =
+                    Number(
+                        b.cantidadNumero
+                    ) || 0;
 
-            if (
-                cantidadA !==
-                cantidadB
-            ) {
+                if (
+                    cantidadA !==
+                    cantidadB
+                ) {
+
+                    return (
+                        cantidadA -
+                        cantidadB
+                    );
+                }
 
                 return (
-                    cantidadA -
-                    cantidadB
+                    Number(a.azufre) -
+                    Number(b.azufre)
                 );
-
             }
-
-            return (
-                Number(a.azufre) -
-                Number(b.azufre)
-            );
-
-        });
-
+        );
 }
 
 // =====================================================
@@ -2287,26 +2331,28 @@ function convertirTiempoASegundos(
     if (horas) {
 
         segundos +=
-            Number(horas[1]) * 3600;
-
+            Number(
+                horas[1]
+            ) * 3600;
     }
 
     if (minutos) {
 
         segundos +=
-            Number(minutos[1]) * 60;
-
+            Number(
+                minutos[1]
+            ) * 60;
     }
 
     if (segundosMatch) {
 
         segundos +=
-            Number(segundosMatch[1]);
-
+            Number(
+                segundosMatch[1]
+            );
     }
 
     return segundos;
-
 }
 
 // =====================================================
@@ -2322,12 +2368,10 @@ function ordenarMelee(
             convertirTiempoASegundos(
                 a.tiempo
             ) -
-
             convertirTiempoASegundos(
                 b.tiempo
             )
     );
-
 }
 
 // =====================================================
@@ -2356,7 +2400,6 @@ async function consultarRaid(
             );
 
             return null;
-
         }
 
         console.log(
@@ -2465,7 +2508,6 @@ async function consultarRaid(
 
             balas:
                 balas.slice(0, 10)
-
         };
 
     } catch (error) {
@@ -2476,9 +2518,7 @@ async function consultarRaid(
         );
 
         return null;
-
     }
-
 }
 
 // =====================================================
@@ -2496,5 +2536,4 @@ module.exports = {
     clasificarRaid,
 
     extraerCantidadRaid
-
 };
