@@ -14,20 +14,38 @@ const {
 // CACHE
 // =====================================================
 
-const raidsCache = new Map();
+const raidsCache =
+    new Map();
 
-const CACHE_TIEMPO = 30 * 60 * 1000;
+const CACHE_TIEMPO =
+    30 * 60 * 1000;
 
 // =====================================================
 // LIMPIAR CACHE
 // =====================================================
 
 function limpiarCache() {
-    const ahora = Date.now();
 
-    for (const [mensajeId, datos] of raidsCache.entries()) {
-        if (ahora - datos.creado > CACHE_TIEMPO) {
-            raidsCache.delete(mensajeId);
+    const ahora =
+        Date.now();
+
+    for (
+        const [
+            mensajeId,
+            datos
+        ]
+        of raidsCache.entries()
+    ) {
+
+        if (
+            ahora -
+                datos.creado >
+            CACHE_TIEMPO
+        ) {
+
+            raidsCache.delete(
+                mensajeId
+            );
         }
     }
 }
@@ -36,35 +54,64 @@ function limpiarCache() {
 // FORMATEAR NUMEROS
 // =====================================================
 
-function formatearNumero(numero) {
-    return Number(numero || 0).toLocaleString("es-CL");
+function formatearNumero(
+    numero
+) {
+
+    return Number(
+        numero || 0
+    ).toLocaleString(
+        "es-CL"
+    );
 }
 
 // =====================================================
 // MATERIALES
 // =====================================================
 
-function crearTextoMateriales(raid) {
+function crearTextoMateriales(
+    raid
+) {
+
     if (
         !raid ||
-        !Array.isArray(raid.ingredientes) ||
+        !Array.isArray(
+            raid.ingredientes
+        ) ||
         raid.ingredientes.length === 0
     ) {
+
         return "Sin materiales.";
     }
 
     const lineas = [];
 
-    for (const ingrediente of raid.ingredientes) {
+    for (
+        const ingrediente
+        of raid.ingredientes
+    ) {
+
         const nombre =
-            String(ingrediente.nombre || "")
-                .replace(/\s+/g, " ")
+            String(
+                ingrediente.nombre ||
+                ""
+            )
+                .replace(
+                    /\s+/g,
+                    " "
+                )
                 .trim();
 
         const cantidad =
-            Number(ingrediente.cantidad || 0);
+            Number(
+                ingrediente.cantidad ||
+                0
+            );
 
-        if (!nombre || cantidad <= 0) {
+        if (
+            !nombre ||
+            cantidad <= 0
+        ) {
             continue;
         }
 
@@ -72,50 +119,109 @@ function crearTextoMateriales(raid) {
             nombre
                 .toLowerCase()
                 .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "");
+                .replace(
+                    /[\u0300-\u036f]/g,
+                    ""
+                );
 
-        let emoji = "📦";
+        let emoji =
+            "📦";
 
         if (
-            normalizado.includes("sulfur") ||
-            normalizado.includes("azufre")
+            normalizado.includes(
+                "sulfur"
+            ) ||
+            normalizado.includes(
+                "azufre"
+            )
         ) {
-            emoji = "🪨";
+
+            emoji =
+                "🪨";
+
         } else if (
-            normalizado.includes("charcoal") ||
-            normalizado.includes("carbon")
+            normalizado.includes(
+                "charcoal"
+            ) ||
+            normalizado.includes(
+                "carbon"
+            )
         ) {
-            emoji = "🪵";
+
+            emoji =
+                "🪵";
+
         } else if (
-            normalizado.includes("metal fragments") ||
-            normalizado.includes("metal fragment") ||
-            normalizado.includes("fragmentos de metal")
+            normalizado.includes(
+                "metal fragments"
+            ) ||
+            normalizado.includes(
+                "metal fragment"
+            ) ||
+            normalizado.includes(
+                "fragmentos de metal"
+            )
         ) {
-            emoji = "🔩";
+
+            emoji =
+                "🔩";
+
         } else if (
-            normalizado.includes("metal pipe") ||
-            normalizado.includes("tubo de metal") ||
-            normalizado.includes("tuberia metalica")
+            normalizado.includes(
+                "metal pipe"
+            ) ||
+            normalizado.includes(
+                "tubo de metal"
+            ) ||
+            normalizado.includes(
+                "tuberia metalica"
+            )
         ) {
-            emoji = "🔧";
+
+            emoji =
+                "🔧";
+
         } else if (
-            normalizado.includes("low grade")
+            normalizado.includes(
+                "low grade"
+            )
         ) {
-            emoji = "🛢️";
+
+            emoji =
+                "🛢️";
+
         } else if (
-            normalizado.includes("cloth") ||
-            normalizado.includes("tela")
+            normalizado.includes(
+                "cloth"
+            ) ||
+            normalizado.includes(
+                "tela"
+            )
         ) {
-            emoji = "🧵";
+
+            emoji =
+                "🧵";
+
         } else if (
-            normalizado.includes("rope") ||
-            normalizado.includes("cuerda")
+            normalizado.includes(
+                "rope"
+            ) ||
+            normalizado.includes(
+                "cuerda"
+            )
         ) {
-            emoji = "🪢";
+
+            emoji =
+                "🪢";
+
         } else if (
-            normalizado.includes("tech trash")
+            normalizado.includes(
+                "tech trash"
+            )
         ) {
-            emoji = "💻";
+
+            emoji =
+                "💻";
         }
 
         lineas.push(
@@ -132,8 +238,15 @@ function crearTextoMateriales(raid) {
 // TEXTO RAID
 // =====================================================
 
-function crearTextoRaids(raids) {
-    if (!raids || raids.length === 0) {
+function crearTextoRaids(
+    raids
+) {
+
+    if (
+        !Array.isArray(raids) ||
+        raids.length === 0
+    ) {
+
         return null;
     }
 
@@ -152,63 +265,120 @@ function crearTextoRaids(raids) {
 
     const bloques = [];
 
-    raids.slice(0, 10).forEach((raid, indice) => {
-        let bloque =
-            `${posiciones[indice]} **${raid.herramienta}**\n`;
+    raids
+        .slice(0, 10)
+        .forEach(
+            (
+                raid,
+                indice
+            ) => {
 
-        bloque +=
-            `> 📦 Cantidad: **${raid.cantidad}**`;
+                let bloque =
+                    `${
+                        posiciones[indice]
+                    } **${
+                        raid.herramienta ||
+                        "Método desconocido"
+                    }**\n`;
 
-        if (
-            Number(raid.azufre || 0) > 0
-        ) {
-            bloque +=
-                `\n> 🪨 Azufre total: **${formatearNumero(
-                    raid.azufre
-                )}**`;
-        }
+                bloque +=
+                    `> 📦 Cantidad: **${formatearNumero(
+                        raid.cantidad
+                    )}**`;
 
-        if (raid.tiempo) {
-            bloque +=
-                `\n> ⏱️ Tiempo: **${raid.tiempo}**`;
-        }
+                if (
+                    Number(
+                        raid.azufre ||
+                        0
+                    ) > 0
+                ) {
 
-        const materiales =
-            crearTextoMateriales(raid);
+                    bloque +=
+                        `\n> 🪨 Azufre total: **${formatearNumero(
+                            raid.azufre
+                        )}**`;
+                }
 
-        if (materiales !== "Sin materiales.") {
-            bloque +=
-                `\n\n> **Raw Material Cost:**\n${materiales}`;
-        }
+                if (
+                    raid.tiempo
+                ) {
 
-        bloques.push(bloque);
-    });
+                    bloque +=
+                        `\n> ⏱️ Tiempo: **${raid.tiempo}**`;
+                }
 
-    return bloques.join("\n\n");
+                const materiales =
+                    crearTextoMateriales(
+                        raid
+                    );
+
+                if (
+                    materiales !==
+                    "Sin materiales."
+                ) {
+
+                    bloque +=
+                        `\n\n> **Raw Material Cost:**\n${materiales}`;
+                }
+
+                bloques.push(
+                    bloque
+                );
+            }
+        );
+
+    return bloques.join(
+        "\n\n"
+    );
 }
 
 // =====================================================
 // EMBED BASE
 // =====================================================
 
-function crearEmbedBase(resultado, titulo, color) {
-    return new EmbedBuilder()
-        .setTitle(
-            `${titulo} — ${resultado.nombre}`
-        )
-        .setURL(resultado.url)
-        .setColor(color)
-        .setFooter({
-            text: "Datos obtenidos de RustHelp"
-        })
-        .setTimestamp();
+function crearEmbedBase(
+    resultado,
+    titulo,
+    color
+) {
+
+    const embed =
+        new EmbedBuilder()
+            .setTitle(
+                `${titulo} — ${
+                    resultado.nombre ||
+                    "Objeto"
+                }`
+            )
+            .setColor(
+                color
+            )
+            .setFooter({
+                text:
+                    "Datos obtenidos de RustHelp"
+            })
+            .setTimestamp();
+
+    if (
+        resultado.url
+    ) {
+
+        embed.setURL(
+            resultado.url
+        );
+    }
+
+    return embed;
 }
 
 // =====================================================
 // ECONOMIA
 // =====================================================
 
-function crearEmbedEconomia(resultado) {
+function crearEmbedEconomia(
+    resultado
+) {
+
     const embed =
         crearEmbedBase(
             resultado,
@@ -217,9 +387,13 @@ function crearEmbedEconomia(resultado) {
         );
 
     if (
-        !resultado.explosivosEconomia ||
-        resultado.explosivosEconomia.length === 0
+        !Array.isArray(
+            resultado.explosivosEconomia
+        ) ||
+        resultado.explosivosEconomia.length ===
+            0
     ) {
+
         embed.setDescription(
             "❌ RustHelp no pudo encontrar métodos explosivos válidos."
         );
@@ -234,7 +408,9 @@ function crearEmbedEconomia(resultado) {
     );
 
     embed.addFields({
-        name: "💰 Orden",
+        name:
+            "💰 Orden",
+
         value:
             "Ordenado por el menor costo de **Raw Material Cost**."
     });
@@ -246,7 +422,10 @@ function crearEmbedEconomia(resultado) {
 // CANTIDAD
 // =====================================================
 
-function crearEmbedCantidad(resultado) {
+function crearEmbedCantidad(
+    resultado
+) {
+
     const embed =
         crearEmbedBase(
             resultado,
@@ -255,9 +434,13 @@ function crearEmbedCantidad(resultado) {
         );
 
     if (
-        !resultado.explosivosCantidad ||
-        resultado.explosivosCantidad.length === 0
+        !Array.isArray(
+            resultado.explosivosCantidad
+        ) ||
+        resultado.explosivosCantidad.length ===
+            0
     ) {
+
         embed.setDescription(
             "❌ No se encontraron métodos explosivos válidos."
         );
@@ -272,7 +455,9 @@ function crearEmbedCantidad(resultado) {
     );
 
     embed.addFields({
-        name: "📦 Orden",
+        name:
+            "📦 Orden",
+
         value:
             "Ordenado por la menor cantidad de explosivos."
     });
@@ -284,7 +469,10 @@ function crearEmbedCantidad(resultado) {
 // EXPLOSIVOS
 // =====================================================
 
-function crearEmbedExplosivos(resultado) {
+function crearEmbedExplosivos(
+    resultado
+) {
+
     const embed =
         crearEmbedBase(
             resultado,
@@ -293,9 +481,13 @@ function crearEmbedExplosivos(resultado) {
         );
 
     if (
-        !resultado.explosivos ||
-        resultado.explosivos.length === 0
+        !Array.isArray(
+            resultado.explosivos
+        ) ||
+        resultado.explosivos.length ===
+            0
     ) {
+
         embed.setDescription(
             "❌ No se encontraron explosivos válidos."
         );
@@ -310,7 +502,9 @@ function crearEmbedExplosivos(resultado) {
     );
 
     embed.addFields({
-        name: "💣 Métodos de raideo",
+        name:
+            "💣 Métodos de raideo",
+
         value:
             "Explosivos disponibles para destruir este objeto."
     });
@@ -322,7 +516,10 @@ function crearEmbedExplosivos(resultado) {
 // MELEE
 // =====================================================
 
-function crearEmbedMelee(resultado) {
+function crearEmbedMelee(
+    resultado
+) {
+
     const embed =
         crearEmbedBase(
             resultado,
@@ -331,9 +528,13 @@ function crearEmbedMelee(resultado) {
         );
 
     if (
-        !resultado.melee ||
-        resultado.melee.length === 0
+        !Array.isArray(
+            resultado.melee
+        ) ||
+        resultado.melee.length ===
+            0
     ) {
+
         embed.setDescription(
             "❌ RustHelp no encontró métodos melee para este objeto."
         );
@@ -348,7 +549,9 @@ function crearEmbedMelee(resultado) {
     );
 
     embed.addFields({
-        name: "🔨 Orden",
+        name:
+            "🔨 Orden",
+
         value:
             "Ordenado de menor a mayor tiempo de raideo."
     });
@@ -360,7 +563,10 @@ function crearEmbedMelee(resultado) {
 // MUNICION
 // =====================================================
 
-function crearEmbedMunicion(resultado) {
+function crearEmbedMunicion(
+    resultado
+) {
+
     const embed =
         crearEmbedBase(
             resultado,
@@ -369,9 +575,13 @@ function crearEmbedMunicion(resultado) {
         );
 
     if (
-        !resultado.balas ||
-        resultado.balas.length === 0
+        !Array.isArray(
+            resultado.balas
+        ) ||
+        resultado.balas.length ===
+            0
     ) {
+
         embed.setDescription(
             "❌ RustHelp no encontró munición para este objeto."
         );
@@ -386,7 +596,9 @@ function crearEmbedMunicion(resultado) {
     );
 
     embed.addFields({
-        name: "🔫 Munición",
+        name:
+            "🔫 Munición",
+
         value:
             "Munición disponible para destruir este objeto."
     });
@@ -399,6 +611,7 @@ function crearEmbedMunicion(resultado) {
 // =====================================================
 
 function crearBotones() {
+
     const fila =
         new ActionRowBuilder()
             .addComponents(
@@ -474,7 +687,9 @@ function crearBotones() {
                     )
             );
 
-    return [fila];
+    return [
+        fila
+    ];
 }
 
 // =====================================================
@@ -485,37 +700,58 @@ module.exports = {
 
     data:
         new SlashCommandBuilder()
-            .setName("raid")
+
+            .setName(
+                "raid"
+            )
+
             .setDescription(
                 "Consulta cuánto cuesta raidear un objeto de Rust"
             )
+
             .addStringOption(
                 option =>
                     option
-                        .setName("item")
+                        .setName(
+                            "item"
+                        )
                         .setDescription(
                             "Objeto de Rust, por ejemplo: puerta de madera"
                         )
-                        .setRequired(true)
+                        .setRequired(
+                            true
+                        )
             ),
 
-    async execute(interaction) {
+    // =================================================
+    // EXECUTE
+    // =================================================
+
+    async execute(
+        interaction
+    ) {
+
         await interaction.deferReply();
 
         const nombre =
-            interaction.options.getString(
-                "item"
-            );
+            interaction.options
+                .getString(
+                    "item"
+                );
 
         try {
+
             console.log(
                 `🎯 /raid solicitado: ${nombre}`
             );
 
             const resultado =
-                await consultarRaid(nombre);
+                await consultarRaid(
+                    nombre
+                );
 
             if (!resultado) {
+
                 await interaction.editReply(
                     "❌ No encontré ese objeto en RustHelp."
                 );
@@ -529,8 +765,13 @@ module.exports = {
                 );
 
             await interaction.editReply({
-                embeds: [embed],
-                components: crearBotones()
+
+                embeds: [
+                    embed
+                ],
+
+                components:
+                    crearBotones()
             });
 
             const mensaje =
@@ -541,8 +782,11 @@ module.exports = {
             raidsCache.set(
                 mensaje.id,
                 {
-                    resultado,
-                    creado: Date.now()
+                    resultado:
+                        resultado,
+
+                    creado:
+                        Date.now()
                 }
             );
 
@@ -551,35 +795,48 @@ module.exports = {
             );
 
         } catch (error) {
+
             console.error(
                 "❌ Error comando /raid:",
                 error
             );
 
             try {
+
                 await interaction.editReply(
                     "❌ Ocurrió un error consultando RustHelp."
                 );
+
             } catch {
-                // Ignorar
+                // Ignorar error secundario
             }
         }
     },
 
     // =================================================
-    // BOTONES
+    // MANEJAR BOTONES RAID
     // =================================================
 
-    async manejarBotonRaid(interaction) {
-        if (!interaction.isButton()) {
+    async manejarBotonRaid(
+        interaction
+    ) {
+
+        if (
+            !interaction.isButton()
+        ) {
             return false;
         }
 
         const botonesValidos = [
+
             "raid_economia",
+
             "raid_cantidad",
+
             "raid_explosivos",
+
             "raid_melee",
+
             "raid_municion"
         ];
 
@@ -588,6 +845,7 @@ module.exports = {
                 interaction.customId
             )
         ) {
+
             return false;
         }
 
@@ -599,10 +857,14 @@ module.exports = {
             );
 
         if (!datos) {
+
             await interaction.reply({
+
                 content:
                     "❌ Los datos de este raid ya no están disponibles. Ejecuta nuevamente `/raid`.",
-                ephemeral: true
+
+                ephemeral:
+                    true
             });
 
             return true;
@@ -611,74 +873,100 @@ module.exports = {
         const resultado =
             datos.resultado;
 
-        let nuevoEmbed = null;
+        let nuevoEmbed;
 
-        switch (interaction.customId) {
+        switch (
+            interaction.customId
+        ) {
 
             case "raid_economia":
+
                 nuevoEmbed =
                     crearEmbedEconomia(
                         resultado
                     );
+
                 break;
 
             case "raid_cantidad":
+
                 nuevoEmbed =
                     crearEmbedCantidad(
                         resultado
                     );
+
                 break;
 
             case "raid_explosivos":
+
                 nuevoEmbed =
                     crearEmbedExplosivos(
                         resultado
                     );
+
                 break;
 
             case "raid_melee":
+
                 nuevoEmbed =
                     crearEmbedMelee(
                         resultado
                     );
+
                 break;
 
             case "raid_municion":
+
                 nuevoEmbed =
                     crearEmbedMunicion(
                         resultado
                     );
+
                 break;
 
             default:
+
                 return false;
         }
 
         try {
+
             await interaction.update({
-                embeds: [nuevoEmbed],
-                components: crearBotones()
+
+                embeds: [
+                    nuevoEmbed
+                ],
+
+                components:
+                    crearBotones()
             });
 
         } catch (error) {
+
             console.error(
                 "❌ Error botón /raid:",
                 error
             );
 
-            if (
-                !interaction.replied &&
-                !interaction.deferred
-            ) {
-                try {
+            try {
+
+                if (
+                    !interaction.replied &&
+                    !interaction.deferred
+                ) {
+
                     await interaction.reply({
+
                         content:
                             "❌ No pude actualizar el cálculo.",
-                        ephemeral: true
+
+                        ephemeral:
+                            true
                     });
-                } catch {
-                    // Ignorar
                 }
+
+            } catch {
+                // Ignorar
             }
         }
 

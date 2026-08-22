@@ -595,13 +595,18 @@ client.on(
                     "raid_economia",
                     "raid_cantidad",
                     "raid_explosivos",
-                    "raid_melee"
+                    "raid_melee",
+                    "raid_municion"
                 ].includes(
                     interaction.customId
                 )
             ) {
 
                 try {
+
+                    console.log(
+                        `🎯 Botón Raid presionado: ${interaction.customId}`
+                    );
 
                     const comandoRaid =
                         client.commands.get(
