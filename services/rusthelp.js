@@ -1,5 +1,6 @@
 const axios = require("axios");
-const cheerio = require("cheerio");
+const cheerio = fnRequiresCheerio(); // o simplemente require("cheerio")
+const cheerioLoader = require("cheerio");
 
 const BASE_URL = "https://rusthelp.com/es-ES/items";
 
@@ -19,10 +20,6 @@ function normalizarTexto(texto) {
         .trim();
 }
 
-function convertirSlug(nombre) {
-    return normalizarTexto(nombre).replace(/\s+/g, "-");
-}
-
 const ALIASES = {
     "tc": "tool-cupboard",
     "armario": "tool-cupboard",
@@ -37,83 +34,76 @@ async function consultarRaid(nombreQuery) {
     if (!queryLimpia) return null;
 
     const normalizado = normalizarTexto(queryLimpia);
-    const slug = ALIASES[normalizado] || convertirSlug(queryLimpia);
+    const slug = ALIASES[normalizado] || normalizado.replace(/\s+/g, "-");
     const urlFinal = `${BASE_URL}/${slug}`;
 
     try {
         const response = await axios.get(urlFinal, {
             headers: HEADERS,
-            timeout: 10000,
+            timeout: 8000,
             validateStatus: s => s >= 200 && s < 400
         });
 
         if (!response.data) return null;
 
-        const $ = cheerio.load(response.data);
+        const $ = cheerioLoader.load(response.data);
         const nombreObjeto = $("h1").first().text().trim() || queryLimpia;
 
         const startingItems = [];
         const raidingCost = [];
         const dondeEncontrar = [];
 
-        // Buscar tablas específicamente dentro de la calculadora de raid o por estructura de filas
-        // RustHelp suele usar tablas para las costos de raid
-        $("table").each((tablaIndex, tabla) => {
-            const tituloTabla = $(tabla).prev("h2, h3, h4").text().trim();
-            
-            $(tabla).find("tbody tr, tr").each((_, fila) => {
+        // En RustHelp, las tablas de la calculadora suelen estar precedidas por textos específicos o contenedores de raid
+        // Vamos a buscar filas de tablas que tengan celdas con tiempos o costes de raid válidos
+        $("table").each((_, tabla) => {
+            const tituloSeccion = $(tabla).prev("h2, h3, h4, div").text().trim();
+            const esLoot = /encontrar|drop|loot/i.test(tituloSeccion);
+
+            $(tabla).find("tr").each((_, fila) => {
                 const columnas = $(fila).find("td");
                 if (columnas.length < 2) return;
 
-                const herramienta = $(columnas[0]).text().trim();
-                const tiempo = columnas.length > 1 ? $(columnas[1]).text().trim() : "";
-                const cantidadTexto = columnas.length > 2 ? $(columnas[2]).text().trim() : "";
+                const textoCol0 = $(columnas[0]).text().trim();
+                const textoCol1 = $(columnas[1]).text().trim();
+                const textoCol2 = columnas.length > 2 ? $(columnas[2]).text().trim() : "";
 
-                if (!herramienta) return;
+                if (!textoCol0) return;
 
-                // Si es la tabla de dónde se encuentra (loot drops)
-                if (normalizarTexto(tituloTabla).includes("encontrar") || normalizarTexto(tituloTabla).includes("drop") || columnas.length === 2) {
-                    dondeEncontrar.push({ herramienta, tiempo });
-                    return;
-                }
-
-                const itemRaid = {
-                    herramienta: herramienta,
-                    tiempo: tiempo || "N/A",
-                    componentes: [{ nombre: herramienta, cantidad: 1 }]
-                };
-
-                if (startingItems.length < 3) {
-                    startingItems.push(itemRaid);
+                if (esLoot || /%/.test(textoCol1)) {
+                    dondeEncontrar.push({
+                        herramienta: textoCol0,
+                        tiempo: textoCol1
+                    });
                 } else {
-                    raidingCost.push(itemRaid);
+                    // Es un item de raid
+                    const itemData = {
+                        herramienta: textoCol0,
+                        tiempo: textoCol1 || "N/A",
+                        componentes: [{ nombre: textoCol0, cantidad: 1 }]
+                    };
+
+                    // Las primeras filas de la calculadora suelen ser las de Starting Item
+                    if (startingItems.length < 3 && !/min|s/i.test(textoCol1) === false) {
+                        startingItems.push(itemData);
+                    } else {
+                        raidingCost.push(itemData);
+                    }
                 }
             });
         });
 
-        const convertirASegundos = (t) => {
-            let total = 0;
-            const minMatch = t.match(/(\d+)\s*m/);
-            const segMatch = t.match(/(\d+)\s*s/);
-            if (minMatch) total += parseInt(minMatch[1]) * 60;
-            if (segMatch) total += parseInt(segMatch[1]);
-            return total || 0;
-        };
-
-        const raidingCostOrdenado = raidingCost
-            .sort((a, b) => convertirASegundos(a.tiempo) - convertirASegundos(b.tiempo))
-            .slice(0, 7);
-
-        const listaCompleta = [...startingItems, ...raidingCostOrdenado];
+        // Asegurar que si startingItems quedó vacío, tomemos los primeros de raidingCost
+        const principales = startingItems.length > 0 ? startingItems : raidingCost.slice(0, 3);
+        const alternativas = raidingCost.slice(3, 10);
 
         return {
             nombre: nombreObjeto,
             url: urlFinal,
-            explosivosEconomia: listaCompleta.length > 0 ? listaCompleta : startingItems,
-            explosivosCantidad: listaCompleta,
-            melee: raidingCostOrdenado,
-            balas: raidingCostOrdenado,
-            dondeEncontrar: dondeEncontrar.length > 0 ? dondeEncontrar : [{ herramienta: "Información disponible en la web oficial", tiempo: "" }]
+            explosivosEconomia: principales,
+            explosivosCantidad: principales,
+            melee: alternativas.length > 0 ? alternativas : raidingCost.slice(0, 5),
+            balas: alternativas,
+            dondeEncontrar: dondeEncontrar.length > 0 ? dondeEncontrar : [{ herramienta: "No se encontraron datos de loot directo", tiempo: "" }]
         };
 
     } catch (error) {

@@ -47,7 +47,6 @@ module.exports = {
             .setFooter({ text: "Selecciona una categoría abajo | Fuente: RustHelp" })
             .setTimestamp();
 
-        // Creamos los botones (divididos en filas si superan 5, aquí caben los 5 exactos en una ActionRow)
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`raid_eco_${cacheKey}`).setLabel("Economía").setStyle(ButtonStyle.Primary).setEmoji("🪙"),
             new ButtonBuilder().setCustomId(`raid_cant_${cacheKey}`).setLabel("Cantidad").setStyle(ButtonStyle.Primary).setEmoji("📦"),
@@ -60,6 +59,9 @@ module.exports = {
     },
 
     async manejarBotonRaid(interaction) {
+        // Previene el error de "la interacción falló" si el bot tarda un segundo en procesar
+        await interaction.deferUpdate();
+
         const parts = interaction.customId.split("_");
         if (parts.length < 3) return;
 
@@ -68,7 +70,7 @@ module.exports = {
         const resultado = raidCache.get(cacheKey);
 
         if (!resultado) {
-            return interaction.reply({ content: "⚠️ Estos botones han expirado. Vuelve a ejecutar `/raid`.", ephemeral: true });
+            return interaction.followUp({ content: "⚠️ Estos botones han expirado. Vuelve a ejecutar `/raid`.", ephemeral: true });
         }
 
         const embed = new EmbedBuilder()
@@ -89,6 +91,6 @@ module.exports = {
             embed.addFields({ name: "🔍 Dónde encontrar / Loot", value: crearTextoAmount(resultado.dondeEncontrar) });
         }
 
-        await interaction.update({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] });
     }
 };
