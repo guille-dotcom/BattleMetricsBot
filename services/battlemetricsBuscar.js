@@ -9,8 +9,6 @@ const axios = require("axios");
 const BM_API = "https://api.battlemetrics.com";
 const TIMEZONE_CHILE = "America/Santiago";
 
-// Máximo Last Seen permitido en el servidor buscado.
-// 60 = 1 hora
 const MAX_LAST_SEEN_MINUTES = 60;
 
 
@@ -113,6 +111,12 @@ function obtenerServerIdDeSesion(sesion) {
 
     if (sesion.attributes?.serverId) {
         return String(sesion.attributes.serverId);
+    }
+
+    // Algunos resultados pueden traer el servidor
+    // dentro de attributes.
+    if (sesion.attributes?.server?.id) {
+        return String(sesion.attributes.server.id);
     }
 
     return null;
@@ -476,6 +480,207 @@ async function obtenerJugador(playerId) {
 
 
 // =====================================================
+// OBTENER INFORMACIÓN DEL JUGADOR DIRECTAMENTE EN
+// EL SERVIDOR
+// =====================================================
+//
+// IMPORTANTE:
+//
+// BattleMetrics no siempre entrega el historial de
+// sesiones de todos los servidores mediante:
+// /players/{id}/relationships/sessions
+//
+// Hay servidores donde el jugador aparece perfectamente
+// en la página del servidor pero esa relación devuelve
+// 0 sesiones.
+//
+// Por eso usamos también el endpoint de jugadores del
+// servidor como FALLBACK.
+//
+// Esto permite encontrar casos como:
+//
+// Clark Kent → BM 391482136
+// Servidor → 2788421
+// Tiempo → 02:30
+//
+// aunque /players/391482136/relationships/sessions
+// devuelva 0.
+//
+// =====================================================
+
+async function obtenerJugadorEnServidor(
+    playerId,
+    serverId
+) {
+
+    try {
+
+        if (!playerId || !serverId) {
+            return null;
+        }
+
+        const urls = [
+
+            `${BM_API}/servers/${serverId}/players`,
+
+            `${BM_API}/servers/${serverId}/relationships/players`
+
+        ];
+
+        for (const url of urls) {
+
+            try {
+
+                console.log(
+                    `🔄 BM → buscando jugador ${playerId} directamente en servidor ${serverId}`
+                );
+
+                const response =
+                    await axios.get(
+                        url,
+                        {
+                            headers: getHeaders(),
+
+                            params: {
+                                "filter[player]":
+                                    playerId,
+
+                                "page[size]": 100
+                            },
+
+                            timeout: 15000
+                        }
+                    );
+
+                const data =
+                    response.data?.data || [];
+
+                if (!Array.isArray(data) || data.length === 0) {
+                    continue;
+                }
+
+                const encontrado =
+                    data.find(
+                        item =>
+                            String(item?.id) ===
+                            String(playerId)
+                    ) ||
+                    data.find(
+                        item =>
+                            String(
+                                item?.relationships?.player?.data?.id
+                            ) ===
+                            String(playerId)
+                    );
+
+                if (encontrado) {
+
+                    console.log(
+                        `✅ BM → jugador ${playerId} encontrado directamente en servidor ${serverId}`
+                    );
+
+                    return encontrado;
+                }
+
+            } catch (error) {
+
+                const status =
+                    error.response?.status;
+
+                console.log(
+                    `⚠️ Fallback servidor ${serverId} → ${url} → ${status || error.message}`
+                );
+            }
+        }
+
+        return null;
+
+    } catch (error) {
+
+        console.error(
+            `❌ Error buscando jugador ${playerId} directamente en servidor ${serverId}:`,
+            error.response?.data ||
+            error.message
+        );
+
+        return null;
+    }
+}
+
+
+// =====================================================
+// OBTENER DATOS DEL JUGADOR EN SERVIDOR MEDIANTE
+// FILTRO GLOBAL
+// =====================================================
+//
+// Este fallback es especialmente útil cuando el endpoint
+// del servidor anterior no devuelve el player.
+//
+// =====================================================
+
+async function buscarJugadorPorServidorYNombre(
+    nombre,
+    serverId
+) {
+
+    try {
+
+        if (!nombre || !serverId) {
+            return null;
+        }
+
+        const response =
+            await axios.get(
+                `${BM_API}/players`,
+                {
+                    headers: getHeaders(),
+
+                    params: {
+                        "filter[search]":
+                            nombre,
+
+                        "filter[servers]":
+                            serverId,
+
+                        "page[size]": 100
+                    },
+
+                    timeout: 15000
+                }
+            );
+
+        const jugadores =
+            response.data?.data || [];
+
+        const nombreNormalizado =
+            normalizarNombre(nombre);
+
+        return (
+            jugadores.find(
+                jugador =>
+                    jugador?.type === "player" &&
+                    normalizarNombre(
+                        jugador.attributes?.name
+                    ) ===
+                    nombreNormalizado
+            ) ||
+            null
+        );
+
+    } catch (error) {
+
+        console.log(
+            `⚠️ Búsqueda global filtrada por servidor ${serverId} no disponible:`,
+            error.response?.data ||
+            error.message
+        );
+
+        return null;
+    }
+}
+
+
+// =====================================================
 // OBTENER SESIONES DEL JUGADOR
 // =====================================================
 
@@ -541,6 +746,150 @@ async function obtenerSesionesJugador(playerId) {
         console.error(
             `❌ Error obteniendo sesiones del jugador ${playerId}:`,
             error.response?.data ||
+            error.message
+        );
+
+        return [];
+    }
+}
+
+
+// =====================================================
+// OBTENER SESIONES DE UN SERVIDOR ESPECÍFICO
+// =====================================================
+//
+// Fallback.
+//
+// Si BattleMetrics devuelve 0 sesiones desde el perfil,
+// intentamos consultar las sesiones filtradas por servidor.
+//
+// =====================================================
+
+async function obtenerSesionesJugadorEnServidor(
+    playerId,
+    serverId
+) {
+
+    try {
+
+        if (!playerId || !serverId) {
+            return [];
+        }
+
+        const sesiones = [];
+
+        const urls = [
+
+            `${BM_API}/sessions`,
+
+            `${BM_API}/players/${playerId}/sessions`
+
+        ];
+
+        for (const baseUrl of urls) {
+
+            try {
+
+                let nextUrl = baseUrl;
+                let pagina = 1;
+
+                while (
+                    nextUrl &&
+                    pagina <= 50
+                ) {
+
+                    console.log(
+                        `📡 BM ${playerId} → fallback sesiones servidor ${serverId} → página ${pagina}`
+                    );
+
+                    const response =
+                        await axios.get(
+                            nextUrl,
+                            {
+                                headers: getHeaders(),
+
+                                params:
+                                    pagina === 1
+                                        ? {
+                                            "filter[player]":
+                                                playerId,
+
+                                            "filter[server]":
+                                                serverId,
+
+                                            "page[size]": 100
+                                        }
+                                        : undefined,
+
+                                timeout: 15000
+                            }
+                        );
+
+                    const data =
+                        response.data?.data || [];
+
+                    if (!Array.isArray(data) || data.length === 0) {
+                        break;
+                    }
+
+                    for (const sesion of data) {
+
+                        const idServidor =
+                            obtenerServerIdDeSesion(
+                                sesion
+                            );
+
+                        if (
+                            String(idServidor) ===
+                            String(serverId)
+                        ) {
+
+                            const existe =
+                                sesiones.some(
+                                    existente =>
+                                        String(
+                                            existente.id
+                                        ) ===
+                                        String(
+                                            sesion.id
+                                        )
+                                );
+
+                            if (!existe) {
+                                sesiones.push(sesion);
+                            }
+                        }
+                    }
+
+                    nextUrl =
+                        response.data?.links?.next ||
+                        null;
+
+                    pagina++;
+                }
+
+                if (sesiones.length > 0) {
+                    break;
+                }
+
+            } catch (error) {
+
+                console.log(
+                    `⚠️ Fallback sesiones ${baseUrl} → ${error.response?.status || error.message}`
+                );
+            }
+        }
+
+        console.log(
+            `📊 BM ${playerId} → fallback servidor ${serverId}: ${sesiones.length} sesiones`
+        );
+
+        return sesiones;
+
+    } catch (error) {
+
+        console.error(
+            `❌ Error en fallback de sesiones ${playerId}/${serverId}:`,
             error.message
         );
 
@@ -961,20 +1310,6 @@ async function obtenerServidorDeSesion(
 // =====================================================
 // OBTENER DURACIÓN DE LA SESIÓN ACTUAL
 // =====================================================
-//
-// IMPORTANTE:
-//
-// Para jugadores ONLINE NO usamos la cantidad de
-// sesiones ni el timePlayed acumulado.
-//
-// Se calcula:
-//
-// ahora - start de la sesión abierta.
-//
-// Esto evita mostrar "0m" cuando BM todavía no ha
-// actualizado otros contadores.
-//
-// =====================================================
 
 function obtenerDuracionSesionActual(
     sesiones,
@@ -1059,6 +1394,81 @@ function obtenerDuracionSesionActual(
 
 
 // =====================================================
+// EXTRAER DATOS DE JUGADOR/SERVIDOR DEL FALLBACK
+// =====================================================
+
+function extraerDatosServidorJugador(
+    dato,
+    playerId,
+    serverId
+) {
+
+    if (!dato) {
+        return null;
+    }
+
+    const atributos =
+        dato.attributes || {};
+
+    const relaciones =
+        dato.relationships || {};
+
+    const serverRelationship =
+        relaciones.server?.data;
+
+    const playerRelationship =
+        relaciones.player?.data;
+
+    const idJugador =
+        String(
+            dato.type === "player"
+                ? dato.id
+                : playerRelationship?.id || playerId
+        );
+
+    const idServidor =
+        String(
+            dato.type === "server"
+                ? dato.id
+                : serverRelationship?.id || serverId
+        );
+
+    return {
+
+        playerId: idJugador,
+
+        serverId: idServidor,
+
+        timePlayed:
+            Number(
+                atributos.timePlayed ??
+                dato.meta?.timePlayed ??
+                atributos.time_played ??
+                0
+            ) || 0,
+
+        firstSeen:
+            atributos.firstSeen ||
+            atributos.first_seen ||
+            null,
+
+        lastSeen:
+            atributos.lastSeen ||
+            atributos.last_seen ||
+            null,
+
+        online:
+            Boolean(
+                atributos.online ??
+                false
+            ),
+
+        raw: dato
+    };
+}
+
+
+// =====================================================
 // CONSTRUIR RESULTADO
 // =====================================================
 
@@ -1068,7 +1478,8 @@ async function construirResultadoJugador(
     serverId,
     servidorConfigurado,
     ultimaSesionServidor,
-    lastSeenServidor
+    lastSeenServidor,
+    datosServidorFallback = null
 ) {
 
     const atributos =
@@ -1111,12 +1522,6 @@ async function construirResultadoJugador(
     // =================================================
     // ONLINE REAL
     // =================================================
-    //
-    // Primero comprobamos la sesión abierta en el
-    // servidor configurado.
-    //
-    // Esto es más preciso para /buscar.
-    //
 
     const sesionActualServidor =
         sesiones.find(
@@ -1147,10 +1552,19 @@ async function construirResultadoJugador(
             }
         );
 
-    const online =
+    let online =
         Boolean(
             sesionActualServidor
         );
+
+    // Si el endpoint alternativo informa online,
+    // lo usamos como respaldo.
+    if (
+        !online &&
+        datosServidorFallback?.online === true
+    ) {
+        online = true;
+    }
 
 
     // =================================================
@@ -1162,11 +1576,6 @@ async function construirResultadoJugador(
             sesiones,
             serverId
         );
-
-
-    // =================================================
-    // FALLBACK
-    // =================================================
 
     if (
         online &&
@@ -1185,6 +1594,33 @@ async function construirResultadoJugador(
                     ) / 1000
                 )
             );
+    }
+
+
+    // =================================================
+    // FALLBACK DE LAST SEEN
+    // =================================================
+
+    if (
+        !lastSeenServidor &&
+        datosServidorFallback?.lastSeen
+    ) {
+
+        const fechaFallback =
+            new Date(
+                datosServidorFallback.lastSeen
+            );
+
+        if (!isNaN(fechaFallback.getTime())) {
+            lastSeenServidor =
+                fechaFallback;
+        }
+    }
+
+
+    // Si está online, Last Seen debe considerarse ahora.
+    if (online) {
+        lastSeenServidor = new Date();
     }
 
 
@@ -1248,6 +1684,18 @@ async function construirResultadoJugador(
     let origenTiempoServidor =
         "battlemetrics.meta.timePlayed";
 
+    if (
+        segundosServidor <= 0 &&
+        datosServidorFallback?.timePlayed > 0
+    ) {
+
+        segundosServidor =
+            datosServidorFallback.timePlayed;
+
+        origenTiempoServidor =
+            "server-player.fallback";
+    }
+
     if (segundosServidor <= 0) {
 
         segundosServidor =
@@ -1302,6 +1750,21 @@ async function construirResultadoJugador(
         }
     }
 
+    if (
+        !primeraConexion &&
+        datosServidorFallback?.firstSeen
+    ) {
+
+        const fallback =
+            new Date(
+                datosServidorFallback.firstSeen
+            );
+
+        if (!isNaN(fallback.getTime())) {
+            primeraConexion = fallback;
+        }
+    }
+
 
     // =================================================
     // ÚLTIMA CONEXIÓN GLOBAL
@@ -1338,6 +1801,21 @@ async function construirResultadoJugador(
         inicioGlobal
     ) {
         ultimaConexion = inicioGlobal;
+    }
+
+    if (
+        !ultimaConexion &&
+        datosServidorFallback?.lastSeen
+    ) {
+
+        const fallback =
+            new Date(
+                datosServidorFallback.lastSeen
+            );
+
+        if (!isNaN(fallback.getTime())) {
+            ultimaConexion = fallback;
+        }
     }
 
 
@@ -1396,13 +1874,9 @@ async function construirResultadoJugador(
 
         online,
 
-        // Mantiene cantidad total de sesiones para
-        // información general.
         sesiones:
             sesiones.length,
 
-        // Cantidad de sesiones específicamente del
-        // servidor configurado.
         sesionesServidor:
             sesiones.filter(
                 sesion =>
@@ -1414,10 +1888,6 @@ async function construirResultadoJugador(
                     String(serverId)
             ).length,
 
-        // =================================================
-        // SESIÓN ACTUAL
-        // =================================================
-
         sesionActualSegundos:
             segundosSesionActual,
 
@@ -1426,7 +1896,6 @@ async function construirResultadoJugador(
                 segundosSesionActual
             ),
 
-        // Alias útil para el comando /buscar.
         tiempoOnline:
             formatearTiempo(
                 segundosSesionActual
@@ -1434,11 +1903,6 @@ async function construirResultadoJugador(
 
         tiempoOnlineSegundos:
             segundosSesionActual,
-
-
-        // =================================================
-        // HORAS TOTALES PERFIL
-        // =================================================
 
         timePlayedSeconds:
             segundosTotal,
@@ -1459,11 +1923,6 @@ async function construirResultadoJugador(
             Math.floor(
                 segundosTotal / 3600
             ),
-
-
-        // =================================================
-        // HORAS SERVIDOR
-        // =================================================
 
         timePlayedServerSeconds:
             segundosServidor,
@@ -1486,11 +1945,6 @@ async function construirResultadoJugador(
             ),
 
         origenTiempoServidor,
-
-
-        // =================================================
-        // ÚLTIMA SESIÓN SERVIDOR
-        // =================================================
 
         ultimaSesionSegundos:
             segundosUltimaSesionServidor,
@@ -1516,11 +1970,6 @@ async function construirResultadoJugador(
         ultimaSesionServerName:
             servidorConfigurado?.name ||
             `Servidor ${serverId}`,
-
-
-        // =================================================
-        // LAST SEEN
-        // =================================================
 
         lastSeen:
             formatearFechaChile(
@@ -1549,11 +1998,6 @@ async function construirResultadoJugador(
 
         maxLastSeenMinutes:
             MAX_LAST_SEEN_MINUTES,
-
-
-        // =================================================
-        // DATOS GENERALES
-        // =================================================
 
         primeraConexion:
             formatearFechaChile(
@@ -1584,7 +2028,9 @@ async function construirResultadoJugador(
             true,
 
         origen:
-            "global+server-timeplayed+server-last-seen"
+            datosServidorFallback
+                ? "global+server-player-fallback"
+                : "global+server-timeplayed+server-last-seen"
     };
 }
 
@@ -1706,7 +2152,7 @@ async function buscarJugadorHistorico(
             indice++
         ) {
 
-            const perfilBusqueda =
+            let perfilBusqueda =
                 perfiles[indice];
 
             const playerId =
@@ -1784,26 +2230,120 @@ async function buscarJugadorHistorico(
                 `📥 Perfil ${playerId} → cargando historial...`
             );
 
-            const sesiones =
+            let sesiones =
                 await obtenerSesionesJugador(
                     playerId
                 );
 
 
             // =================================================
-            // IMPORTANTE
+            // SI EL PERFIL DEVUELVE 0 SESIONES
+            // =================================================
             //
-            // Si BattleMetrics no entrega sesiones para
-            // el perfil, NO lo descartamos inmediatamente.
+            // NO DESCARTAMOS.
             //
-            // El detalle del jugador puede seguir teniendo
-            // información válida de servidor.
+            // Primero consultamos directamente el servidor.
+            //
+            // Esto soluciona los casos donde BM muestra:
+            //
+            // Clark Kent | 02:30
+            //
+            // pero el endpoint del perfil devuelve:
+            //
+            // 0 sesiones
+            //
             // =================================================
 
             if (sesiones.length === 0) {
 
                 console.log(
-                    `⚠️ Perfil ${playerId} → no tiene sesiones accesibles`
+                    `⚠️ Perfil ${playerId} → 0 sesiones en endpoint global`
+                );
+
+                console.log(
+                    `🔄 Activando fallback específico del servidor ${serverIdString}...`
+                );
+
+                const sesionesFallback =
+                    await obtenerSesionesJugadorEnServidor(
+                        playerId,
+                        serverIdString
+                    );
+
+                if (sesionesFallback.length > 0) {
+
+                    sesiones =
+                        sesionesFallback;
+
+                    console.log(
+                        `✅ Perfil ${playerId} → recuperadas ${sesiones.length} sesiones mediante fallback`
+                    );
+                }
+            }
+
+
+            // =================================================
+            // DATOS DIRECTOS DEL SERVIDOR
+            // =================================================
+
+            let datosServidorFallback =
+                null;
+
+            // Primero intentamos recuperar información
+            // directa del servidor aunque no existan sesiones.
+
+            const jugadorServidor =
+                await obtenerJugadorEnServidor(
+                    playerId,
+                    serverIdString
+                );
+
+            if (jugadorServidor) {
+
+                datosServidorFallback =
+                    extraerDatosServidorJugador(
+                        jugadorServidor,
+                        playerId,
+                        serverIdString
+                    );
+            }
+
+
+            // =================================================
+            // SEGUNDO FALLBACK
+            // =================================================
+
+            if (!datosServidorFallback) {
+
+                const jugadorServidorNombre =
+                    await buscarJugadorPorServidorYNombre(
+                        nombrePerfil,
+                        serverIdString
+                    );
+
+                if (jugadorServidorNombre) {
+
+                    datosServidorFallback =
+                        extraerDatosServidorJugador(
+                            jugadorServidorNombre,
+                            playerId,
+                            serverIdString
+                        );
+                }
+            }
+
+
+            // =================================================
+            // SI NO HAY SESIONES NI FALLBACK
+            // =================================================
+
+            if (
+                sesiones.length === 0 &&
+                !datosServidorFallback
+            ) {
+
+                console.log(
+                    `⚠️ Perfil ${playerId} → no tiene historial accesible por API`
                 );
 
                 candidatosDescartados.push({
@@ -1813,7 +2353,7 @@ async function buscarJugadorHistorico(
                     name: nombrePerfil,
 
                     motivo:
-                        "Sin sesiones accesibles"
+                        "Sin sesiones ni información directa del servidor"
                 });
 
                 continue;
@@ -1824,46 +2364,83 @@ async function buscarJugadorHistorico(
             // ÚLTIMA SESIÓN SERVIDOR
             // =================================================
 
-            const ultimaSesionServidor =
+            let ultimaSesionServidor =
                 obtenerUltimaSesionEnServidor(
                     sesiones,
                     serverIdString
                 );
-
-            if (!ultimaSesionServidor) {
-
-                console.log(
-                    `❌ Perfil ${playerId} → NO tiene historial en el servidor ${serverIdString}`
-                );
-
-                candidatosDescartados.push({
-
-                    id: playerId,
-
-                    name: nombrePerfil,
-
-                    motivo:
-                        "No tiene sesiones en el servidor configurado"
-                });
-
-                continue;
-            }
 
 
             // =================================================
             // LAST SEEN
             // =================================================
 
-            const lastSeenServidor =
+            let lastSeenServidor =
                 obtenerLastSeenEnServidor(
                     sesiones,
                     serverIdString
                 );
 
-            const lastSeenMinutos =
-                calcularMinutosDesde(
-                    lastSeenServidor
+
+            // Si las sesiones no existen, usamos el dato
+            // directo entregado por BattleMetrics.
+
+            if (
+                !lastSeenServidor &&
+                datosServidorFallback?.lastSeen
+            ) {
+
+                const fechaFallback =
+                    new Date(
+                        datosServidorFallback.lastSeen
+                    );
+
+                if (!isNaN(fechaFallback.getTime())) {
+
+                    lastSeenServidor =
+                        fechaFallback;
+                }
+            }
+
+
+            // Si el fallback dice que está online,
+            // consideramos Last Seen como ahora.
+
+            if (
+                datosServidorFallback?.online === true
+            ) {
+
+                lastSeenServidor =
+                    new Date();
+            }
+
+
+            // =================================================
+            // SI EL FALLBACK SOLO TIENE TIMEPLAYED
+            // =================================================
+            //
+            // Si existe tiempo de servidor pero no tenemos
+            // una sesión concreta, usamos el propio registro
+            // del servidor como confirmación de historial.
+            //
+            // No inventamos Last Seen.
+            //
+            // =================================================
+
+            if (
+                !ultimaSesionServidor &&
+                datosServidorFallback &&
+                (
+                    datosServidorFallback.timePlayed > 0 ||
+                    datosServidorFallback.lastSeen
+                )
+            ) {
+
+                console.log(
+                    `✅ Perfil ${playerId} → historial confirmado mediante datos del servidor`
                 );
+            }
+
 
             console.log(
                 `🎮 Servidor encontrado → ${serverIdString}`
@@ -1874,11 +2451,24 @@ async function buscarJugadorHistorico(
             );
 
             console.log(
-                `⏱️ Hace → ${lastSeenMinutos ?? "?"} minutos`
+                `⏱️ Hace → ${calcularMinutosDesde(lastSeenServidor) ?? "?"} minutos`
             );
 
 
-            if (lastSeenMinutos === null) {
+            // =================================================
+            // VALIDAR LAST SEEN
+            // =================================================
+
+            const lastSeenMinutos =
+                calcularMinutosDesde(
+                    lastSeenServidor
+                );
+
+
+            if (
+                lastSeenMinutos === null &&
+                !datosServidorFallback
+            ) {
 
                 console.log(
                     `❌ Perfil ${playerId} → no se pudo determinar Last Seen`
@@ -1899,8 +2489,9 @@ async function buscarJugadorHistorico(
 
 
             if (
+                lastSeenMinutos !== null &&
                 lastSeenMinutos >
-                MAX_LAST_SEEN_MINUTES
+                    MAX_LAST_SEEN_MINUTES
             ) {
 
                 console.log(
@@ -1966,7 +2557,8 @@ async function buscarJugadorHistorico(
                     serverIdString,
                     servidorActividad,
                     ultimaSesionServidor,
-                    lastSeenServidor
+                    lastSeenServidor,
+                    datosServidorFallback
                 );
 
             if (!resultado) {
@@ -1995,14 +2587,18 @@ async function buscarJugadorHistorico(
                 lastSeenMinutos;
 
             resultado.lastSeenHours =
-                Number(
-                    (
-                        lastSeenMinutos / 60
-                    ).toFixed(2)
-                );
+                lastSeenMinutos !== null
+                    ? Number(
+                        (
+                            lastSeenMinutos / 60
+                        ).toFixed(2)
+                    )
+                    : null;
 
             resultado.lastSeenWithinLimit =
-                true;
+                lastSeenMinutos !== null &&
+                lastSeenMinutos <=
+                    MAX_LAST_SEEN_MINUTES;
 
             resultado.maxLastSeenMinutes =
                 MAX_LAST_SEEN_MINUTES;
@@ -2033,6 +2629,10 @@ async function buscarJugadorHistorico(
 
             console.log(
                 `📌 Fuente horas servidor → ${resultado.origenTiempoServidor}`
+            );
+
+            console.log(
+                `🟢 ONLINE → ${resultado.online ? "SÍ" : "NO"}`
             );
 
 
@@ -2081,7 +2681,7 @@ async function buscarJugadorHistorico(
             );
 
             console.log(
-                `   Hace: ${resultado.lastSeenMinutes} minutos`
+                `   Hace: ${resultado.lastSeenMinutes ?? "?"} minutos`
             );
 
             console.log(
@@ -2176,6 +2776,12 @@ module.exports = {
 
     obtenerSesionesJugador,
 
+    obtenerSesionesJugadorEnServidor,
+
+    obtenerJugadorEnServidor,
+
+    buscarJugadorPorServidorYNombre,
+
     buscarJugadorHistorico,
 
     searchBattleMetricsPlayerHistory,
@@ -2205,5 +2811,4 @@ module.exports = {
     obtenerTiempoTotalPerfil,
 
     obtenerDuracionSesionActual
-
 };
