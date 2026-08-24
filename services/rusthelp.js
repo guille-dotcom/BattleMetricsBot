@@ -28,6 +28,15 @@ const ALIASES = {
     "puerta de madera": "wooden-door"
 };
 
+function convertirASegundos(t) {
+    let total = 0;
+    const minMatch = t.match(/(\d+)\s*m/);
+    const segMatch = t.match(/(\d+)\s*s/);
+    if (minMatch) total += parseInt(minMatch[1]) * 60;
+    if (segMatch) total += parseInt(segMatch[1]);
+    return total || 0;
+}
+
 async function consultarRaid(nombreQuery) {
     const queryLimpia = String(nombreQuery || "").trim();
     if (!queryLimpia) return null;
@@ -52,51 +61,53 @@ async function consultarRaid(nombreQuery) {
         const raidingCost = [];
         const dondeEncontrar = [];
 
-        $("table").each((_, tabla) => {
+        // Identificar tablas en la página de RustHelp
+        $("table").each((index, tabla) => {
             const tituloSeccion = $(tabla).prev("h2, h3, h4, div").text().trim();
-            const esLoot = /encontrar|drop|loot/i.test(tituloSeccion);
+            const esLoot = /looted from|encontrar|drop/i.test(tituloSeccion) || $(tabla).text().includes("%");
 
             $(tabla).find("tr").each((_, fila) => {
                 const columnas = $(fila).find("td");
                 if (columnas.length < 2) return;
 
-                const textoCol0 = $(columnas[0]).text().trim();
-                const textoCol1 = $(columnas[1]).text().trim();
+                const col0 = $(columnas[0]).text().trim();
+                const col1 = $(columnas[1]).text().trim();
+                const col2 = columnas.length > 2 ? $(columnas[2]).text().trim() : "";
 
-                if (!textoCol0) return;
+                if (!col0) return;
 
-                if (esLoot || /%/.test(textoCol1)) {
-                    dondeEncontrar.push({
-                        herramienta: textoCol0,
-                        tiempo: textoCol1
-                    });
+                if (esLoot) {
+                    dondeEncontrar.push({ herramienta: col0, tiempo: col1 });
                 } else {
+                    // Verificamos si pertenece a Starting Item (suele tener cantidades explícitas o notas de tiempo cortas)
+                    // En la primera tabla o si tiene formato de starting item
                     const itemData = {
-                        herramienta: textoCol0,
-                        tiempo: textoCol1 || "N/A",
-                        componentes: [{ nombre: textoCol0, cantidad: 1 }]
+                        herramienta: col0,
+                        tiempo: col1 || "N/A",
+                        cantidad: col2 || ""
                     };
 
-                    if (startingItems.length < 3) {
+                    // Diferenciamos las tablas por orden o estructura visual
+                    if (index === 0 && startingItems.length < 3) {
                         startingItems.push(itemData);
-                    } else {
+                    } else if (index > 0 || startingItems.length >= 3) {
                         raidingCost.push(itemData);
                     }
                 }
             });
         });
 
-        const principales = startingItems.length > 0 ? startingItems : raidingCost.slice(0, 3);
-        const alternativas = raidingCost.slice(3, 10);
+        // Ordenar el Raiding Cost por tiempo (de menor a mayor) y limitar a 7
+        const raidingCostOrdenado = raidingCost
+            .sort((a, b) => convertirASegundos(a.tiempo) - convertirASegundos(b.tiempo))
+            .slice(0, 7);
 
         return {
             nombre: nombreObjeto,
             url: urlFinal,
-            explosivosEconomia: principales,
-            explosivosCantidad: principales,
-            melee: alternativas.length > 0 ? alternativas : raidingCost.slice(0, 5),
-            balas: alternativas,
-            dondeEncontrar: dondeEncontrar.length > 0 ? dondeEncontrar : [{ herramienta: "No se encontraron datos de loot directo", tiempo: "" }]
+            startingItems: startingItems.length > 0 ? startingItems : raidingCost.slice(0, 3),
+            raidingCost: raidingCostOrdenado,
+            dondeEncontrar: dondeEncontrar.length > 0 ? dondeEncontrar : [{ herramienta: "No se encontraron datos", tiempo: "" }]
         };
 
     } catch (error) {

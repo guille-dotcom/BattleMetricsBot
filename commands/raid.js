@@ -3,10 +3,36 @@ const { consultarRaid } = require("../services/rusthelp");
 
 const raidCache = new Map();
 
+function formatearRaideo(startingItems, raidingCost) {
+    let texto = "";
+
+    if (startingItems && startingItems.length > 0) {
+        texto += "**⚡ Starting Items:**\n";
+        texto += startingItems.map((item, index) => {
+            let formato = `> ${index + 1}. **${item.herramienta}**`;
+            if (item.tiempo && item.tiempo !== "N/A") formato += ` (⏱️ ${item.tiempo})`;
+            if (item.cantidad) formato += ` [Cant: ${item.cantidad}]`;
+            return formato;
+        }).join("\n");
+    }
+
+    if (raidingCost && raidingCost.length > 0) {
+        texto += "\n\n**🔨 Raiding Cost:**\n";
+        texto += raidingCost.map((item, index) => {
+            let formato = `> ${index + 1}. **${item.herramienta}**`;
+            if (item.tiempo && item.tiempo !== "N/A") formato += ` (⏱️ ${item.tiempo})`;
+            if (item.cantidad) formato += ` [Cant: ${item.cantidad}]`;
+            return formato;
+        }).join("\n");
+    }
+
+    return texto || "No hay datos disponibles.";
+}
+
 function crearTextoAmount(items) {
     if (!items || items.length === 0) return "No hay datos disponibles.";
     return items.map((item, index) => {
-        let formato = `**${index + 1}. ${item.herramienta}**`;
+        let formato = `> ${index + 1}. **${item.herramienta}**`;
         if (item.tiempo && item.tiempo !== "N/A" && item.tiempo !== "") {
             formato += ` (⏱️ ${item.tiempo})`;
         }
@@ -42,16 +68,13 @@ module.exports = {
             .setURL(resultado.url)
             .setColor("#E67E22")
             .addFields(
-                { name: "💰 Opciones de Raid", value: crearTextoAmount(resultado.explosivosEconomia) }
+                { name: "🔨 Raideo", value: formatearRaideo(resultado.startingItems, resultado.raidingCost) }
             )
             .setFooter({ text: "Selecciona una categoría abajo | Fuente: RustHelp" })
             .setTimestamp();
 
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`raid_eco_${cacheKey}`).setLabel("Economía").setStyle(ButtonStyle.Primary).setEmoji("🪙"),
-            new ButtonBuilder().setCustomId(`raid_cant_${cacheKey}`).setLabel("Cantidad").setStyle(ButtonStyle.Primary).setEmoji("📦"),
-            new ButtonBuilder().setCustomId(`raid_melee_${cacheKey}`).setLabel("Melee").setStyle(ButtonStyle.Secondary).setEmoji("⛏️"),
-            new ButtonBuilder().setCustomId(`raid_balas_${cacheKey}`).setLabel("Munición").setStyle(ButtonStyle.Secondary).setEmoji("🎯"),
+            new ButtonBuilder().setCustomId(`raid_raideo_${cacheKey}`).setLabel("Raideo").setStyle(ButtonStyle.Primary).setEmoji("🔨"),
             new ButtonBuilder().setCustomId(`raid_donde_${cacheKey}`).setLabel("Dónde encontrar").setStyle(ButtonStyle.Success).setEmoji("🔍")
         );
 
@@ -59,7 +82,6 @@ module.exports = {
     },
 
     async manejarBotonRaid(interaction) {
-        // Previene el error de "la interacción falló" si el bot tarda un segundo en procesar
         await interaction.deferUpdate();
 
         const parts = interaction.customId.split("_");
@@ -79,16 +101,10 @@ module.exports = {
             .setColor("#E67E22")
             .setTimestamp();
 
-        if (tipo === "eco") {
-            embed.addFields({ name: "🪙 Opciones de Economía", value: crearTextoAmount(resultado.explosivosEconomia) });
-        } else if (tipo === "cant") {
-            embed.addFields({ name: "📦 Opciones por Cantidad", value: crearTextoAmount(resultado.explosivosCantidad) });
-        } else if (tipo === "melee") {
-            embed.addFields({ name: "⛏️ Herramientas Melee", value: crearTextoAmount(resultado.melee) });
-        } else if (tipo === "balas") {
-            embed.addFields({ name: "🎯 Munición de Raid", value: crearTextoAmount(resultado.balas) });
+        if (tipo === "raideo") {
+            embed.addFields({ name: "🔨 Raideo (Starting Items & Cost)", value: formatearRaideo(resultado.startingItems, resultado.raidingCost) });
         } else if (tipo === "donde") {
-            embed.addFields({ name: "🔍 Dónde encontrar / Loot", value: crearTextoAmount(resultado.dondeEncontrar) });
+            embed.addFields({ name: "🔍 Dónde encontrar (Looted From)", value: crearTextoAmount(resultado.dondeEncontrar) });
         }
 
         await interaction.editReply({ embeds: [embed] });
