@@ -9,7 +9,7 @@ const axios = require("axios");
 const BM_API = "https://api.battlemetrics.com";
 
 // =====================================================
-// ZONA HORARIA OFICIAL DEL BOT
+// ZONA HORARIA
 // =====================================================
 
 const TIMEZONE_CHILE = "America/Santiago";
@@ -35,7 +35,7 @@ function getHeaders() {
 
 
 // =====================================================
-// FORMATEAR FECHA A HORA DE CHILE
+// FECHA CHILE
 // =====================================================
 
 function formatearFechaChile(fecha) {
@@ -56,7 +56,6 @@ function formatearFechaChile(fecha) {
                 fechaReal.getTime()
             )
         ) {
-
             return "No disponible";
         }
 
@@ -86,7 +85,7 @@ function formatearFechaChile(fecha) {
 
 
 // =====================================================
-// OBTENER PARTES DE UNA FECHA EN HORA CHILE
+// PARTES FECHA CHILE
 // =====================================================
 
 function obtenerPartesFechaChile(fecha) {
@@ -131,7 +130,7 @@ function obtenerPartesFechaChile(fecha) {
 
 
 // =====================================================
-// CONVERTIR FECHA/HORA DE CHILE A UTC
+// CHILE → UTC
 // =====================================================
 
 function convertirChileLocalAUTC(
@@ -192,7 +191,7 @@ function convertirChileLocalAUTC(
 
 
 // =====================================================
-// OBTENER INICIO DE SEMANA EN CHILE
+// INICIO SEMANA
 // =====================================================
 
 function obtenerInicioSemanaChile(
@@ -242,7 +241,7 @@ function obtenerInicioSemanaChile(
 
 
 // =====================================================
-// OBTENER INICIO DEL MES EN CHILE
+// INICIO MES
 // =====================================================
 
 function obtenerInicioMesChile(
@@ -266,7 +265,7 @@ function obtenerInicioMesChile(
 
 
 // =====================================================
-// OBTENER SERVER ID DE UNA SESIÓN
+// SERVER ID DE SESIÓN
 // =====================================================
 
 function obtenerServerIdDeSesion(
@@ -306,12 +305,16 @@ function obtenerServerIdDeSesion(
 
 
 // =====================================================
-// 1. BUSCAR JUGADOR EN EL SERVIDOR
+// 1. /HORAS
 // =====================================================
 //
-// ESTA FUNCIÓN SE MANTIENE PARA /HORAS.
+// ESTA FUNCIÓN NO SE CAMBIA.
 //
-// NO SE CAMBIA SU COMPORTAMIENTO.
+// Busca solamente jugadores que estén actualmente
+// asociados al servidor consultado.
+//
+// /horas sigue funcionando de forma independiente
+// de /buscar.
 // =====================================================
 
 async function searchBattleMetricsPlayer(
@@ -336,19 +339,16 @@ async function searchBattleMetricsPlayer(
                 }
             );
 
-
         const players =
             response.data?.included?.filter(
                 item =>
                     item.type === "player"
             ) || [];
 
-
         const nombreBuscado =
             playerName
                 .toLowerCase()
                 .trim();
-
 
         const encontrados =
             players.filter(
@@ -366,7 +366,6 @@ async function searchBattleMetricsPlayer(
                 }
             );
 
-
         if (
             encontrados.length > 1
         ) {
@@ -381,9 +380,7 @@ async function searchBattleMetricsPlayer(
             };
         }
 
-
         return encontrados[0] || null;
-
 
     } catch (error) {
 
@@ -399,17 +396,13 @@ async function searchBattleMetricsPlayer(
 
 
 // =====================================================
-// 2. BUSCAR PERFILES GLOBALMENTE POR NOMBRE
+// 2. BÚSQUEDA GLOBAL POR NOMBRE
 // =====================================================
 //
 // ESTA FUNCIÓN ES PARA /BUSCAR.
 //
-// IMPORTANTE:
-// Aquí NO filtramos por servidor.
-//
-// Primero encontramos los perfiles globalmente.
-// Después comprobamos cuáles tienen historial
-// en el servidor configurado.
+// NO FILTRA POR SERVIDOR.
+// Primero encuentra los perfiles por nombre.
 // =====================================================
 
 async function buscarJugadoresGlobal(
@@ -426,24 +419,18 @@ async function buscarJugadoresGlobal(
             return [];
         }
 
-
         console.log(
             `🌎 Búsqueda global BM por nombre: "${nombre}"`
         );
 
-
-        const encontrados =
-            [];
+        const encontrados = [];
 
         let nextUrl =
             `${BM_API}/players`;
 
-        let pagina =
-            1;
+        let pagina = 1;
 
-        const limitePaginas =
-            10;
-
+        const limitePaginas = 10;
 
         while (
             nextUrl &&
@@ -472,16 +459,13 @@ async function buscarJugadoresGlobal(
                     }
                 );
 
-
             const jugadores =
                 response.data?.data ||
                 [];
 
-
             console.log(
-                `📊 Búsqueda global BM página ${pagina}: ${jugadores.length} resultados`
+                `📊 BM página ${pagina}: ${jugadores.length} resultados`
             );
-
 
             for (
                 const jugador
@@ -492,29 +476,20 @@ async function buscarJugadoresGlobal(
                     jugador.type !==
                     "player"
                 ) {
-
                     continue;
                 }
-
 
                 const nombreBM =
                     jugador.attributes?.name
                         ?.trim()
                         .toLowerCase();
 
-
-                // -----------------------------------------
-                // COINCIDENCIA EXACTA
-                // -----------------------------------------
-
                 if (
                     nombreBM !==
                     nombre.toLowerCase()
                 ) {
-
                     continue;
                 }
-
 
                 if (
                     !encontrados.some(
@@ -534,7 +509,6 @@ async function buscarJugadoresGlobal(
                 }
             }
 
-
             nextUrl =
                 response.data?.links?.next ||
                 null;
@@ -542,14 +516,11 @@ async function buscarJugadoresGlobal(
             pagina++;
         }
 
-
         console.log(
-            `🌎 Perfiles globales exactos encontrados: ${encontrados.length}`
+            `🌎 Perfiles exactos encontrados: ${encontrados.length}`
         );
 
-
         return encontrados;
-
 
     } catch (error) {
 
@@ -565,22 +536,185 @@ async function buscarJugadoresGlobal(
 
 
 // =====================================================
-// 3. OBTENER SESIONES DE UN JUGADOR EN UN SERVIDOR
+// 3. OBTENER SERVIDORES DEL PERFIL
 // =====================================================
 //
-// Esta es la parte importante.
+// ESTA ES LA PARTE CLAVE DE /BUSCAR.
 //
-// Ejemplo:
+// No buscamos al jugador en la lista ONLINE.
 //
-// playerId = 1179425969
-// serverId = 2788421
+// Abrimos directamente su perfil:
 //
-// Se obtiene solamente:
+// /players/{playerId}?include=server
 //
-// /players/1179425969/relationships/sessions
-// filter[servers]=2788421
+// Y revisamos los servidores asociados al perfil.
 //
-// Así NO mezclamos sesiones de otros servidores.
+// Esto permite encontrar jugadores OFFLINE.
+// =====================================================
+
+async function obtenerServidoresDelPerfil(
+    playerId
+) {
+
+    try {
+
+        const response =
+            await axios.get(
+                `${BM_API}/players/${playerId}`,
+                {
+                    headers:
+                        getHeaders(),
+
+                    params: {
+                        include: "server"
+                    },
+
+                    timeout: 7000
+                }
+            );
+
+        const player =
+            response.data?.data;
+
+        if (!player) {
+            return {
+                player: null,
+                servidores: []
+            };
+        }
+
+        const servidores =
+            response.data?.included?.filter(
+                item =>
+                    item.type === "server"
+            ) || [];
+
+        // =================================================
+        // DEDUPLICAR SERVIDORES
+        // =================================================
+
+        const mapa =
+            new Map();
+
+        for (
+            const servidor
+            of servidores
+        ) {
+
+            if (
+                servidor?.id
+            ) {
+
+                mapa.set(
+                    String(
+                        servidor.id
+                    ),
+                    servidor
+                );
+            }
+        }
+
+        const lista =
+            Array.from(
+                mapa.values()
+            );
+
+        console.log(
+            `📡 Perfil ${playerId}: ${lista.length} servidores encontrados`
+        );
+
+        return {
+            player,
+            servidores: lista
+        };
+
+    } catch (error) {
+
+        console.error(
+            `❌ Error obteniendo servidores del perfil ${playerId}:`,
+            error.response?.data ||
+            error.message
+        );
+
+        return {
+            player: null,
+            servidores: []
+        };
+    }
+}
+
+
+// =====================================================
+// 4. OBTENER SERVIDOR DEL PERFIL
+// =====================================================
+
+async function obtenerServidorDelPerfil(
+    playerId,
+    serverId
+) {
+
+    const resultado =
+        await obtenerServidoresDelPerfil(
+            playerId
+        );
+
+    if (
+        !resultado.player
+    ) {
+
+        return null;
+    }
+
+    const servidor =
+        resultado.servidores.find(
+            item =>
+                String(
+                    item.id
+                ) ===
+                String(
+                    serverId
+                )
+        );
+
+    if (
+        !servidor
+    ) {
+
+        return null;
+    }
+
+    return {
+
+        player:
+            resultado.player,
+
+        servidor,
+
+        timePlayedSeconds:
+            Number(
+                servidor.meta?.timePlayed
+            ) || 0,
+
+        firstSeen:
+            servidor.meta?.firstSeen ||
+            servidor.attributes?.firstSeen ||
+            null,
+
+        lastSeen:
+            servidor.meta?.lastSeen ||
+            servidor.attributes?.lastSeen ||
+            servidor.meta?.lastSeenAt ||
+            servidor.attributes?.lastSeenAt ||
+            null
+    };
+}
+
+
+// =====================================================
+// 5. SESIONES DE UN SERVIDOR
+// =====================================================
+//
+// Se mantiene para /horas y otras funciones.
 // =====================================================
 
 async function obtenerSesionesServidor(
@@ -593,15 +727,11 @@ async function obtenerSesionesServidor(
         let nextUrl =
             `${BM_API}/players/${playerId}/relationships/sessions`;
 
-        let pagina =
-            1;
+        let pagina = 1;
 
-        const limitePaginas =
-            50;
+        const limitePaginas = 50;
 
-        const sesiones =
-            [];
-
+        const sesiones = [];
 
         while (
             nextUrl &&
@@ -630,19 +760,15 @@ async function obtenerSesionesServidor(
                     }
                 );
 
-
             const data =
                 response.data?.data ||
                 [];
 
-
             if (
                 data.length === 0
             ) {
-
                 break;
             }
-
 
             for (
                 const sesion
@@ -653,7 +779,6 @@ async function obtenerSesionesServidor(
                     obtenerServerIdDeSesion(
                         sesion
                     );
-
 
                 if (
                     sessionServerId &&
@@ -671,14 +796,12 @@ async function obtenerSesionesServidor(
                 }
             }
 
-
             nextUrl =
                 response.data?.links?.next ||
                 null;
 
             pagina++;
         }
-
 
         sesiones.sort(
             (a, b) => {
@@ -702,9 +825,7 @@ async function obtenerSesionesServidor(
             }
         );
 
-
         return sesiones;
-
 
     } catch (error) {
 
@@ -720,108 +841,24 @@ async function obtenerSesionesServidor(
 
 
 // =====================================================
-// 4. OBTENER SERVIDOR DENTRO DEL PERFIL
-// =====================================================
-
-async function obtenerServidorDelPerfil(
-    playerId,
-    serverId
-) {
-
-    try {
-
-        const response =
-            await axios.get(
-                `${BM_API}/players/${playerId}`,
-                {
-                    headers:
-                        getHeaders(),
-
-                    params: {
-                        include:
-                            "server"
-                    },
-
-                    timeout: 7000
-                }
-            );
-
-
-        const player =
-            response.data?.data;
-
-
-        if (!player) {
-            return null;
-        }
-
-
-        const servidores =
-            response.data?.included?.filter(
-                item =>
-                    item.type === "server"
-            ) || [];
-
-
-        const servidor =
-            servidores.find(
-                item =>
-                    String(
-                        item.id
-                    ) ===
-                    String(
-                        serverId
-                    )
-            );
-
-
-        if (!servidor) {
-            return null;
-        }
-
-
-        return {
-
-            player,
-
-            servidor,
-
-            timePlayedSeconds:
-                Number(
-                    servidor.meta?.timePlayed
-                ) || 0
-
-        };
-
-
-    } catch (error) {
-
-        console.error(
-            `❌ Error obteniendo perfil BM ${playerId}:`,
-            error.response?.data ||
-            error.message
-        );
-
-        return null;
-    }
-}
-
-
-// =====================================================
-// 5. BUSCAR JUGADOR HISTÓRICO
+// 6. /BUSCAR - HISTORIAL
 // =====================================================
 //
-// FLUJO:
+// NUEVA LÓGICA:
 //
-// 1. Buscar nombre GLOBALMENTE.
-// 2. Revisar cada perfil.
-// 3. Buscar el servidor configurado dentro
-//    del perfil.
-// 4. Obtener las sesiones de ESE servidor.
-// 5. Si no tiene sesiones en ese servidor,
-//    DESCARTAR.
-// 6. Si tiene sesiones, guardar last seen.
-// 7. Ordenar por actividad más reciente.
+// 1. Buscar "cyclops" globalmente.
+// 2. Obtener perfil de cada coincidencia.
+// 3. Mirar servidores asociados al perfil.
+// 4. Buscar EXACTAMENTE 2788421.
+// 5. Si existe:
+//      -> encontrado
+//      -> devolver ID BM
+//      -> nombre servidor
+//      -> lastSeen
+//      -> firstSeen
+//      -> timePlayed
+//
+// NO exige que esté online.
 // =====================================================
 
 async function searchBattleMetricsPlayerHistory(
@@ -833,30 +870,17 @@ async function searchBattleMetricsPlayerHistory(
 
         if (
             !playerName ||
-            !playerName.trim()
-        ) {
-
-            return null;
-        }
-
-
-        if (
+            !playerName.trim() ||
             !serverId
         ) {
 
             return null;
         }
 
-
-        // =================================================
-        // BUSCAR GLOBALMENTE
-        // =================================================
-
         const perfiles =
             await buscarJugadoresGlobal(
                 playerName
             );
-
 
         if (
             perfiles.length === 0
@@ -869,14 +893,7 @@ async function searchBattleMetricsPlayerHistory(
             return null;
         }
 
-
-        // =================================================
-        // CANDIDATOS DEL SERVIDOR
-        // =================================================
-
-        const candidatos =
-            [];
-
+        const candidatos = [];
 
         for (
             const perfil
@@ -884,247 +901,83 @@ async function searchBattleMetricsPlayerHistory(
         ) {
 
             console.log(
-                `🔎 Revisando perfil BM ${perfil.id} para servidor ${serverId}...`
+                `🔎 Revisando perfil BM ${perfil.id} buscando servidor ${serverId}...`
             );
 
-
-            // ---------------------------------------------
-            // VERIFICAR QUE EL SERVIDOR EXISTA EN EL PERFIL
-            // ---------------------------------------------
-
-            const servidorPerfil =
+            const resultado =
                 await obtenerServidorDelPerfil(
                     perfil.id,
                     serverId
                 );
 
-
             if (
-                !servidorPerfil
+                !resultado
             ) {
 
                 console.log(
-                    `⛔ Perfil ${perfil.id} descartado: nunca encontrado en servidor ${serverId}.`
+                    `⛔ Perfil ${perfil.id}: no aparece servidor ${serverId}`
                 );
 
                 continue;
             }
 
+            const servidor =
+                resultado.servidor;
 
-            // ---------------------------------------------
-            // OBTENER SESIONES DEL SERVIDOR
-            // ---------------------------------------------
+            const meta =
+                servidor.meta || {};
 
-            const sesiones =
-                await obtenerSesionesServidor(
-                    perfil.id,
-                    serverId
-                );
-
-
-            if (
-                sesiones.length === 0
-            ) {
-
-                console.log(
-                    `⛔ Perfil ${perfil.id} descartado: no hay sesiones para ${serverId}.`
-                );
-
-                continue;
-            }
-
-
-            // ---------------------------------------------
-            // ÚLTIMA SESIÓN
-            // ---------------------------------------------
-
-            const ultimaSesion =
-                sesiones[0];
-
-
-            const ultimoInicio =
-                ultimaSesion.attributes?.start
-                    ? new Date(
-                        ultimaSesion.attributes.start
-                    )
-                    : null;
-
-
-            const ultimoFin =
-                ultimaSesion.attributes?.stop
-                    ? new Date(
-                        ultimaSesion.attributes.stop
-                    )
-                    : null;
-
-
-            // ---------------------------------------------
-            // SI LA SESIÓN ESTÁ ACTIVA
-            // ---------------------------------------------
-
-            const online =
-                !ultimoFin;
-
-
-            // ---------------------------------------------
-            // LAST SEEN
-            // ---------------------------------------------
-
-            let ultimaConexion =
-                ultimoFin ||
-                ultimoInicio ||
+            const lastSeenRaw =
+                meta.lastSeen ||
+                meta.lastSeenAt ||
+                servidor.attributes?.lastSeen ||
+                servidor.attributes?.lastSeenAt ||
                 null;
 
+            const firstSeenRaw =
+                meta.firstSeen ||
+                meta.firstSeenAt ||
+                servidor.attributes?.firstSeen ||
+                servidor.attributes?.firstSeenAt ||
+                null;
 
-            if (
-                !ultimaConexion ||
-                isNaN(
-                    ultimaConexion.getTime()
-                )
-            ) {
-
-                ultimaConexion =
-                    null;
-            }
-
-
-            // ---------------------------------------------
-            // PRIMERA SESIÓN
-            // ---------------------------------------------
-
-            const primeraSesion =
-                sesiones[
-                    sesiones.length - 1
-                ];
-
-
-            const primeraConexion =
-                primeraSesion?.attributes?.start
+            const lastSeenDate =
+                lastSeenRaw
                     ? new Date(
-                        primeraSesion.attributes.start
+                        lastSeenRaw
                     )
                     : null;
 
-
-            // ---------------------------------------------
-            // TIME PLAYED
-            // ---------------------------------------------
-
-            let segundosJugados =
-                servidorPerfil.timePlayedSeconds;
-
-
-            // ---------------------------------------------
-            // SUMAR SESIONES SI SON MAYORES
-            // ---------------------------------------------
-
-            let segundosSesiones =
-                0;
-
-
-            for (
-                const sesion
-                of sesiones
-            ) {
-
-                const start =
-                    sesion.attributes?.start
-                        ? new Date(
-                            sesion.attributes.start
-                        )
-                        : null;
-
-
-                if (
-                    !start ||
-                    isNaN(
-                        start.getTime()
+            const firstSeenDate =
+                firstSeenRaw
+                    ? new Date(
+                        firstSeenRaw
                     )
-                ) {
+                    : null;
 
-                    continue;
-                }
-
-
-                let end =
-                    sesion.attributes?.stop
-                        ? new Date(
-                            sesion.attributes.stop
-                        )
-                        : null;
-
-
-                if (
-                    !end
-                ) {
-
-                    end =
-                        new Date();
-                }
-
-
-                if (
-                    isNaN(
-                        end.getTime()
-                    )
-                ) {
-
-                    continue;
-                }
-
-
-                segundosSesiones +=
-                    Math.max(
-                        0,
-                        Math.floor(
-                            (
-                                end -
-                                start
-                            ) / 1000
-                        )
-                    );
-            }
-
-
-            if (
-                segundosSesiones >
-                segundosJugados
-            ) {
-
-                segundosJugados =
-                    segundosSesiones;
-            }
-
-
-            // ---------------------------------------------
-            // HORAS
-            // ---------------------------------------------
+            const timePlayedSeconds =
+                Number(
+                    meta.timePlayed
+                ) || 0;
 
             const horas =
                 Math.floor(
-                    segundosJugados /
+                    timePlayedSeconds /
                     3600
                 );
-
 
             const minutos =
                 Math.floor(
                     (
-                        segundosJugados %
+                        timePlayedSeconds %
                         3600
                     ) / 60
                 );
 
-
-            const tiempoJugadoTexto =
+            const tiempoJugado =
                 horas > 0
                     ? `${horas}h ${minutos}m`
                     : `${minutos}m`;
-
-
-            // ---------------------------------------------
-            // GUARDAR CANDIDATO
-            // ---------------------------------------------
 
             candidatos.push({
 
@@ -1141,51 +994,71 @@ async function searchBattleMetricsPlayerHistory(
                     ),
 
                 serverName:
-                    servidorPerfil
-                        .servidor
-                        .attributes
-                        ?.name ||
+                    servidor.attributes?.name ||
                     "Desconocido",
 
                 online:
-                    online,
+                    false,
+
+                lastSeenDate:
+                    lastSeenDate &&
+                    !isNaN(
+                        lastSeenDate.getTime()
+                    )
+                        ? lastSeenDate
+                        : null,
+
+                firstSeenDate:
+                    firstSeenDate &&
+                    !isNaN(
+                        firstSeenDate.getTime()
+                    )
+                        ? firstSeenDate
+                        : null,
+
+                ultimaConexion:
+                    formatearFechaChile(
+                        lastSeenDate
+                    ),
+
+                primeraConexion:
+                    formatearFechaChile(
+                        firstSeenDate
+                    ),
 
                 horas:
                     horas,
 
+                minutos:
+                    minutos,
+
                 tiempoJugado:
-                    tiempoJugadoTexto,
-
-                primeraConexion:
-                    formatearFechaChile(
-                        primeraConexion
-                    ),
-
-                ultimaConexion:
-                    formatearFechaChile(
-                        ultimaConexion
-                    ),
-
-                ultimaConexionDate:
-                    ultimaConexion,
+                    tiempoJugado,
 
                 timePlayedSeconds:
-                    segundosJugados
-
+                    timePlayedSeconds
             });
+
+            console.log(
+                `✅ PERFIL ${perfil.id} PERTENECE AL SERVIDOR ${serverId}`
+            );
+
+            console.log(
+                `🎮 Servidor: ${servidor.attributes?.name}`
+            );
+
+            console.log(
+                `🕐 Last Seen: ${lastSeenRaw}`
+            );
         }
 
-
-        // =================================================
-        // NINGÚN PERFIL PERTENECE AL SERVIDOR
-        // =================================================
 
         if (
             candidatos.length === 0
         ) {
 
             console.log(
-                `❌ "${playerName}" existe globalmente, pero ningún perfil tiene historial en ${serverId}.`
+                `❌ "${playerName}" no tiene el servidor ${serverId} en su perfil.`
             );
 
             return null;
@@ -1193,20 +1066,20 @@ async function searchBattleMetricsPlayerHistory(
 
 
         // =================================================
-        // ORDENAR POR ÚLTIMA ACTIVIDAD EN EL SERVIDOR
+        // ORDENAR POR LAST SEEN
         // =================================================
 
         candidatos.sort(
             (a, b) => {
 
                 const fechaA =
-                    a.ultimaConexionDate
-                        ? a.ultimaConexionDate.getTime()
+                    a.lastSeenDate
+                        ? a.lastSeenDate.getTime()
                         : 0;
 
                 const fechaB =
-                    b.ultimaConexionDate
-                        ? b.ultimaConexionDate.getTime()
+                    b.lastSeenDate
+                        ? b.lastSeenDate.getTime()
                         : 0;
 
                 return (
@@ -1217,21 +1090,17 @@ async function searchBattleMetricsPlayerHistory(
         );
 
 
-        // =================================================
-        // RESULTADO
-        // =================================================
-
         const jugador =
             candidatos[0];
 
 
         console.log(
-            "✅ Jugador encontrado en servidor:",
+            "✅ /buscar encontró jugador:",
             {
                 nombre:
                     jugador.name,
 
-                playerId:
+                battleMetricsId:
                     jugador.id,
 
                 servidor:
@@ -1240,14 +1109,8 @@ async function searchBattleMetricsPlayerHistory(
                 serverId:
                     jugador.serverId,
 
-                online:
-                    jugador.online,
-
-                ultimaConexion:
-                    jugador.ultimaConexion,
-
-                horas:
-                    jugador.horas
+                lastSeen:
+                    jugador.ultimaConexion
             }
         );
 
@@ -1256,14 +1119,10 @@ async function searchBattleMetricsPlayerHistory(
 
             ...jugador,
 
-            // Para permitir al comando saber si
-            // había varios perfiles que coincidían.
             candidatos:
-
                 candidatos.length > 1
                     ? candidatos
                     : []
-
         };
 
 
@@ -1281,12 +1140,10 @@ async function searchBattleMetricsPlayerHistory(
 
 
 // =====================================================
-// 6. OBTENER DATOS COMPLETOS DEL JUGADOR
+// 7. DATOS COMPLETOS DEL JUGADOR
 // =====================================================
 //
-// ESTA FUNCIÓN SE MANTIENE COMPATIBLE CON /HORAS.
-//
-// targetServerId es opcional.
+// COMPATIBLE CON /HORAS.
 // =====================================================
 
 async function getBattleMetricsPlayerStatus(
@@ -1305,10 +1162,6 @@ async function getBattleMetricsPlayerStatus(
             )
         );
 
-
-        // =================================================
-        // DATOS DEL JUGADOR
-        // =================================================
 
         const playerResponse =
             await axios.get(
@@ -1332,7 +1185,6 @@ async function getBattleMetricsPlayerStatus(
 
 
         if (!player) {
-
             return null;
         }
 
@@ -1348,12 +1200,7 @@ async function getBattleMetricsPlayerStatus(
             ) || [];
 
 
-        // =================================================
-        // HORAS
-        // =================================================
-
-        let segundosTotales =
-            0;
+        let segundosTotales = 0;
 
 
         if (
@@ -1403,14 +1250,11 @@ async function getBattleMetricsPlayerStatus(
         // SESIONES
         // =================================================
 
-        let todasLasSesiones =
-            [];
+        let todasLasSesiones = [];
 
-        let pagina =
-            1;
+        let pagina = 1;
 
-        const limitePaginas =
-            50;
+        const limitePaginas = 50;
 
         let nextUrl =
             `${BM_API}/players/${playerId}/relationships/sessions?page[size]=100`;
@@ -1443,7 +1287,6 @@ async function getBattleMetricsPlayerStatus(
                 if (
                     sesiones.length === 0
                 ) {
-
                     break;
                 }
 
@@ -1459,7 +1302,6 @@ async function getBattleMetricsPlayerStatus(
 
                 pagina++;
 
-
             } catch (error) {
 
                 console.error(
@@ -1472,10 +1314,6 @@ async function getBattleMetricsPlayerStatus(
             }
         }
 
-
-        // =================================================
-        // FILTRAR POR SERVIDOR SI SE SOLICITÓ
-        // =================================================
 
         if (
             targetServerId
@@ -1495,10 +1333,6 @@ async function getBattleMetricsPlayerStatus(
                 );
         }
 
-
-        // =================================================
-        // ORDENAR
-        // =================================================
 
         todasLasSesiones.sort(
             (a, b) =>
@@ -1527,10 +1361,6 @@ async function getBattleMetricsPlayerStatus(
             );
 
 
-        // =================================================
-        // SESIÓN ACTIVA
-        // =================================================
-
         const sesionActiva =
             todasLasSesiones.find(
                 sesion =>
@@ -1538,7 +1368,7 @@ async function getBattleMetricsPlayerStatus(
             );
 
 
-        let online =
+        const online =
             Boolean(
                 sesionActiva
             );
@@ -1600,24 +1430,15 @@ async function getBattleMetricsPlayerStatus(
         }
 
 
-        // =================================================
-        // CALCULAR SESIONES
-        // =================================================
+        let segundosSesionesTotales = 0;
 
-        let segundosSesionesTotales =
-            0;
+        let segundosSemana = 0;
 
-        let segundosSemana =
-            0;
+        let segundosMes = 0;
 
-        let segundosMes =
-            0;
+        let ultimaConexion = null;
 
-        let ultimaConexion =
-            null;
-
-        let primeraConexion =
-            null;
+        let primeraConexion = null;
 
 
         for (
@@ -1632,7 +1453,6 @@ async function getBattleMetricsPlayerStatus(
             if (
                 !atributos.start
             ) {
-
                 continue;
             }
 
@@ -1648,7 +1468,6 @@ async function getBattleMetricsPlayerStatus(
                     inicio.getTime()
                 )
             ) {
-
                 continue;
             }
 
@@ -1682,7 +1501,6 @@ async function getBattleMetricsPlayerStatus(
                     fin.getTime()
                 )
             ) {
-
                 continue;
             }
 
@@ -1702,8 +1520,6 @@ async function getBattleMetricsPlayerStatus(
             segundosSesionesTotales +=
                 duracion;
 
-
-            // Semana
 
             if (
                 fin >= inicioSemana &&
@@ -1733,8 +1549,6 @@ async function getBattleMetricsPlayerStatus(
             }
 
 
-            // Mes
-
             if (
                 fin >= inicioMes &&
                 inicio <= ahora
@@ -1762,8 +1576,6 @@ async function getBattleMetricsPlayerStatus(
                     );
             }
 
-
-            // Última conexión
 
             if (
                 atributos.stop
@@ -1859,11 +1671,10 @@ async function getBattleMetricsPlayerStatus(
 
 
         // =================================================
-        // HISTORIAL DE NOMBRES
+        // HISTORIAL NOMBRES
         // =================================================
 
-        let historialNombres =
-            [];
+        let historialNombres = [];
 
 
         try {
@@ -1916,16 +1727,12 @@ async function getBattleMetricsPlayerStatus(
             ) {
 
                 console.log(
-                    "⚠️ No se pudo obtener historial de nombres:",
+                    "⚠️ No se pudo obtener historial:",
                     error.message
                 );
             }
         }
 
-
-        // =================================================
-        // RESULTADO
-        // =================================================
 
         return {
 
@@ -1986,7 +1793,7 @@ async function getBattleMetricsPlayerStatus(
 
 
 // =====================================================
-// 7. RANKING DEL SERVIDOR
+// 8. RANKING
 // =====================================================
 
 async function getServerLeaderboard(
@@ -2028,7 +1835,6 @@ async function getServerLeaderboard(
         if (
             players.length === 0
         ) {
-
             return [];
         }
 
@@ -2065,7 +1871,7 @@ async function getServerLeaderboard(
     } catch (error) {
 
         console.error(
-            "Error obteniendo ranking del servidor:",
+            "Error obteniendo ranking:",
             error.response?.data ||
             error.message
         );
