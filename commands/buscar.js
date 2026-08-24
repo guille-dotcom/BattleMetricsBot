@@ -41,6 +41,7 @@ module.exports = {
 
         await interaction.deferReply();
 
+
         // =================================================
         // NOMBRE
         // =================================================
@@ -50,11 +51,13 @@ module.exports = {
                 .getString("nombre")
                 ?.trim();
 
+
         if (!nombre) {
 
             return await interaction.editReply(
                 "❌ Debes introducir un nombre."
             );
+
         }
 
 
@@ -63,6 +66,7 @@ module.exports = {
         // =================================================
 
         let serverId = null;
+
 
         try {
 
@@ -84,6 +88,7 @@ module.exports = {
                     String(
                         dbConfig.battleMetricsServerId
                     );
+
             }
 
         } catch (error) {
@@ -112,9 +117,14 @@ module.exports = {
         }
 
 
+        // =================================================
+        // LOG
+        // =================================================
+
         console.log(
             `🎯 Ejecutando /buscar`
         );
+
 
         console.log(
             `🎯 /buscar "${nombre}" → servidor configurado ${serverId}`
@@ -126,6 +136,7 @@ module.exports = {
         // =================================================
 
         let jugadorBM = null;
+
 
         try {
 
@@ -163,12 +174,13 @@ module.exports = {
                     )
 
                     .setDescription(
-                        `No se encontró un perfil de **${nombre}** que tenga historial en el servidor configurado.`
+                        `No se encontró un perfil de **${nombre}** que tenga historial reciente en el servidor configurado.`
                     )
 
                     .addFields(
 
                         {
+
                             name:
                                 "🎮 Servidor consultado",
 
@@ -177,9 +189,11 @@ module.exports = {
 
                             inline:
                                 true
+
                         },
 
                         {
+
                             name:
                                 "🔎 Búsqueda",
 
@@ -188,9 +202,11 @@ module.exports = {
 
                             inline:
                                 true
+
                         },
 
                         {
+
                             name:
                                 "📡 Método",
 
@@ -199,6 +215,7 @@ module.exports = {
 
                             inline:
                                 true
+
                         }
 
                     )
@@ -249,11 +266,50 @@ module.exports = {
         // =================================================
         // ESTADO
         // =================================================
+        //
+        // IMPORTANTE:
+        //
+        // jugadorBM.online debe representar el estado
+        // del jugador en el servidor configurado.
+        //
+        // =================================================
+
+        const estaOnline =
+            Boolean(
+                jugadorBM.online
+            );
+
 
         const estado =
-            jugadorBM.online
+            estaOnline
+
                 ? `🟢 Online · ${tiempoJugado}`
+
                 : "🔴 Offline";
+
+
+        // =================================================
+        // DESCRIPCIÓN DINÁMICA
+        // =================================================
+
+        let descripcion;
+
+
+        if (estaOnline) {
+
+            descripcion =
+                `Perfil encontrado en BattleMetrics.\n\n` +
+
+                `El perfil **está actualmente conectado al servidor configurado**.`;
+
+        } else {
+
+            descripcion =
+                `Perfil encontrado en BattleMetrics.\n\n` +
+
+                `El perfil **sí tiene historial en el servidor configurado**, aunque actualmente esté offline.`;
+
+        }
 
 
         // =================================================
@@ -269,21 +325,18 @@ module.exports = {
 
                 .setColor(
 
-                    jugadorBM.online
+                    estaOnline
                         ? "#57F287"
                         : "#5865F2"
 
                 )
 
                 .setDescription(
-
-                    `Perfil encontrado en BattleMetrics.\n\n` +
-
-                    `El perfil **sí tiene historial en el servidor configurado**, aunque actualmente esté offline.`
-
+                    descripcion
                 )
 
                 .addFields(
+
 
                     // -------------------------------------
                     // SERVIDOR
