@@ -43,41 +43,6 @@ const ALIASES = {
 };
 
 // =====================================================
-// EXTRACCIÓN DE COMPONENTES DE UNA FILA
-// =====================================================
-
-function extraerComponentesFila($, filaElemento) {
-    const componentes = [];
-    
-    $(filaElemento).find("td").eq(2).find("img, span, div").each((_, el) => {
-        // Lógica para extraer los ítems y cantidades de la columna 'Amount'
-        const textoItem = $(el).attr("alt") || $(el).text().trim();
-        const cantidadTexto = $(el).next().text().trim() || $(el).text().trim();
-        const cantidadMatch = cantidadTexto.match(/×\s*(\d+)/) || cantidadTexto.match(/(\d+)/);
-        
-        if (textoItem && cantidadMatch) {
-            componentes.push({
-                nombre: textoItem,
-                cantidad: parseInt(cantidadMatch[1], 10) || 1
-            });
-        }
-    });
-
-    // Fallback por si la estructura de columnas varía en texto plano
-    if (componentes.length === 0) {
-        const textoCeldaAmount = $(filaElemento).find("td").eq(2).text().trim();
-        if (textoCeldaAmount) {
-            componentes.push({
-                nombre: "Cantidad",
-                cantidad: 1
-            });
-        }
-    }
-
-    return componentes;
-}
-
-// =====================================================
 // CONSULTAR RUSTHELP
 // =====================================================
 
@@ -113,7 +78,6 @@ async function consultarRaid(nombreQuery) {
                 const herramienta = $(columnas[0]).text().trim();
                 const tiempo = $(columnas[1]).text().trim();
                 
-                // Extraer cantidad principal de la celda amount
                 const cantidadTexto = $(columnas[2]).text().trim();
                 const cantidadNum = parseInt(cantidadTexto.replace(/\D/g, "")) || 1;
 
@@ -127,7 +91,6 @@ async function consultarRaid(nombreQuery) {
                     ]
                 };
 
-                // Determinamos si pertenece a Starting Item (primeras 3 opciones) o Raiding Cost
                 if (tablaIndex === 0 && startingItems.length < 3) {
                     startingItems.push(itemRaid);
                 } else {
@@ -136,27 +99,22 @@ async function consultarRaid(nombreQuery) {
             });
         });
 
-        // Ordenar las 7 alternativas de Raiding Cost por tiempo (menor a mayor)
+        // Función corregida sin espacios en el nombre
+        const convertirASegundos = (t) => {
+            let total = 0;
+            const minMatch = t.match(/(\d+)\s*m/);
+            const segMatch = t.match(/(\d+)\s*s/);
+            if (minMatch) total += parseInt(minMatch[1]) * 60;
+            if (segMatch) total += parseInt(segMatch[1]);
+            return total || 0;
+        };
+
         const raidingCostOrdenado = raidingCost
-            .sort((a, b) => {
-                // Convertir tiempos tipo "11s", "1m 7s" a segundos para ordenar bien
-                const convertirA segundos = (t) => {
-                    let total = 0;
-                    const minMatch = t.match(/(\d+)\s*m/);
-                    const segMatch = t.match(/(\d+)\s*s/);
-                    if (minMatch) total += parseInt(minMatch[1]) * 60;
-                    if (segMatch) total += parseInt(segMatch[1]);
-                    return total || 0;
-                };
-                return convertirA segundos(a.tiempo) - convertirA segundos(b.tiempo);
-            })
+            .sort((a, b) => convertirASegundos(a.tiempo) - convertirASegundos(b.tiempo))
             .slice(0, 7);
 
-        // Combinar para las vistas que pide tu comando
-        // Economía y Cantidad usan las 3 de starting + 7 alternativas
         const listaCompleta = [...startingItems, ...raidingCostOrdenado];
 
-        // Filtrar Melee y Munición de la lista completa
         const meleeKeywords = ["pico", "hacha", "pickaxe", "hatchet", "chainsaw", "jackhammer", "motosierra", "martillo"];
         const ammoKeywords = ["5.56", "ammo", "bullet", "balas", "explosive 5"];
 
@@ -166,7 +124,6 @@ async function consultarRaid(nombreQuery) {
         return {
             nombre: nombreObjeto,
             url: urlFinal,
-            // Las 3 recomendadas de Starting Item + alternativas de Raiding Cost
             explosivosEconomia: listaCompleta,
             explosivosCantidad: listaCompleta,
             melee: melee.length > 0 ? melee : raidingCostOrdenado.slice(0, 7),
