@@ -1,6 +1,5 @@
 const axios = require("axios");
-const cheerio = fnRequiresCheerio(); // o simplemente require("cheerio")
-const cheerioLoader = require("cheerio");
+const cheerio = require("cheerio");
 
 const BASE_URL = "https://rusthelp.com/es-ES/items";
 
@@ -46,15 +45,13 @@ async function consultarRaid(nombreQuery) {
 
         if (!response.data) return null;
 
-        const $ = cheerioLoader.load(response.data);
+        const $ = cheerio.load(response.data);
         const nombreObjeto = $("h1").first().text().trim() || queryLimpia;
 
         const startingItems = [];
         const raidingCost = [];
         const dondeEncontrar = [];
 
-        // En RustHelp, las tablas de la calculadora suelen estar precedidas por textos específicos o contenedores de raid
-        // Vamos a buscar filas de tablas que tengan celdas con tiempos o costes de raid válidos
         $("table").each((_, tabla) => {
             const tituloSeccion = $(tabla).prev("h2, h3, h4, div").text().trim();
             const esLoot = /encontrar|drop|loot/i.test(tituloSeccion);
@@ -65,7 +62,6 @@ async function consultarRaid(nombreQuery) {
 
                 const textoCol0 = $(columnas[0]).text().trim();
                 const textoCol1 = $(columnas[1]).text().trim();
-                const textoCol2 = columnas.length > 2 ? $(columnas[2]).text().trim() : "";
 
                 if (!textoCol0) return;
 
@@ -75,15 +71,13 @@ async function consultarRaid(nombreQuery) {
                         tiempo: textoCol1
                     });
                 } else {
-                    // Es un item de raid
                     const itemData = {
                         herramienta: textoCol0,
                         tiempo: textoCol1 || "N/A",
                         componentes: [{ nombre: textoCol0, cantidad: 1 }]
                     };
 
-                    // Las primeras filas de la calculadora suelen ser las de Starting Item
-                    if (startingItems.length < 3 && !/min|s/i.test(textoCol1) === false) {
+                    if (startingItems.length < 3) {
                         startingItems.push(itemData);
                     } else {
                         raidingCost.push(itemData);
@@ -92,7 +86,6 @@ async function consultarRaid(nombreQuery) {
             });
         });
 
-        // Asegurar que si startingItems quedó vacío, tomemos los primeros de raidingCost
         const principales = startingItems.length > 0 ? startingItems : raidingCost.slice(0, 3);
         const alternativas = raidingCost.slice(3, 10);
 
