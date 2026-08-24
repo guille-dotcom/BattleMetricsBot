@@ -4,8 +4,8 @@ const {
 } = require("discord.js");
 
 const {
-    searchBattleMetricsPlayerHistory
-} = require("../services/battlemetricsHours.js");
+    buscarJugadorHistorico
+} = require("../services/battlemetricsBuscar.js");
 
 const ServerConfig =
     require("../models/ServerConfig");
@@ -23,7 +23,7 @@ module.exports = {
             .setName("buscar")
 
             .setDescription(
-                "Busca un jugador por nombre en BattleMetrics y comprueba su historial en el servidor configurado"
+                "Busca un jugador en BattleMetrics y comprueba su historial en el servidor configurado"
             )
 
             .addStringOption(
@@ -48,7 +48,7 @@ module.exports = {
         const nombre =
             interaction.options
                 .getString("nombre")
-                .trim();
+                ?.trim();
 
         if (!nombre) {
 
@@ -56,6 +56,7 @@ module.exports = {
                 "❌ Debes introducir un nombre."
             );
         }
+
 
         // =================================================
         // SERVIDOR CONFIGURADO
@@ -67,9 +68,12 @@ module.exports = {
 
             const dbConfig =
                 await ServerConfig.findOne({
+
                     guildId:
                         interaction.guild.id
+
                 });
+
 
             if (
                 dbConfig &&
@@ -85,10 +89,12 @@ module.exports = {
         } catch (error) {
 
             console.error(
-                "❌ Error MongoDB:",
+                "❌ Error obteniendo configuración del servidor:",
                 error.message
             );
+
         }
+
 
         // =================================================
         // SIN SERVIDOR
@@ -96,17 +102,27 @@ module.exports = {
 
         if (!serverId) {
 
-            return await interaction.editReply(
-                "❌ Este servidor de Discord no tiene un servidor de BattleMetrics configurado."
-            );
+            return await interaction.editReply({
+
+                content:
+                    "❌ Este servidor de Discord no tiene un servidor de BattleMetrics configurado."
+
+            });
+
         }
+
+
+        console.log(
+            `🎯 Ejecutando /buscar`
+        );
 
         console.log(
             `🎯 /buscar "${nombre}" → servidor configurado ${serverId}`
         );
 
+
         // =================================================
-        // BUSCAR PERFIL + SERVIDOR
+        // BUSCAR PERFIL + HISTORIAL
         // =================================================
 
         let jugadorBM = null;
@@ -114,7 +130,7 @@ module.exports = {
         try {
 
             jugadorBM =
-                await searchBattleMetricsPlayerHistory(
+                await buscarJugadorHistorico(
                     nombre,
                     serverId
                 );
@@ -123,9 +139,11 @@ module.exports = {
 
             console.error(
                 "❌ Error buscando jugador:",
-                error.message
+                error
             );
+
         }
+
 
         // =================================================
         // NO ENCONTRADO
@@ -186,50 +204,57 @@ module.exports = {
                     )
 
                     .setFooter({
+
                         text:
                             "RustLogix • BattleMetrics"
+
                     })
 
                     .setTimestamp();
 
+
             return await interaction.editReply({
-                embeds: [embed]
+
+                embeds:
+                    [embed]
+
             });
+
         }
 
+
         // =================================================
-        // DATOS
+        // DATOS DEL JUGADOR
         // =================================================
 
         const nombreJugador =
             jugadorBM.name ||
             nombre;
 
+
         const playerId =
             jugadorBM.id;
+
 
         const serverName =
             jugadorBM.serverName ||
             `Servidor ${serverId}`;
 
-        const horas =
-            Number(
-                jugadorBM.horas
-            ) || 0;
-
-        const minutos =
-            Number(
-                jugadorBM.minutos
-            ) || 0;
 
         const tiempoJugado =
             jugadorBM.tiempoJugado ||
-            `${horas}h ${minutos}m`;
+            "0m";
+
+
+        // =================================================
+        // ESTADO
+        // =================================================
 
         const estado =
             jugadorBM.online
                 ? `🟢 Online · ${tiempoJugado}`
                 : "🔴 Offline";
+
 
         // =================================================
         // EMBED
@@ -243,14 +268,19 @@ module.exports = {
                 )
 
                 .setColor(
+
                     jugadorBM.online
                         ? "#57F287"
                         : "#5865F2"
+
                 )
 
                 .setDescription(
+
                     `Perfil encontrado en BattleMetrics.\n\n` +
+
                     `El perfil **sí tiene historial en el servidor configurado**, aunque actualmente esté offline.`
+
                 )
 
                 .addFields(
@@ -260,21 +290,25 @@ module.exports = {
                     // -------------------------------------
 
                     {
+
                         name:
-                            "🎮 Último servidor",
+                            "🎮 Servidor",
 
                         value:
                             `[${serverName}](https://www.battlemetrics.com/servers/rust/${serverId})`,
 
                         inline:
                             false
+
                     },
 
+
                     // -------------------------------------
-                    // ID SERVIDOR
+                    // SERVER ID
                     // -------------------------------------
 
                     {
+
                         name:
                             "🆔 Server ID",
 
@@ -283,13 +317,16 @@ module.exports = {
 
                         inline:
                             true
+
                     },
 
+
                     // -------------------------------------
-                    // ID JUGADOR
+                    // BATTLEMETRICS
                     // -------------------------------------
 
                     {
+
                         name:
                             "🆔 BattleMetrics",
 
@@ -298,13 +335,16 @@ module.exports = {
 
                         inline:
                             true
+
                     },
+
 
                     // -------------------------------------
                     // ESTADO
                     // -------------------------------------
 
                     {
+
                         name:
                             "🎮 Estado",
 
@@ -313,13 +353,16 @@ module.exports = {
 
                         inline:
                             true
+
                     },
 
+
                     // -------------------------------------
-                    // HORAS
+                    // TIEMPO
                     // -------------------------------------
 
                     {
+
                         name:
                             "📈 Tiempo en servidor",
 
@@ -328,13 +371,16 @@ module.exports = {
 
                         inline:
                             true
+
                     },
+
 
                     // -------------------------------------
                     // SESIONES
                     // -------------------------------------
 
                     {
+
                         name:
                             "🔄 Sesiones",
 
@@ -343,13 +389,16 @@ module.exports = {
 
                         inline:
                             true
+
                     },
+
 
                     // -------------------------------------
                     // PRIMERA CONEXIÓN
                     // -------------------------------------
 
                     {
+
                         name:
                             "📅 Primera conexión",
 
@@ -358,13 +407,16 @@ module.exports = {
 
                         inline:
                             true
+
                     },
+
 
                     // -------------------------------------
                     // ÚLTIMA CONEXIÓN
                     // -------------------------------------
 
                     {
+
                         name:
                             "🕐 Última conexión",
 
@@ -373,51 +425,76 @@ module.exports = {
 
                         inline:
                             true
+
                     }
 
                 )
 
                 .setFooter({
+
                     text:
                         `RustLogix • BattleMetrics • Servidor ${serverId}`
+
                 })
 
                 .setTimestamp();
 
+
         // =================================================
-        // SI HAY VARIOS PERFILES
+        // OTROS PERFILES CON HISTORIAL
         // =================================================
 
         if (
+
             jugadorBM.candidatos &&
-            jugadorBM.candidatos.length > 1
+            jugadorBM.candidatos.length > 0
+
         ) {
 
             const lista =
                 jugadorBM.candidatos
+
                     .slice(0, 5)
+
                     .map(
+
                         candidato =>
+
                             `• **${candidato.name}** — BM \`${candidato.id}\``
+
                     )
+
                     .join("\n");
 
-            embed.addFields({
 
-                name:
-                    "👥 Otros perfiles con historial",
+            if (lista) {
 
-                value:
-                    lista,
+                embed.addFields({
 
-                inline:
-                    false
-            });
+                    name:
+                        "👥 Otros perfiles con historial",
+
+                    value:
+                        lista,
+
+                    inline:
+                        false
+
+                });
+
+            }
+
         }
+
 
         // =================================================
         // RESPUESTA
         // =================================================
+
+        console.log(
+            `✅ /buscar terminado → ${nombreJugador} (${playerId})`
+        );
+
 
         return await interaction.editReply({
 
@@ -425,5 +502,7 @@ module.exports = {
                 [embed]
 
         });
+
     }
+
 };
