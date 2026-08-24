@@ -185,7 +185,7 @@ module.exports = {
                                 "🎮 Servidor consultado",
 
                             value:
-                                `\`${serverId}\``,
+                                `[Servidor BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`,
 
                             inline:
                                 true
@@ -258,20 +258,31 @@ module.exports = {
             `Servidor ${serverId}`;
 
 
-        const tiempoJugado =
+        // =================================================
+        // TIEMPOS
+        // =================================================
+
+        // Tiempo de la sesión actual.
+        const tiempoSesionActual =
+            jugadorBM.tiempoSesionActual ||
+            "0m";
+
+
+        // Tiempo TOTAL únicamente en el servidor buscado.
+        const horasServidor =
+            jugadorBM.tiempoServidor ||
+            "0m";
+
+
+        // Tiempo TOTAL de todo el perfil BattleMetrics.
+        const horasTotalesPerfil =
+            jugadorBM.tiempoTotalPerfil ||
             jugadorBM.tiempoJugado ||
             "0m";
 
 
         // =================================================
         // ESTADO
-        // =================================================
-        //
-        // IMPORTANTE:
-        //
-        // jugadorBM.online debe representar el estado
-        // del jugador en el servidor configurado.
-        //
         // =================================================
 
         const estaOnline =
@@ -283,7 +294,7 @@ module.exports = {
         const estado =
             estaOnline
 
-                ? `🟢 Online · ${tiempoJugado}`
+                ? `🟢 Online · ${tiempoSesionActual}`
 
                 : "🔴 Offline";
 
@@ -299,14 +310,12 @@ module.exports = {
 
             descripcion =
                 `Perfil encontrado en BattleMetrics.\n\n` +
-
                 `El perfil **está actualmente conectado al servidor configurado**.`;
 
         } else {
 
             descripcion =
                 `Perfil encontrado en BattleMetrics.\n\n` +
-
                 `El perfil **sí tiene historial en el servidor configurado**, aunque actualmente esté offline.`;
 
         }
@@ -357,24 +366,6 @@ module.exports = {
 
 
                     // -------------------------------------
-                    // SERVER ID
-                    // -------------------------------------
-
-                    {
-
-                        name:
-                            "🆔 Server ID",
-
-                        value:
-                            `\`${serverId}\``,
-
-                        inline:
-                            true
-
-                    },
-
-
-                    // -------------------------------------
                     // BATTLEMETRICS
                     // -------------------------------------
 
@@ -384,10 +375,10 @@ module.exports = {
                             "🆔 BattleMetrics",
 
                         value:
-                            `[${playerId}](https://www.battlemetrics.com/players/${playerId})`,
+                            `https://www.battlemetrics.com/players/${playerId}`,
 
                         inline:
-                            true
+                            false
 
                     },
 
@@ -411,16 +402,34 @@ module.exports = {
 
 
                     // -------------------------------------
-                    // TIEMPO
+                    // HORAS EN SERVIDOR
                     // -------------------------------------
 
                     {
 
                         name:
-                            "📈 Tiempo en servidor",
+                            "📈 Horas totales en servidor",
 
                         value:
-                            `\`${tiempoJugado}\``,
+                            `\`${horasServidor}\``,
+
+                        inline:
+                            true
+
+                    },
+
+
+                    // -------------------------------------
+                    // HORAS TOTALES DEL PERFIL
+                    // -------------------------------------
+
+                    {
+
+                        name:
+                            "🌐 Horas totales BattleMetrics",
+
+                        value:
+                            `\`${horasTotalesPerfil}\``,
 
                         inline:
                             true
@@ -435,10 +444,10 @@ module.exports = {
                     {
 
                         name:
-                            "🔄 Sesiones",
+                            "🔄 Sesiones en servidor",
 
                         value:
-                            `\`${jugadorBM.sesiones || 0}\``,
+                            `\`${jugadorBM.sesionesServidor || 0}\``,
 
                         inline:
                             true
