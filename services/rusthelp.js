@@ -9,10 +9,6 @@ const HEADERS = {
     "Accept-Language": "es-ES,es;q=0.9,en;q=0.8"
 };
 
-// =====================================================
-// UTILIDADES Y ALIASES
-// =====================================================
-
 function normalizarTexto(texto) {
     return String(texto || "")
         .normalize("NFD")
@@ -30,21 +26,11 @@ function convertirSlug(nombre) {
 const ALIASES = {
     "tc": "tool-cupboard",
     "armario": "tool-cupboard",
-    "armario de herramientas": "tool-cupboard",
     "puerta blindada": "armored-door",
     "puerta de garaje": "garage-door",
-    "puerta garaje": "garage-door",
     "puerta de chapa": "sheet-metal-door",
-    "puerta de madera": "wooden-door",
-    "pared blindada": "armored-wall",
-    "pared de piedra": "stone-wall",
-    "pared de chapa": "sheet-metal-wall",
-    "pared de madera": "wooden-wall"
+    "puerta de madera": "wooden-door"
 };
-
-// =====================================================
-// CONSULTAR RUSTHELP
-// =====================================================
 
 async function consultarRaid(nombreQuery) {
     const queryLimpia = String(nombreQuery || "").trim();
@@ -68,30 +54,36 @@ async function consultarRaid(nombreQuery) {
 
         const startingItems = [];
         const raidingCost = [];
+        const dondeEncontrar = [];
 
-        // Parsear las tablas de la página de RustHelp
+        // Buscar tablas específicamente dentro de la calculadora de raid o por estructura de filas
+        // RustHelp suele usar tablas para las costos de raid
         $("table").each((tablaIndex, tabla) => {
+            const tituloTabla = $(tabla).prev("h2, h3, h4").text().trim();
+            
             $(tabla).find("tbody tr, tr").each((_, fila) => {
                 const columnas = $(fila).find("td");
-                if (columnas.length < 3) return;
+                if (columnas.length < 2) return;
 
                 const herramienta = $(columnas[0]).text().trim();
-                const tiempo = $(columnas[1]).text().trim();
-                
-                const cantidadTexto = $(columnas[2]).text().trim();
-                const cantidadNum = parseInt(cantidadTexto.replace(/\D/g, "")) || 1;
+                const tiempo = columnas.length > 1 ? $(columnas[1]).text().trim() : "";
+                const cantidadTexto = columnas.length > 2 ? $(columnas[2]).text().trim() : "";
 
                 if (!herramienta) return;
+
+                // Si es la tabla de dónde se encuentra (loot drops)
+                if (normalizarTexto(tituloTabla).includes("encontrar") || normalizarTexto(tituloTabla).includes("drop") || columnas.length === 2) {
+                    dondeEncontrar.push({ herramienta, tiempo });
+                    return;
+                }
 
                 const itemRaid = {
                     herramienta: herramienta,
                     tiempo: tiempo || "N/A",
-                    componentes: [
-                        { nombre: herramienta, cantidad: cantidadNum }
-                    ]
+                    componentes: [{ nombre: herramienta, cantidad: 1 }]
                 };
 
-                if (tablaIndex === 0 && startingItems.length < 3) {
+                if (startingItems.length < 3) {
                     startingItems.push(itemRaid);
                 } else {
                     raidingCost.push(itemRaid);
@@ -99,7 +91,6 @@ async function consultarRaid(nombreQuery) {
             });
         });
 
-        // Función corregida sin espacios en el nombre
         const convertirASegundos = (t) => {
             let total = 0;
             const minMatch = t.match(/(\d+)\s*m/);
@@ -115,27 +106,20 @@ async function consultarRaid(nombreQuery) {
 
         const listaCompleta = [...startingItems, ...raidingCostOrdenado];
 
-        const meleeKeywords = ["pico", "hacha", "pickaxe", "hatchet", "chainsaw", "jackhammer", "motosierra", "martillo"];
-        const ammoKeywords = ["5.56", "ammo", "bullet", "balas", "explosive 5"];
-
-        const melee = listaCompleta.filter(m => meleeKeywords.some(k => normalizarTexto(m.herramienta).includes(k)));
-        const balas = listaCompleta.filter(m => ammoKeywords.some(k => normalizarTexto(m.herramienta).includes(k)));
-
         return {
             nombre: nombreObjeto,
             url: urlFinal,
-            explosivosEconomia: listaCompleta,
+            explosivosEconomia: listaCompleta.length > 0 ? listaCompleta : startingItems,
             explosivosCantidad: listaCompleta,
-            melee: melee.length > 0 ? melee : raidingCostOrdenado.slice(0, 7),
-            balas: balas.length > 0 ? balas : raidingCostOrdenado.slice(0, 7)
+            melee: raidingCostOrdenado,
+            balas: raidingCostOrdenado,
+            dondeEncontrar: dondeEncontrar.length > 0 ? dondeEncontrar : [{ herramienta: "Información disponible en la web oficial", tiempo: "" }]
         };
 
     } catch (error) {
-        console.error("❌ Error al consultar RustHelp:", error.message);
+        console.error("❌ Error en servicio rusthelp:", error.message);
         return null;
     }
 }
 
-module.exports = {
-    consultarRaid
-};
+module.exports = { consultarRaid };
