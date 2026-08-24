@@ -61,53 +61,71 @@ async function consultarRaid(nombreQuery) {
         const raidingCost = [];
         const dondeEncontrar = [];
 
-        // Identificar tablas en la página de RustHelp
-        $("table").each((index, tabla) => {
-            const tituloSeccion = $(tabla).prev("h2, h3, h4, div").text().trim();
-            const esLoot = /looted from|encontrar|drop/i.test(tituloSeccion) || $(tabla).text().includes("%");
+        // Buscar tablas en la página
+        const tablas = $("table");
 
-            $(tabla).find("tr").each((_, fila) => {
+        // 1. Extraer Starting Items (generalmente la primera tabla o la que contiene el encabezado Starting Item)
+        tablas.each((index, tabla) => {
+            const textoTabla = $(tabla).text();
+            const esLoot = /looted from|encontrar|drop/i.test(textoTabla) && textoTabla.includes("%");
+
+            if (esLoot) {
+                $(tabla).find("tr").each((_, fila) => {
+                    const columnas = $(fila).find("td");
+                    if (columnas.length < 2) return;
+                    const col0 = $(columnas[0]).text().trim();
+                    const col1 = $(columnas[1]).text().trim();
+                    if (col0) dondeEncontrar.push({ herramienta: col0, tiempo: col1 });
+                });
+                return;
+            }
+
+            // Analizamos filas de la tabla de raideo
+            $(tabla).find("tr").each((filaIndex, fila) => {
                 const columnas = $(fila).find("td");
                 if (columnas.length < 2) return;
 
-                const col0 = $(columnas[0]).text().trim();
-                const col1 = $(columnas[1]).text().trim();
-                const col2 = columnas.length > 2 ? $(columnas[2]).text().trim() : "";
+                const col0 = $(columnas[0]).text().trim(); // Nombre del explosivo / herramienta
+                const col1 = $(columnas[1]).text().trim(); // Tiempo (ej: 11s)
+                const col2 = $(columnas[2]).text().trim(); // Cantidad (ej: x1, x3, etc.)
 
-                if (!col0) return;
+                if (!col0 || /herramienta|starting|time/i.test(col0)) return;
 
-                if (esLoot) {
-                    dondeEncontrar.push({ herramienta: col0, tiempo: col1 });
+                // Las primeras filas de la sección superior suelen ser los Starting Items (tienen el tiempo en la segunda columna y cantidades al lado)
+                if (index === 0 && filaIndex <= 3 && col1.includes("s") || col1.includes("m")) {
+                    // Verificamos que no esté duplicado
+                    if (!startingItems.some(i => i.herramienta === col0)) {
+                        startingItems.push({
+                            herramienta: col0,
+                            tiempo: col1,
+                            cantidad: col2 || ""
+                        });
+                    }
                 } else {
-                    // Verificamos si pertenece a Starting Item (suele tener cantidades explícitas o notas de tiempo cortas)
-                    // En la primera tabla o si tiene formato de starting item
-                    const itemData = {
-                        herramienta: col0,
-                        tiempo: col1 || "N/A",
-                        cantidad: col2 || ""
-                    };
-
-                    // Diferenciamos las tablas por orden o estructura visual
-                    if (index === 0 && startingItems.length < 3) {
-                        startingItems.push(itemData);
-                    } else if (index > 0 || startingItems.length >= 3) {
-                        raidingCost.push(itemData);
+                    // El resto va para Raiding Cost
+                    if (!raidingCost.some(i => i.herramienta === col0)) {
+                        raidingCost.push({
+                            herramienta: col0,
+                            cantidad: col1, // En tablas inferiores, la columna 1 suele ser la cantidad
+                            tiempo: col2    // La columna 2 suele ser el tiempo
+                        });
                     }
                 }
             });
         });
 
-        // Ordenar el Raiding Cost por tiempo (de menor a mayor) y limitar a 7
+        // Ordenar Raiding Cost por tiempo real de menor a mayor y tomar 7
         const raidingCostOrdenado = raidingCost
+            .filter(item => item.tiempo && item.tiempo !== "")
             .sort((a, b) => convertirASegundos(a.tiempo) - convertirASegundos(b.tiempo))
             .slice(0, 7);
 
         return {
             nombre: nombreObjeto,
             url: urlFinal,
-            startingItems: startingItems.length > 0 ? startingItems : raidingCost.slice(0, 3),
+            startingItems: startingItems.slice(0, 3),
             raidingCost: raidingCostOrdenado,
-            dondeEncontrar: dondeEncontrar.length > 0 ? dondeEncontrar : [{ herramienta: "No se encontraron datos", tiempo: "" }]
+            dondeEncontrar: dondeEncontrar.length > 0 ? dondeEncontrar : [{ herramienta: "No disponible", tiempo: "" }]
         };
 
     } catch (error) {
