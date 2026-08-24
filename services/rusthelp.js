@@ -1,5 +1,5 @@
 const axios = require("axios");
-const cheerio = require("cheerio");
+const cheerio = fnRequiresCheerio ? fnRequiresCheerio() : require("cheerio"); // Manteniendo compatibilidad segura
 
 const BASE_URL = "https://rusthelp.com/es-ES/items";
 
@@ -43,78 +43,83 @@ async function consultarRaid(nombreQuery) {
 
     const normalizado = normalizarTexto(queryLimpia);
     const slug = ALIASES[normalizado] || normalizado.replace(/\s+/g, "-");
-    const urlFinal = `${BASE_URL}/${slug}`;
+    
+    // Consultamos específicamente la sub-ruta de raideo para asegurar que devuelva los costos correctos
+    const urlRaideo = `${BASE_URL}/${slug}#raiding`;
+    const urlLoot = `${BASE_URL}/${slug}`;
 
     try {
-        const response = await axios.get(urlFinal, {
-            headers: HEADERS,
-            timeout: 8000,
-            validateStatus: s => s >= 200 && s < 400
-        });
+        const [respRaideo, respLoot] = await Promise.all([
+            axios.get(urlRaideo, { headers: HEADERS, timeout: 8000, validateStatus: s => s >= 200 && s < 400 }).catch(() => null),
+            axios.get(urlLoot, { headers: HEADERS, timeout: 8000, validateStatus: s => s >= 200 && s < 400 }).catch(() => null)
+        ]);
 
-        if (!response.data) return null;
+        const $r = respRaideo && respRaideo.data ? cheerio.load(respRaideo.data) : null;
+        const $l = respLoot && respLoot.data ? cheerio.load(respLoot.data) : null;
 
-        const $ = cheerio.load(response.data);
-        const nombreObjeto = $("h1").first().text().trim() || queryLimpia;
+        const nombreObjeto = ($r ? $r("h1").first().text().trim() : null) || ($l ? $l("h1").first().text().trim() : null) || queryLimpia;
 
         const startingItems = [];
         const raidingCost = [];
         const dondeEncontrar = [];
 
-        // Buscar tablas en la página
-        const tablas = $("table");
+        // Extraer Raideo ($r)
+        if ($r) {
+            $r("table").each((index, tabla) => {
+                const textoTabla = $r(tabla).text();
+                // Omitir si es una tabla de loot o crafteo puro
+                if (/looted from|crafting|reciclado/i.test(textoTabla) && !textoTabla.includes("Time to Raid")) return;
 
-        // 1. Extraer Starting Items (generalmente la primera tabla o la que contiene el encabezado Starting Item)
-        tablas.each((index, tabla) => {
-            const textoTabla = $(tabla).text();
-            const esLoot = /looted from|encontrar|drop/i.test(textoTabla) && textoTabla.includes("%");
-
-            if (esLoot) {
-                $(tabla).find("tr").each((_, fila) => {
-                    const columnas = $(fila).find("td");
+                $r(tabla).find("tr").each((_, fila) => {
+                    const columnas = $r(fila).find("td");
                     if (columnas.length < 2) return;
-                    const col0 = $(columnas[0]).text().trim();
-                    const col1 = $(columnas[1]).text().trim();
-                    if (col0) dondeEncontrar.push({ herramienta: col0, tiempo: col1 });
+
+                    const col0 = $r(columnas[0]).text().trim();
+                    const col1 = $r(columnas[1]).text().trim();
+                    const col2 = $r(columnas.length > 2 ? columnas[2] : columnas[1]).text().trim();
+
+                    if (!col0 || /herramienta|starting|time|cost/i.test(col0)) return;
+
+                    // Detectar si es un Starting Item (suele tener tiempos cortos como s o m en la columna 1)
+                    if (index === 0 && (col1.includes("s") || col1.includes("m")) && startingItems.length < 3) {
+                        if (!startingItems.some(i => i.herramienta === col0)) {
+                            startingItems.push({
+                                herramienta: col0,
+                                tiempo: col1,
+                                cantidad: col2 !== col1 ? col2 : ""
+                            });
+                        }
+                    } else {
+                        if (!raidingCost.some(i => i.herramienta === col0)) {
+                            raidingCost.push({
+                                herramienta: col0,
+                                cantidad: col1,
+                                tiempo: col2
+                            });
+                        }
+                    }
                 });
-                return;
-            }
+            });
+        }
 
-            // Analizamos filas de la tabla de raideo
-            $(tabla).find("tr").each((filaIndex, fila) => {
-                const columnas = $(fila).find("td");
-                if (columnas.length < 2) return;
-
-                const col0 = $(columnas[0]).text().trim(); // Nombre del explosivo / herramienta
-                const col1 = $(columnas[1]).text().trim(); // Tiempo (ej: 11s)
-                const col2 = $(columnas[2]).text().trim(); // Cantidad (ej: x1, x3, etc.)
-
-                if (!col0 || /herramienta|starting|time/i.test(col0)) return;
-
-                // Las primeras filas de la sección superior suelen ser los Starting Items (tienen el tiempo en la segunda columna y cantidades al lado)
-                if (index === 0 && filaIndex <= 3 && col1.includes("s") || col1.includes("m")) {
-                    // Verificamos que no esté duplicado
-                    if (!startingItems.some(i => i.herramienta === col0)) {
-                        startingItems.push({
-                            herramienta: col0,
-                            tiempo: col1,
-                            cantidad: col2 || ""
-                        });
-                    }
-                } else {
-                    // El resto va para Raiding Cost
-                    if (!raidingCost.some(i => i.herramienta === col0)) {
-                        raidingCost.push({
-                            herramienta: col0,
-                            cantidad: col1, // En tablas inferiores, la columna 1 suele ser la cantidad
-                            tiempo: col2    // La columna 2 suele ser el tiempo
-                        });
-                    }
+        // Extraer Dónde Encontrar ($l)
+        if ($l) {
+            $l("table").each((_, tabla) => {
+                const textoTabla = $l(tabla).text();
+                if (/looted from|encontrar|drop/i.test(textoTabla) || textoTabla.includes("%")) {
+                    $l(tabla).find("tr").each((_, fila) => {
+                        const columnas = $l(fila).find("td");
+                        if (columnas.length < 2) return;
+                        const col0 = $l(columnas[0]).text().trim();
+                        const col1 = $l(columnas[1]).text().trim();
+                        if (col0 && !dondeEncontrar.some(i => i.herramienta === col0)) {
+                            dondeEncontrar.push({ herramienta: col0, tiempo: col1 });
+                        }
+                    });
                 }
             });
-        });
+        }
 
-        // Ordenar Raiding Cost por tiempo real de menor a mayor y tomar 7
         const raidingCostOrdenado = raidingCost
             .filter(item => item.tiempo && item.tiempo !== "")
             .sort((a, b) => convertirASegundos(a.tiempo) - convertirASegundos(b.tiempo))
@@ -122,7 +127,7 @@ async function consultarRaid(nombreQuery) {
 
         return {
             nombre: nombreObjeto,
-            url: urlFinal,
+            url: urlLoot,
             startingItems: startingItems.slice(0, 3),
             raidingCost: raidingCostOrdenado,
             dondeEncontrar: dondeEncontrar.length > 0 ? dondeEncontrar : [{ herramienta: "No disponible", tiempo: "" }]
