@@ -107,12 +107,10 @@ function obtenerServerIdDeSesion(
         return null;
     }
 
-
     const relationship =
         sesion.relationships
             ?.server
             ?.data;
-
 
     if (
         relationship?.id
@@ -123,7 +121,6 @@ function obtenerServerIdDeSesion(
         );
     }
 
-
     if (
         sesion.attributes?.serverId
     ) {
@@ -132,7 +129,6 @@ function obtenerServerIdDeSesion(
             sesion.attributes.serverId
         );
     }
-
 
     return null;
 }
@@ -160,10 +156,8 @@ async function obtenerServidor(
                 }
             );
 
-
         const servidor =
             response.data?.data;
-
 
         if (
             !servidor
@@ -171,7 +165,6 @@ async function obtenerServidor(
 
             return null;
         }
-
 
         return {
 
@@ -215,19 +208,8 @@ async function obtenerServidor(
 // BUSCAR PERFILES GLOBALES POR NOMBRE
 // =====================================================
 //
-// IMPORTANTE:
-//
-// NO usamos:
-//
-// /servers/{serverId}/players
-//
-// porque BattleMetrics puede devolver:
-//
-// 405 GET is not allowed
-//
-// Primero buscamos el perfil global y después
-// revisamos sus sesiones para comprobar si pertenece
-// al servidor configurado.
+// Busca el perfil independientemente de que el jugador
+// esté actualmente conectado al servidor.
 //
 // =====================================================
 
@@ -241,7 +223,6 @@ async function buscarPerfilesPorNombre(
             String(nombre)
                 .trim();
 
-
         if (
             !nombreBuscado
         ) {
@@ -249,31 +230,25 @@ async function buscarPerfilesPorNombre(
             return [];
         }
 
-
         const nombreNormalizado =
-            nombreBuscado.toLowerCase();
-
+            nombreBuscado
+                .toLowerCase();
 
         console.log(
             `🌎 BM → buscando perfiles globales "${nombreBuscado}"`
         );
 
-
         const resultados =
             [];
-
 
         let nextUrl =
             `${BM_API}/players`;
 
-
         let pagina =
             1;
 
-
         const limitePaginas =
             10;
-
 
         while (
             nextUrl &&
@@ -283,7 +258,6 @@ async function buscarPerfilesPorNombre(
             console.log(
                 `📄 BM /players → página ${pagina}`
             );
-
 
             const response =
                 await axios.get(
@@ -310,16 +284,13 @@ async function buscarPerfilesPorNombre(
                     }
                 );
 
-
             const jugadores =
                 response.data?.data ||
                 [];
 
-
             console.log(
                 `📊 BM /players → ${jugadores.length} resultados`
             );
-
 
             for (
                 const jugador
@@ -334,17 +305,11 @@ async function buscarPerfilesPorNombre(
                     continue;
                 }
 
-
                 const nombreBM =
                     jugador.attributes
                         ?.name
                         ?.trim()
                         .toLowerCase();
-
-
-                // =================================================
-                // SOLO NOMBRE EXACTO
-                // =================================================
 
                 if (
                     nombreBM !==
@@ -353,7 +318,6 @@ async function buscarPerfilesPorNombre(
 
                     continue;
                 }
-
 
                 const existe =
                     resultados.some(
@@ -366,7 +330,6 @@ async function buscarPerfilesPorNombre(
                             )
                     );
 
-
                 if (
                     !existe
                 ) {
@@ -377,20 +340,16 @@ async function buscarPerfilesPorNombre(
                 }
             }
 
-
             nextUrl =
                 response.data?.links?.next ||
                 null;
 
-
             pagina++;
         }
-
 
         console.log(
             `🔎 BM → ${resultados.length} perfil(es) exactos encontrados para "${nombreBuscado}"`
         );
-
 
         return resultados;
 
@@ -429,7 +388,6 @@ async function obtenerJugador(
                 }
             );
 
-
         return (
             response.data?.data ||
             null
@@ -449,16 +407,17 @@ async function obtenerJugador(
 
 
 // =====================================================
-// OBTENER TODAS LAS SESIONES DEL JUGADOR
+// OBTENER SESIONES DEL JUGADOR
 // =====================================================
 //
-// Usamos el perfil global.
+// IMPORTANTE:
 //
-// NO usamos:
+// Se mantiene este método por compatibilidad con el resto
+// del bot.
 //
-// /servers/{id}/players
-//
-// porque ese endpoint puede devolver 405.
+// Si BattleMetrics no devuelve sesiones mediante este
+// endpoint, NO se considera automáticamente que el perfil
+// no existe.
 //
 // =====================================================
 
@@ -471,18 +430,14 @@ async function obtenerSesionesJugador(
         const sesiones =
             [];
 
-
         let nextUrl =
             `${BM_API}/players/${playerId}/relationships/sessions?page[size]=100`;
-
 
         let pagina =
             1;
 
-
         const limitePaginas =
             50;
-
 
         while (
             nextUrl &&
@@ -492,7 +447,6 @@ async function obtenerSesionesJugador(
             console.log(
                 `📡 BM ${playerId} → sesiones página ${pagina}`
             );
-
 
             const response =
                 await axios.get(
@@ -506,16 +460,13 @@ async function obtenerSesionesJugador(
                     }
                 );
 
-
             const data =
                 response.data?.data ||
                 [];
 
-
             console.log(
                 `📊 BM ${playerId} → ${data.length} sesiones recibidas`
             );
-
 
             if (
                 data.length === 0
@@ -524,20 +475,16 @@ async function obtenerSesionesJugador(
                 break;
             }
 
-
             sesiones.push(
                 ...data
             );
-
 
             nextUrl =
                 response.data?.links?.next ||
                 null;
 
-
             pagina++;
         }
-
 
         return sesiones;
 
@@ -557,14 +504,6 @@ async function obtenerSesionesJugador(
 // =====================================================
 // OBTENER SESIONES DEL JUGADOR PARA UN SERVIDOR
 // =====================================================
-//
-// Primero obtenemos las sesiones globales del jugador
-// y después filtramos localmente por serverId.
-//
-// Esto permite encontrar al jugador aunque esté OFFLINE,
-// siempre que BattleMetrics conserve su sesión.
-//
-// =====================================================
 
 async function obtenerSesionesServidorJugador(
     playerId,
@@ -578,11 +517,9 @@ async function obtenerSesionesServidorJugador(
                 playerId
             );
 
-
         console.log(
             `📊 BM ${playerId} → ${sesiones.length} sesiones globales`
         );
-
 
         if (
             sesiones.length === 0
@@ -591,12 +528,10 @@ async function obtenerSesionesServidorJugador(
             return [];
         }
 
-
         const serverIdString =
             String(
                 serverId
             );
-
 
         const sesionesServidor =
             sesiones.filter(
@@ -606,7 +541,6 @@ async function obtenerSesionesServidorJugador(
                         obtenerServerIdDeSesion(
                             sesion
                         );
-
 
                     return (
                         sessionServerId &&
@@ -618,11 +552,9 @@ async function obtenerSesionesServidorJugador(
                 }
             );
 
-
         console.log(
             `🎮 BM ${playerId} → ${sesionesServidor.length} sesiones en servidor ${serverIdString}`
         );
-
 
         return sesionesServidor;
 
@@ -649,10 +581,8 @@ function calcularTiempoSesiones(
     let segundos =
         0;
 
-
     const ahora =
         new Date();
-
 
     for (
         const sesion
@@ -663,7 +593,6 @@ function calcularTiempoSesiones(
             sesion.attributes ||
             {};
 
-
         if (
             !atributos.start
         ) {
@@ -671,12 +600,10 @@ function calcularTiempoSesiones(
             continue;
         }
 
-
         const inicio =
             new Date(
                 atributos.start
             );
-
 
         if (
             isNaN(
@@ -687,9 +614,7 @@ function calcularTiempoSesiones(
             continue;
         }
 
-
         let fin;
-
 
         if (
             atributos.stop
@@ -702,14 +627,9 @@ function calcularTiempoSesiones(
 
         } else {
 
-            // =================================================
-            // SESIÓN ACTIVA
-            // =================================================
-
             fin =
                 ahora;
         }
-
 
         if (
             isNaN(
@@ -719,7 +639,6 @@ function calcularTiempoSesiones(
 
             continue;
         }
-
 
         segundos +=
             Math.max(
@@ -732,7 +651,6 @@ function calcularTiempoSesiones(
                 )
             );
     }
-
 
     return segundos;
 }
@@ -751,13 +669,11 @@ function formatearTiempo(
             segundos
         ) || 0;
 
-
     const horas =
         Math.floor(
             segundos /
             3600
         );
-
 
     const minutos =
         Math.floor(
@@ -768,7 +684,6 @@ function formatearTiempo(
             60
         );
 
-
     if (
         horas > 0
     ) {
@@ -776,34 +691,12 @@ function formatearTiempo(
         return `${horas}h ${minutos}m`;
     }
 
-
     return `${minutos}m`;
 }
 
 
 // =====================================================
 // OBTENER ÚLTIMA SESIÓN
-// =====================================================
-//
-// IMPORTANTE:
-//
-// La última sesión es la que determina si el jugador
-// sigue jugando o si se desconectó.
-//
-// Si tiene:
-//
-// start = 20:00
-// stop  = 20:45
-//
-// entonces está OFFLINE, pero sigue siendo encontrado.
-//
-// Si tiene:
-//
-// start = 20:00
-// stop  = null
-//
-// entonces está ONLINE.
-//
 // =====================================================
 
 function obtenerUltimaSesion(
@@ -820,7 +713,6 @@ function obtenerUltimaSesion(
         return null;
     }
 
-
     const sesionesValidas =
         sesiones.filter(
             sesion => {
@@ -828,17 +720,17 @@ function obtenerUltimaSesion(
                 const start =
                     sesion.attributes?.start;
 
+                if (
+                    !start
+                ) {
 
-                if (!start) {
                     return false;
                 }
-
 
                 const fecha =
                     new Date(
                         start
                     );
-
 
                 return !isNaN(
                     fecha.getTime()
@@ -846,14 +738,12 @@ function obtenerUltimaSesion(
             }
         );
 
-
     if (
         sesionesValidas.length === 0
     ) {
 
         return null;
     }
-
 
     sesionesValidas.sort(
         (a, b) => {
@@ -863,12 +753,10 @@ function obtenerUltimaSesion(
                     a.attributes.start
                 ).getTime();
 
-
             const fechaB =
                 new Date(
                     b.attributes.start
                 ).getTime();
-
 
             return (
                 fechaB -
@@ -877,26 +765,267 @@ function obtenerUltimaSesion(
         }
     );
 
-
     return sesionesValidas[0];
 }
 
 
 // =====================================================
-// BUSCAR JUGADOR
+// CREAR RESULTADO A PARTIR DE SESIONES
+// =====================================================
+
+function crearResultadoJugador(
+    jugador,
+    perfil,
+    sesiones,
+    serverId,
+    servidor,
+    nombreBuscado
+) {
+
+    if (
+        !Array.isArray(
+            sesiones
+        ) ||
+        sesiones.length === 0
+    ) {
+
+        return null;
+    }
+
+    const atributos =
+        perfil?.attributes ||
+        jugador?.attributes ||
+        {};
+
+    sesiones.sort(
+        (a, b) => {
+
+            return (
+                new Date(
+                    b.attributes?.start ||
+                    0
+                ) -
+                new Date(
+                    a.attributes?.start ||
+                    0
+                )
+            );
+        }
+    );
+
+    const ultimaSesion =
+        obtenerUltimaSesion(
+            sesiones
+        );
+
+    if (
+        !ultimaSesion
+    ) {
+
+        return null;
+    }
+
+    const atributosUltimaSesion =
+        ultimaSesion.attributes ||
+        {};
+
+    const ultimaSesionInicio =
+        atributosUltimaSesion.start
+            ? new Date(
+                atributosUltimaSesion.start
+            )
+            : null;
+
+    const ultimaSesionFin =
+        atributosUltimaSesion.stop
+            ? new Date(
+                atributosUltimaSesion.stop
+            )
+            : null;
+
+    const online =
+        Boolean(
+            atributosUltimaSesion.start &&
+            !atributosUltimaSesion.stop
+        );
+
+    let ultimaConexion =
+        null;
+
+    if (
+        ultimaSesionFin &&
+        !isNaN(
+            ultimaSesionFin.getTime()
+        )
+    ) {
+
+        ultimaConexion =
+            ultimaSesionFin;
+
+    } else if (
+        ultimaSesionInicio &&
+        !isNaN(
+            ultimaSesionInicio.getTime()
+        )
+    ) {
+
+        ultimaConexion =
+            ultimaSesionInicio;
+    }
+
+    let primeraConexion =
+        null;
+
+    for (
+        const sesion
+        of sesiones
+    ) {
+
+        const inicio =
+            sesion.attributes?.start
+                ? new Date(
+                    sesion.attributes.start
+                )
+                : null;
+
+        if (
+            !inicio ||
+            isNaN(
+                inicio.getTime()
+            )
+        ) {
+
+            continue;
+        }
+
+        if (
+            !primeraConexion ||
+            inicio <
+            primeraConexion
+        ) {
+
+            primeraConexion =
+                inicio;
+        }
+    }
+
+    const segundos =
+        calcularTiempoSesiones(
+            sesiones
+        );
+
+    let segundosUltimaSesion =
+        0;
+
+    if (
+        ultimaSesionInicio &&
+        !isNaN(
+            ultimaSesionInicio.getTime()
+        )
+    ) {
+
+        const finUltimaSesion =
+            ultimaSesionFin &&
+            !isNaN(
+                ultimaSesionFin.getTime()
+            )
+                ? ultimaSesionFin
+                : new Date();
+
+        segundosUltimaSesion =
+            Math.max(
+                0,
+                Math.floor(
+                    (
+                        finUltimaSesion -
+                        ultimaSesionInicio
+                    ) / 1000
+                )
+            );
+    }
+
+    return {
+
+        id:
+            String(
+                jugador.id
+            ),
+
+        name:
+            atributos.name ||
+            jugador.attributes?.name ||
+            nombreBuscado,
+
+        serverId:
+            String(
+                serverId
+            ),
+
+        serverName:
+            servidor?.name ||
+            `Servidor ${serverId}`,
+
+        online,
+
+        sesiones:
+            sesiones.length,
+
+        timePlayedSeconds:
+            segundos,
+
+        tiempoJugado:
+            formatearTiempo(
+                segundos
+            ),
+
+        ultimaSesionSegundos:
+            segundosUltimaSesion,
+
+        tiempoUltimaSesion:
+            formatearTiempo(
+                segundosUltimaSesion
+            ),
+
+        primeraConexion:
+            formatearFechaChile(
+                primeraConexion
+            ),
+
+        ultimaConexion:
+            formatearFechaChile(
+                ultimaConexion
+            ),
+
+        ultimaConexionDate:
+            ultimaConexion,
+
+        ultimaSesionInicio:
+            formatearFechaChile(
+                ultimaSesionInicio
+            ),
+
+        ultimaSesionFin:
+            formatearFechaChile(
+                ultimaSesionFin
+            ),
+
+        perfilUrl:
+            `https://www.battlemetrics.com/players/${jugador.id}`
+
+    };
+}
+
+
+// =====================================================
+// BUSCAR JUGADOR HISTÓRICO
 // =====================================================
 //
-// FLUJO:
-//
-// 1. Busca el nombre exacto en BattleMetrics.
-// 2. Obtiene los perfiles globales encontrados.
-// 3. Obtiene sus sesiones.
-// 4. Filtra las sesiones por el servidor configurado.
-// 5. Busca la última sesión de ese servidor.
-// 6. Si está activa → ONLINE.
-// 7. Si terminó → OFFLINE, pero sigue encontrado.
-// 8. Calcula las horas solamente de ese servidor.
-//
+// 1. Busca el nombre globalmente.
+// 2. NO exige que esté online.
+// 3. Comprueba las sesiones disponibles del perfil.
+// 4. Filtra por servidor configurado.
+// 5. Si existe historial → devuelve jugador.
+// 6. Si está offline → igualmente devuelve jugador.
 // =====================================================
 
 async function buscarJugadorHistorico(
@@ -914,7 +1043,6 @@ async function buscarJugadorHistorico(
             return null;
         }
 
-
         if (
             !serverId
         ) {
@@ -922,33 +1050,28 @@ async function buscarJugadorHistorico(
             return null;
         }
 
-
         serverId =
             String(
                 serverId
             );
-
 
         const nombreBuscado =
             String(
                 nombre
             ).trim();
 
-
         console.log(
             `🔎 BM BUSCAR → "${nombreBuscado}" → servidor ${serverId}`
         );
 
-
         // =================================================
-        // SERVIDOR CONFIGURADO
+        // SERVIDOR
         // =================================================
 
         const servidor =
             await obtenerServidor(
                 serverId
             );
-
 
         if (
             servidor
@@ -965,9 +1088,8 @@ async function buscarJugadorHistorico(
             );
         }
 
-
         // =================================================
-        // BUSCAR PERFIL GLOBAL
+        // PERFILES
         // =================================================
 
         const perfiles =
@@ -975,30 +1097,26 @@ async function buscarJugadorHistorico(
                 nombreBuscado
             );
 
-
         if (
             perfiles.length === 0
         ) {
 
             console.log(
-                `❌ BM → no se encontró perfil global para "${nombreBuscado}"`
+                `❌ BM → no existe perfil global para "${nombreBuscado}"`
             );
 
             return null;
         }
 
-
         console.log(
-            `👥 BM → ${perfiles.length} perfil(es) global(es) para "${nombreBuscado}"`
+            `👥 BM → ${perfiles.length} perfil(es) encontrados`
         );
-
 
         const candidatos =
             [];
 
-
         // =================================================
-        // REVISAR PERFILES
+        // REVISAR CADA PERFIL
         // =================================================
 
         for (
@@ -1011,34 +1129,21 @@ async function buscarJugadorHistorico(
                     jugador.id
                 );
 
-
             console.log(
-                `🔎 Revisando BM ${playerId} → última actividad en servidor ${serverId}`
+                `🔎 Revisando BM ${playerId} → historial servidor ${serverId}`
             );
-
-
-            // =================================================
-            // OBTENER DETALLE
-            // =================================================
 
             const detalle =
                 await obtenerJugador(
                     playerId
                 );
 
-
             const perfil =
                 detalle ||
                 jugador;
 
-
-            const atributos =
-                perfil.attributes ||
-                {};
-
-
             // =================================================
-            // SESIONES DEL SERVIDOR CONFIGURADO
+            // SESIONES
             // =================================================
 
             const sesiones =
@@ -1047,318 +1152,59 @@ async function buscarJugadorHistorico(
                     serverId
                 );
 
-
             console.log(
                 `📊 BM ${playerId} → ${sesiones.length} sesiones en ${serverId}`
             );
 
-
             // =================================================
-            // SIN SESIONES EN EL SERVIDOR
+            // SI HAY HISTORIAL
             // =================================================
 
             if (
-                sesiones.length === 0
+                sesiones.length > 0
             ) {
 
-                console.log(
-                    `⛔ BM ${playerId} → no tiene sesiones en ${serverId}`
-                );
-
-                continue;
-            }
-
-
-            // =================================================
-            // ORDENAR SESIONES
-            // =================================================
-
-            sesiones.sort(
-                (a, b) => {
-
-                    return (
-                        new Date(
-                            b.attributes?.start ||
-                            0
-                        ) -
-                        new Date(
-                            a.attributes?.start ||
-                            0
-                        )
+                const resultado =
+                    crearResultadoJugador(
+                        jugador,
+                        perfil,
+                        sesiones,
+                        serverId,
+                        servidor,
+                        nombreBuscado
                     );
-                }
-            );
-
-
-            // =================================================
-            // ÚLTIMA SESIÓN DEL SERVIDOR
-            // =================================================
-
-            const ultimaSesion =
-                obtenerUltimaSesion(
-                    sesiones
-                );
-
-
-            if (
-                !ultimaSesion
-            ) {
-
-                console.log(
-                    `⛔ BM ${playerId} → no se pudo determinar última sesión`
-                );
-
-                continue;
-            }
-
-
-            const atributosUltimaSesion =
-                ultimaSesion.attributes ||
-                {};
-
-
-            const ultimaSesionInicio =
-                atributosUltimaSesion.start
-                    ? new Date(
-                        atributosUltimaSesion.start
-                    )
-                    : null;
-
-
-            const ultimaSesionFin =
-                atributosUltimaSesion.stop
-                    ? new Date(
-                        atributosUltimaSesion.stop
-                    )
-                    : null;
-
-
-            // =================================================
-            // ONLINE
-            // =================================================
-            //
-            // La última sesión sin stop significa que BM
-            // todavía la considera activa.
-            //
-            // Si tiene stop, está offline.
-            //
-            // =================================================
-
-            const online =
-                Boolean(
-                    atributosUltimaSesion.start &&
-                    !atributosUltimaSesion.stop
-                );
-
-
-            // =================================================
-            // ÚLTIMA CONEXIÓN
-            // =================================================
-
-            let ultimaConexion =
-                null;
-
-
-            if (
-                ultimaSesionFin &&
-                !isNaN(
-                    ultimaSesionFin.getTime()
-                )
-            ) {
-
-                ultimaConexion =
-                    ultimaSesionFin;
-
-            } else if (
-                ultimaSesionInicio &&
-                !isNaN(
-                    ultimaSesionInicio.getTime()
-                )
-            ) {
-
-                // Si está online, mostramos el inicio de la
-                // sesión como referencia.
-
-                ultimaConexion =
-                    ultimaSesionInicio;
-            }
-
-
-            // =================================================
-            // PRIMERA CONEXIÓN
-            // =================================================
-
-            let primeraConexion =
-                null;
-
-
-            for (
-                const sesion
-                of sesiones
-            ) {
-
-                const inicio =
-                    sesion.attributes?.start
-                        ? new Date(
-                            sesion.attributes.start
-                        )
-                        : null;
-
 
                 if (
-                    !inicio ||
-                    isNaN(
-                        inicio.getTime()
-                    )
+                    resultado
                 ) {
+
+                    candidatos.push(
+                        resultado
+                    );
+
+                    console.log(
+                        `✅ BM ${playerId} → historial encontrado → ${
+                            resultado.online
+                                ? "ONLINE"
+                                : "OFFLINE"
+                        }`
+                    );
 
                     continue;
                 }
-
-
-                if (
-                    !primeraConexion ||
-                    inicio <
-                    primeraConexion
-                ) {
-
-                    primeraConexion =
-                        inicio;
-                }
             }
 
-
             // =================================================
-            // TIEMPO TOTAL EN EL SERVIDOR
+            // SIN SESIONES
             // =================================================
-
-            const segundos =
-                calcularTiempoSesiones(
-                    sesiones
-                );
-
-
-            // =================================================
-            // TIEMPO DE LA ÚLTIMA SESIÓN
-            // =================================================
-
-            let segundosUltimaSesion =
-                0;
-
-
-            if (
-                ultimaSesionInicio &&
-                !isNaN(
-                    ultimaSesionInicio.getTime()
-                )
-            ) {
-
-                const finUltimaSesion =
-                    ultimaSesionFin &&
-                    !isNaN(
-                        ultimaSesionFin.getTime()
-                    )
-                        ? ultimaSesionFin
-                        : new Date();
-
-
-                segundosUltimaSesion =
-                    Math.max(
-                        0,
-                        Math.floor(
-                            (
-                                finUltimaSesion -
-                                ultimaSesionInicio
-                            ) / 1000
-                        )
-                    );
-            }
-
-
-            // =================================================
-            // CANDIDATO
-            // =================================================
-
-            candidatos.push({
-
-                id:
-                    playerId,
-
-                name:
-                    atributos.name ||
-                    jugador.attributes?.name ||
-                    nombreBuscado,
-
-                serverId:
-                    serverId,
-
-                serverName:
-                    servidor?.name ||
-                    `Servidor ${serverId}`,
-
-                online:
-                    online,
-
-                sesiones:
-                    sesiones.length,
-
-                timePlayedSeconds:
-                    segundos,
-
-                tiempoJugado:
-                    formatearTiempo(
-                        segundos
-                    ),
-
-                ultimaSesionSegundos:
-                    segundosUltimaSesion,
-
-                tiempoUltimaSesion:
-                    formatearTiempo(
-                        segundosUltimaSesion
-                    ),
-
-                primeraConexion:
-                    formatearFechaChile(
-                        primeraConexion
-                    ),
-
-                ultimaConexion:
-                    formatearFechaChile(
-                        ultimaConexion
-                    ),
-
-                ultimaConexionDate:
-                    ultimaConexion,
-
-                ultimaSesionInicio:
-                    formatearFechaChile(
-                        ultimaSesionInicio
-                    ),
-
-                ultimaSesionFin:
-                    formatearFechaChile(
-                        ultimaSesionFin
-                    ),
-
-                perfilUrl:
-                    `https://www.battlemetrics.com/players/${playerId}`
-
-            });
-
 
             console.log(
-                `✅ BM ${playerId} → última sesión: ${
-                    online
-                        ? "ONLINE"
-                        : "OFFLINE"
-                }`
+                `⛔ BM ${playerId} → no hay sesiones accesibles en ${serverId}`
             );
         }
 
-
         // =================================================
-        // NINGÚN PERFIL VÁLIDO
+        // NINGÚN PERFIL
         // =================================================
 
         if (
@@ -1366,21 +1212,14 @@ async function buscarJugadorHistorico(
         ) {
 
             console.log(
-                `❌ "${nombreBuscado}" tiene perfil BM, pero no tiene sesiones en el servidor ${serverId}.`
+                `❌ "${nombreBuscado}" tiene perfil(es) BM, pero no se pudo obtener historial del servidor ${serverId}.`
             );
 
             return null;
         }
 
-
         // =================================================
-        // ORDENAR CANDIDATOS
-        // =================================================
-        //
-        // 1. ONLINE primero.
-        // 2. Si están ambos offline, el que tuvo la
-        //    sesión más reciente primero.
-        //
+        // ORDENAR
         // =================================================
 
         candidatos.sort(
@@ -1394,7 +1233,6 @@ async function buscarJugadorHistorico(
                     return -1;
                 }
 
-
                 if (
                     !a.online &&
                     b.online
@@ -1403,18 +1241,15 @@ async function buscarJugadorHistorico(
                     return 1;
                 }
 
-
                 const fechaA =
                     a.ultimaConexionDate
                         ? a.ultimaConexionDate.getTime()
                         : 0;
 
-
                 const fechaB =
                     b.ultimaConexionDate
                         ? b.ultimaConexionDate.getTime()
                         : 0;
-
 
                 return (
                     fechaB -
@@ -1423,14 +1258,8 @@ async function buscarJugadorHistorico(
             }
         );
 
-
-        // =================================================
-        // JUGADOR PRINCIPAL
-        // =================================================
-
         const jugador =
             candidatos[0];
-
 
         console.log(
             "✅ JUGADOR ENCONTRADO",
@@ -1456,21 +1285,10 @@ async function buscarJugadorHistorico(
                 tiempo:
                     jugador.tiempoJugado,
 
-                ultimaSesion:
-                    jugador.ultimaSesionInicio,
-
-                finUltimaSesion:
-                    jugador.ultimaSesionFin,
-
                 ultimaConexion:
                     jugador.ultimaConexion
             }
         );
-
-
-        // =================================================
-        // RESULTADO
-        // =================================================
 
         return {
 
@@ -1482,7 +1300,6 @@ async function buscarJugadorHistorico(
                     : []
 
         };
-
 
     } catch (error) {
 
@@ -1499,11 +1316,6 @@ async function buscarJugadorHistorico(
 
 // =====================================================
 // COMPATIBILIDAD
-// =====================================================
-//
-// Mantiene compatibilidad con versiones anteriores
-// del comando /buscar.
-//
 // =====================================================
 
 async function searchBattleMetricsPlayerHistory(
