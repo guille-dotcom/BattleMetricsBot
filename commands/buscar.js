@@ -10,11 +10,6 @@ const {
 const ServerConfig =
     require("../models/ServerConfig");
 
-
-// =====================================================
-// /BUSCAR
-// =====================================================
-
 module.exports = {
 
     data:
@@ -23,7 +18,7 @@ module.exports = {
             .setName("buscar")
 
             .setDescription(
-                "Busca todos los perfiles de un jugador y comprueba su actividad reciente en el servidor configurado"
+                "Busca todos los perfiles de un jugador y comprueba su actividad en el servidor configurado"
             )
 
             .addStringOption(
@@ -36,21 +31,14 @@ module.exports = {
                         .setRequired(true)
             ),
 
-
     async execute(interaction) {
 
         await interaction.deferReply();
-
-
-        // =================================================
-        // NOMBRE
-        // =================================================
 
         const nombre =
             interaction.options
                 .getString("nombre")
                 ?.trim();
-
 
         if (!nombre) {
 
@@ -60,24 +48,15 @@ module.exports = {
 
         }
 
-
-        // =================================================
-        // SERVIDOR CONFIGURADO
-        // =================================================
-
         let serverId = null;
-
 
         try {
 
             const dbConfig =
                 await ServerConfig.findOne({
-
                     guildId:
                         interaction.guild.id
-
                 });
-
 
             if (
                 dbConfig &&
@@ -100,11 +79,6 @@ module.exports = {
 
         }
 
-
-        // =================================================
-        // SIN SERVIDOR
-        // =================================================
-
         if (!serverId) {
 
             return await interaction.editReply({
@@ -116,26 +90,23 @@ module.exports = {
 
         }
 
-
-        // =================================================
-        // LOG
-        // =================================================
-
         console.log(
-            `🎯 Ejecutando /buscar`
+            "================================================="
         );
 
         console.log(
-            `🎯 /buscar "${nombre}" → servidor ${serverId}`
+            `🎯 Ejecutando /buscar "${nombre}"`
         );
 
+        console.log(
+            `🎮 Servidor configurado: ${serverId}`
+        );
 
-        // =================================================
-        // BUSCAR TODOS LOS PERFILES VÁLIDOS
-        // =================================================
+        console.log(
+            "================================================="
+        );
 
         let jugadores = [];
-
 
         try {
 
@@ -156,9 +127,8 @@ module.exports = {
 
         }
 
-
         // =================================================
-        // NINGUNO ENCONTRADO
+        // NINGÚN RESULTADO
         // =================================================
 
         if (
@@ -178,48 +148,42 @@ module.exports = {
                     )
 
                     .setDescription(
-                        `No se encontró ningún perfil de **${nombre}** que esté conectado al servidor configurado o que haya estado offline durante los últimos **60 minutos**.`
+                        `No se encontró ningún perfil de **${nombre}** con actividad reciente en el servidor configurado.`
                     )
 
                     .addFields(
 
                         {
-
                             name:
                                 "🎮 Servidor consultado",
 
                             value:
-                                `[Servidor BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`,
+                                `[BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`,
 
                             inline:
                                 true
-
                         },
 
                         {
-
                             name:
-                                "🔎 Búsqueda",
+                                "🔎 Nombre",
 
                             value:
                                 `\`${nombre}\``,
 
                             inline:
                                 true
-
                         },
 
                         {
-
                             name:
                                 "📡 Método",
 
                             value:
-                                "`Todos los perfiles + nombre exacto + sesiones + Last Seen`",
+                                "`Todos los perfiles + nombre exacto + servidor + sesiones + Last Seen`",
 
                             inline:
-                                true
-
+                                false
                         }
 
                     )
@@ -233,7 +197,6 @@ module.exports = {
 
                     .setTimestamp();
 
-
             return await interaction.editReply({
 
                 embeds:
@@ -243,9 +206,8 @@ module.exports = {
 
         }
 
-
         // =================================================
-        // CREAR EMBED PRINCIPAL
+        // EMBED
         // =================================================
 
         const embed =
@@ -256,21 +218,25 @@ module.exports = {
                 )
 
                 .setColor(
+
                     jugadores.some(
                         jugador =>
                             jugador.online
                     )
+
                         ? "#57F287"
+
                         : "#5865F2"
+
                 )
 
                 .setDescription(
 
                     jugadores.length === 1
 
-                        ? `Se encontró **1 perfil** que cumple las condiciones de actividad en el servidor configurado.`
+                        ? "Se encontró **1 perfil** con actividad reciente en el servidor."
 
-                        : `Se encontraron **${jugadores.length} perfiles** con el nombre exacto **${nombre}** que cumplen las condiciones de actividad en el servidor configurado.`
+                        : `Se encontraron **${jugadores.length} perfiles** con actividad reciente en el servidor.`
 
                 )
 
@@ -280,16 +246,15 @@ module.exports = {
                         "🎮 Servidor consultado",
 
                     value:
-                        `[Servidor BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`,
+                        `[BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`,
 
                     inline:
                         false
 
                 });
 
-
         // =================================================
-        // AÑADIR CADA PERFIL
+        // PERFILES
         // =================================================
 
         for (
@@ -301,22 +266,12 @@ module.exports = {
             const jugador =
                 jugadores[indice];
 
-
-            // =================================================
-            // ESTADO
-            // =================================================
-
             const estado =
                 jugador.online
 
                     ? `🟢 **Online** · ${jugador.tiempoSesionActual || "0m"}`
 
                     : `🔴 **Offline** · hace ${jugador.lastSeenMinutes ?? "?"} min`;
-
-
-            // =================================================
-            // LAST SEEN
-            // =================================================
 
             const lastSeen =
                 jugador.online
@@ -325,11 +280,6 @@ module.exports = {
 
                     : jugador.lastSeen ||
                       "No disponible";
-
-
-            // =================================================
-            // CAMPO DEL PERFIL
-            // =================================================
 
             embed.addFields({
 
@@ -361,9 +311,8 @@ module.exports = {
 
         }
 
-
         // =================================================
-        // INFORMACIÓN DEL CRITERIO
+        // CRITERIO
         // =================================================
 
         embed.addFields({
@@ -372,13 +321,12 @@ module.exports = {
                 "📡 Criterio de búsqueda",
 
             value:
-                "Se revisan **todos los perfiles encontrados por BattleMetrics** con **nombre exacto**. De ellos, se muestran todos los que tengan historial en el servidor configurado y estén **online** o **offline durante un máximo de 60 minutos**.",
+                "Se revisan todos los perfiles que BattleMetrics devuelve para el nombre buscado. Se exige coincidencia exacta del nombre y relación/actividad en el servidor configurado. Los perfiles offline se muestran únicamente si su último registro está dentro de los **60 minutos**.",
 
             inline:
                 false
 
         });
-
 
         // =================================================
         // FOOTER
@@ -391,18 +339,19 @@ module.exports = {
 
         });
 
-
         embed.setTimestamp();
 
+        // =================================================
+        // LOG
+        // =================================================
 
-        // =================================================
-        // LOG FINAL
-        // =================================================
+        console.log(
+            "================================================="
+        );
 
         console.log(
             `✅ /buscar terminado → ${jugadores.length} perfil(es) válido(s)`
         );
-
 
         for (
             const jugador of jugadores
@@ -419,10 +368,9 @@ module.exports = {
 
         }
 
-
-        // =================================================
-        // RESPUESTA
-        // =================================================
+        console.log(
+            "================================================="
+        );
 
         return await interaction.editReply({
 
