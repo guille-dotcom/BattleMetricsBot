@@ -23,7 +23,7 @@ module.exports = {
             .setName("buscar")
 
             .setDescription(
-                "Busca un jugador en BattleMetrics y comprueba su historial en el servidor configurado"
+                "Busca jugadores en BattleMetrics y comprueba su actividad reciente en el servidor configurado"
             )
 
             .addStringOption(
@@ -31,7 +31,7 @@ module.exports = {
                     option
                         .setName("nombre")
                         .setDescription(
-                            "Nombre del jugador"
+                            "Nombre exacto del jugador"
                         )
                         .setRequired(true)
             ),
@@ -125,22 +125,21 @@ module.exports = {
             `🎯 Ejecutando /buscar`
         );
 
-
         console.log(
             `🎯 /buscar "${nombre}" → servidor configurado ${serverId}`
         );
 
 
         // =================================================
-        // BUSCAR PERFIL + HISTORIAL
+        // BUSCAR TODOS LOS PERFILES VÁLIDOS
         // =================================================
 
-        let jugadorBM = null;
+        let jugadores = [];
 
 
         try {
 
-            jugadorBM =
+            jugadores =
                 await buscarJugadorHistorico(
                     nombre,
                     serverId
@@ -149,7 +148,7 @@ module.exports = {
         } catch (error) {
 
             console.error(
-                "❌ Error buscando jugador:",
+                "❌ Error buscando jugadores:",
                 error
             );
 
@@ -160,7 +159,10 @@ module.exports = {
         // NO ENCONTRADO
         // =================================================
 
-        if (!jugadorBM) {
+        if (
+            !Array.isArray(jugadores) ||
+            jugadores.length === 0
+        ) {
 
             const embed =
                 new EmbedBuilder()
@@ -174,7 +176,7 @@ module.exports = {
                     )
 
                     .setDescription(
-                        `No se encontró un perfil de **${nombre}** que tenga historial reciente en el servidor configurado.`
+                        `No se encontró un perfil de **${nombre}** que esté conectado al servidor configurado o que haya estado offline durante los últimos **60 minutos**.`
                     )
 
                     .addFields(
@@ -211,7 +213,7 @@ module.exports = {
                                 "📡 Método",
 
                             value:
-                                "`Perfil global + historial del servidor`",
+                                "`Nombre exacto + sesiones + Last Seen`",
 
                             inline:
                                 true
@@ -241,329 +243,355 @@ module.exports = {
 
 
         // =================================================
-        // DATOS DEL JUGADOR
+        // LOG RESULTADOS
         // =================================================
 
-        const nombreJugador =
-            jugadorBM.name ||
-            nombre;
-
-
-        const playerId =
-            jugadorBM.id;
-
-
-        const serverName =
-            jugadorBM.serverName ||
-            `Servidor ${serverId}`;
+        console.log(
+            `✅ /buscar → ${jugadores.length} perfil(es) válido(s) encontrado(s)`
+        );
 
 
         // =================================================
-        // TIEMPOS
+        // CREAR EMBEDS
         // =================================================
 
-        // Tiempo de la sesión actual.
-        const tiempoSesionActual =
-            jugadorBM.tiempoSesionActual ||
-            "0m";
+        const embeds = [];
 
 
-        // Tiempo TOTAL únicamente en el servidor buscado.
-        const horasServidor =
-            jugadorBM.tiempoServidor ||
-            "0m";
-
-
-        // Tiempo TOTAL de todo el perfil BattleMetrics.
-        const horasTotalesPerfil =
-            jugadorBM.tiempoTotalPerfil ||
-            jugadorBM.tiempoJugado ||
-            "0m";
-
-
-        // =================================================
-        // ESTADO
-        // =================================================
-
-        const estaOnline =
-            Boolean(
-                jugadorBM.online
-            );
-
-
-        const estado =
-            estaOnline
-
-                ? `🟢 Online · ${tiempoSesionActual}`
-
-                : "🔴 Offline";
-
-
-        // =================================================
-        // DESCRIPCIÓN DINÁMICA
-        // =================================================
-
-        let descripcion;
-
-
-        if (estaOnline) {
-
-            descripcion =
-                `Perfil encontrado en BattleMetrics.\n\n` +
-                `El perfil **está actualmente conectado al servidor configurado**.`;
-
-        } else {
-
-            descripcion =
-                `Perfil encontrado en BattleMetrics.\n\n` +
-                `El perfil **sí tiene historial en el servidor configurado**, aunque actualmente esté offline.`;
-
-        }
-
-
-        // =================================================
-        // EMBED
-        // =================================================
-
-        const embed =
-            new EmbedBuilder()
-
-                .setTitle(
-                    `🔎 ${nombreJugador}`
-                )
-
-                .setColor(
-
-                    estaOnline
-                        ? "#57F287"
-                        : "#5865F2"
-
-                )
-
-                .setDescription(
-                    descripcion
-                )
-
-                .addFields(
-
-
-                    // -------------------------------------
-                    // SERVIDOR
-                    // -------------------------------------
-
-                    {
-
-                        name:
-                            "🎮 Servidor",
-
-                        value:
-                            `[${serverName}](https://www.battlemetrics.com/servers/rust/${serverId})`,
-
-                        inline:
-                            false
-
-                    },
-
-
-                    // -------------------------------------
-                    // BATTLEMETRICS
-                    // -------------------------------------
-
-                    {
-
-                        name:
-                            "🆔 BattleMetrics",
-
-                        value:
-                            `https://www.battlemetrics.com/players/${playerId}`,
-
-                        inline:
-                            false
-
-                    },
-
-
-                    // -------------------------------------
-                    // ESTADO
-                    // -------------------------------------
-
-                    {
-
-                        name:
-                            "🎮 Estado",
-
-                        value:
-                            `\`${estado}\``,
-
-                        inline:
-                            true
-
-                    },
-
-
-                    // -------------------------------------
-                    // HORAS EN SERVIDOR
-                    // -------------------------------------
-
-                    {
-
-                        name:
-                            "📈 Horas totales en servidor",
-
-                        value:
-                            `\`${horasServidor}\``,
-
-                        inline:
-                            true
-
-                    },
-
-
-                    // -------------------------------------
-                    // HORAS TOTALES DEL PERFIL
-                    // -------------------------------------
-
-                    {
-
-                        name:
-                            "🌐 Horas totales BattleMetrics",
-
-                        value:
-                            `\`${horasTotalesPerfil}\``,
-
-                        inline:
-                            true
-
-                    },
-
-
-                    // -------------------------------------
-                    // SESIONES
-                    // -------------------------------------
-
-                    {
-
-                        name:
-                            "🔄 Sesiones en servidor",
-
-                        value:
-                            `\`${jugadorBM.sesionesServidor || 0}\``,
-
-                        inline:
-                            true
-
-                    },
-
-
-                    // -------------------------------------
-                    // PRIMERA CONEXIÓN
-                    // -------------------------------------
-
-                    {
-
-                        name:
-                            "📅 Primera conexión",
-
-                        value:
-                            `\`${jugadorBM.primeraConexion || "No disponible"}\``,
-
-                        inline:
-                            true
-
-                    },
-
-
-                    // -------------------------------------
-                    // ÚLTIMA CONEXIÓN
-                    // -------------------------------------
-
-                    {
-
-                        name:
-                            "🕐 Última conexión",
-
-                        value:
-                            `\`${jugadorBM.ultimaConexion || "Nunca"}\``,
-
-                        inline:
-                            true
-
-                    }
-
-                )
-
-                .setFooter({
-
-                    text:
-                        `RustLogix • BattleMetrics • Servidor ${serverId}`
-
-                })
-
-                .setTimestamp();
-
-
-        // =================================================
-        // OTROS PERFILES CON HISTORIAL
-        // =================================================
-
-        if (
-
-            jugadorBM.candidatos &&
-            jugadorBM.candidatos.length > 0
-
+        for (
+            let indice = 0;
+            indice < jugadores.length;
+            indice++
         ) {
 
-            const lista =
-                jugadorBM.candidatos
-
-                    .slice(0, 5)
-
-                    .map(
-
-                        candidato =>
-
-                            `• **${candidato.name}** — BM \`${candidato.id}\``
-
-                    )
-
-                    .join("\n");
+            const jugador =
+                jugadores[indice];
 
 
-            if (lista) {
+            const nombreJugador =
+                jugador.name ||
+                nombre;
 
-                embed.addFields({
 
-                    name:
-                        "👥 Otros perfiles con historial",
+            const playerId =
+                jugador.id;
 
-                    value:
-                        lista,
 
-                    inline:
-                        false
+            const estaOnline =
+                Boolean(
+                    jugador.online
+                );
 
-                });
+
+            const estado =
+                estaOnline
+
+                    ? `🟢 Online · ${jugador.tiempoSesionActual || "0m"}`
+
+                    : `🔴 Offline · hace ${jugador.lastSeenMinutes ?? "?"} min`;
+
+
+            // =================================================
+            // DESCRIPCIÓN
+            // =================================================
+
+            let descripcion;
+
+
+            if (estaOnline) {
+
+                descripcion =
+                    `Perfil **${indice + 1} de ${jugadores.length}** encontrado.\n\n` +
+                    `El jugador **está actualmente conectado al servidor configurado**.`;
+
+            } else {
+
+                descripcion =
+                    `Perfil **${indice + 1} de ${jugadores.length}** encontrado.\n\n` +
+                    `El jugador está **offline**, pero su última actividad en el servidor fue hace **${jugador.lastSeenMinutes ?? "?"} minutos**.`;
 
             }
 
+
+            // =================================================
+            // EMBED
+            // =================================================
+
+            const embed =
+                new EmbedBuilder()
+
+                    .setTitle(
+                        `🔎 ${nombreJugador}`
+                    )
+
+                    .setColor(
+
+                        estaOnline
+                            ? "#57F287"
+                            : "#5865F2"
+
+                    )
+
+                    .setDescription(
+                        descripcion
+                    )
+
+                    .addFields(
+
+                        // -------------------------------------
+                        // PERFIL
+                        // -------------------------------------
+
+                        {
+
+                            name:
+                                "🆔 BattleMetrics",
+
+                            value:
+                                `[Ver perfil](https://www.battlemetrics.com/players/${playerId})`,
+
+                            inline:
+                                false
+
+                        },
+
+                        // -------------------------------------
+                        // SERVIDOR
+                        // -------------------------------------
+
+                        {
+
+                            name:
+                                "🎮 Servidor",
+
+                            value:
+                                `[${jugador.serverName || `Servidor ${serverId}`}](https://www.battlemetrics.com/servers/rust/${serverId})`,
+
+                            inline:
+                                false
+
+                        },
+
+                        // -------------------------------------
+                        // ESTADO
+                        // -------------------------------------
+
+                        {
+
+                            name:
+                                "🎮 Estado",
+
+                            value:
+                                `\`${estado}\``,
+
+                            inline:
+                                true
+
+                        },
+
+                        // -------------------------------------
+                        // HORAS SERVIDOR
+                        // -------------------------------------
+
+                        {
+
+                            name:
+                                "📈 Horas en servidor",
+
+                            value:
+                                `\`${jugador.tiempoServidor || "0m"}\``,
+
+                            inline:
+                                true
+
+                        },
+
+                        // -------------------------------------
+                        // HORAS TOTALES BM
+                        // -------------------------------------
+
+                        {
+
+                            name:
+                                "🌐 Horas totales BattleMetrics",
+
+                            value:
+                                `\`${jugador.tiempoJugado || "0m"}\``,
+
+                            inline:
+                                true
+
+                        },
+
+                        // -------------------------------------
+                        // SESIONES
+                        // -------------------------------------
+
+                        {
+
+                            name:
+                                "🔄 Sesiones en servidor",
+
+                            value:
+                                `\`${jugador.sesionesServidor || 0}\``,
+
+                            inline:
+                                true
+
+                        },
+
+                        // -------------------------------------
+                        // PRIMERA CONEXIÓN
+                        // -------------------------------------
+
+                        {
+
+                            name:
+                                "📅 Primera conexión",
+
+                            value:
+                                `\`${jugador.primeraConexion || "No disponible"}\``,
+
+                            inline:
+                                true
+
+                        },
+
+                        // -------------------------------------
+                        // ÚLTIMA CONEXIÓN
+                        // -------------------------------------
+
+                        {
+
+                            name:
+                                "🕐 Última conexión",
+
+                            value:
+                                `\`${jugador.ultimaConexion || "Nunca"}\``,
+
+                            inline:
+                                true
+
+                        },
+
+                        // -------------------------------------
+                        // LAST SEEN
+                        // -------------------------------------
+
+                        {
+
+                            name:
+                                "👁️ Last Seen",
+
+                            value:
+                                estaOnline
+                                    ? "`Actualmente online`"
+                                    : `\`${jugador.lastSeen || "No disponible"}\` · hace \`${jugador.lastSeenMinutes ?? "?"} min\``,
+
+                            inline:
+                                false
+
+                        }
+
+                    )
+
+                    .setFooter({
+
+                        text:
+                            `RustLogix • BattleMetrics • Perfil ${indice + 1}/${jugadores.length}`
+
+                    })
+
+                    .setTimestamp();
+
+
+            embeds.push(
+                embed
+            );
         }
 
 
         // =================================================
         // RESPUESTA
         // =================================================
+        //
+        // Discord permite hasta 10 embeds por mensaje.
+        //
+        // Si hay más de 10 perfiles válidos, mandamos
+        // primero los 10 y después el resto.
+        //
+        // =================================================
 
-        console.log(
-            `✅ /buscar terminado → ${nombreJugador} (${playerId})`
-        );
+        const MAX_EMBEDS_POR_MENSAJE = 10;
 
 
-        return await interaction.editReply({
+        if (
+            embeds.length <=
+            MAX_EMBEDS_POR_MENSAJE
+        ) {
+
+            console.log(
+                `✅ /buscar terminado → ${jugadores.length} perfil(es)`
+            );
+
+
+            return await interaction.editReply({
+
+                embeds
+
+            });
+
+        }
+
+
+        // =================================================
+        // MÁS DE 10 PERFILES
+        // =================================================
+
+        const primeraParte =
+            embeds.slice(
+                0,
+                MAX_EMBEDS_POR_MENSAJE
+            );
+
+
+        const resto =
+            embeds.slice(
+                MAX_EMBEDS_POR_MENSAJE
+            );
+
+
+        await interaction.editReply({
 
             embeds:
-                [embed]
+                primeraParte
 
         });
+
+
+        for (
+            let inicio = 0;
+            inicio < resto.length;
+            inicio += MAX_EMBEDS_POR_MENSAJE
+        ) {
+
+            await interaction.followUp({
+
+                embeds:
+                    resto.slice(
+                        inicio,
+                        inicio +
+                        MAX_EMBEDS_POR_MENSAJE
+                    )
+
+            });
+
+        }
+
+
+        console.log(
+            `✅ /buscar terminado → ${jugadores.length} perfil(es) en total`
+        );
 
     }
 
