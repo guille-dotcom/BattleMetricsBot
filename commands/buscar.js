@@ -122,24 +122,16 @@ module.exports = {
         // =================================================
 
         console.log(
-            "================================================="
+            `🎯 Ejecutando /buscar`
         );
 
         console.log(
-            `🎯 Ejecutando /buscar "${nombre}"`
-        );
-
-        console.log(
-            `🎯 Servidor BattleMetrics: ${serverId}`
-        );
-
-        console.log(
-            "================================================="
+            `🎯 /buscar "${nombre}" → servidor ${serverId}`
         );
 
 
         // =================================================
-        // BUSCAR TODOS LOS PERFILES
+        // BUSCAR TODOS LOS PERFILES VÁLIDOS
         // =================================================
 
         let jugadores = [];
@@ -182,11 +174,11 @@ module.exports = {
                     )
 
                     .setColor(
-                        "#ED4245"
+                        "#FF0000"
                     )
 
                     .setDescription(
-                        `No se encontró ningún perfil de **${nombre}** que tenga historial en el servidor configurado y que esté **online** o haya estado **offline durante los últimos 60 minutos**.`
+                        `No se encontró ningún perfil de **${nombre}** que esté conectado al servidor configurado o que haya estado offline durante los últimos **60 minutos**.`
                     )
 
                     .addFields(
@@ -223,7 +215,7 @@ module.exports = {
                                 "📡 Método",
 
                             value:
-                                "`Nombre exacto + sesiones + Last Seen`",
+                                "`Todos los perfiles + nombre exacto + sesiones + Last Seen`",
 
                             inline:
                                 true
@@ -253,18 +245,7 @@ module.exports = {
 
 
         // =================================================
-        // ESTADO GLOBAL DEL EMBED
-        // =================================================
-
-        const hayOnline =
-            jugadores.some(
-                jugador =>
-                    Boolean(jugador.online)
-            );
-
-
-        // =================================================
-        // EMBED PRINCIPAL
+        // CREAR EMBED PRINCIPAL
         // =================================================
 
         const embed =
@@ -275,7 +256,10 @@ module.exports = {
                 )
 
                 .setColor(
-                    hayOnline
+                    jugadores.some(
+                        jugador =>
+                            jugador.online
+                    )
                         ? "#57F287"
                         : "#5865F2"
                 )
@@ -305,7 +289,7 @@ module.exports = {
 
 
         // =================================================
-        // MOSTRAR TODOS LOS PERFILES
+        // AÑADIR CADA PERFIL
         // =================================================
 
         for (
@@ -322,38 +306,12 @@ module.exports = {
             // ESTADO
             // =================================================
 
-            let estado;
+            const estado =
+                jugador.online
 
-            if (jugador.online) {
+                    ? `🟢 **Online** · ${jugador.tiempoSesionActual || "0m"}`
 
-                estado =
-                    `🟢 **Online**`;
-
-                if (
-                    jugador.tiempoSesionActual
-                ) {
-
-                    estado +=
-                        ` · sesión ${jugador.tiempoSesionActual}`;
-
-                }
-
-            } else {
-
-                estado =
-                    `🔴 **Offline**`;
-
-                if (
-                    jugador.lastSeenMinutes !== null &&
-                    jugador.lastSeenMinutes !== undefined
-                ) {
-
-                    estado +=
-                        ` · hace ${jugador.lastSeenMinutes} min`;
-
-                }
-
-            }
+                    : `🔴 **Offline** · hace ${jugador.lastSeenMinutes ?? "?"} min`;
 
 
             // =================================================
@@ -365,23 +323,12 @@ module.exports = {
 
                     ? "Actualmente conectado"
 
-                    : (
-                        jugador.lastSeen ||
-                        "No disponible"
-                    );
+                    : jugador.lastSeen ||
+                      "No disponible";
 
 
             // =================================================
-            // PERFIL
-            // =================================================
-
-            const perfilUrl =
-                jugador.perfilUrl ||
-                `https://www.battlemetrics.com/players/${jugador.id}`;
-
-
-            // =================================================
-            // CAMPO
+            // CAMPO DEL PERFIL
             // =================================================
 
             embed.addFields({
@@ -391,7 +338,7 @@ module.exports = {
 
                 value:
 
-                    `🆔 **BattleMetrics:** [${jugador.id}](${perfilUrl})\n` +
+                    `🆔 **BattleMetrics:** [${jugador.id}](${jugador.perfilUrl})\n` +
 
                     `🎮 **Estado:** ${estado}\n` +
 
@@ -416,7 +363,7 @@ module.exports = {
 
 
         // =================================================
-        // CRITERIO
+        // INFORMACIÓN DEL CRITERIO
         // =================================================
 
         embed.addFields({
@@ -425,7 +372,7 @@ module.exports = {
                 "📡 Criterio de búsqueda",
 
             value:
-                "Se muestran **todos los perfiles** con nombre exacto que tengan historial real en el servidor y estén **online** o **offline durante un máximo de 60 minutos**.",
+                "Se revisan **todos los perfiles encontrados por BattleMetrics** con **nombre exacto**. De ellos, se muestran todos los que tengan historial en el servidor configurado y estén **online** o **offline durante un máximo de 60 minutos**.",
 
             inline:
                 false
