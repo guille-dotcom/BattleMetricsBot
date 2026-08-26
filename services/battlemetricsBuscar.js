@@ -465,14 +465,13 @@ async function obtenerServidor(
         }
 
         const response =
-            await axios.get(
+            await requestBM(
+
+                "GET",
 
                 `${BM_API}/servers/${serverId}`,
 
                 {
-
-                    headers:
-                        getHeaders(),
 
                     timeout:
                         10000
@@ -643,6 +642,26 @@ async function requestBM(
 
 // =====================================================
 // BUSCAR TODOS LOS PERFILES POR SEARCH
+//
+// IMPORTANTE:
+//
+// ESTA BÚSQUEDA ES GLOBAL.
+//
+// NO SE UTILIZA:
+// filter[servers]
+//
+// porque queremos obtener TODOS los perfiles
+// exactos con ese nombre, incluidos perfiles históricos
+// que puedan no aparecer en la relación actual del servidor.
+//
+// Después cada perfil se verifica mediante:
+//
+// 1. GET /players/{id}?include=server
+// 2. Historial de sesiones
+//
+// NO se utiliza:
+//
+// /players/{id}/servers/{serverId}
 // =====================================================
 
 async function ejecutarBusquedaJugadores(
@@ -692,8 +711,11 @@ async function ejecutarBusquedaJugadores(
 
             response =
                 await requestBM(
+
                     "GET",
+
                     nextUrl,
+
                     {
 
                         params:
@@ -705,13 +727,14 @@ async function ejecutarBusquedaJugadores(
                             20000
 
                     }
+
                 );
 
         } catch (error) {
 
             console.error(
 
-                `❌ Error buscando "${terminoBusqueda}" página ${pagina}`,
+                `❌ Error buscando "${terminoBusqueda}" página ${pagina}:`,
 
                 error.response?.data ||
                 error.message
@@ -737,8 +760,11 @@ async function ejecutarBusquedaJugadores(
         ) {
 
             agregarJugadorUnico(
+
                 resultados,
+
                 jugador
+
             );
 
         }
@@ -765,99 +791,21 @@ async function ejecutarBusquedaJugadores(
 
 
 // =====================================================
-// INFORMACIÓN JUGADOR → SERVIDOR
+// OBTENER SERVIDORES DEL JUGADOR
 //
-// Endpoint utilizado:
-//
-// GET /players/{playerId}/servers/{serverId}
-//
-// IMPORTANTE:
+// ÚNICA COMPROBACIÓN DIRECTA DEL PERFIL.
 //
 // NO se utiliza:
 //
-// GET /servers/{serverId}/relationships/players
+// GET /players/{id}/servers/{serverId}
 //
-// Ese endpoint queda completamente eliminado.
-// =====================================================
-
-async function obtenerInformacionJugadorServidor(
-    playerId,
-    serverId
-) {
-
-    if (
-        !playerId ||
-        !serverId
-    ) {
-
-        return null;
-
-    }
-
-    try {
-
-        console.log(
-
-            `🎯 BM → jugador ${playerId} → servidor ${serverId}`
-
-        );
-
-        const response =
-            await requestBM(
-
-                "GET",
-
-                `${BM_API}/players/${playerId}/servers/${serverId}`,
-
-                {
-
-                    timeout:
-                        15000
-
-                }
-
-            );
-
-        const data =
-            response.data?.data ||
-            null;
-
-        if (!data) {
-
-            return null;
-
-        }
-
-        return data;
-
-    } catch (error) {
-
-        if (
-            error.response?.status === 404
-        ) {
-
-            return null;
-
-        }
-
-        console.error(
-
-            `⚠️ Error obteniendo jugador ${playerId} en servidor ${serverId}:`,
-
-            error.response?.data ||
-            error.message
-
-        );
-
-        return null;
-
-    }
-
-}
-
-
-// =====================================================
-// OBTENER SERVIDORES DEL JUGADOR DESDE ENDPOINT
+// porque BattleMetrics devuelve 400 cuando el jugador
+// no tiene historial en ese servidor.
+//
+// Aquí obtenemos el perfil completo y sus relaciones.
+//
+// Si la relación no aparece, posteriormente se revisan
+// las sesiones para confirmar historial histórico.
 // =====================================================
 
 async function obtenerServidoresJugador(
@@ -865,7 +813,17 @@ async function obtenerServidoresJugador(
 ) {
 
     if (!playerId) {
-        return [];
+
+        return {
+
+            jugador:
+                null,
+
+            servidores:
+                []
+
+        };
+
     }
 
     try {
@@ -898,7 +856,15 @@ async function obtenerServidoresJugador(
 
         if (!jugador) {
 
-            return [];
+            return {
+
+                jugador:
+                    null,
+
+                servidores:
+                    []
+
+            };
 
         }
 
@@ -1348,18 +1314,20 @@ function obtenerPlayerIdDeResultadoQuery(
 // =====================================================
 // OBTENER CANDIDATOS
 //
-// Estrategia:
+// ESTRATEGIA:
 //
-// 1. /players?filter[search]=nombre
-// 2. related-identifiers
-// 3. Player Queries disponibles
+// 1. Búsqueda GLOBAL por nombre.
+// 2. Related identifiers.
+// 3. Player Queries.
 //
-// NO:
+// Luego:
 //
-// /servers/{serverId}/relationships/players
+// 4. Filtro por nombre exacto.
+// 5. Cada perfil se comprueba contra el servidor
+//    mediante relación + sesiones.
 //
-// El servidor se comprueba posteriormente,
-// jugador por jugador.
+// NO se utiliza ningún endpoint de:
+// /players/{id}/servers/{serverId}
 // =====================================================
 
 async function obtenerCandidatosPorNombre(
@@ -1403,11 +1371,22 @@ async function obtenerCandidatosPorNombre(
     }
 
     // -------------------------------------------------
-    // 2. ENRIQUECER CON RELATED IDENTIFIERS
+    // CANDIDATOS ORIGINALES
+    //
+    // IMPORTANTE:
+    //
+    // Se guarda esta copia antes de enriquecer,
+    // para evitar que los resultados añadidos durante
+    // related-identifiers vuelvan a disparar todo
+    // el proceso.
     // -------------------------------------------------
 
     const candidatosIniciales =
         [...candidatos];
+
+    // -------------------------------------------------
+    // 2. RELATED IDENTIFIERS
+    // -------------------------------------------------
 
     for (
         const jugador of candidatosIniciales
@@ -1691,45 +1670,20 @@ async function obtenerJugador(
 
     try {
 
-        const response =
-            await requestBM(
-
-                "GET",
-
-                `${BM_API}/players/${playerId}`,
-
-                {
-
-                    params: {
-
-                        include:
-                            "server"
-
-                    },
-
-                    timeout:
-                        15000
-
-                }
-
+        const resultado =
+            await obtenerServidoresJugador(
+                playerId
             );
 
-        const jugador =
-            response.data?.data ||
-            null;
-
-        if (!jugador) {
+        if (!resultado.jugador) {
             return null;
         }
 
+        const jugador =
+            resultado.jugador;
+
         jugador._servidoresIncluidos =
-            response.data?.included
-                ?.filter(
-                    item =>
-                        item?.type ===
-                        "server"
-                ) ||
-            [];
+            resultado.servidores;
 
         return jugador;
 
@@ -2193,10 +2147,6 @@ function obtenerTimePlayedServidor(
     informacionServidor = null
 ) {
 
-    // -------------------------------------------------
-    // 1. Endpoint /players/{id}/servers/{serverId}
-    // -------------------------------------------------
-
     if (informacionServidor) {
 
         const atributos =
@@ -2235,10 +2185,6 @@ function obtenerTimePlayedServidor(
 
     }
 
-    // -------------------------------------------------
-    // 2. Relación incluida
-    // -------------------------------------------------
-
     const relacion =
         obtenerRelacionServidor(
             jugador,
@@ -2257,10 +2203,6 @@ function obtenerTimePlayedServidor(
         return tiempoRelacion;
 
     }
-
-    // -------------------------------------------------
-    // 3. Included server
-    // -------------------------------------------------
 
     const servidores =
         jugador?._servidoresIncluidos ||
@@ -2460,18 +2402,10 @@ async function construirResultadoJugador(
             relacionServidor
         );
 
-    const onlineEndpoint =
-        informacionServidor?.attributes?.online;
-
     const online =
-        typeof onlineEndpoint ===
-            "boolean"
-            ? onlineEndpoint
-            : (
-                onlineRelacion !== null
-                    ? onlineRelacion
-                    : onlineSesion
-            );
+        onlineRelacion !== null
+            ? onlineRelacion
+            : onlineSesion;
 
     let lastSeen =
         lastSeenServidor;
@@ -2482,50 +2416,6 @@ async function construirResultadoJugador(
             obtenerLastSeenDesdeRelacion(
                 relacionServidor
             );
-
-    }
-
-    const atributosServidor =
-        informacionServidor?.attributes ||
-        {};
-
-    const posiblesLastSeen = [
-
-        atributosServidor.lastSeen,
-
-        atributosServidor.lastSeenAt,
-
-        atributosServidor.last_seen,
-
-        atributosServidor.last_seen_at,
-
-        atributosServidor.lastConnected,
-
-        atributosServidor.lastConnectedAt
-
-    ];
-
-    if (!lastSeen) {
-
-        for (
-            const valor of posiblesLastSeen
-        ) {
-
-            const fecha =
-                convertirFecha(
-                    valor
-                );
-
-            if (fecha) {
-
-                lastSeen =
-                    fecha;
-
-                break;
-
-            }
-
-        }
 
     }
 
@@ -2553,9 +2443,7 @@ async function construirResultadoJugador(
         );
 
     let origenTiempoServidor =
-        informacionServidor
-            ? "battlemetrics.player.server"
-            : "battlemetrics.server.relationship";
+        "battlemetrics.server.relationship";
 
     if (
         segundosServidor <= 0 &&
@@ -2667,15 +2555,12 @@ async function construirResultadoJugador(
             relacionServidor
         );
 
-    const tieneEndpointServidor =
-        Boolean(
-            informacionServidor
-        );
+    const tieneSesionesServidor =
+        sesionesServidor.length > 0;
 
     const historialConfirmado =
-        sesionesServidor.length > 0 ||
-        tieneRelacionServidor ||
-        tieneEndpointServidor;
+        tieneSesionesServidor ||
+        tieneRelacionServidor;
 
     return {
 
@@ -2867,7 +2752,7 @@ async function construirResultadoJugador(
         historialConfirmado,
 
         origen:
-            "global-search+player-server+player-identifiers+player-queries+server-relationship+sessions"
+            "global-search+player-detail+server-relationship+sessions"
 
     };
 
@@ -2877,15 +2762,26 @@ async function construirResultadoJugador(
 // =====================================================
 // COMPROBAR JUGADOR CONTRA SERVIDOR
 //
-// ORDEN:
+// IMPORTANTE:
 //
-// 1. GET /players/{id}/servers/{serverId}
-// 2. GET /players/{id}?include=server
-// 3. sessions si falta información
+// SE ELIMINÓ COMPLETAMENTE:
 //
-// NUNCA:
+// GET /players/{playerId}/servers/{serverId}
 //
-// /servers/{serverId}/relationships/players
+// BattleMetrics devuelve HTTP 400 para perfiles que
+// no tengan historial directo en ese endpoint.
+//
+// NUEVO FLUJO:
+//
+// 1. Obtener perfil completo.
+// 2. Revisar relación con el servidor.
+// 3. Obtener sesiones.
+// 4. Buscar sesiones pertenecientes al servidor.
+// 5. Confirmar historial.
+// 6. Aplicar Last Seen.
+//
+// Esto permite encontrar jugadores históricos sin
+// depender del endpoint problemático.
 // =====================================================
 
 async function comprobarJugadorEnServidor(
@@ -2910,21 +2806,11 @@ async function comprobarJugadorEnServidor(
         );
 
     console.log(
-        `🔍 BM → comprobando ${playerId} directamente contra servidor ${serverId}`
+        `🔍 BM → comprobando ${playerId} contra servidor ${serverId}`
     );
 
     // -------------------------------------------------
-    // 1. ENDPOINT DIRECTO JUGADOR → SERVIDOR
-    // -------------------------------------------------
-
-    const informacionServidor =
-        await obtenerInformacionJugadorServidor(
-            playerId,
-            serverId
-        );
-
-    // -------------------------------------------------
-    // 2. DETALLE DEL JUGADOR
+    // 1. OBTENER DETALLE DEL JUGADOR
     // -------------------------------------------------
 
     const detalle =
@@ -2936,14 +2822,9 @@ async function comprobarJugadorEnServidor(
         detalle ||
         jugador;
 
-    if (
-        detalle?.relationships?.servers?.data
-    ) {
-
-        jugadorCompleto.relationships =
-            detalle.relationships;
-
-    }
+    // -------------------------------------------------
+    // 2. RELACIÓN DEL JUGADOR CON EL SERVIDOR
+    // -------------------------------------------------
 
     const relacionServidor =
         obtenerRelacionServidor(
@@ -2951,35 +2832,13 @@ async function comprobarJugadorEnServidor(
             serverId
         );
 
-    let sesiones = [];
-
-    let ultimaSesionServidor =
-        null;
-
-    let lastSeenServidor =
-        null;
-
-    // -------------------------------------------------
-    // CONFIRMACIÓN
-    // -------------------------------------------------
-
     if (
-        informacionServidor
-    ) {
-
-        console.log(
-
-            `🎯 ${playerId} → endpoint jugador/servidor CONFIRMADO`
-
-        );
-
-    } else if (
         relacionServidor
     ) {
 
         console.log(
 
-            `🎯 ${playerId} → relación jugador/servidor CONFIRMADA`
+            `🎯 ${playerId} → relación jugador/servidor ENCONTRADA`
 
         );
 
@@ -2987,14 +2846,65 @@ async function comprobarJugadorEnServidor(
 
         console.log(
 
-            `⚠️ ${playerId} → sin confirmación directa jugador/servidor`
+            `ℹ️ ${playerId} → no aparece relación directa con ${serverId}, se revisarán sesiones`
 
         );
 
     }
 
     // -------------------------------------------------
-    // ONLINE
+    // 3. SESIONES
+    //
+    // Se descargan para poder confirmar históricos.
+    //
+    // Esto es importante:
+    //
+    // Un jugador puede no aparecer en la relación actual
+    // del perfil, pero sí tener sesiones antiguas en el
+    // servidor.
+    // -------------------------------------------------
+
+    const sesiones =
+        await obtenerSesionesJugador(
+            playerId
+        );
+
+    // -------------------------------------------------
+    // 4. ÚLTIMA SESIÓN DEL SERVIDOR
+    // -------------------------------------------------
+
+    const ultimaSesionServidor =
+        obtenerUltimaSesionEnServidor(
+            sesiones,
+            serverId
+        );
+
+    // -------------------------------------------------
+    // 5. LAST SEEN
+    // -------------------------------------------------
+
+    let lastSeenServidor =
+        obtenerLastSeenDesdeRelacion(
+            relacionServidor
+        );
+
+    const lastSeenSesion =
+        obtenerLastSeenEnServidor(
+            sesiones,
+            serverId
+        );
+
+    if (
+        lastSeenSesion
+    ) {
+
+        lastSeenServidor =
+            lastSeenSesion;
+
+    }
+
+    // -------------------------------------------------
+    // 6. ONLINE
     // -------------------------------------------------
 
     const onlineRelacion =
@@ -3002,131 +2912,30 @@ async function comprobarJugadorEnServidor(
             relacionServidor
         );
 
-    const onlineEndpoint =
-        informacionServidor?.attributes?.online;
-
     let online =
-        typeof onlineEndpoint ===
-            "boolean"
-            ? onlineEndpoint
-            : onlineRelacion;
+        onlineRelacion;
 
-    // -------------------------------------------------
-    // LAST SEEN DIRECTO
-    // -------------------------------------------------
+    const onlineSesion =
+        Boolean(
 
-    lastSeenServidor =
-        obtenerLastSeenDesdeRelacion(
-            relacionServidor
+            ultimaSesionServidor &&
+
+            !ultimaSesionServidor.attributes?.stop
+
         );
 
-    const atributosServidor =
-        informacionServidor?.attributes ||
-        {};
-
-    const posiblesLastSeen = [
-
-        atributosServidor.lastSeen,
-
-        atributosServidor.lastSeenAt,
-
-        atributosServidor.last_seen,
-
-        atributosServidor.last_seen_at,
-
-        atributosServidor.lastConnected,
-
-        atributosServidor.lastConnectedAt
-
-    ];
-
-    if (!lastSeenServidor) {
-
-        for (
-            const valor of posiblesLastSeen
-        ) {
-
-            const fecha =
-                convertirFecha(
-                    valor
-                );
-
-            if (fecha) {
-
-                lastSeenServidor =
-                    fecha;
-
-                break;
-
-            }
-
-        }
-
-    }
-
-    // -------------------------------------------------
-    // SESIONES
-    //
-    // Si tenemos endpoint completo y online/lastSeen
-    // suficientes, evitamos descargar todo el historial.
-    // -------------------------------------------------
-
-    const necesitaSesiones =
-        !informacionServidor ||
-        online === null ||
-        online === undefined ||
-        !lastSeenServidor;
-
     if (
-        necesitaSesiones
+        online === null ||
+        online === undefined
     ) {
 
-        sesiones =
-            await obtenerSesionesJugador(
-                playerId
-            );
-
-        ultimaSesionServidor =
-            obtenerUltimaSesionEnServidor(
-                sesiones,
-                serverId
-            );
-
-        const lastSeenSesion =
-            obtenerLastSeenEnServidor(
-                sesiones,
-                serverId
-            );
-
-        if (
-            lastSeenSesion
-        ) {
-
-            lastSeenServidor =
-                lastSeenSesion;
-
-        }
-
-        const onlineSesion =
-            Boolean(
-                ultimaSesionServidor &&
-                !ultimaSesionServidor.attributes?.stop
-            );
-
-        if (
-            online === null ||
-            online === undefined
-        ) {
-
-            online =
-                onlineSesion;
-
-        }
+        online =
+            onlineSesion;
 
     }
 
     // -------------------------------------------------
-    // DEFAULT OFFLINE
+    // 7. DEFAULT OFFLINE
     // -------------------------------------------------
 
     if (
@@ -3134,18 +2943,28 @@ async function comprobarJugadorEnServidor(
         online === undefined
     ) {
 
-        online = false;
+        online =
+            false;
 
     }
 
     // -------------------------------------------------
-    // CONFIRMAR HISTORIAL DEL SERVIDOR
+    // 8. CONFIRMAR HISTORIAL
+    //
+    // IMPORTANTE:
+    //
+    // Para considerar que el jugador pertenece al
+    // servidor basta con:
+    //
+    // - relación encontrada
+    // O
+    // - una sesión histórica encontrada.
+    //
+    // NO dependemos del endpoint eliminado.
     // -------------------------------------------------
 
     const historialServidor =
         Boolean(
-
-            informacionServidor ||
 
             relacionServidor ||
 
@@ -3165,8 +2984,14 @@ async function comprobarJugadorEnServidor(
 
     }
 
+    console.log(
+
+        `🎯 ${playerId} → HISTORIAL DEL SERVIDOR CONFIRMADO`
+
+    );
+
     // -------------------------------------------------
-    // LAST SEEN
+    // 9. LAST SEEN
     // -------------------------------------------------
 
     const lastSeenMinutes =
@@ -3222,7 +3047,7 @@ async function comprobarJugadorEnServidor(
     }
 
     // -------------------------------------------------
-    // CONSTRUIR RESULTADO
+    // 10. CONSTRUIR RESULTADO
     // -------------------------------------------------
 
     const resultado =
@@ -3242,7 +3067,7 @@ async function comprobarJugadorEnServidor(
 
             relacionServidor,
 
-            informacionServidor
+            null
 
         );
 
@@ -3622,8 +3447,6 @@ module.exports = {
     obtenerLastSeenDesdeRelacion,
 
     obtenerTimePlayedDeRelacion,
-
-    obtenerInformacionJugadorServidor,
 
     obtenerServidoresJugador,
 
