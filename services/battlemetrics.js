@@ -194,9 +194,6 @@ function convertirChileLocalAUTC(
 // =====================================================
 // OBTENER INICIO DE SEMANA EN CHILE
 // =====================================================
-//
-// Semana comienza lunes 00:00.
-// =====================================================
 
 function obtenerInicioSemanaChile(
     fechaActual
@@ -269,15 +266,324 @@ function obtenerInicioMesChile(
 
 
 // =====================================================
+// NORMALIZAR STEAM ID
+// =====================================================
+
+function normalizarSteamId(steamId) {
+
+    if (
+        steamId === null ||
+        steamId === undefined
+    ) {
+
+        return null;
+    }
+
+    const valor =
+        String(steamId)
+            .trim()
+            .replace(/^steam:/i, "");
+
+    if (
+        /^\d{17}$/.test(valor)
+    ) {
+
+        return valor;
+    }
+
+    return null;
+}
+
+
+// =====================================================
+// OBTENER STEAM ID DESDE UN PLAYER BM
+// =====================================================
+//
+// BattleMetrics puede devolver los identifiers
+// relacionados en diferentes estructuras dependiendo
+// del endpoint/permisos.
+//
+// Esta función intenta encontrar un SteamID64
+// sin romper si el dato no viene incluido.
+// =====================================================
+
+function obtenerSteamIdDePlayer(player) {
+
+    if (!player) {
+        return null;
+    }
+
+    const atributos =
+        player.attributes || {};
+
+    const posibles = [
+
+        atributos.steamId,
+
+        atributos.steamID,
+
+        atributos.steamid,
+
+        atributos.platformId,
+
+        atributos.identifier
+
+    ];
+
+    for (
+        const valor of posibles
+    ) {
+
+        const steamId =
+            normalizarSteamId(
+                valor
+            );
+
+        if (steamId) {
+            return steamId;
+        }
+    }
+
+    return null;
+}
+
+
+// =====================================================
+// BUSCAR PLAYER BM POR STEAM ID
+// =====================================================
+//
+// IMPORTANTE:
+//
+// El SteamID64 y el ID interno de BattleMetrics
+// son identificadores diferentes.
+//
+// Esta función intenta localizar el player BM
+// mediante el identificador Steam.
+//
+// Si la API no permite la búsqueda por SteamID
+// con el token actual, devuelve null y la búsqueda
+// tradicional por nombre/servidor puede utilizarse
+// como respaldo.
+// =====================================================
+
+async function searchBattleMetricsPlayerBySteamId(
+    steamId,
+    serverId = null
+) {
+
+    const steamIdNormalizado =
+        normalizarSteamId(
+            steamId
+        );
+
+    if (!steamIdNormalizado) {
+
+        console.log(
+            "⚠️ BM | SteamID inválido:",
+            steamId
+        );
+
+        return null;
+    }
+
+
+    try {
+
+        console.log(
+            `🔎 BM | Buscando SteamID ${steamIdNormalizado}...`
+        );
+
+
+        // =================================================
+        // BÚSQUEDA GLOBAL DE PLAYER
+        // =================================================
+
+        const response =
+            await axios.get(
+                `${BM_API}/players`,
+                {
+                    headers:
+                        getHeaders(),
+
+                    params: {
+
+                        "filter[search]":
+                            steamIdNormalizado,
+
+                        "page[size]":
+                            100
+                    },
+
+                    timeout: 7000
+                }
+            );
+
+
+        const players =
+            response.data?.data ||
+            [];
+
+
+        if (
+            players.length === 0
+        ) {
+
+            console.log(
+                `⚠️ BM | No se encontró jugador para SteamID ${steamIdNormalizado}`
+            );
+
+            return null;
+        }
+
+
+        // =================================================
+        // BUSCAR MATCH EXACTO
+        // =================================================
+
+        const encontrados =
+            players.filter(
+                player => {
+
+                    const steamIdPlayer =
+                        obtenerSteamIdDePlayer(
+                            player
+                        );
+
+                    return (
+                        steamIdPlayer ===
+                        steamIdNormalizado
+                    );
+                }
+            );
+
+
+        if (
+            encontrados.length === 1
+        ) {
+
+            console.log(
+                `✅ BM | SteamID asociado a BM ID ${encontrados[0].id}`
+            );
+
+            return encontrados[0];
+        }
+
+
+        // =================================================
+        // SI LA API DEVUELVE UN SOLO RESULTADO
+        // =================================================
+        //
+        // Algunos resultados de BattleMetrics no
+        // exponen el SteamID directamente en attributes.
+        //
+        // En ese caso, si solo existe un resultado,
+        // devolvemos el jugador para que pueda
+        // comprobarse posteriormente.
+        // =================================================
+
+        if (
+            players.length === 1
+        ) {
+
+            console.log(
+                `ℹ️ BM | Un único resultado para SteamID ${steamIdNormalizado}: ${players[0].id}`
+            );
+
+            return players[0];
+        }
+
+
+        console.log(
+            `⚠️ BM | ${players.length} resultados para SteamID ${steamIdNormalizado}`
+        );
+
+        return {
+            duplicate: true,
+            players: players
+        };
+
+
+    } catch (error) {
+
+        console.error(
+            "❌ BM | Error buscando por SteamID:",
+            error.response?.data ||
+            error.message
+        );
+
+        return null;
+    }
+}
+
+
+// =====================================================
 // 1. BUSCAR JUGADOR EN EL SERVIDOR
+// =====================================================
+//
+// Mantiene la función original para los comandos
+// que todavía trabajan mediante nombre.
+//
+// Ahora acepta opcionalmente steamId.
+//
+// Si se proporciona SteamID, primero intenta buscar
+// directamente por SteamID.
 // =====================================================
 
 async function searchBattleMetricsPlayer(
     playerName,
-    serverId
+    serverId,
+    steamId = null
 ) {
 
     try {
+
+        // =================================================
+        // PRIMERO: STEAM ID
+        // =================================================
+
+        const steamIdNormalizado =
+            normalizarSteamId(
+                steamId
+            );
+
+        if (
+            steamIdNormalizado
+        ) {
+
+            const jugadorPorSteam =
+                await searchBattleMetricsPlayerBySteamId(
+                    steamIdNormalizado,
+                    serverId
+                );
+
+            if (
+                jugadorPorSteam
+            ) {
+
+                if (
+                    jugadorPorSteam.duplicate
+                ) {
+
+                    return jugadorPorSteam;
+                }
+
+                return jugadorPorSteam;
+            }
+        }
+
+
+        // =================================================
+        // RESPALDO: BUSCAR POR NOMBRE EN SERVIDOR
+        // =================================================
+
+        if (
+            !serverId ||
+            !playerName
+        ) {
+
+            return null;
+        }
+
 
         const response =
             await axios.get(
@@ -303,7 +609,9 @@ async function searchBattleMetricsPlayer(
 
 
         const nombreBuscado =
-            playerName
+            String(
+                playerName
+            )
                 .toLowerCase()
                 .trim();
 
@@ -313,8 +621,11 @@ async function searchBattleMetricsPlayer(
                 player => {
 
                     const nombreBM =
-                        player.attributes?.name
-                            ?.toLowerCase()
+                        String(
+                            player.attributes?.name ||
+                            ""
+                        )
+                            .toLowerCase()
                             .trim();
 
                     return (
@@ -334,7 +645,7 @@ async function searchBattleMetricsPlayer(
         ) {
 
             console.log(
-                `⚠️ Nombre duplicado en BM: ${playerName}`
+                `⚠️ BM | Nombre duplicado: ${playerName}`
             );
 
             return {
@@ -350,7 +661,7 @@ async function searchBattleMetricsPlayer(
     } catch (error) {
 
         console.error(
-            "Error buscando jugador en BM:",
+            "❌ BM | Error buscando jugador:",
             error.response?.data ||
             error.message
         );
@@ -587,8 +898,7 @@ async function getBattleMetricsPlayerStatus(
                     );
 
                 return (
-                    fechaB -
-                    fechaA
+                    fechaB - fechaA
                 );
             }
         );
@@ -856,7 +1166,8 @@ async function getBattleMetricsPlayerStatus(
             // =================================================
 
             else if (
-                sesion === sesionActiva
+                sesion ===
+                sesionActiva
             ) {
 
                 fin =
@@ -986,15 +1297,6 @@ async function getBattleMetricsPlayerStatus(
         // =================================================
         // CORRECCIÓN DE HORAS BM
         // =================================================
-        //
-        // Utilizamos el mayor valor entre:
-        //
-        // 1. timePlayed de servidores
-        // 2. suma de sesiones
-        //
-        // Así evitamos que BM entregue 0h cuando
-        // las sesiones sí contienen las horas reales.
-        // =================================================
 
         if (
             segundosSesionesTotales >
@@ -1094,12 +1396,6 @@ async function getBattleMetricsPlayerStatus(
 
         } catch (error) {
 
-            /*
-             * BattleMetrics puede responder 405
-             * en este endpoint. No es crítico para
-             * obtener las horas ni el estado.
-             */
-
             if (
                 error.response?.status !== 405
             ) {
@@ -1110,6 +1406,16 @@ async function getBattleMetricsPlayerStatus(
                 );
             }
         }
+
+
+        // =================================================
+        // STEAM ID SI ESTÁ DISPONIBLE
+        // =================================================
+
+        const steamId =
+            obtenerSteamIdDePlayer(
+                player
+            );
 
 
         // =================================================
@@ -1124,6 +1430,9 @@ async function getBattleMetricsPlayerStatus(
             name:
                 playerAttributes.name ||
                 "Desconocido",
+
+            steamId:
+                steamId,
 
             online:
                 online,
@@ -1146,6 +1455,9 @@ async function getBattleMetricsPlayerStatus(
             server:
                 nombreServidor,
 
+            serverId:
+                servidorActual,
+
             historialNombres:
                 historialNombres
         };
@@ -1160,6 +1472,9 @@ async function getBattleMetricsPlayerStatus(
             {
                 id:
                     resultado.id,
+
+                steamId:
+                    resultado.steamId,
 
                 nombre:
                     resultado.name,
@@ -1258,6 +1573,11 @@ async function getServerLeaderboard(
                         player.attributes?.name ||
                         "Desconocido",
 
+                    steamId:
+                        obtenerSteamIdDePlayer(
+                            player
+                        ),
+
                     timePlayedSeconds:
                         Number(
                             player.meta?.timePlayed
@@ -1296,6 +1616,8 @@ async function getServerLeaderboard(
 module.exports = {
 
     searchBattleMetricsPlayer,
+
+    searchBattleMetricsPlayerBySteamId,
 
     getBattleMetricsPlayerStatus,
 
