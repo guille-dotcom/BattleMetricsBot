@@ -17,6 +17,9 @@ const LIMITE_PAGINAS_BUSQUEDA =
 const LIMITE_PAGINAS_SESIONES =
     1000;
 
+const LIMITE_PAGINAS_SERVIDOR =
+    1000;
+
 
 // =====================================================
 // HEADERS
@@ -520,7 +523,7 @@ function agregarJugadorUnico(
 
 
 // =====================================================
-// BUSCAR TODOS LOS PERFILES
+// BUSCAR TODOS LOS PERFILES POR SEARCH
 // =====================================================
 
 async function ejecutarBusquedaJugadores(
@@ -574,15 +577,6 @@ async function ejecutarBusquedaJugadores(
                     100
 
             };
-
-            /*
-             * Si estamos comprobando un servidor,
-             * pedimos también la relación server.
-             *
-             * IMPORTANTE:
-             * Esto no sustituye la búsqueda global.
-             * Se usa para obtener metadatos del servidor.
-             */
 
             if (serverId) {
 
@@ -663,12 +657,6 @@ async function ejecutarBusquedaJugadores(
 
         if (!siguiente) {
 
-            console.log(
-
-                `🏁 BM /players → no hay más páginas después de ${pagina}`
-
-            );
-
             nextUrl =
                 null;
 
@@ -677,33 +665,130 @@ async function ejecutarBusquedaJugadores(
             nextUrl =
                 siguiente;
 
-            console.log(
-                `➡️ BM /players → siguiente página disponible`
-            );
-
         }
 
         pagina++;
 
     }
 
-    if (
-        pagina >
-        LIMITE_PAGINAS_BUSQUEDA &&
-        nextUrl
+    console.log(
+
+        `📊 BM /players → "${terminoBusqueda}" → ${resultados.length} perfiles únicos`
+
+    );
+
+    return resultados;
+
+}
+
+
+// =====================================================
+// BUSCAR JUGADORES DIRECTAMENTE EN SERVIDOR
+// =====================================================
+
+async function obtenerJugadoresDelServidor(
+    serverId
+) {
+
+    const resultados = [];
+
+    if (!serverId) {
+        return resultados;
+    }
+
+    let nextUrl =
+        `${BM_API}/servers/${serverId}/relationships/players?page[size]=100`;
+
+    let pagina = 1;
+
+    console.log(
+        `🎯 BM → recorriendo TODOS los jugadores relacionados con servidor ${serverId}`
+    );
+
+    while (
+        nextUrl &&
+        pagina <= LIMITE_PAGINAS_SERVIDOR
     ) {
 
-        console.warn(
+        console.log(
 
-            `⚠️ Se alcanzó el límite de seguridad de ${LIMITE_PAGINAS_BUSQUEDA} páginas.`
+            `📡 BM /servers/${serverId}/relationships/players → página ${pagina}`
 
         );
+
+        let response;
+
+        try {
+
+            response =
+                await axios.get(
+
+                    nextUrl,
+
+                    {
+
+                        headers:
+                            getHeaders(),
+
+                        timeout:
+                            20000
+
+                    }
+
+                );
+
+        } catch (error) {
+
+            console.error(
+
+                `❌ Error obteniendo jugadores del servidor ${serverId}, página ${pagina}:`,
+
+                error.response?.data ||
+                error.message
+
+            );
+
+            break;
+
+        }
+
+        const jugadores =
+            response.data?.data ||
+            [];
+
+        console.log(
+
+            `📊 Servidor ${serverId} → página ${pagina}: ${jugadores.length} relaciones`
+
+        );
+
+        for (
+            const jugador of jugadores
+        ) {
+
+            agregarJugadorUnico(
+                resultados,
+                jugador
+            );
+
+        }
+
+        const siguiente =
+            response.data
+                ?.links
+                ?.next;
+
+        nextUrl =
+            siguiente ||
+            null;
+
+        pagina++;
 
     }
 
     console.log(
 
-        `📊 BM /players → "${terminoBusqueda}" → ${resultados.length} perfiles únicos`
+        `🎯 BM → servidor ${serverId} → ${resultados.length} jugador(es) únicos encontrados`
 
     );
 
@@ -732,15 +817,9 @@ async function obtenerCandidatosPorNombre(
         return candidatos;
     }
 
-    /*
-     * IMPORTANTE:
-     *
-     * La búsqueda GLOBAL es la fuente principal.
-     *
-     * No usamos solamente la búsqueda del servidor
-     * porque queremos descubrir todos los perfiles
-     * que tengan ese nombre.
-     */
+    // -------------------------------------------------
+    // 1. BÚSQUEDA GLOBAL
+    // -------------------------------------------------
 
     console.log(
         `🌎 BM → búsqueda GLOBAL para "${nombreBuscado}"`
@@ -762,17 +841,15 @@ async function obtenerCandidatosPorNombre(
 
     }
 
-    /*
-     * También hacemos una búsqueda filtrada por
-     * servidor para obtener perfiles que BM asocie
-     * directamente con ese servidor.
-     */
+    // -------------------------------------------------
+    // 2. BÚSQUEDA POR SERVIDOR + NOMBRE
+    // -------------------------------------------------
 
     if (serverId) {
 
         console.log(
 
-            `🎯 BM → búsqueda adicional en servidor ${serverId}`
+            `🎯 BM → búsqueda "${nombreBuscado}" filtrada por servidor ${serverId}`
 
         );
 
@@ -795,9 +872,56 @@ async function obtenerCandidatosPorNombre(
 
     }
 
+    // -------------------------------------------------
+    // 3. BÚSQUEDA DIRECTA DEL SERVIDOR
+    // -------------------------------------------------
+
+    if (serverId) {
+
+        console.log(
+
+            `🔍 BM → búsqueda DIRECTA de jugadores del servidor ${serverId}`
+
+        );
+
+        const jugadoresServidor =
+            await obtenerJugadoresDelServidor(
+                serverId
+            );
+
+        const nombreObjetivo =
+            normalizarNombre(
+                nombreBuscado
+            );
+
+        for (
+            const jugador of jugadoresServidor
+        ) {
+
+            const nombreJugador =
+                normalizarNombre(
+                    jugador.attributes?.name
+                );
+
+            if (
+                nombreJugador ===
+                nombreObjetivo
+            ) {
+
+                agregarJugadorUnico(
+                    candidatos,
+                    jugador
+                );
+
+            }
+
+        }
+
+    }
+
     console.log(
 
-        `👥 BM → ${candidatos.length} candidato(s) únicos`
+        `👥 BM → ${candidatos.length} candidato(s) únicos después de TODAS las búsquedas`
 
     );
 
@@ -1681,12 +1805,6 @@ async function construirResultadoJugador(
 
     }
 
-    /*
-     * Si está online pero no tenemos una sesión
-     * reciente del servidor, usamos la relación de
-     * BattleMetrics como fuente del estado.
-     */
-
     if (
         online &&
         !lastSeen
@@ -2031,7 +2149,7 @@ async function construirResultadoJugador(
         historialConfirmado,
 
         origen:
-            "global-search+server-search+exact-name+server-relationship+sessions+last-seen"
+            "global-search+server-search+server-players+exact-name+server-relationship+sessions+last-seen"
 
     };
 
@@ -2104,7 +2222,7 @@ async function buscarJugadoresHistoricos(
         ) {
 
             console.log(
-                `❌ No se encontraron perfiles para "${nombreBuscado}"`
+                `❌ No se encontraron perfiles exactos para "${nombreBuscado}"`
             );
 
             return [];
@@ -2159,12 +2277,6 @@ async function buscarJugadoresHistoricos(
             let jugador =
                 detalle ||
                 perfil;
-
-            /*
-             * Conservamos la relación de servidores
-             * obtenida en la búsqueda si el detalle
-             * no la trae.
-             */
 
             if (
                 !jugador.relationships
@@ -2249,14 +2361,6 @@ async function buscarJugadoresHistoricos(
                     serverIdString
                 );
 
-            /*
-             * FALLBACK IMPORTANTE:
-             *
-             * Si las sesiones disponibles no contienen
-             * el servidor, intentamos usar los metadatos
-             * de la relación del servidor.
-             */
-
             if (!lastSeenServidor) {
 
                 lastSeenServidor =
@@ -2289,14 +2393,6 @@ async function buscarJugadoresHistoricos(
                         lastSeenServidor
                     );
 
-            /*
-             * Si no hay sesión del servidor pero sí
-             * relación, no descartamos inmediatamente.
-             *
-             * Primero comprobamos el estado de la
-             * relación.
-             */
-
             const historialServidor =
                 Boolean(
                     ultimaSesionServidor ||
@@ -2315,28 +2411,13 @@ async function buscarJugadoresHistoricos(
 
             }
 
-            /*
-             * ONLINE:
-             *
-             * Siempre válido.
-             */
-
             if (online) {
 
                 console.log(
-
                     `🟢 ${playerId} → ONLINE`
-
                 );
 
             } else {
-
-                /*
-                 * OFFLINE:
-                 *
-                 * Debemos tener Last Seen y estar
-                 * dentro de los 60 minutos.
-                 */
 
                 if (
                     lastSeenMinutes === null ||
@@ -2592,6 +2673,8 @@ module.exports = {
 
     obtenerLastSeenDesdeRelacion,
 
-    obtenerTimePlayedDeRelacion
+    obtenerTimePlayedDeRelacion,
+
+    obtenerJugadoresDelServidor
 
 };

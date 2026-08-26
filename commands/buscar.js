@@ -154,6 +154,7 @@ module.exports = {
                     .addFields(
 
                         {
+
                             name:
                                 "🎮 Servidor consultado",
 
@@ -162,9 +163,11 @@ module.exports = {
 
                             inline:
                                 true
+
                         },
 
                         {
+
                             name:
                                 "🔎 Nombre",
 
@@ -173,17 +176,20 @@ module.exports = {
 
                             inline:
                                 true
+
                         },
 
                         {
+
                             name:
                                 "📡 Método",
 
                             value:
-                                "`Todos los perfiles + nombre exacto + servidor + sesiones + Last Seen`",
+                                "`Búsqueda global + búsqueda por servidor + jugadores directos del servidor + nombre exacto + sesiones + Last Seen`",
 
                             inline:
                                 false
+
                         }
 
                     )
@@ -207,7 +213,7 @@ module.exports = {
         }
 
         // =================================================
-        // EMBED
+        // EMBED PRINCIPAL
         // =================================================
 
         const embed =
@@ -254,55 +260,80 @@ module.exports = {
                 });
 
         // =================================================
-        // PERFILES
+        // RESULTADOS
         // =================================================
 
+        const resultadosPorCampo = 5;
+
         for (
-            let indice = 0;
-            indice < jugadores.length;
-            indice++
+            let inicio = 0;
+            inicio < jugadores.length;
+            inicio += resultadosPorCampo
         ) {
 
-            const jugador =
-                jugadores[indice];
+            const grupo =
+                jugadores.slice(
+                    inicio,
+                    inicio + resultadosPorCampo
+                );
 
-            const estado =
-                jugador.online
+            const texto =
+                grupo
+                    .map(
+                        (jugador, posicion) => {
 
-                    ? `🟢 **Online** · ${jugador.tiempoSesionActual || "0m"}`
+                            const indice =
+                                inicio +
+                                posicion;
 
-                    : `🔴 **Offline** · hace ${jugador.lastSeenMinutes ?? "?"} min`;
+                            const estado =
+                                jugador.online
 
-            const lastSeen =
-                jugador.online
+                                    ? `🟢 **Online** · ${jugador.tiempoSesionActual || "0m"}`
 
-                    ? "Actualmente conectado"
+                                    : `🔴 **Offline** · hace ${jugador.lastSeenMinutes ?? "?"} min`;
 
-                    : jugador.lastSeen ||
-                      "No disponible";
+                            const lastSeen =
+                                jugador.online
+
+                                    ? "Actualmente conectado"
+
+                                    : jugador.lastSeen ||
+                                      "No disponible";
+
+                            return (
+
+                                `${jugador.online ? "🟢" : "🔴"} **Perfil ${indice + 1} — ${jugador.name}**\n` +
+
+                                `🆔 **BattleMetrics:** [${jugador.id}](${jugador.perfilUrl})\n` +
+
+                                `🎮 **Estado:** ${estado}\n` +
+
+                                `📈 **Horas servidor:** \`${jugador.tiempoServidor || "0m"}\`\n` +
+
+                                `🌐 **Horas totales BM:** \`${jugador.tiempoJugado || "0m"}\`\n` +
+
+                                `🔄 **Sesiones servidor:** \`${jugador.sesionesServidor || 0}\`\n` +
+
+                                `📅 **Primera conexión:** \`${jugador.primeraConexion || "No disponible"}\`\n` +
+
+                                `🕐 **Última conexión:** \`${jugador.ultimaConexion || "Nunca"}\`\n` +
+
+                                `⏱️ **Last Seen:** \`${lastSeen}\``
+
+                            );
+
+                        }
+                    )
+                    .join("\n\n");
 
             embed.addFields({
 
                 name:
-                    `${jugador.online ? "🟢" : "🔴"} ${jugador.name} · Perfil ${indice + 1}`,
+                    `👥 Perfiles ${inicio + 1}-${Math.min(inicio + resultadosPorCampo, jugadores.length)}`,
 
                 value:
-
-                    `🆔 **BattleMetrics:** [${jugador.id}](${jugador.perfilUrl})\n` +
-
-                    `🎮 **Estado:** ${estado}\n` +
-
-                    `📈 **Horas en servidor:** \`${jugador.tiempoServidor || "0m"}\`\n` +
-
-                    `🌐 **Horas totales BM:** \`${jugador.tiempoJugado || "0m"}\`\n` +
-
-                    `🔄 **Sesiones en servidor:** \`${jugador.sesionesServidor || 0}\`\n` +
-
-                    `📅 **Primera conexión:** \`${jugador.primeraConexion || "No disponible"}\`\n` +
-
-                    `🕐 **Última conexión:** \`${jugador.ultimaConexion || "Nunca"}\`\n` +
-
-                    `⏱️ **Last Seen:** \`${lastSeen}\``,
+                    texto,
 
                 inline:
                     false
@@ -315,18 +346,24 @@ module.exports = {
         // CRITERIO
         // =================================================
 
-        embed.addFields({
+        if (
+            embed.data.fields.length < 25
+        ) {
 
-            name:
-                "📡 Criterio de búsqueda",
+            embed.addFields({
 
-            value:
-                "Se revisan todos los perfiles que BattleMetrics devuelve para el nombre buscado. Se exige coincidencia exacta del nombre y relación/actividad en el servidor configurado. Los perfiles offline se muestran únicamente si su último registro está dentro de los **60 minutos**.",
+                name:
+                    "📡 Criterio de búsqueda",
 
-            inline:
-                false
+                value:
+                    "Se revisan todos los perfiles exactos que BattleMetrics devuelve mediante búsqueda global, búsqueda por servidor y recorrido directo de los jugadores relacionados con el servidor. Los perfiles se comparan por nombre exacto. Se exige relación o historial en el servidor configurado. Los perfiles offline se muestran únicamente si su último registro está dentro de los **60 minutos**.",
 
-        });
+                inline:
+                    false
+
+            });
+
+        }
 
         // =================================================
         // FOOTER
