@@ -30,8 +30,30 @@ const serverConfigSchema = new mongoose.Schema({
     steamIdMyId: {
         type: String,
         default: null
+    },
+
+    // ==========================================
+    // CONFIGURACIÓN TIENDA RUST
+    // ==========================================
+
+    rustStoreChannelId: {
+        type: String,
+        default: null
+    },
+
+    rustStoreEnabled: {
+        type: Boolean,
+        default: false
+    },
+
+    rustStoreLastPublishedWeek: {
+        type: String,
+        default: null
     }
 
 });
 
-module.exports = mongoose.model("ServerConfig", serverConfigSchema);
+module.exports = mongoose.model(
+    "ServerConfig",
+    serverConfigSchema
+);

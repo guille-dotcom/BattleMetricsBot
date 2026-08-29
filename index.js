@@ -25,6 +25,14 @@ const {
 } = require("./services/trackerService");
 
 // ======================
+// TIENDA RUST AUTOMÁTICA
+// ======================
+
+const {
+    iniciarTiendaAutomatica
+} = require("./services/rustStore");
+
+// ======================
 // PUERTO PARA RENDER
 // ======================
 
@@ -460,6 +468,33 @@ client.once(
             30 * 1000
         );
 
+        // ======================
+        // TIENDA RUST AUTOMÁTICA
+        // ======================
+
+        console.log(
+            "🛒 Iniciando sistema automático de tienda Rust..."
+        );
+
+        try {
+
+            iniciarTiendaAutomatica(
+                client
+            );
+
+            console.log(
+                "🛒 Sistema automático de tienda Rust iniciado correctamente."
+            );
+
+        } catch (error) {
+
+            console.error(
+                "❌ Error iniciando tienda Rust automática:",
+                error
+            );
+
+        }
+
     }
 );
 
@@ -531,6 +566,10 @@ Después podrás usar:
 
 💣 **Raid Calculator**
 💣 \`/raid\`
+
+
+🛒 **Tienda Rust**
+🛒 \`/configurar-tienda\`
 
 
 📚 Usa:
