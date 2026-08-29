@@ -8,8 +8,7 @@ const {
     ButtonStyle
 } = require("discord.js");
 
-const ServerConfig =
-    require("../models/ServerConfig");
+const ServerConfig = require("../models/ServerConfig");
 
 // =====================================================
 // CONFIGURACIÓN
@@ -33,15 +32,13 @@ const CHECK_INTERVAL =
 
 function obtenerFechaChile() {
 
-    const ahora =
-        new Date();
+    const ahora = new Date();
 
     const partes =
         new Intl.DateTimeFormat(
             "en-CA",
             {
-                timeZone:
-                    TIMEZONE_CHILE,
+                timeZone: TIMEZONE_CHILE,
                 year: "numeric",
                 month: "2-digit",
                 day: "2-digit"
@@ -67,8 +64,7 @@ function obtenerFechaChile() {
         year,
         month,
         day,
-        fecha:
-            `${year}-${month}-${day}`
+        fecha: `${year}-${month}-${day}`
     };
 }
 
@@ -81,13 +77,10 @@ function obtenerDiaChile() {
     return new Intl.DateTimeFormat(
         "en-US",
         {
-            timeZone:
-                TIMEZONE_CHILE,
+            timeZone: TIMEZONE_CHILE,
             weekday: "short"
         }
-    ).format(
-        new Date()
-    );
+    ).format(new Date());
 }
 
 // =====================================================
@@ -96,15 +89,13 @@ function obtenerDiaChile() {
 
 function obtenerSemanaTienda() {
 
-    const ahora =
-        new Date();
+    const ahora = new Date();
 
     const partes =
         new Intl.DateTimeFormat(
             "en-US",
             {
-                timeZone:
-                    TIMEZONE_CHILE,
+                timeZone: TIMEZONE_CHILE,
                 weekday: "short",
                 year: "numeric",
                 month: "2-digit",
@@ -159,6 +150,21 @@ function convertirUrl(url) {
 }
 
 // =====================================================
+// LIMPIAR TEXTO
+// =====================================================
+
+function limpiarTexto(texto) {
+
+    if (!texto) {
+        return "";
+    }
+
+    return String(texto)
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+// =====================================================
 // EXTRAER PRECIO
 // =====================================================
 
@@ -169,9 +175,7 @@ function extraerPrecio(texto) {
     }
 
     const limpio =
-        texto
-            .replace(/\s+/g, " ")
-            .trim();
+        limpiarTexto(texto);
 
     /*
      * Steam puede devolver:
@@ -180,7 +184,7 @@ function extraerPrecio(texto) {
      * R$ 9,99
      * €9.99
      * £9.99
-     * etc.
+     * ¥999
      */
 
     const match =
@@ -194,8 +198,7 @@ function extraerPrecio(texto) {
 
     /*
      * Segundo intento:
-     * buscar cualquier bloque que termine
-     * en números con decimales.
+     * buscar números con decimales.
      */
 
     const fallback =
@@ -216,6 +219,10 @@ function extraerPrecio(texto) {
 
 function obtenerImagen(elemento) {
 
+    if (!elemento || !elemento.length) {
+        return "";
+    }
+
     const img =
         elemento.find("img").first();
 
@@ -228,8 +235,163 @@ function obtenerImagen(elemento) {
         img.attr("data-src") ||
         img.attr("data-original") ||
         img.attr("data-lazy-src") ||
+        img.attr("data-image") ||
         ""
     );
+}
+
+// =====================================================
+// EXTRAER NOMBRE
+// =====================================================
+
+function obtenerNombre(elemento) {
+
+    if (!elemento || !elemento.length) {
+        return "";
+    }
+
+    let nombre = "";
+
+    const selectores = [
+        ".item_store_item_name",
+        ".itemstore_item_name",
+        ".item_name",
+        ".store_item_name",
+        ".name",
+        "[data-item-name]",
+        "[data-name]"
+    ];
+
+    for (const selector of selectores) {
+
+        const encontrado =
+            elemento.find(selector).first();
+
+        if (
+            encontrado &&
+            encontrado.length
+        ) {
+
+            nombre =
+                limpiarTexto(
+                    encontrado.text()
+                );
+
+            if (nombre) {
+                break;
+            }
+
+            nombre =
+                encontrado.attr(
+                    "data-item-name"
+                ) ||
+                encontrado.attr(
+                    "data-name"
+                ) ||
+                "";
+
+            if (nombre) {
+                break;
+            }
+        }
+    }
+
+    if (!nombre) {
+
+        nombre =
+            elemento.attr(
+                "data-item-name"
+            ) ||
+            elemento.attr(
+                "data-name"
+            ) ||
+            "";
+    }
+
+    return limpiarTexto(nombre);
+}
+
+// =====================================================
+// VALIDAR NOMBRE
+// =====================================================
+
+function nombreValido(nombre) {
+
+    if (!nombre) {
+        return false;
+    }
+
+    if (nombre.length < 2) {
+        return false;
+    }
+
+    const ignorar = [
+        "rust item store",
+        "featured",
+        "limited",
+        "general",
+        "new releases",
+        "cart",
+        "top sellers",
+        "all",
+        "search",
+        "browse"
+    ];
+
+    return !ignorar.includes(
+        nombre.toLowerCase()
+    );
+}
+
+// =====================================================
+// AGREGAR ITEM
+// =====================================================
+
+function agregarItem(
+    items,
+    vistos,
+    item
+) {
+
+    if (!item) {
+        return;
+    }
+
+    const nombre =
+        limpiarTexto(item.nombre);
+
+    const precio =
+        limpiarTexto(item.precio);
+
+    const enlace =
+        convertirUrl(item.enlace);
+
+    const imagen =
+        convertirUrl(item.imagen);
+
+    if (!nombreValido(nombre)) {
+        return;
+    }
+
+    if (!precio) {
+        return;
+    }
+
+    const key =
+        `${nombre.toLowerCase()}|${precio}`;
+
+    if (vistos.has(key)) {
+        return;
+    }
+
+    vistos.add(key);
+
+    items.push({
+        nombre,
+        precio,
+        imagen,
+        enlace
+    });
 }
 
 // =====================================================
@@ -250,8 +412,9 @@ async function obtenerTiendaRust() {
                 {
                     timeout: 30000,
 
-                    headers: {
+                    maxRedirects: 5,
 
+                    headers: {
                         "User-Agent":
                             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
 
@@ -265,7 +428,10 @@ async function obtenerTiendaRust() {
                             "no-cache",
 
                         "Pragma":
-                            "no-cache"
+                            "no-cache",
+
+                        "Upgrade-Insecure-Requests":
+                            "1"
                     }
                 }
             );
@@ -282,21 +448,26 @@ async function obtenerTiendaRust() {
             return [];
         }
 
+        console.log(
+            `🛒 Steam respondió HTTP ${response.status}`
+        );
+
+        const html =
+            String(response.data);
+
+        console.log(
+            `🛒 HTML recibido: ${html.length} caracteres`
+        );
+
         const $ =
-            cheerio.load(
-                response.data
-            );
+            cheerio.load(html);
 
         const items = [];
         const vistos = new Set();
 
         // =================================================
-        // MÉTODO PRINCIPAL
-        //
-        // Steam utiliza enlaces:
-        //
-        // /itemstore/252490/detail/XXXXX/
-        //
+        // MÉTODO 1
+        // ENLACES DIRECTOS A DETAIL
         // =================================================
 
         $(
@@ -307,71 +478,59 @@ async function obtenerTiendaRust() {
                 const el =
                     $(element);
 
-                let enlace =
-                    el.attr("href") || "";
-
-                enlace =
+                const enlace =
                     convertirUrl(
-                        enlace
+                        el.attr("href") || ""
                     );
 
-                let nombre =
-                    el.text()
-                        .replace(/\s+/g, " ")
-                        .trim();
-
-                /*
-                 * Si el texto del enlace viene vacío,
-                 * buscar información en el contenedor.
-                 */
+                let contenedor =
+                    el.closest(
+                        [
+                            ".item_store_item",
+                            ".itemstore_item",
+                            ".item_store",
+                            ".store_item",
+                            ".item",
+                            ".itemstore_item"
+                        ].join(", ")
+                    );
 
                 if (
-                    !nombre ||
-                    nombre.length < 2
+                    !contenedor ||
+                    !contenedor.length
                 ) {
-
-                    const contenedor =
-                        el.closest(
-                            ".item_store_item, .itemstore_item, .item, .store_item"
-                        );
-
-                    if (
-                        contenedor &&
-                        contenedor.length
-                    ) {
-
-                        nombre =
-                            contenedor
-                                .find(
-                                    ".item_store_item_name, .itemstore_item_name, .item_name, .name"
-                                )
-                                .first()
-                                .text()
-                                .replace(/\s+/g, " ")
-                                .trim();
-                    }
+                    contenedor = el.parent();
                 }
 
-                /*
-                 * Buscar precio en el propio enlace
-                 * y después en su contenedor.
-                 */
+                let nombre =
+                    obtenerNombre(
+                        contenedor
+                    );
+
+                if (!nombre) {
+
+                    nombre =
+                        limpiarTexto(
+                            el.text()
+                        );
+                }
+
+                if (!nombre) {
+
+                    nombre =
+                        limpiarTexto(
+                            el.attr(
+                                "title"
+                            )
+                        );
+                }
 
                 let precio =
                     extraerPrecio(
                         el.text()
                     );
 
-                let contenedor =
-                    el.closest(
-                        ".item_store_item, .itemstore_item, .item, .store_item"
-                    );
-
-                if (
-                    !precio &&
-                    contenedor &&
-                    contenedor.length
-                ) {
+                if (!precio) {
 
                     precio =
                         extraerPrecio(
@@ -379,42 +538,10 @@ async function obtenerTiendaRust() {
                         );
                 }
 
-                /*
-                 * Buscar nombre mediante atributos
-                 */
-
-                if (
-                    !nombre &&
-                    contenedor &&
-                    contenedor.length
-                ) {
-
-                    nombre =
-                        contenedor.attr(
-                            "data-item-name"
-                        ) ||
-                        contenedor.attr(
-                            "data-name"
-                        ) ||
-                        "";
-                }
-
-                /*
-                 * Imagen
-                 */
-
-                let imagen = "";
-
-                if (
-                    contenedor &&
-                    contenedor.length
-                ) {
-
-                    imagen =
-                        obtenerImagen(
-                            contenedor
-                        );
-                }
+                let imagen =
+                    obtenerImagen(
+                        contenedor
+                    );
 
                 if (!imagen) {
 
@@ -424,109 +551,37 @@ async function obtenerTiendaRust() {
                         );
                 }
 
-                nombre =
-                    nombre
-                        .replace(/\s+/g, " ")
-                        .trim();
-
-                precio =
-                    precio
-                        .replace(/\s+/g, " ")
-                        .trim();
-
-                // =================================================
-                // VALIDACIÓN
-                // =================================================
-
-                if (
-                    !nombre ||
-                    nombre.length < 2
-                ) {
-                    return;
-                }
-
-                /*
-                 * Ya no exigimos "$".
-                 *
-                 * Steam puede devolver R$, €, £, etc.
-                 */
-
-                if (!precio) {
-                    return;
-                }
-
-                /*
-                 * Evitar basura
-                 */
-
-                const nombreLower =
-                    nombre.toLowerCase();
-
-                const ignorar = [
-                    "rust item store",
-                    "featured",
-                    "limited",
-                    "general",
-                    "new releases",
-                    "cart",
-                    "top sellers",
-                    "all"
-                ];
-
-                if (
-                    ignorar.includes(
-                        nombreLower
-                    )
-                ) {
-                    return;
-                }
-
-                // =================================================
-                // DUPLICADOS
-                // =================================================
-
-                const key =
-                    `${nombreLower}|${precio}`;
-
-                if (
-                    vistos.has(key)
-                ) {
-                    return;
-                }
-
-                vistos.add(key);
-
-                items.push({
-
-                    nombre,
-
-                    precio,
-
-                    imagen,
-
-                    enlace
-                });
+                agregarItem(
+                    items,
+                    vistos,
+                    {
+                        nombre,
+                        precio,
+                        imagen,
+                        enlace
+                    }
+                );
             }
         );
 
         // =================================================
-        // FALLBACK 2
-        //
-        // Buscar contenedores que tengan enlaces
-        // de detalle aunque el selector anterior
-        // no haya encontrado información suficiente.
+        // MÉTODO 2
+        // CONTENEDORES DE ITEMS
         // =================================================
 
-        if (
-            items.length === 0
-        ) {
+        if (items.length === 0) {
 
             console.log(
                 "⚠️ Selector principal no encontró artículos. Ejecutando fallback..."
             );
 
             $(
-                '[class*="item_store"], [class*="itemstore"], [class*="store_item"]'
+                [
+                    '[class*="item_store"]',
+                    '[class*="itemstore"]',
+                    '[class*="store_item"]',
+                    '[class*="itemStore"]'
+                ].join(", ")
             ).each(
                 (index, element) => {
 
@@ -547,24 +602,32 @@ async function obtenerTiendaRust() {
 
                     const enlace =
                         convertirUrl(
-                            link.attr("href")
+                            link.attr(
+                                "href"
+                            )
                         );
 
                     let nombre =
-                        el.find(
-                            ".item_store_item_name, .itemstore_item_name, .item_name, .name"
-                        )
-                            .first()
-                            .text()
-                            .replace(/\s+/g, " ")
-                            .trim();
+                        obtenerNombre(
+                            el
+                        );
 
                     if (!nombre) {
 
                         nombre =
-                            link.text()
-                                .replace(/\s+/g, " ")
-                                .trim();
+                            limpiarTexto(
+                                link.text()
+                            );
+                    }
+
+                    if (!nombre) {
+
+                        nombre =
+                            limpiarTexto(
+                                link.attr(
+                                    "title"
+                                )
+                            );
                     }
 
                     const precio =
@@ -577,49 +640,129 @@ async function obtenerTiendaRust() {
                             el
                         );
 
-                    if (
-                        !nombre ||
-                        !precio
-                    ) {
-                        return;
-                    }
-
-                    const key =
-                        `${nombre.toLowerCase()}|${precio}`;
-
-                    if (
-                        vistos.has(key)
-                    ) {
-                        return;
-                    }
-
-                    vistos.add(key);
-
-                    items.push({
-
-                        nombre,
-
-                        precio,
-
-                        imagen,
-
-                        enlace
-                    });
+                    agregarItem(
+                        items,
+                        vistos,
+                        {
+                            nombre,
+                            precio,
+                            imagen,
+                            enlace
+                        }
+                    );
                 }
             );
         }
 
         // =================================================
-        // RESULTADO
+        // MÉTODO 3
+        // BUSCAR CUALQUIER URL DETAIL
+        // =================================================
+
+        if (items.length === 0) {
+
+            console.log(
+                "⚠️ Fallback 2 sin resultados. Buscando URLs detail directamente..."
+            );
+
+            $("a").each(
+                (index, element) => {
+
+                    const el =
+                        $(element);
+
+                    const href =
+                        el.attr(
+                            "href"
+                        ) || "";
+
+                    if (
+                        !href.includes(
+                            "/itemstore/252490/detail/"
+                        )
+                    ) {
+                        return;
+                    }
+
+                    const enlace =
+                        convertirUrl(
+                            href
+                        );
+
+                    let contenedor =
+                        el.parent();
+
+                    if (
+                        !contenedor ||
+                        !contenedor.length
+                    ) {
+                        return;
+                    }
+
+                    let nombre =
+                        limpiarTexto(
+                            el.text()
+                        );
+
+                    if (!nombre) {
+
+                        nombre =
+                            limpiarTexto(
+                                el.attr(
+                                    "title"
+                                )
+                            );
+                    }
+
+                    if (!nombre) {
+
+                        nombre =
+                            obtenerNombre(
+                                contenedor
+                            );
+                    }
+
+                    let precio =
+                        extraerPrecio(
+                            el.text()
+                        );
+
+                    if (!precio) {
+
+                        precio =
+                            extraerPrecio(
+                                contenedor.text()
+                            );
+                    }
+
+                    const imagen =
+                        obtenerImagen(
+                            contenedor
+                        );
+
+                    agregarItem(
+                        items,
+                        vistos,
+                        {
+                            nombre,
+                            precio,
+                            imagen,
+                            enlace
+                        }
+                    );
+                }
+            );
+        }
+
+        // =================================================
+        // DIAGNÓSTICO
         // =================================================
 
         console.log(
             `🛒 Steam devolvió ${items.length} artículos`
         );
 
-        if (
-            items.length > 0
-        ) {
+        if (items.length > 0) {
 
             items.forEach(
                 (item, index) => {
@@ -630,12 +773,49 @@ async function obtenerTiendaRust() {
 
                 }
             );
+
+        } else {
+
+            console.log(
+                "⚠️ Steam todavía no entregó artículos."
+            );
+
+            // Diagnóstico útil para Render
+            if (
+                html.includes(
+                    "Steam Community"
+                )
+            ) {
+
+                console.log(
+                    "⚠️ Steam parece haber devuelto una página de bloqueo/redirección."
+                );
+            }
+
+            if (
+                html.includes(
+                    "captcha"
+                )
+            ) {
+
+                console.log(
+                    "⚠️ Steam devolvió CAPTCHA."
+                );
+            }
+
+            if (
+                html.includes(
+                    "Access Denied"
+                )
+            ) {
+
+                console.log(
+                    "⚠️ Steam devolvió Access Denied."
+                );
+            }
         }
 
-        return items.slice(
-            0,
-            12
-        );
+        return items.slice(0, 12);
 
     } catch (error) {
 
@@ -643,6 +823,16 @@ async function obtenerTiendaRust() {
             "❌ Error consultando tienda Steam:",
             error.message
         );
+
+        if (
+            error.response
+        ) {
+
+            console.error(
+                `❌ HTTP: ${error.response.status}`
+            );
+
+        }
 
         return [];
     }
@@ -652,9 +842,7 @@ async function obtenerTiendaRust() {
 // CREAR EMBED
 // =====================================================
 
-function crearEmbed(
-    items
-) {
+function crearEmbed(items) {
 
     const embed =
         new EmbedBuilder()
@@ -697,7 +885,6 @@ function crearEmbed(
         }
 
         embed.addFields({
-
             name:
                 `🎨 ${item.nombre}`,
 
@@ -721,9 +908,7 @@ function crearEmbed(
                 )
         );
 
-    if (
-        imagen
-    ) {
+    if (imagen) {
 
         embed.setThumbnail(
             imagen.imagen
@@ -766,9 +951,7 @@ function crearBotonTienda() {
 // PUBLICAR EN CANAL
 // =====================================================
 
-async function publicarTienda(
-    channel
-) {
+async function publicarTienda(channel) {
 
     const items =
         await obtenerTiendaRust();
@@ -800,6 +983,7 @@ async function publicarTienda(
         components: [
             row
         ]
+
     });
 
     return items;
@@ -843,6 +1027,7 @@ async function publicarTiendaManual(
         components: [
             row
         ]
+
     });
 }
 
@@ -850,21 +1035,17 @@ async function publicarTiendaManual(
 // REVISAR TIENDA AUTOMÁTICA
 // =====================================================
 
-let tiendaRevisando =
-    false;
+let tiendaRevisando = false;
 
 async function revisarTiendaAutomatica(
     client
 ) {
 
-    if (
-        tiendaRevisando
-    ) {
+    if (tiendaRevisando) {
         return;
     }
 
-    tiendaRevisando =
-        true;
+    tiendaRevisando = true;
 
     try {
 
@@ -880,9 +1061,7 @@ async function revisarTiendaAutomatica(
                 "Thu",
                 "Fri",
                 "Sat"
-            ].includes(
-                dia
-            )
+            ].includes(dia)
         ) {
 
             return;
@@ -901,6 +1080,7 @@ async function revisarTiendaAutomatica(
                 rustStoreChannelId: {
                     $ne: null
                 }
+
             });
 
         if (
@@ -1005,6 +1185,7 @@ async function revisarTiendaAutomatica(
                     components: [
                         row
                     ]
+
                 });
 
                 // =========================================
@@ -1103,4 +1284,5 @@ module.exports = {
     revisarTiendaAutomatica,
 
     iniciarTiendaAutomatica
+
 };
