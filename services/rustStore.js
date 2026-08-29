@@ -18,6 +18,9 @@ const ServerConfig =
 const STEAM_STORE_URL =
     "https://store.steampowered.com/itemstore/252490/browse/?filter=Limited";
 
+const STEAM_BASE_URL =
+    "https://store.steampowered.com";
+
 const TIMEZONE_CHILE =
     "America/Santiago";
 
@@ -75,19 +78,16 @@ function obtenerFechaChile() {
 
 function obtenerDiaChile() {
 
-    const fecha =
-        new Intl.DateTimeFormat(
-            "en-US",
-            {
-                timeZone:
-                    TIMEZONE_CHILE,
-                weekday: "short"
-            }
-        ).format(
-            new Date()
-        );
-
-    return fecha;
+    return new Intl.DateTimeFormat(
+        "en-US",
+        {
+            timeZone:
+                TIMEZONE_CHILE,
+            weekday: "short"
+        }
+    ).format(
+        new Date()
+    );
 }
 
 // =====================================================
@@ -99,7 +99,7 @@ function obtenerSemanaTienda() {
     const ahora =
         new Date();
 
-    const formatter =
+    const partes =
         new Intl.DateTimeFormat(
             "en-US",
             {
@@ -110,12 +110,7 @@ function obtenerSemanaTienda() {
                 month: "2-digit",
                 day: "2-digit"
             }
-        );
-
-    const partes =
-        formatter.formatToParts(
-            ahora
-        );
+        ).formatToParts(ahora);
 
     const weekday =
         partes.find(
@@ -137,14 +132,104 @@ function obtenerSemanaTienda() {
             p => p.type === "day"
         )?.value;
 
-    // ==========================================
-    // La rotación comienza el jueves.
-    //
-    // Si todavía estamos miércoles,
-    // utilizamos la última rotación.
-    // ==========================================
-
     return `${year}-${month}-${day}-${weekday}`;
+}
+
+// =====================================================
+// CONVERTIR URL
+// =====================================================
+
+function convertirUrl(url) {
+
+    if (!url) {
+        return "";
+    }
+
+    url = String(url).trim();
+
+    if (url.startsWith("//")) {
+        return `https:${url}`;
+    }
+
+    if (url.startsWith("/")) {
+        return `${STEAM_BASE_URL}${url}`;
+    }
+
+    return url;
+}
+
+// =====================================================
+// EXTRAER PRECIO
+// =====================================================
+
+function extraerPrecio(texto) {
+
+    if (!texto) {
+        return "";
+    }
+
+    const limpio =
+        texto
+            .replace(/\s+/g, " ")
+            .trim();
+
+    /*
+     * Steam puede devolver:
+     *
+     * $9.99
+     * R$ 9,99
+     * €9.99
+     * £9.99
+     * etc.
+     */
+
+    const match =
+        limpio.match(
+            /(?:US\$|R\$|[$€£¥₹₽])\s*\d+(?:[.,]\d{1,2})?/i
+        );
+
+    if (match) {
+        return match[0].trim();
+    }
+
+    /*
+     * Segundo intento:
+     * buscar cualquier bloque que termine
+     * en números con decimales.
+     */
+
+    const fallback =
+        limpio.match(
+            /\d+(?:[.,]\d{1,2})/
+        );
+
+    if (fallback) {
+        return fallback[0];
+    }
+
+    return "";
+}
+
+// =====================================================
+// OBTENER IMAGEN
+// =====================================================
+
+function obtenerImagen(elemento) {
+
+    const img =
+        elemento.find("img").first();
+
+    if (!img || img.length === 0) {
+        return "";
+    }
+
+    return convertirUrl(
+        img.attr("src") ||
+        img.attr("data-src") ||
+        img.attr("data-original") ||
+        img.attr("data-lazy-src") ||
+        ""
+    );
 }
 
 // =====================================================
@@ -157,303 +242,63 @@ async function obtenerTiendaRust() {
         "🛒 Consultando tienda Rust en Steam..."
     );
 
-    const response =
-        await axios.get(
-            STEAM_STORE_URL,
-            {
-                timeout: 30000,
+    try {
 
-                headers: {
+        const response =
+            await axios.get(
+                STEAM_STORE_URL,
+                {
+                    timeout: 30000,
 
-                    "User-Agent":
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0.0.0 Safari/537.36",
+                    headers: {
 
-                    "Accept":
-                        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                        "User-Agent":
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
 
-                    "Accept-Language":
-                        "en-US,en;q=0.9",
+                        "Accept":
+                            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
 
-                    "Cache-Control":
-                        "no-cache",
+                        "Accept-Language":
+                            "en-US,en;q=0.9",
 
-                    "Pragma":
-                        "no-cache"
+                        "Cache-Control":
+                            "no-cache",
 
+                        "Pragma":
+                            "no-cache"
+                    }
                 }
-            }
-        );
-
-    const $ =
-        cheerio.load(
-            response.data
-        );
-
-    const items = [];
-
-    const vistos =
-        new Set();
-
-    // =================================================
-    // SELECTORES PRINCIPALES DE STEAM
-    // =================================================
-
-    const elementos =
-        $(
-            ".item_store_item, " +
-            ".itemstore_item, " +
-            ".item"
-        );
-
-    elementos.each(
-        (index, element) => {
-
-            const el =
-                $(element);
-
-            let nombre =
-                "";
-
-            let precio =
-                "";
-
-            let imagen =
-                "";
-
-            let enlace =
-                "";
-
-            // -----------------------------------------
-            // NOMBRE
-            // -----------------------------------------
-
-            nombre =
-                el.find(
-                    ".item_store_item_name, " +
-                    ".itemstore_item_name, " +
-                    ".item_name"
-                )
-                    .first()
-                    .text()
-                    .trim();
-
-            if (!nombre) {
-
-                nombre =
-                    el.attr(
-                        "data-item-name"
-                    ) ||
-                    el.attr(
-                        "data-name"
-                    ) ||
-                    "";
-
-            }
-
-            // -----------------------------------------
-            // PRECIO
-            // -----------------------------------------
-
-            precio =
-                el.find(
-                    ".item_store_item_price, " +
-                    ".itemstore_item_price, " +
-                    ".item_price, " +
-                    ".price"
-                )
-                    .first()
-                    .text()
-                    .trim();
-
-            // -----------------------------------------
-            // IMAGEN
-            // -----------------------------------------
-
-            const img =
-                el.find(
-                    "img"
-                )
-                    .first();
-
-            imagen =
-                img.attr(
-                    "src"
-                ) ||
-                img.attr(
-                    "data-src"
-                ) ||
-                img.attr(
-                    "data-original"
-                ) ||
-                "";
-
-            // -----------------------------------------
-            // ENLACE
-            // -----------------------------------------
-
-            enlace =
-                el.attr(
-                    "href"
-                ) ||
-                el.find(
-                    "a"
-                )
-                    .first()
-                    .attr(
-                        "href"
-                    ) ||
-                "";
-
-            if (
-                enlace &&
-                enlace.startsWith("/")
-            ) {
-
-                enlace =
-                    "https://store.steampowered.com" +
-                    enlace;
-
-            }
-
-            // -----------------------------------------
-            // FALLBACK: BUSCAR PRECIO EN TEXTO
-            // -----------------------------------------
-
-            if (
-                !precio
-            ) {
-
-                const texto =
-                    el.text()
-                        .replace(
-                            /\s+/g,
-                            " "
-                        )
-                        .trim();
-
-                const match =
-                    texto.match(
-                        /\$[\d.,]+/
-                    );
-
-                if (
-                    match
-                ) {
-
-                    precio =
-                        match[0];
-
-                }
-
-            }
-
-            // -----------------------------------------
-            // LIMPIEZA
-            // -----------------------------------------
-
-            nombre =
-                nombre
-                    .replace(
-                        /\s+/g,
-                        " "
-                    )
-                    .trim();
-
-            precio =
-                precio
-                    .replace(
-                        /\s+/g,
-                        " "
-                    )
-                    .trim();
-
-            // -----------------------------------------
-            // VALIDACIÓN
-            // -----------------------------------------
-
-            if (
-                !nombre ||
-                nombre.length < 2
-            ) {
-                return;
-            }
-
-            if (
-                !precio ||
-                !precio.includes("$")
-            ) {
-                return;
-            }
-
-            // -----------------------------------------
-            // EVITAR BASURA
-            // -----------------------------------------
-
-            const nombreLower =
-                nombre.toLowerCase();
-
-            const ignorar = [
-
-                "rust item store",
-                "featured",
-                "limited",
-                "general",
-                "new releases",
-                "cart",
-                "top sellers"
-
-            ];
-
-            if (
-                ignorar.includes(
-                    nombreLower
-                )
-            ) {
-                return;
-            }
-
-            // -----------------------------------------
-            // DUPLICADOS
-            // -----------------------------------------
-
-            const key =
-                `${nombreLower}|${precio}`;
-
-            if (
-                vistos.has(key)
-            ) {
-                return;
-            }
-
-            vistos.add(
-                key
             );
 
-            items.push({
+        if (
+            !response ||
+            !response.data
+        ) {
 
-                nombre,
-                precio,
-                imagen,
-                enlace
+            console.log(
+                "⚠️ Steam no devolvió contenido."
+            );
 
-            });
-
+            return [];
         }
-    );
 
-    // =================================================
-    // FALLBACK POR TEXTO
-    // =================================================
+        const $ =
+            cheerio.load(
+                response.data
+            );
 
-    if (
-        items.length === 0
-    ) {
+        const items = [];
+        const vistos = new Set();
 
-        console.log(
-            "⚠️ Steam no entregó elementos con los selectores principales."
-        );
+        // =================================================
+        // MÉTODO PRINCIPAL
+        //
+        // Steam utiliza enlaces:
+        //
+        // /itemstore/252490/detail/XXXXX/
+        //
+        // =================================================
 
-        // Buscar enlaces /detail/
         $(
             'a[href*="/itemstore/252490/detail/"]'
         ).each(
@@ -462,50 +307,186 @@ async function obtenerTiendaRust() {
                 const el =
                     $(element);
 
-                const enlace =
-                    el.attr(
-                        "href"
+                let enlace =
+                    el.attr("href") || "";
+
+                enlace =
+                    convertirUrl(
+                        enlace
                     );
 
-                const texto =
+                let nombre =
                     el.text()
-                        .replace(
-                            /\s+/g,
-                            " "
-                        )
+                        .replace(/\s+/g, " ")
                         .trim();
 
-                const precioMatch =
-                    texto.match(
-                        /\$[\d.,]+/
+                /*
+                 * Si el texto del enlace viene vacío,
+                 * buscar información en el contenedor.
+                 */
+
+                if (
+                    !nombre ||
+                    nombre.length < 2
+                ) {
+
+                    const contenedor =
+                        el.closest(
+                            ".item_store_item, .itemstore_item, .item, .store_item"
+                        );
+
+                    if (
+                        contenedor &&
+                        contenedor.length
+                    ) {
+
+                        nombre =
+                            contenedor
+                                .find(
+                                    ".item_store_item_name, .itemstore_item_name, .item_name, .name"
+                                )
+                                .first()
+                                .text()
+                                .replace(/\s+/g, " ")
+                                .trim();
+                    }
+                }
+
+                /*
+                 * Buscar precio en el propio enlace
+                 * y después en su contenedor.
+                 */
+
+                let precio =
+                    extraerPrecio(
+                        el.text()
+                    );
+
+                let contenedor =
+                    el.closest(
+                        ".item_store_item, .itemstore_item, .item, .store_item"
                     );
 
                 if (
-                    !texto ||
-                    !precioMatch
+                    !precio &&
+                    contenedor &&
+                    contenedor.length
                 ) {
-                    return;
+
+                    precio =
+                        extraerPrecio(
+                            contenedor.text()
+                        );
                 }
 
-                const precio =
-                    precioMatch[0];
-
-                const nombre =
-                    texto
-                        .replace(
-                            precio,
-                            ""
-                        )
-                        .trim();
+                /*
+                 * Buscar nombre mediante atributos
+                 */
 
                 if (
-                    !nombre
+                    !nombre &&
+                    contenedor &&
+                    contenedor.length
+                ) {
+
+                    nombre =
+                        contenedor.attr(
+                            "data-item-name"
+                        ) ||
+                        contenedor.attr(
+                            "data-name"
+                        ) ||
+                        "";
+                }
+
+                /*
+                 * Imagen
+                 */
+
+                let imagen = "";
+
+                if (
+                    contenedor &&
+                    contenedor.length
+                ) {
+
+                    imagen =
+                        obtenerImagen(
+                            contenedor
+                        );
+                }
+
+                if (!imagen) {
+
+                    imagen =
+                        obtenerImagen(
+                            el
+                        );
+                }
+
+                nombre =
+                    nombre
+                        .replace(/\s+/g, " ")
+                        .trim();
+
+                precio =
+                    precio
+                        .replace(/\s+/g, " ")
+                        .trim();
+
+                // =================================================
+                // VALIDACIÓN
+                // =================================================
+
+                if (
+                    !nombre ||
+                    nombre.length < 2
                 ) {
                     return;
                 }
+
+                /*
+                 * Ya no exigimos "$".
+                 *
+                 * Steam puede devolver R$, €, £, etc.
+                 */
+
+                if (!precio) {
+                    return;
+                }
+
+                /*
+                 * Evitar basura
+                 */
+
+                const nombreLower =
+                    nombre.toLowerCase();
+
+                const ignorar = [
+                    "rust item store",
+                    "featured",
+                    "limited",
+                    "general",
+                    "new releases",
+                    "cart",
+                    "top sellers",
+                    "all"
+                ];
+
+                if (
+                    ignorar.includes(
+                        nombreLower
+                    )
+                ) {
+                    return;
+                }
+
+                // =================================================
+                // DUPLICADOS
+                // =================================================
 
                 const key =
-                    `${nombre.toLowerCase()}|${precio}`;
+                    `${nombreLower}|${precio}`;
 
                 if (
                     vistos.has(key)
@@ -513,40 +494,158 @@ async function obtenerTiendaRust() {
                     return;
                 }
 
-                vistos.add(
-                    key
-                );
+                vistos.add(key);
 
                 items.push({
 
                     nombre,
+
                     precio,
 
-                    imagen:
-                        "",
+                    imagen,
 
-                    enlace:
-                        enlace.startsWith(
-                            "http"
-                        )
-                            ? enlace
-                            : `https://store.steampowered.com${enlace}`
-
+                    enlace
                 });
-
             }
         );
 
+        // =================================================
+        // FALLBACK 2
+        //
+        // Buscar contenedores que tengan enlaces
+        // de detalle aunque el selector anterior
+        // no haya encontrado información suficiente.
+        // =================================================
+
+        if (
+            items.length === 0
+        ) {
+
+            console.log(
+                "⚠️ Selector principal no encontró artículos. Ejecutando fallback..."
+            );
+
+            $(
+                '[class*="item_store"], [class*="itemstore"], [class*="store_item"]'
+            ).each(
+                (index, element) => {
+
+                    const el =
+                        $(element);
+
+                    const link =
+                        el.find(
+                            'a[href*="/itemstore/252490/detail/"]'
+                        ).first();
+
+                    if (
+                        !link ||
+                        link.length === 0
+                    ) {
+                        return;
+                    }
+
+                    const enlace =
+                        convertirUrl(
+                            link.attr("href")
+                        );
+
+                    let nombre =
+                        el.find(
+                            ".item_store_item_name, .itemstore_item_name, .item_name, .name"
+                        )
+                            .first()
+                            .text()
+                            .replace(/\s+/g, " ")
+                            .trim();
+
+                    if (!nombre) {
+
+                        nombre =
+                            link.text()
+                                .replace(/\s+/g, " ")
+                                .trim();
+                    }
+
+                    const precio =
+                        extraerPrecio(
+                            el.text()
+                        );
+
+                    const imagen =
+                        obtenerImagen(
+                            el
+                        );
+
+                    if (
+                        !nombre ||
+                        !precio
+                    ) {
+                        return;
+                    }
+
+                    const key =
+                        `${nombre.toLowerCase()}|${precio}`;
+
+                    if (
+                        vistos.has(key)
+                    ) {
+                        return;
+                    }
+
+                    vistos.add(key);
+
+                    items.push({
+
+                        nombre,
+
+                        precio,
+
+                        imagen,
+
+                        enlace
+                    });
+                }
+            );
+        }
+
+        // =================================================
+        // RESULTADO
+        // =================================================
+
+        console.log(
+            `🛒 Steam devolvió ${items.length} artículos`
+        );
+
+        if (
+            items.length > 0
+        ) {
+
+            items.forEach(
+                (item, index) => {
+
+                    console.log(
+                        `   ${index + 1}. ${item.nombre} — ${item.precio}`
+                    );
+
+                }
+            );
+        }
+
+        return items.slice(
+            0,
+            12
+        );
+
+    } catch (error) {
+
+        console.error(
+            "❌ Error consultando tienda Steam:",
+            error.message
+        );
+
+        return [];
     }
-
-    console.log(
-        `🛒 Steam devolvió ${items.length} artículos`
-    );
-
-    return items.slice(
-        0,
-        12
-    );
 }
 
 // =====================================================
@@ -559,26 +658,20 @@ function crearEmbed(
 
     const embed =
         new EmbedBuilder()
-
             .setTitle(
                 "🛒 TIENDA SEMANAL DE RUST"
             )
-
             .setDescription(
                 "🔥 **Nuevos artículos disponibles esta semana.**\n\n" +
                 "Estos son los artículos de la rotación **Limited** de la tienda oficial de Rust en Steam."
             )
-
             .setColor(
                 0xE67E22
             )
-
             .setURL(
                 STEAM_STORE_URL
             )
-
             .setTimestamp()
-
             .setFooter({
                 text:
                     "RustLogix • Rust Item Store"
@@ -601,7 +694,6 @@ function crearEmbed(
 
             value +=
                 `\n[🛒 Ver en Steam](${item.enlace})`;
-
         }
 
         embed.addFields({
@@ -613,9 +705,7 @@ function crearEmbed(
 
             inline:
                 true
-
         });
-
     }
 
     // =================================================
@@ -638,10 +728,38 @@ function crearEmbed(
         embed.setThumbnail(
             imagen.imagen
         );
-
     }
 
     return embed;
+}
+
+// =====================================================
+// CREAR BOTÓN
+// =====================================================
+
+function crearBotonTienda() {
+
+    return new ActionRowBuilder()
+        .addComponents(
+
+            new ButtonBuilder()
+
+                .setLabel(
+                    "Ver tienda completa"
+                )
+
+                .setEmoji(
+                    "🛒"
+                )
+
+                .setStyle(
+                    ButtonStyle.Link
+                )
+
+                .setURL(
+                    STEAM_STORE_URL
+                )
+        );
 }
 
 // =====================================================
@@ -663,7 +781,6 @@ async function publicarTienda(
         throw new Error(
             "Steam no devolvió artículos de la tienda."
         );
-
     }
 
     const embed =
@@ -672,28 +789,7 @@ async function publicarTienda(
         );
 
     const row =
-        new ActionRowBuilder()
-            .addComponents(
-
-                new ButtonBuilder()
-
-                    .setLabel(
-                        "Ver tienda completa"
-                    )
-
-                    .setEmoji(
-                        "🛒"
-                    )
-
-                    .setStyle(
-                        ButtonStyle.Link
-                    )
-
-                    .setURL(
-                        STEAM_STORE_URL
-                    )
-
-            );
+        crearBotonTienda();
 
     await channel.send({
 
@@ -704,7 +800,6 @@ async function publicarTienda(
         components: [
             row
         ]
-
     });
 
     return items;
@@ -729,7 +824,6 @@ async function publicarTiendaManual(
         throw new Error(
             "Steam no devolvió artículos."
         );
-
     }
 
     const embed =
@@ -738,28 +832,7 @@ async function publicarTiendaManual(
         );
 
     const row =
-        new ActionRowBuilder()
-            .addComponents(
-
-                new ButtonBuilder()
-
-                    .setLabel(
-                        "Ver tienda completa"
-                    )
-
-                    .setEmoji(
-                        "🛒"
-                    )
-
-                    .setStyle(
-                        ButtonStyle.Link
-                    )
-
-                    .setURL(
-                        STEAM_STORE_URL
-                    )
-
-            );
+        crearBotonTienda();
 
     return interaction.editReply({
 
@@ -770,9 +843,7 @@ async function publicarTiendaManual(
         components: [
             row
         ]
-
     });
-
 }
 
 // =====================================================
@@ -789,9 +860,7 @@ async function revisarTiendaAutomatica(
     if (
         tiendaRevisando
     ) {
-
         return;
-
     }
 
     tiendaRevisando =
@@ -802,12 +871,9 @@ async function revisarTiendaAutomatica(
         const dia =
             obtenerDiaChile();
 
-        // Solo comprobamos automáticamente
-        // jueves, viernes y sábado.
-        //
-        // Esto permite que si Steam tarda en
-        // actualizar la tienda el jueves,
-        // el bot pueda detectarla después.
+        // =================================================
+        // SOLO JUEVES, VIERNES Y SÁBADO
+        // =================================================
 
         if (
             ![
@@ -820,8 +886,11 @@ async function revisarTiendaAutomatica(
         ) {
 
             return;
-
         }
+
+        // =================================================
+        // OBTENER SERVIDORES CONFIGURADOS
+        // =================================================
 
         const configs =
             await ServerConfig.find({
@@ -832,7 +901,6 @@ async function revisarTiendaAutomatica(
                 rustStoreChannelId: {
                     $ne: null
                 }
-
             });
 
         if (
@@ -840,12 +908,15 @@ async function revisarTiendaAutomatica(
         ) {
 
             return;
-
         }
 
         console.log(
             `🛒 Revisando tienda automática para ${configs.length} servidor(es)...`
         );
+
+        // =================================================
+        // CONSULTAR STEAM
+        // =================================================
 
         const items =
             await obtenerTiendaRust();
@@ -860,11 +931,14 @@ async function revisarTiendaAutomatica(
             );
 
             return;
-
         }
 
         const semana =
             obtenerSemanaTienda();
+
+        // =================================================
+        // PROCESAR SERVIDORES
+        // =================================================
 
         for (
             const config
@@ -873,9 +947,9 @@ async function revisarTiendaAutomatica(
 
             try {
 
-                // =====================================
+                // =========================================
                 // YA PUBLICADA
-                // =====================================
+                // =========================================
 
                 if (
                     config.rustStoreLastPublishedWeek ===
@@ -883,12 +957,11 @@ async function revisarTiendaAutomatica(
                 ) {
 
                     continue;
-
                 }
 
-                // =====================================
+                // =========================================
                 // OBTENER CANAL
-                // =====================================
+                // =========================================
 
                 const canal =
                     await client.channels.fetch(
@@ -905,12 +978,11 @@ async function revisarTiendaAutomatica(
                     );
 
                     continue;
-
                 }
 
-                // =====================================
+                // =========================================
                 // CREAR EMBED
-                // =====================================
+                // =========================================
 
                 const embed =
                     crearEmbed(
@@ -918,32 +990,11 @@ async function revisarTiendaAutomatica(
                     );
 
                 const row =
-                    new ActionRowBuilder()
-                        .addComponents(
+                    crearBotonTienda();
 
-                            new ButtonBuilder()
-
-                                .setLabel(
-                                    "Ver tienda completa"
-                                )
-
-                                .setEmoji(
-                                    "🛒"
-                                )
-
-                                .setStyle(
-                                    ButtonStyle.Link
-                                )
-
-                                .setURL(
-                                    STEAM_STORE_URL
-                                )
-
-                        );
-
-                // =====================================
+                // =========================================
                 // PUBLICAR
-                // =====================================
+                // =========================================
 
                 await canal.send({
 
@@ -954,12 +1005,11 @@ async function revisarTiendaAutomatica(
                     components: [
                         row
                     ]
-
                 });
 
-                // =====================================
-                // MARCAR COMO PUBLICADA
-                // =====================================
+                // =========================================
+                // MARCAR SEMANA
+                // =========================================
 
                 config.rustStoreLastPublishedWeek =
                     semana;
@@ -976,9 +1026,7 @@ async function revisarTiendaAutomatica(
                     `❌ Error publicando tienda en ${config.guildId}:`,
                     error.message
                 );
-
             }
-
         }
 
     } catch (error) {
@@ -992,9 +1040,7 @@ async function revisarTiendaAutomatica(
 
         tiendaRevisando =
             false;
-
     }
-
 }
 
 // =====================================================
@@ -1006,11 +1052,12 @@ function iniciarTiendaAutomatica(
 ) {
 
     console.log(
-        "🛒 Sistema de tienda Rust iniciado."
+        "🛒 Sistema automático de tienda Rust iniciado correctamente."
     );
 
-    // Primera comprobación
-    // al iniciar el bot.
+    // =================================================
+    // PRIMERA COMPROBACIÓN
+    // =================================================
 
     setTimeout(
         () => {
@@ -1023,7 +1070,9 @@ function iniciarTiendaAutomatica(
         15000
     );
 
-    // Revisar cada 10 minutos.
+    // =================================================
+    // REVISAR CADA 10 MINUTOS
+    // =================================================
 
     setInterval(
         () => {
@@ -1035,7 +1084,6 @@ function iniciarTiendaAutomatica(
         },
         CHECK_INTERVAL
     );
-
 }
 
 // =====================================================
@@ -1055,5 +1103,4 @@ module.exports = {
     revisarTiendaAutomatica,
 
     iniciarTiendaAutomatica
-
 };
