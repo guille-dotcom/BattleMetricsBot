@@ -31,6 +31,9 @@ const CHECK_INTERVAL =
 const REQUEST_DELAY =
     250;
 
+const DETAIL_CONCURRENCY =
+    3;
+
 // =====================================================
 // HEADERS
 // =====================================================
@@ -108,6 +111,67 @@ function esperar(ms) {
 }
 
 // =====================================================
+// VALIDAR URL DE IMAGEN
+// =====================================================
+
+function esUrlImagenValida(url) {
+    if (!url) {
+        return false;
+    }
+
+    url = convertirUrl(url);
+
+    if (!url) {
+        return false;
+    }
+
+    if (!/^https?:\/\//i.test(url)) {
+        return false;
+    }
+
+    const lower = url.toLowerCase();
+
+    // Imágenes reales de Steam
+    if (
+        lower.includes("steamstatic.com") ||
+        lower.includes("steamusercontent.com") ||
+        lower.includes("steampowered.com")
+    ) {
+        return true;
+    }
+
+    // Otros CDN de imágenes
+    if (
+        lower.endsWith(".png") ||
+        lower.endsWith(".jpg") ||
+        lower.endsWith(".jpeg") ||
+        lower.endsWith(".webp")
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
+// =====================================================
+// CONVERTIR IMAGEN
+// =====================================================
+
+function convertirImagen(url) {
+    if (!url) {
+        return "";
+    }
+
+    url = convertirUrl(url);
+
+    if (!esUrlImagenValida(url)) {
+        return "";
+    }
+
+    return url;
+}
+
+// =====================================================
 // PRECIO
 // =====================================================
 
@@ -140,47 +204,6 @@ function extraerPrecio(texto) {
 }
 
 // =====================================================
-// IMÁGENES
-// =====================================================
-
-function convertirImagen(url) {
-    if (!url) {
-        return "";
-    }
-
-    url = String(url)
-        .trim()
-        .replace(/&amp;/gi, "&")
-        .replace(/\\\//g, "/")
-        .replace(/\\"/g, '"');
-
-    if (!url) {
-        return "";
-    }
-
-    if (url.startsWith("//")) {
-        url = `https:${url}`;
-    }
-
-    if (url.startsWith("/")) {
-        url = `${STEAM_BASE_URL}${url}`;
-    }
-
-    if (!/^https?:\/\//i.test(url)) {
-        return "";
-    }
-
-    // Evitar URLs que claramente no sean imágenes.
-    if (
-        /favicon|avatar|logo_steam|header\.jpg/i.test(url)
-    ) {
-        return "";
-    }
-
-    return url;
-}
-
-// =====================================================
 // OBTENER IMAGEN DESDE ELEMENTO
 // =====================================================
 
@@ -189,23 +212,23 @@ function obtenerImagenElemento(elemento) {
         return "";
     }
 
-    const atributos = [
-        "src",
-        "data-src",
-        "data-original",
-        "data-lazy-src",
-        "data-image",
-        "data-image-url",
-        "data-original-src",
-        "data-full",
-        "data-bg",
-        "data-background-image"
-    ];
-
     const imagenes = elemento.find("img");
 
     for (let i = 0; i < imagenes.length; i++) {
         const img = imagenes.eq(i);
+
+        const atributos = [
+            "src",
+            "data-src",
+            "data-original",
+            "data-lazy-src",
+            "data-image",
+            "data-image-url",
+            "data-original-src",
+            "data-full",
+            "data-lazy",
+            "data-url"
+        ];
 
         for (const atributo of atributos) {
             const valor = img.attr(atributo);
@@ -226,17 +249,18 @@ function obtenerImagenElemento(elemento) {
             img.attr("data-srcset");
 
         if (srcset) {
-            const candidatos = srcset
+            const urls = srcset
                 .split(",")
-                .map(x => x.trim())
-                .reverse();
+                .map(parte => {
+                    return parte
+                        .trim()
+                        .split(/\s+/)[0];
+                });
 
-            for (const candidato of candidatos) {
-                const url = candidato
-                    .split(/\s+/)[0];
-
+            // Preferir una imagen de Steam
+            for (const posible of urls) {
                 const imagen =
-                    convertirImagen(url);
+                    convertirImagen(posible);
 
                 if (imagen) {
                     return imagen;
@@ -245,25 +269,21 @@ function obtenerImagenElemento(elemento) {
         }
     }
 
-    // Buscar backgrounds.
-    const elementosConBackground =
-        elemento.find("[style]");
+    // Algunos elementos de Steam usan background-image
+    const elementos = elemento.find("*");
 
-    for (
-        let i = 0;
-        i < elementosConBackground.length;
-        i++
-    ) {
-        const el =
-            elementosConBackground.eq(i);
+    for (let i = 0; i < elementos.length; i++) {
+        const el = elementos.eq(i);
 
-        const style =
-            el.attr("style") || "";
+        const style = el.attr("style");
 
-        const match =
-            style.match(
-                /url\(\s*['"]?([^'")]+)['"]?\s*\)/i
-            );
+        if (!style) {
+            continue;
+        }
+
+        const match = style.match(
+            /background-image\s*:\s*url\(["']?([^"')]+)["']?\)/i
+        );
 
         if (match && match[1]) {
             const imagen =
@@ -279,16 +299,14 @@ function obtenerImagenElemento(elemento) {
 }
 
 // =====================================================
-// OBTENER IMAGEN DESDE META
+// IMAGEN DESDE META
 // =====================================================
 
 function obtenerImagenMeta($) {
     const selectores = [
         'meta[property="og:image"]',
         'meta[property="og:image:url"]',
-        'meta[property="og:image:secure_url"]',
         'meta[name="twitter:image"]',
-        'meta[name="twitter:image:src"]',
         'meta[itemprop="image"]'
     ];
 
@@ -314,41 +332,64 @@ function obtenerImagenMeta($) {
 }
 
 // =====================================================
-// BUSCAR IMAGEN EN HTML
+// BUSCAR IMAGEN STEAM ECONOMY EN HTML
 // =====================================================
 
-function buscarImagenEnHtml(html) {
+function buscarImagenSteamEnHtml(html) {
     if (!html) {
         return "";
     }
 
+    const texto = String(html);
+
+    // =================================================
+    // Buscar directamente URLs del CDN de Steam
+    // =================================================
+
     const patrones = [
-        /["']image["']\s*:\s*["']([^"']+)["']/i,
-        /["']image_url["']\s*:\s*["']([^"']+)["']/i,
-        /["']imageUrl["']\s*:\s*["']([^"']+)["']/i,
-        /["']icon_url["']\s*:\s*["']([^"']+)["']/i,
-        /["']iconUrl["']\s*:\s*["']([^"']+)["']/i,
-        /["']image_large["']\s*:\s*["']([^"']+)["']/i,
-        /["']image_small["']\s*:\s*["']([^"']+)["']/i,
-        /["']image_medium["']\s*:\s*["']([^"']+)["']/i,
-        /["']image_large_url["']\s*:\s*["']([^"']+)["']/i,
-        /["']image_small_url["']\s*:\s*["']([^"']+)["']/i
+        /https?:\/\/(?:community|store)\.(?:akamai\.)?steamstatic\.com\/economy\/image\/[^"'\\\s<>)]+/gi,
+
+        /https?:\/\/community\.steamstatic\.com\/economy\/image\/[^"'\\\s<>)]+/gi,
+
+        /https?:\/\/store\.steampowered\.com\/public\/[^"'\\\s<>)]+\.(?:png|jpg|jpeg|webp)/gi,
+
+        /https?:\/\/images\.steamusercontent\.com\/[^"'\\\s<>)]+/gi
     ];
 
+    const candidatos = [];
+
     for (const regex of patrones) {
-        const match =
-            html.match(regex);
+        let match;
+
+        while ((match = regex.exec(texto)) !== null) {
+            if (match[0]) {
+                candidatos.push(match[0]);
+            }
+        }
+    }
+
+    // =================================================
+    // Preferir economy/image
+    // =================================================
+
+    for (const candidato of candidatos) {
+        const imagen =
+            convertirImagen(candidato);
 
         if (
-            match &&
-            match[1]
+            imagen &&
+            imagen.includes("/economy/image/")
         ) {
-            const imagen =
-                convertirImagen(match[1]);
+            return normalizarImagenSteam(imagen);
+        }
+    }
 
-            if (imagen) {
-                return imagen;
-            }
+    for (const candidato of candidatos) {
+        const imagen =
+            convertirImagen(candidato);
+
+        if (imagen) {
+            return imagen;
         }
     }
 
@@ -356,72 +397,49 @@ function buscarImagenEnHtml(html) {
 }
 
 // =====================================================
-// BUSCAR IMAGEN STEAM CDN
+// NORMALIZAR IMAGEN STEAM
 // =====================================================
 
-function buscarImagenSteamCdn(
-    html,
-    itemId
-) {
-    if (!html || !itemId) {
+function normalizarImagenSteam(url) {
+    if (!url) {
+        return "";
+    }
+
+    url = convertirUrl(url);
+
+    if (!url) {
         return "";
     }
 
     /*
-     * Steam suele utilizar URLs CDN como:
+     * Steam puede entregar:
      *
-     * https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/252490/...
+     * /economy/image/XXXXX/96fx96f
      *
      * o:
      *
-     * https://community.cloudflare.steamstatic.com/economy/image/...
+     * /economy/image/XXXXX
      *
-     * Buscamos cualquier imagen cercana al ID del artículo.
+     * Para Discord queremos una imagen grande.
      */
 
-    const patrones = [
-        new RegExp(
-            `https?:\\\\?/\\\\?/[^"'\\s<>]+${itemId}[^"'\\s<>]+`,
-            "gi"
-        ),
+    if (
+        url.includes("/economy/image/")
+    ) {
+        url = url.replace(
+            /\/(?:\d+fx\d+f|64fx64f|96fx96f|128fx128f|256fx256f|512fx512f|300x300f|330x192f|600x338f|1200x675f)(?:\?.*)?$/i,
+            "/512fx512f"
+        );
 
-        /https?:\\?\/\\?\/shared\.cloudflare\.steamstatic\.com\/[^"'<> ]+/gi,
-
-        /https?:\\?\/\\?\/community\.cloudflare\.steamstatic\.com\/[^"'<> ]+/gi,
-
-        /https?:\\?\/\\?\/steamcdn-a\.akamaihd\.net\/[^"'<> ]+/gi,
-
-        /https?:\\?\/\\?\/cdn\.akamai\.steamstatic\.com\/[^"'<> ]+/gi
-    ];
-
-    for (const regex of patrones) {
-        const matches =
-            html.match(regex);
-
-        if (!matches) {
-            continue;
-        }
-
-        for (const rawUrl of matches) {
-            const imagen =
-                convertirImagen(
-                    rawUrl
-                        .replace(/\\\//g, "/")
-                        .replace(/\\"/g, "")
-                );
-
-            if (
-                imagen &&
-                /\.(jpg|jpeg|png|webp)(\?|$)/i.test(
-                    imagen
-                )
-            ) {
-                return imagen;
-            }
+        if (
+            !/\/\d+fx\d+f(?:\?.*)?$/i.test(url)
+        ) {
+            url =
+                `${url.replace(/\/+$/, "")}/512fx512f`;
         }
     }
 
-    return "";
+    return url;
 }
 
 // =====================================================
@@ -462,9 +480,7 @@ function nombreValido(nombre) {
     const lower =
         nombre.toLowerCase();
 
-    if (
-        ignorar.includes(lower)
-    ) {
+    if (ignorar.includes(lower)) {
         return false;
     }
 
@@ -510,10 +526,7 @@ function obtenerNombreDesdeElemento(
     elemento,
     link
 ) {
-    if (
-        !elemento ||
-        !elemento.length
-    ) {
+    if (!elemento || !elemento.length) {
         return "";
     }
 
@@ -530,9 +543,7 @@ function obtenerNombreDesdeElemento(
 
     for (const selector of selectores) {
         const encontrado =
-            elemento
-                .find(selector)
-                .first();
+            elemento.find(selector).first();
 
         if (
             encontrado &&
@@ -543,9 +554,7 @@ function obtenerNombreDesdeElemento(
                     encontrado.text()
                 );
 
-            if (
-                nombreValido(nombre)
-            ) {
+            if (nombreValido(nombre)) {
                 return nombre;
             }
         }
@@ -575,14 +584,9 @@ function obtenerNombreDesdeElemento(
             continue;
         }
 
-        for (
-            const atributo
-            of atributos
-        ) {
+        for (const atributo of atributos) {
             const valor =
-                elementoBusqueda.attr(
-                    atributo
-                );
+                elementoBusqueda.attr(atributo);
 
             if (!valor) {
                 continue;
@@ -591,26 +595,19 @@ function obtenerNombreDesdeElemento(
             const nombre =
                 limpiarNombre(valor);
 
-            if (
-                nombreValido(nombre)
-            ) {
+            if (nombreValido(nombre)) {
                 return nombre;
             }
         }
     }
 
-    if (
-        link &&
-        link.length
-    ) {
+    if (link && link.length) {
         const textoLink =
             limpiarNombre(
                 link.text()
             );
 
-        if (
-            nombreValido(textoLink)
-        ) {
+        if (nombreValido(textoLink)) {
             return textoLink;
         }
     }
@@ -619,17 +616,14 @@ function obtenerNombreDesdeElemento(
 }
 
 // =====================================================
-// OBTENER CONTENEDOR
+// OBTENER CONTENEDOR ITEM
 // =====================================================
 
 function obtenerContenedorItem(
     $,
     link
 ) {
-    if (
-        !link ||
-        !link.length
-    ) {
+    if (!link || !link.length) {
         return null;
     }
 
@@ -655,16 +649,11 @@ function obtenerContenedorItem(
         }
     }
 
-    let actual =
-        link;
+    // Fallback
+    let actual = link;
 
-    for (
-        let i = 0;
-        i < 8;
-        i++
-    ) {
-        actual =
-            actual.parent();
+    for (let i = 0; i < 8; i++) {
+        actual = actual.parent();
 
         if (
             !actual ||
@@ -703,20 +692,33 @@ function agregarItem(
     }
 
     const nombre =
-        limpiarNombre(item.nombre);
+        limpiarNombre(
+            item.nombre
+        );
 
     const precio =
-        limpiarTexto(item.precio);
+        limpiarTexto(
+            item.precio
+        );
 
     const enlace =
-        convertirUrl(item.enlace);
+        convertirUrl(
+            item.enlace
+        );
 
-    const imagen =
-        convertirImagen(item.imagen);
+    let imagen =
+        convertirImagen(
+            item.imagen
+        );
 
-    if (
-        !nombreValido(nombre)
-    ) {
+    if (imagen) {
+        imagen =
+            normalizarImagenSteam(
+                imagen
+            );
+    }
+
+    if (!nombreValido(nombre)) {
         return;
     }
 
@@ -738,9 +740,7 @@ function agregarItem(
             ? `id:${match[1]}`
             : `${nombre.toLowerCase()}|${precio}`;
 
-    if (
-        vistos.has(key)
-    ) {
+    if (vistos.has(key)) {
         return;
     }
 
@@ -828,12 +828,11 @@ function extraerItemsDesdeEnlaces(
                     link
                 );
 
-            if (
-                !nombreValido(nombre)
-            ) {
+            if (!nombreValido(nombre)) {
                 console.log(
                     `⚠️ No se pudo obtener nombre para detail ${match[1]}`
                 );
+
                 return;
             }
 
@@ -882,46 +881,14 @@ function extraerItemsDesdeEnlaces(
                 console.log(
                     `⚠️ ${nombre}: no se encontró precio`
                 );
+
                 return;
             }
 
-            let imagen =
+            const imagen =
                 obtenerImagenElemento(
                     contenedor
                 );
-
-            if (!imagen) {
-                imagen =
-                    obtenerImagenElemento(
-                        link
-                    );
-            }
-
-            if (!imagen) {
-                imagen =
-                    obtenerImagenMeta(
-                        $
-                    );
-            }
-
-            if (!imagen) {
-                imagen =
-                    buscarImagenEnHtml(
-                        $.html()
-                    );
-            }
-
-            if (!imagen) {
-                imagen =
-                    buscarImagenSteamCdn(
-                        $.html(),
-                        match[1]
-                    );
-            }
-
-            console.log(
-                `🖼️ ${nombre}: ${imagen ? "IMAGEN ENCONTRADA" : "SIN IMAGEN"}`
-            );
 
             agregarItem(
                 items,
@@ -990,11 +957,6 @@ function extraerItemsVisuales(
                     return;
                 }
 
-                const match =
-                    enlace.match(
-                        /\/itemstore\/252490\/detail\/(\d+)\/?/i
-                    );
-
                 const nombre =
                     obtenerNombreDesdeElemento(
                         $,
@@ -1007,28 +969,10 @@ function extraerItemsVisuales(
                         el.text()
                     );
 
-                let imagen =
+                const imagen =
                     obtenerImagenElemento(
                         el
                     );
-
-                if (!imagen) {
-                    imagen =
-                        obtenerImagenElemento(
-                            link
-                        );
-                }
-
-                if (
-                    !imagen &&
-                    match
-                ) {
-                    imagen =
-                        buscarImagenSteamCdn(
-                            $.html(),
-                            match[1]
-                        );
-                }
 
                 if (
                     nombreValido(nombre) &&
@@ -1038,17 +982,9 @@ function extraerItemsVisuales(
                         items,
                         vistos,
                         {
-                            id:
-                                match
-                                    ? match[1]
-                                    : "",
-
                             nombre,
-
                             precio,
-
                             imagen,
-
                             enlace
                         }
                     );
@@ -1065,12 +1001,10 @@ function extraerItemsVisuales(
 }
 
 // =====================================================
-// OBTENER TODAS LAS URL DETAIL
+// OBTENER URLS DETAIL
 // =====================================================
 
-function obtenerUrlsDetail(
-    html
-) {
+function obtenerUrlsDetail(html) {
     const urls =
         new Map();
 
@@ -1088,8 +1022,7 @@ function obtenerUrlsDetail(
         let match;
 
         while (
-            (match =
-                regex.exec(html)) !== null
+            (match = regex.exec(html)) !== null
         ) {
             const id =
                 match[1];
@@ -1114,9 +1047,7 @@ function obtenerUrlsDetail(
 // BUSCAR NOMBRE EN HTML
 // =====================================================
 
-function buscarNombreEnTexto(
-    html
-) {
+function buscarNombreEnTexto(html) {
     if (!html) {
         return "";
     }
@@ -1154,13 +1085,160 @@ function buscarNombreEnTexto(
 }
 
 // =====================================================
+// BUSCAR IMAGEN EN HTML
+// =====================================================
+
+function buscarImagenEnHtml(html) {
+    if (!html) {
+        return "";
+    }
+
+    const imagenSteam =
+        buscarImagenSteamEnHtml(
+            html
+        );
+
+    if (imagenSteam) {
+        return imagenSteam;
+    }
+
+    const patrones = [
+        /["']image["']\s*:\s*["']([^"']+)["']/i,
+        /["']image_url["']\s*:\s*["']([^"']+)["']/i,
+        /["']imageUrl["']\s*:\s*["']([^"']+)["']/i,
+        /["']icon_url["']\s*:\s*["']([^"']+)["']/i,
+        /["']iconUrl["']\s*:\s*["']([^"']+)["']/i
+    ];
+
+    for (const regex of patrones) {
+        const match =
+            html.match(regex);
+
+        if (
+            match &&
+            match[1]
+        ) {
+            const imagen =
+                convertirImagen(
+                    match[1]
+                );
+
+            if (imagen) {
+                return normalizarImagenSteam(
+                    imagen
+                );
+            }
+        }
+    }
+
+    return "";
+}
+
+// =====================================================
+// OBTENER IMAGEN DESDE DETAIL
+// =====================================================
+
+async function obtenerImagenDesdeDetalle(
+    $,
+    html
+) {
+    // =================================================
+    // MÉTODO 1
+    // ENLACES DIRECTOS A ECONOMY/IMAGE
+    // =================================================
+
+    const enlacesImagen =
+        $("a[href]");
+
+    for (
+        let i = 0;
+        i < enlacesImagen.length;
+        i++
+    ) {
+        const enlace =
+            enlacesImagen.eq(i);
+
+        const href =
+            enlace.attr("href");
+
+        if (!href) {
+            continue;
+        }
+
+        const imagen =
+            convertirImagen(
+                href
+            );
+
+        if (
+            imagen &&
+            imagen.includes(
+                "/economy/image/"
+            )
+        ) {
+            return normalizarImagenSteam(
+                imagen
+            );
+        }
+    }
+
+    // =================================================
+    // MÉTODO 2
+    // IMG
+    // =================================================
+
+    const imagenElemento =
+        obtenerImagenElemento(
+            $("body")
+        );
+
+    if (imagenElemento) {
+        return normalizarImagenSteam(
+            imagenElemento
+        );
+    }
+
+    // =================================================
+    // MÉTODO 3
+    // META
+    // =================================================
+
+    const imagenMeta =
+        obtenerImagenMeta($);
+
+    if (imagenMeta) {
+        return normalizarImagenSteam(
+            imagenMeta
+        );
+    }
+
+    // =================================================
+    // MÉTODO 4
+    // HTML DIRECTO
+    // =================================================
+
+    const imagenHtml =
+        buscarImagenEnHtml(
+            html
+        );
+
+    if (imagenHtml) {
+        return imagenHtml;
+    }
+
+    return "";
+}
+
+// =====================================================
 // OBTENER DETAIL
 // =====================================================
 
-async function obtenerDetalleItem(
-    url
-) {
+async function obtenerDetalleItem(url) {
     try {
+        console.log(
+            `🖼️ Consultando imagen detail: ${url}`
+        );
+
         const response =
             await axios.get(
                 url,
@@ -1311,42 +1389,17 @@ async function obtenerDetalleItem(
         // IMAGEN
         // =================================================
 
-        let imagen =
-            obtenerImagenMeta(
-                $
+        const imagen =
+            await obtenerImagenDesdeDetalle(
+                $,
+                html
             );
-
-        if (!imagen) {
-            imagen =
-                obtenerImagenElemento(
-                    $("body")
-                );
-        }
-
-        if (!imagen) {
-            imagen =
-                buscarImagenEnHtml(
-                    html
-                );
-        }
-
-        if (!imagen) {
-            imagen =
-                buscarImagenSteamCdn(
-                    html,
-                    itemId
-                );
-        }
-
-        // =================================================
-        // VALIDACIÓN
-        // =================================================
 
         if (
             !nombreValido(nombre)
         ) {
             console.log(
-                `⚠️ Detail ${itemId}: nombre inválido o genérico`
+                `⚠️ Detail ${itemId}: nombre inválido`
             );
 
             return null;
@@ -1357,11 +1410,17 @@ async function obtenerDetalleItem(
                 `⚠️ Detail ${itemId}: no se encontró precio`
             );
 
-            return null;
+            return {
+                id: itemId,
+                nombre,
+                precio: "",
+                imagen,
+                enlace: url
+            };
         }
 
         console.log(
-            `✅ Detail ${itemId}: ${nombre} — ${precio} — ${imagen ? "CON IMAGEN" : "SIN IMAGEN"}`
+            `✅ Detail ${itemId}: ${nombre} — ${precio} — ${imagen ? "IMAGEN OK" : "SIN IMAGEN"}`
         );
 
         return {
@@ -1378,6 +1437,129 @@ async function obtenerDetalleItem(
 
         return null;
     }
+}
+
+// =====================================================
+// COMPLETAR IMÁGENES
+// =====================================================
+
+async function completarImagenesItems(items) {
+    if (
+        !items ||
+        items.length === 0
+    ) {
+        return items;
+    }
+
+    const pendientes =
+        items.filter(item => {
+            return (
+                item &&
+                item.enlace &&
+                !esUrlImagenValida(
+                    item.imagen
+                )
+            );
+        });
+
+    if (
+        pendientes.length === 0
+    ) {
+        console.log(
+            "🖼️ Todos los artículos ya tienen imagen."
+        );
+
+        return items;
+    }
+
+    console.log(
+        `🖼️ ${pendientes.length} artículos necesitan obtener su imagen desde detail...`
+    );
+
+    for (
+        let i = 0;
+        i < pendientes.length;
+        i += DETAIL_CONCURRENCY
+    ) {
+        const grupo =
+            pendientes.slice(
+                i,
+                i + DETAIL_CONCURRENCY
+            );
+
+        const resultados =
+            await Promise.all(
+                grupo.map(item => {
+                    return obtenerDetalleItem(
+                        item.enlace
+                    );
+                })
+            );
+
+        for (
+            let j = 0;
+            j < resultados.length;
+            j++
+        ) {
+            const detalle =
+                resultados[j];
+
+            const item =
+                grupo[j];
+
+            if (
+                !detalle
+            ) {
+                continue;
+            }
+
+            if (
+                detalle.imagen
+            ) {
+                item.imagen =
+                    normalizarImagenSteam(
+                        detalle.imagen
+                    );
+
+                console.log(
+                    `🖼️ ${item.nombre}: imagen encontrada`
+                );
+            } else {
+                console.log(
+                    `⚠️ ${item.nombre}: detail no entregó imagen`
+                );
+            }
+
+            // Si por alguna razón el detail encontró
+            // un nombre mejor, conservarlo.
+            if (
+                nombreValido(
+                    detalle.nombre
+                )
+            ) {
+                item.nombre =
+                    detalle.nombre;
+            }
+
+            if (
+                detalle.precio
+            ) {
+                item.precio =
+                    detalle.precio;
+            }
+        }
+
+        if (
+            i + DETAIL_CONCURRENCY <
+            pendientes.length
+        ) {
+            await esperar(
+                REQUEST_DELAY
+            );
+        }
+    }
+
+    return items;
 }
 
 // =====================================================
@@ -1451,6 +1633,7 @@ async function obtenerTiendaRust() {
 
             // =================================================
             // MÉTODO 1
+            // LINKS REALES
             // =================================================
 
             extraerItemsDesdeEnlaces(
@@ -1465,6 +1648,7 @@ async function obtenerTiendaRust() {
 
             // =================================================
             // MÉTODO 2
+            // CONTENEDORES VISUALES
             // =================================================
 
             if (
@@ -1483,6 +1667,7 @@ async function obtenerTiendaRust() {
 
             // =================================================
             // MÉTODO 3
+            // OBTENER DETAIL URLS
             // =================================================
 
             const detailUrls =
@@ -1493,6 +1678,10 @@ async function obtenerTiendaRust() {
             console.log(
                 `🛒 Referencias detail encontradas: ${detailUrls.length}`
             );
+
+            // =================================================
+            // FALLBACK COMPLETO
+            // =================================================
 
             if (
                 items.length === 0 &&
@@ -1511,12 +1700,12 @@ async function obtenerTiendaRust() {
                 for (
                     let i = 0;
                     i < urlsDetail.length;
-                    i += 3
+                    i += DETAIL_CONCURRENCY
                 ) {
                     const grupo =
                         urlsDetail.slice(
                             i,
-                            i + 3
+                            i + DETAIL_CONCURRENCY
                         );
 
                     const resultados =
@@ -1542,7 +1731,7 @@ async function obtenerTiendaRust() {
                     }
 
                     if (
-                        i + 3 <
+                        i + DETAIL_CONCURRENCY <
                         urlsDetail.length
                     ) {
                         await esperar(
@@ -1553,85 +1742,16 @@ async function obtenerTiendaRust() {
             }
 
             // =================================================
-            // RECUPERAR IMAGEN INDIVIDUAL
+            // NUEVO:
+            // COMPLETAR IMÁGENES DE TODOS
             // =================================================
-            //
-            // Si el listado encontró el artículo pero
-            // no encontró imagen, consultamos SU detail.
-            //
-            // Esto es importante porque Steam puede poner
-            // el nombre/precio en la página principal pero
-            // la imagen solamente en el detail.
-            // =================================================
-
-            const itemsSinImagen =
-                items.filter(
-                    item =>
-                        !item.imagen &&
-                        item.enlace
-                );
 
             if (
-                itemsSinImagen.length > 0
+                items.length > 0
             ) {
-                console.log(
-                    `🖼️ ${itemsSinImagen.length} artículos no tienen imagen. Consultando sus páginas detail...`
+                await completarImagenesItems(
+                    items
                 );
-
-                for (
-                    let i = 0;
-                    i < itemsSinImagen.length;
-                    i += 3
-                ) {
-                    const grupo =
-                        itemsSinImagen.slice(
-                            i,
-                            i + 3
-                        );
-
-                    const resultados =
-                        await Promise.all(
-                            grupo.map(
-                                item =>
-                                    obtenerDetalleItem(
-                                        item.enlace
-                                    )
-                            )
-                        );
-
-                    for (
-                        let j = 0;
-                        j < resultados.length;
-                        j++
-                    ) {
-                        const detalle =
-                            resultados[j];
-
-                        const original =
-                            grupo[j];
-
-                        if (
-                            detalle &&
-                            detalle.imagen
-                        ) {
-                            original.imagen =
-                                detalle.imagen;
-
-                            console.log(
-                                `🖼️ Imagen recuperada: ${original.nombre}`
-                            );
-                        }
-                    }
-
-                    if (
-                        i + 3 <
-                        itemsSinImagen.length
-                    ) {
-                        await esperar(
-                            REQUEST_DELAY
-                        );
-                    }
-                }
             }
 
             // =================================================
@@ -1650,6 +1770,12 @@ async function obtenerTiendaRust() {
                         console.log(
                             `   ${index + 1}. ${item.nombre} — ${item.precio} — ${item.imagen ? "CON IMAGEN" : "SIN IMAGEN"}`
                         );
+
+                        if (item.imagen) {
+                            console.log(
+                                `      🖼️ ${item.imagen}`
+                            );
+                        }
                     }
                 );
 
@@ -1716,9 +1842,7 @@ async function obtenerTiendaRust() {
 // CREAR EMBED INDIVIDUAL
 // =====================================================
 
-function crearEmbedItem(
-    item
-) {
+function crearEmbedItem(item) {
     const embed =
         new EmbedBuilder()
             .setTitle(
@@ -1728,14 +1852,9 @@ function crearEmbedItem(
                 "🔥 **Artículo disponible esta semana en la tienda Limited de Rust.**"
             )
             .addFields({
-                name:
-                    "💰 Precio",
-
-                value:
-                    `**${item.precio}**`,
-
-                inline:
-                    true
+                name: "💰 Precio",
+                value: `**${item.precio}**`,
+                inline: true
             })
             .setColor(
                 0xE67E22
@@ -1750,14 +1869,31 @@ function crearEmbedItem(
                     "RustLogix • Rust Item Store"
             });
 
+    // =================================================
+    // IMAGEN
+    // =================================================
+
     if (
         item.imagen &&
-        /^https?:\/\//i.test(
+        esUrlImagenValida(
             item.imagen
         )
     ) {
+        const imagen =
+            normalizarImagenSteam(
+                item.imagen
+            );
+
+        console.log(
+            `🖼️ Embed ${item.nombre}: ${imagen}`
+        );
+
         embed.setImage(
-            item.imagen
+            imagen
+        );
+    } else {
+        console.log(
+            `⚠️ Embed ${item.nombre}: SIN IMAGEN`
         );
     }
 
@@ -1768,9 +1904,7 @@ function crearEmbedItem(
 // BOTÓN INDIVIDUAL
 // =====================================================
 
-function crearBotonItem(
-    item
-) {
+function crearBotonItem(item) {
     if (
         !item ||
         !item.enlace
@@ -1923,9 +2057,7 @@ async function publicarTiendaManual(
     await interaction.editReply({
         content:
             `🛒 Se encontraron **${items.length} artículos** en la tienda semanal.\n\nPublicando artículos...`,
-
         embeds: [],
-
         components: []
     });
 
