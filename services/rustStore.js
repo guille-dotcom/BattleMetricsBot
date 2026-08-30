@@ -23,8 +23,8 @@ const STEAM_BASE_URL =
 const TIMEZONE_CHILE =
     "America/Santiago";
 
-// NO LIMITAR A 12.
-// La tienda puede tener 14, 15, 16, etc.
+// No limitar a 12.
+// Steam puede entregar 12, 14, 15, 16, etc.
 const MAX_ITEMS = 50;
 
 const CHECK_INTERVAL =
@@ -119,8 +119,7 @@ function extraerPrecio(texto) {
         return "";
     }
 
-    const limpio =
-        limpiarTexto(texto);
+    const limpio = limpiarTexto(texto);
 
     const patrones = [
         /(?:US\s*)?\$\s*\d+(?:[.,]\d{1,2})?/i,
@@ -133,8 +132,7 @@ function extraerPrecio(texto) {
     ];
 
     for (const regex of patrones) {
-        const match =
-            limpio.match(regex);
+        const match = limpio.match(regex);
 
         if (match) {
             return match[0].trim();
@@ -145,7 +143,7 @@ function extraerPrecio(texto) {
 }
 
 // =====================================================
-// IMAGEN
+// IMÁGENES
 // =====================================================
 
 function convertirImagen(url) {
@@ -153,18 +151,13 @@ function convertirImagen(url) {
         return "";
     }
 
-    url =
-        convertirUrl(url);
+    url = convertirUrl(url);
 
     if (!url) {
         return "";
     }
 
-    // Steam puede devolver URLs con parámetros.
-    // Las dejamos intactas porque Discord las acepta.
-    if (
-        /^https?:\/\//i.test(url)
-    ) {
+    if (/^https?:\/\//i.test(url)) {
         return url;
     }
 
@@ -172,23 +165,14 @@ function convertirImagen(url) {
 }
 
 function obtenerImagenElemento(elemento) {
-    if (
-        !elemento ||
-        !elemento.length
-    ) {
+    if (!elemento || !elemento.length) {
         return "";
     }
 
-    const imagenes =
-        elemento.find("img");
+    const imagenes = elemento.find("img");
 
-    for (
-        let i = 0;
-        i < imagenes.length;
-        i++
-    ) {
-        const img =
-            imagenes.eq(i);
+    for (let i = 0; i < imagenes.length; i++) {
+        const img = imagenes.eq(i);
 
         const atributos = [
             "src",
@@ -198,41 +182,34 @@ function obtenerImagenElemento(elemento) {
             "data-image",
             "data-image-url",
             "data-original-src",
-            "data-full",
-            "data-srcset"
+            "data-full"
         ];
 
-        for (
-            const atributo
-            of atributos
-        ) {
-            const valor =
-                img.attr(atributo);
+        for (const atributo of atributos) {
+            const valor = img.attr(atributo);
 
-            if (valor) {
-                const url =
-                    convertirImagen(valor);
+            if (!valor) {
+                continue;
+            }
 
-                if (url) {
-                    return url;
-                }
+            const url = convertirImagen(valor);
+
+            if (url) {
+                return url;
             }
         }
 
         const srcset =
-            img.attr("srcset");
+            img.attr("srcset") ||
+            img.attr("data-srcset");
 
         if (srcset) {
-            const primero =
-                srcset
-                    .split(",")[0]
-                    .trim()
-                    .split(/\s+/)[0];
+            const primero = srcset
+                .split(",")[0]
+                .trim()
+                .split(/\s+/)[0];
 
-            const url =
-                convertirImagen(
-                    primero
-                );
+            const url = convertirImagen(primero);
 
             if (url) {
                 return url;
@@ -251,21 +228,19 @@ function obtenerImagenMeta($) {
         'meta[itemprop="image"]'
     ];
 
-    for (
-        const selector
-        of selectores
-    ) {
+    for (const selector of selectores) {
         const valor =
-            $(selector)
-                .attr("content");
+            $(selector).first().attr("content");
 
-        if (valor) {
-            const imagen =
-                convertirImagen(valor);
+        if (!valor) {
+            continue;
+        }
 
-            if (imagen) {
-                return imagen;
-            }
+        const imagen =
+            convertirImagen(valor);
+
+        if (imagen) {
+            return imagen;
         }
     }
 
@@ -281,8 +256,7 @@ function nombreValido(nombre) {
         return false;
     }
 
-    nombre =
-        limpiarTexto(nombre);
+    nombre = limpiarTexto(nombre);
 
     if (
         nombre.length < 2 ||
@@ -310,13 +284,10 @@ function nombreValido(nombre) {
     const lower =
         nombre.toLowerCase();
 
-    if (
-        ignorar.includes(lower)
-    ) {
+    if (ignorar.includes(lower)) {
         return false;
     }
 
-    // Evitar títulos que claramente no son items.
     if (
         lower.includes("sign in") ||
         lower.includes("log in") ||
@@ -341,421 +312,386 @@ function limpiarNombre(nombre) {
     let resultado =
         limpiarTexto(nombre);
 
-    resultado =
-        resultado
-            .replace(/\s*-\s*Steam.*$/i, "")
-            .replace(/\s*\|\s*Steam.*$/i, "")
-            .replace(/^Rust\s*-\s*/i, "")
-            .trim();
+    resultado = resultado
+        .replace(/\s*-\s*Steam.*$/i, "")
+        .replace(/\s*\|\s*Steam.*$/i, "")
+        .replace(/^Rust\s*-\s*/i, "")
+        .trim();
 
     return resultado;
 }
 
 // =====================================================
-// EXTRAER NOMBRE DESDE JSON/HTML
+// OBTENER NOMBRE DESDE ELEMENTO
 // =====================================================
 
-function buscarNombreEnTexto(html) {
-    if (!html) {
+function obtenerNombreDesdeElemento(
+    $,
+    elemento,
+    link
+) {
+    if (!elemento || !elemento.length) {
         return "";
     }
 
-    const patrones = [
-
-        // item_name
-        /["']item_name["']\s*:\s*["']([^"']{2,200})["']/i,
-
-        // display_name
-        /["']display_name["']\s*:\s*["']([^"']{2,200})["']/i,
-
-        // itemName
-        /["']itemName["']\s*:\s*["']([^"']{2,200})["']/i,
-
-        // data-item-name
-        /data-item-name\s*=\s*["']([^"']{2,200})["']/i,
-
-        // data-name
-        /data-name\s*=\s*["']([^"']{2,200})["']/i,
-
-        // name
-        /["']name["']\s*:\s*["']([^"']{2,200})["']/i,
-
-        // title
-        /["']title["']\s*:\s*["']([^"']{2,200})["']/i
+    const selectores = [
+        ".item_store_item_name",
+        ".itemstore_item_name",
+        ".item_name",
+        ".store_item_name",
+        ".item_title",
+        ".itemstore_item_title",
+        ".name",
+        ".title"
     ];
 
-    for (
-        const regex
-        of patrones
-    ) {
-        const match =
-            html.match(regex);
+    for (const selector of selectores) {
+        const encontrado =
+            elemento.find(selector).first();
 
         if (
-            match &&
-            match[1]
+            encontrado &&
+            encontrado.length
         ) {
             const nombre =
                 limpiarNombre(
-                    match[1]
+                    encontrado.text()
                 );
 
-            if (
-                nombreValido(nombre)
-            ) {
+            if (nombreValido(nombre)) {
                 return nombre;
             }
         }
     }
 
-    return "";
-}
+    const atributos = [
+        "data-item-name",
+        "data-name",
+        "data-title",
+        "title",
+        "aria-label"
+    ];
 
-// =====================================================
-// EXTRAER NOMBRE DEL DETAIL
-// =====================================================
-
-function extraerNombreDetail($, html) {
-
-    // -------------------------------------------------
-    // 1. SELECTORES ESPECÍFICOS
-    // -------------------------------------------------
-
-    const selectores = [
-        ".itemstore_item_name",
-        ".item_store_item_name",
-        ".item_name",
-        ".store_item_name",
-        ".itemstore_item_title",
-        ".item_store_item_title",
-        ".item_title",
-        "[data-item-name]",
-        "[data-name]"
+    const elementosParaBuscar = [
+        link,
+        elemento
     ];
 
     for (
-        const selector
-        of selectores
+        const elementoBusqueda
+        of elementosParaBuscar
     ) {
-        const elementos =
-            $(selector);
-
-        for (
-            let i = 0;
-            i < elementos.length;
-            i++
+        if (
+            !elementoBusqueda ||
+            !elementoBusqueda.length
         ) {
-            const elemento =
-                elementos.eq(i);
-
-            let nombre =
-                limpiarNombre(
-                    elemento.text()
-                );
-
-            if (
-                nombreValido(nombre)
-            ) {
-                return nombre;
-            }
-
-            const atributos = [
-                "data-item-name",
-                "data-name",
-                "data-title",
-                "title"
-            ];
-
-            for (
-                const atributo
-                of atributos
-            ) {
-                const valor =
-                    elemento.attr(
-                        atributo
-                    );
-
-                if (!valor) {
-                    continue;
-                }
-
-                nombre =
-                    limpiarNombre(
-                        valor
-                    );
-
-                if (
-                    nombreValido(nombre)
-                ) {
-                    return nombre;
-                }
-            }
+            continue;
         }
-    }
 
-    // -------------------------------------------------
-    // 2. H1
-    // -------------------------------------------------
+        for (const atributo of atributos) {
+            const valor =
+                elementoBusqueda.attr(atributo);
 
-    const h1 =
-        limpiarNombre(
-            $("h1")
-                .first()
-                .text()
-        );
-
-    if (
-        nombreValido(h1)
-    ) {
-        return h1;
-    }
-
-    // -------------------------------------------------
-    // 3. META OG TITLE
-    // -------------------------------------------------
-
-    const ogTitle =
-        limpiarNombre(
-            $('meta[property="og:title"]')
-                .attr("content")
-        );
-
-    if (
-        nombreValido(ogTitle)
-    ) {
-        return ogTitle;
-    }
-
-    // -------------------------------------------------
-    // 4. TITLE
-    // -------------------------------------------------
-
-    const title =
-        limpiarNombre(
-            $("title")
-                .first()
-                .text()
-        );
-
-    if (
-        nombreValido(title)
-    ) {
-        return title;
-    }
-
-    // -------------------------------------------------
-    // 5. JSON-LD
-    // -------------------------------------------------
-
-    const scripts =
-        $('script[type="application/ld+json"]');
-
-    for (
-        let i = 0;
-        i < scripts.length;
-        i++
-    ) {
-        try {
-            const texto =
-                $(scripts[i]).html();
-
-            if (!texto) {
+            if (!valor) {
                 continue;
             }
 
-            const data =
-                JSON.parse(texto);
+            const nombre =
+                limpiarNombre(valor);
 
-            const encontrados = [];
-
-            function recorrer(objeto) {
-                if (!objeto) {
-                    return;
-                }
-
-                if (
-                    Array.isArray(objeto)
-                ) {
-                    for (
-                        const item
-                        of objeto
-                    ) {
-                        recorrer(item);
-                    }
-
-                    return;
-                }
-
-                if (
-                    typeof objeto !== "object"
-                ) {
-                    return;
-                }
-
-                if (
-                    typeof objeto.name ===
-                    "string"
-                ) {
-                    const nombre =
-                        limpiarNombre(
-                            objeto.name
-                        );
-
-                    if (
-                        nombreValido(
-                            nombre
-                        )
-                    ) {
-                        encontrados.push(
-                            nombre
-                        );
-                    }
-                }
-
-                for (
-                    const key
-                    of Object.keys(objeto)
-                ) {
-                    const valor =
-                        objeto[key];
-
-                    if (
-                        valor &&
-                        typeof valor ===
-                        "object"
-                    ) {
-                        recorrer(valor);
-                    }
-                }
+            if (nombreValido(nombre)) {
+                return nombre;
             }
-
-            recorrer(data);
-
-            if (
-                encontrados.length > 0
-            ) {
-                return encontrados[0];
-            }
-
-        } catch {
-            // JSON-LD inválido.
         }
     }
 
-    // -------------------------------------------------
-    // 6. BUSCAR EN HTML CRUDO
-    // -------------------------------------------------
+    // El texto del enlace es una de las fuentes
+    // principales de Steam actualmente.
+    if (link && link.length) {
+        const textoLink =
+            limpiarNombre(link.text());
 
-    const nombreHtml =
-        buscarNombreEnTexto(
-            html
-        );
-
-    if (
-        nombreValido(
-            nombreHtml
-        )
-    ) {
-        return nombreHtml;
+        if (nombreValido(textoLink)) {
+            return textoLink;
+        }
     }
 
     return "";
 }
 
 // =====================================================
-// EXTRAER PRECIO DEL DETAIL
+// OBTENER CONTENEDOR DE ITEM
 // =====================================================
 
-function extraerPrecioDetail($, html) {
+function obtenerContenedorItem(
+    $,
+    link
+) {
+    if (!link || !link.length) {
+        return null;
+    }
 
     const selectores = [
-        ".item_price",
-        ".price",
-        ".itemstore_price",
-        ".item_store_price",
-        ".item_purchase_price",
-        ".itemstore_item_price",
-        "[class*='price']"
+        ".item_store_item",
+        ".itemstore_item",
+        ".item_store_item_cap",
+        ".item_store_item_container",
+        ".item_store_item_holder",
+        ".store_item",
+        ".itemstore_item_holder"
     ];
 
-    for (
-        const selector
-        of selectores
-    ) {
-        const elementos =
-            $(selector);
-
-        for (
-            let i = 0;
-            i < elementos.length;
-            i++
-        ) {
-            const precio =
-                extraerPrecio(
-                    $(elementos[i]).text()
-                );
-
-            if (precio) {
-                return precio;
-            }
-        }
-    }
-
-    // Buscar en atributos.
-    const atributosPrecio = [
-        "data-price",
-        "data-item-price",
-        "data-final-price"
-    ];
-
-    for (
-        const atributo
-        of atributosPrecio
-    ) {
-        const elemento =
-            $(`[${atributo}]`)
-                .first();
+    for (const selector of selectores) {
+        const padre =
+            link.closest(selector);
 
         if (
-            elemento &&
-            elemento.length
+            padre &&
+            padre.length
         ) {
-            const precio =
-                extraerPrecio(
-                    elemento.attr(
-                        atributo
-                    )
-                );
-
-            if (precio) {
-                return precio;
-            }
+            return padre;
         }
     }
 
-    // HTML crudo.
-    if (html) {
+    // Fallback: buscar varios niveles hacia arriba.
+    let actual = link;
+
+    for (let i = 0; i < 6; i++) {
+        actual = actual.parent();
+
+        if (
+            !actual ||
+            !actual.length
+        ) {
+            break;
+        }
+
+        const texto =
+            limpiarTexto(actual.text());
+
         const precio =
-            extraerPrecio(html);
+            extraerPrecio(texto);
 
         if (precio) {
-            return precio;
+            return actual;
         }
     }
 
-    // Texto completo.
-    const body =
-        limpiarTexto(
-            $("body").text()
+    return link.parent();
+}
+
+// =====================================================
+// AGREGAR ITEM
+// =====================================================
+
+function agregarItem(
+    items,
+    vistos,
+    item
+) {
+    if (!item) {
+        return;
+    }
+
+    const nombre =
+        limpiarNombre(item.nombre);
+
+    const precio =
+        limpiarTexto(item.precio);
+
+    const enlace =
+        convertirUrl(item.enlace);
+
+    const imagen =
+        convertirImagen(item.imagen);
+
+    if (!nombreValido(nombre)) {
+        return;
+    }
+
+    if (!precio) {
+        return;
+    }
+
+    if (!enlace) {
+        return;
+    }
+
+    const match =
+        enlace.match(
+            /\/itemstore\/252490\/detail\/(\d+)\/?/i
         );
 
-    return extraerPrecio(
-        body
+    const key =
+        match
+            ? `id:${match[1]}`
+            : `${nombre.toLowerCase()}|${precio}`;
+
+    if (vistos.has(key)) {
+        return;
+    }
+
+    vistos.add(key);
+
+    items.push({
+        id:
+            match
+                ? match[1]
+                : "",
+
+        nombre,
+
+        precio,
+
+        imagen,
+
+        enlace
+    });
+}
+
+// =====================================================
+// EXTRAER ITEMS DIRECTAMENTE DESDE LOS LINKS
+// =====================================================
+
+function extraerItemsDesdeEnlaces(
+    $,
+    items,
+    vistos
+) {
+    const enlaces =
+        $('a[href*="/itemstore/252490/detail/"]');
+
+    console.log(
+        `🛒 Enlaces de artículos encontrados: ${enlaces.length}`
+    );
+
+    enlaces.each(
+        (index, element) => {
+            if (
+                items.length >= MAX_ITEMS
+            ) {
+                return false;
+            }
+
+            const link =
+                $(element);
+
+            const href =
+                link.attr("href");
+
+            const enlace =
+                convertirUrl(href);
+
+            if (!enlace) {
+                return;
+            }
+
+            const match =
+                enlace.match(
+                    /\/itemstore\/252490\/detail\/(\d+)\/?/i
+                );
+
+            if (!match) {
+                return;
+            }
+
+            const contenedor =
+                obtenerContenedorItem(
+                    $,
+                    link
+                );
+
+            if (
+                !contenedor ||
+                !contenedor.length
+            ) {
+                return;
+            }
+
+            const nombre =
+                obtenerNombreDesdeElemento(
+                    $,
+                    contenedor,
+                    link
+                );
+
+            if (!nombreValido(nombre)) {
+                console.log(
+                    `⚠️ No se pudo obtener nombre para detail ${match[1]}`
+                );
+                return;
+            }
+
+            let precio =
+                extraerPrecio(
+                    contenedor.text()
+                );
+
+            if (!precio) {
+                precio =
+                    extraerPrecio(
+                        link.text()
+                    );
+            }
+
+            if (!precio) {
+                const atributosPrecio = [
+                    "data-price",
+                    "data-item-price",
+                    "data-final-price"
+                ];
+
+                for (
+                    const atributo
+                    of atributosPrecio
+                ) {
+                    const valor =
+                        contenedor.attr(
+                            atributo
+                        );
+
+                    if (valor) {
+                        precio =
+                            extraerPrecio(
+                                valor
+                            );
+
+                        if (precio) {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!precio) {
+                console.log(
+                    `⚠️ ${nombre}: no se encontró precio`
+                );
+                return;
+            }
+
+            const imagen =
+                obtenerImagenElemento(
+                    contenedor
+                );
+
+            agregarItem(
+                items,
+                vistos,
+                {
+                    id: match[1],
+                    nombre,
+                    precio,
+                    imagen,
+                    enlace
+                }
+            );
+        }
     );
 }
 
 // =====================================================
-// EXTRAER ITEM VISUAL
+// EXTRAER ITEMS VISUALES - FALLBACK
 // =====================================================
 
 function extraerItemsVisuales(
@@ -773,13 +709,9 @@ function extraerItemsVisuales(
         ".itemstore_item_holder"
     ];
 
-    for (
-        const selector
-        of selectores
-    ) {
+    for (const selector of selectores) {
         $(selector).each(
             (index, element) => {
-
                 if (
                     items.length >=
                     MAX_ITEMS
@@ -811,56 +743,12 @@ function extraerItemsVisuales(
                     return;
                 }
 
-                let nombre = "";
-
-                const selectoresNombre = [
-                    ".item_store_item_name",
-                    ".itemstore_item_name",
-                    ".item_name",
-                    ".store_item_name",
-                    ".name",
-                    ".title"
-                ];
-
-                for (
-                    const selectorNombre
-                    of selectoresNombre
-                ) {
-                    const encontrado =
-                        el.find(
-                            selectorNombre
-                        ).first();
-
-                    if (
-                        encontrado &&
-                        encontrado.length
-                    ) {
-                        nombre =
-                            limpiarNombre(
-                                encontrado.text()
-                            );
-
-                        if (
-                            nombreValido(
-                                nombre
-                            )
-                        ) {
-                            break;
-                        }
-                    }
-                }
-
-                if (
-                    !nombre
-                ) {
-                    nombre =
-                        limpiarNombre(
-                            link.attr(
-                                "title"
-                            ) ||
-                            link.text()
-                        );
-                }
+                const nombre =
+                    obtenerNombreDesdeElemento(
+                        $,
+                        el,
+                        link
+                    );
 
                 const precio =
                     extraerPrecio(
@@ -889,91 +777,23 @@ function extraerItemsVisuales(
                 }
             }
         );
+
+        if (
+            items.length >=
+            MAX_ITEMS
+        ) {
+            break;
+        }
     }
-}
-
-// =====================================================
-// AGREGAR ITEM
-// =====================================================
-
-function agregarItem(
-    items,
-    vistos,
-    item
-) {
-    if (!item) {
-        return;
-    }
-
-    let nombre =
-        limpiarNombre(
-            item.nombre
-        );
-
-    const precio =
-        limpiarTexto(
-            item.precio
-        );
-
-    const enlace =
-        convertirUrl(
-            item.enlace
-        );
-
-    const imagen =
-        convertirImagen(
-            item.imagen
-        );
-
-    if (
-        !nombreValido(nombre)
-    ) {
-        return;
-    }
-
-    if (!precio) {
-        return;
-    }
-
-    if (!enlace) {
-        return;
-    }
-
-    const match =
-        enlace.match(
-            /\/detail\/(\d+)\/?/i
-        );
-
-    const key =
-        match
-            ? `id:${match[1]}`
-            : `${nombre.toLowerCase()}|${precio}`;
-
-    if (
-        vistos.has(key)
-    ) {
-        return;
-    }
-
-    vistos.add(key);
-
-    items.push({
-        id:
-            match
-                ? match[1]
-                : "",
-        nombre,
-        precio,
-        imagen,
-        enlace
-    });
 }
 
 // =====================================================
 // OBTENER TODAS LAS URL DETAIL
 // =====================================================
 
-function obtenerUrlsDetail(html) {
+function obtenerUrlsDetail(
+    html
+) {
     const urls =
         new Map();
 
@@ -982,24 +802,12 @@ function obtenerUrlsDetail(html) {
     }
 
     const patrones = [
-
-        // URL completa
-        /https?:\\?\/\\?\/store\.steampowered\.com\\?\/itemstore\\?\/252490\\?\/detail\\?\/(\d+)\\?\/?/gi,
-
-        // URL normal
         /https?:\/\/store\.steampowered\.com\/itemstore\/252490\/detail\/(\d+)\/?/gi,
-
-        // Relativa
         /\/itemstore\/252490\/detail\/(\d+)\/?/gi,
-
-        // Escapada
         /\\\/itemstore\\\/252490\\\/detail\\\/(\d+)\\\/?/gi
     ];
 
-    for (
-        const regex
-        of patrones
-    ) {
+    for (const regex of patrones) {
         let match;
 
         while (
@@ -1026,10 +834,55 @@ function obtenerUrlsDetail(html) {
 }
 
 // =====================================================
-// DETECTAR IMAGEN DESDE HTML CRUDO
+// BUSCAR NOMBRE EN HTML
 // =====================================================
 
-function buscarImagenEnHtml(html) {
+function buscarNombreEnTexto(
+    html
+) {
+    if (!html) {
+        return "";
+    }
+
+    const patrones = [
+        /["']item_name["']\s*:\s*["']([^"']{2,200})["']/i,
+        /["']display_name["']\s*:\s*["']([^"']{2,200})["']/i,
+        /["']itemName["']\s*:\s*["']([^"']{2,200})["']/i,
+        /data-item-name\s*=\s*["']([^"']{2,200})["']/i,
+        /data-name\s*=\s*["']([^"']{2,200})["']/i
+    ];
+
+    for (const regex of patrones) {
+        const match =
+            html.match(regex);
+
+        if (
+            match &&
+            match[1]
+        ) {
+            const nombre =
+                limpiarNombre(
+                    match[1]
+                );
+
+            if (
+                nombreValido(nombre)
+            ) {
+                return nombre;
+            }
+        }
+    }
+
+    return "";
+}
+
+// =====================================================
+// BUSCAR IMAGEN EN HTML
+// =====================================================
+
+function buscarImagenEnHtml(
+    html
+) {
     if (!html) {
         return "";
     }
@@ -1042,10 +895,7 @@ function buscarImagenEnHtml(html) {
         /["']iconUrl["']\s*:\s*["']([^"']+)["']/i
     ];
 
-    for (
-        const regex
-        of patrones
-    ) {
+    for (const regex of patrones) {
         const match =
             html.match(regex);
 
@@ -1068,7 +918,7 @@ function buscarImagenEnHtml(html) {
 }
 
 // =====================================================
-// OBTENER DETAIL
+// OBTENER DETAIL - SOLO COMO RESPALDO
 // =====================================================
 
 async function obtenerDetalleItem(
@@ -1081,10 +931,12 @@ async function obtenerDetalleItem(
                 {
                     timeout: 25000,
                     maxRedirects: 5,
+
                     validateStatus:
                         status =>
                             status >= 200 &&
                             status < 400,
+
                     headers:
                         STEAM_HEADERS
                 }
@@ -1108,7 +960,7 @@ async function obtenerDetalleItem(
 
         const match =
             url.match(
-                /\/detail\/(\d+)\/?/i
+                /\/itemstore\/252490\/detail\/(\d+)\/?/i
             );
 
         const itemId =
@@ -1116,34 +968,139 @@ async function obtenerDetalleItem(
                 ? match[1]
                 : "";
 
-        // -------------------------------------------------
-        // NOMBRE
-        // -------------------------------------------------
+        // IMPORTANTE:
+        // NO usar <title> como fuente principal.
+        // Steam puede devolver "Rust on Steam".
+        let nombre = "";
 
-        const nombre =
-            extraerNombreDetail(
-                $,
-                html
+        const selectoresNombre = [
+            ".itemstore_item_name",
+            ".item_store_item_name",
+            ".item_name",
+            ".store_item_name",
+            "[data-item-name]",
+            "[data-name]"
+        ];
+
+        for (
+            const selector
+            of selectoresNombre
+        ) {
+            const elementos =
+                $(selector);
+
+            for (
+                let i = 0;
+                i < elementos.length;
+                i++
+            ) {
+                const elemento =
+                    elementos.eq(i);
+
+                const candidatos = [
+                    elemento.text(),
+                    elemento.attr(
+                        "data-item-name"
+                    ),
+                    elemento.attr(
+                        "data-name"
+                    ),
+                    elemento.attr(
+                        "data-title"
+                    ),
+                    elemento.attr(
+                        "title"
+                    ),
+                    elemento.attr(
+                        "aria-label"
+                    )
+                ];
+
+                for (
+                    const candidato
+                    of candidatos
+                ) {
+                    const posible =
+                        limpiarNombre(
+                            candidato
+                        );
+
+                    if (
+                        nombreValido(
+                            posible
+                        )
+                    ) {
+                        nombre =
+                            posible;
+
+                        break;
+                    }
+                }
+
+                if (nombre) {
+                    break;
+                }
+            }
+
+            if (nombre) {
+                break;
+            }
+        }
+
+        // Buscar JSON embebido.
+        if (!nombre) {
+            const patrones = [
+                /["']item_name["']\s*:\s*["']([^"']{2,200})["']/i,
+                /["']display_name["']\s*:\s*["']([^"']{2,200})["']/i,
+                /["']itemName["']\s*:\s*["']([^"']{2,200})["']/i
+            ];
+
+            for (
+                const regex
+                of patrones
+            ) {
+                const resultado =
+                    html.match(regex);
+
+                if (
+                    resultado &&
+                    resultado[1]
+                ) {
+                    const posible =
+                        limpiarNombre(
+                            resultado[1]
+                        );
+
+                    if (
+                        nombreValido(
+                            posible
+                        )
+                    ) {
+                        nombre =
+                            posible;
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Precio.
+        let precio =
+            extraerPrecio(
+                $("body").text()
             );
 
-        // -------------------------------------------------
-        // PRECIO
-        // -------------------------------------------------
+        if (!precio) {
+            precio =
+                extraerPrecio(
+                    html
+                );
+        }
 
-        const precio =
-            extraerPrecioDetail(
-                $,
-                html
-            );
-
-        // -------------------------------------------------
-        // IMAGEN
-        // -------------------------------------------------
-
+        // Imagen.
         let imagen =
-            obtenerImagenMeta(
-                $
-            );
+            obtenerImagenMeta($);
 
         if (!imagen) {
             imagen =
@@ -1159,15 +1116,11 @@ async function obtenerDetalleItem(
                 );
         }
 
-        // -------------------------------------------------
-        // RESULTADO
-        // -------------------------------------------------
-
         if (
             !nombreValido(nombre)
         ) {
             console.log(
-                `⚠️ Detail ${itemId}: no se pudo obtener nombre.`
+                `⚠️ Detail ${itemId}: nombre inválido o genérico`
             );
 
             return null;
@@ -1175,7 +1128,7 @@ async function obtenerDetalleItem(
 
         if (!precio) {
             console.log(
-                `⚠️ Detail ${itemId}: no se pudo obtener precio.`
+                `⚠️ Detail ${itemId}: no se encontró precio`
             );
 
             return null;
@@ -1186,13 +1139,11 @@ async function obtenerDetalleItem(
         );
 
         return {
-            id:
-                itemId,
+            id: itemId,
             nombre,
             precio,
             imagen,
-            enlace:
-                url
+            enlace: url
         };
 
     } catch (error) {
@@ -1205,67 +1156,17 @@ async function obtenerDetalleItem(
 }
 
 // =====================================================
-// EXTRAER DATOS EMBEBIDOS
-// =====================================================
-
-function extraerDatosEmbebidos(
-    html,
-    items,
-    vistos
-) {
-    if (!html) {
-        return;
-    }
-
-    const nombres = [];
-
-    const patrones = [
-        /["']item_name["']\s*:\s*["']([^"']+)["']/gi,
-        /["']display_name["']\s*:\s*["']([^"']+)["']/gi,
-        /["']itemName["']\s*:\s*["']([^"']+)["']/gi
-    ];
-
-    for (
-        const regex
-        of patrones
-    ) {
-        let match;
-
-        while (
-            (match =
-                regex.exec(html)) !== null
-        ) {
-            const nombre =
-                limpiarNombre(
-                    match[1]
-                );
-
-            if (
-                nombreValido(nombre)
-            ) {
-                nombres.push(
-                    nombre
-                );
-            }
-        }
-    }
-
-    return nombres;
-}
-
-// =====================================================
 // OBTENER TIENDA RUST
 // =====================================================
 
 async function obtenerTiendaRust() {
-
     console.log(
         "🛒 Consultando tienda Rust en Steam..."
     );
 
     const urls = [
         `${STEAM_STORE_URL}&cc=us&l=english`,
-        `${STEAM_STORE_URL}&l=english`,
+        `${STEAM_STORE_URL}&cc=cl&l=english`,
         `${STEAM_STORE_URL}&cc=cl&l=spanish`
     ];
 
@@ -1282,17 +1183,18 @@ async function obtenerTiendaRust() {
         );
 
         try {
-
             const response =
                 await axios.get(
                     url,
                     {
                         timeout: 30000,
                         maxRedirects: 5,
+
                         validateStatus:
                             status =>
                                 status >= 200 &&
                                 status < 400,
+
                         headers:
                             STEAM_HEADERS
                     }
@@ -1323,22 +1225,41 @@ async function obtenerTiendaRust() {
 
             // =================================================
             // MÉTODO 1
-            // HTML VISUAL
+            // LINKS REALES DE LOS ITEMS
             // =================================================
 
-            extraerItemsVisuales(
+            extraerItemsDesdeEnlaces(
                 $,
                 items,
                 vistos
             );
 
             console.log(
-                `🛒 Método visual encontró: ${items.length}`
+                `🛒 Método enlaces encontró: ${items.length}`
             );
 
             // =================================================
             // MÉTODO 2
-            // TODOS LOS DETAIL
+            // CONTENEDORES VISUALES
+            // =================================================
+
+            if (
+                items.length < MAX_ITEMS
+            ) {
+                extraerItemsVisuales(
+                    $,
+                    items,
+                    vistos
+                );
+            }
+
+            console.log(
+                `🛒 Después del método visual: ${items.length}`
+            );
+
+            // =================================================
+            // MÉTODO 3
+            // DETAIL SOLO PARA ITEMS QUE NO TENGAN DATOS
             // =================================================
 
             const detailUrls =
@@ -1347,39 +1268,30 @@ async function obtenerTiendaRust() {
                 );
 
             console.log(
-                `🛒 Referencias detail encontradas en HTML: ${detailUrls.length}`
+                `🛒 Referencias detail encontradas: ${detailUrls.length}`
             );
 
-            // =================================================
-            // CONSULTAR TODOS LOS DETAIL
-            // =================================================
-
+            // Solo consultar detail si la página principal
+            // no consiguió suficientes artículos.
             if (
+                items.length === 0 &&
                 detailUrls.length > 0
             ) {
-
-                const cantidad =
-                    Math.min(
-                        detailUrls.length,
-                        MAX_ITEMS
-                    );
-
-                console.log(
-                    `🛒 Consultando ${cantidad} páginas detail...`
-                );
-
                 const urlsDetail =
                     detailUrls.slice(
                         0,
                         MAX_ITEMS
                     );
 
+                console.log(
+                    `🛒 Fallback: consultando ${urlsDetail.length} páginas detail...`
+                );
+
                 for (
                     let i = 0;
                     i < urlsDetail.length;
                     i += 3
                 ) {
-
                     const grupo =
                         urlsDetail.slice(
                             i,
@@ -1397,7 +1309,6 @@ async function obtenerTiendaRust() {
                         const item
                         of resultados
                     ) {
-
                         if (!item) {
                             continue;
                         }
@@ -1420,39 +1331,6 @@ async function obtenerTiendaRust() {
                 }
             }
 
-            console.log(
-                `🛒 Después de consultar detail: ${items.length}`
-            );
-
-            // =================================================
-            // MÉTODO 3
-            // DATOS EMBEBIDOS
-            // =================================================
-
-            if (
-                items.length === 0
-            ) {
-
-                const nombres =
-                    extraerDatosEmbebidos(
-                        html,
-                        items,
-                        vistos
-                    );
-
-                console.log(
-                    `🛒 Nombres embebidos encontrados: ${nombres.length}`
-                );
-            }
-
-            // =================================================
-            // ORDENAR POR ORDEN DE APARICIÓN
-            // =================================================
-
-            // No hacemos sort.
-            // Steam ya entrega los IDs en el orden
-            // de la tienda.
-
             // =================================================
             // RESULTADO
             // =================================================
@@ -1460,14 +1338,12 @@ async function obtenerTiendaRust() {
             if (
                 items.length > 0
             ) {
-
                 console.log(
                     `🛒 Steam devolvió ${items.length} artículos`
                 );
 
                 items.forEach(
                     (item, index) => {
-
                         console.log(
                             `   ${index + 1}. ${item.nombre} — ${item.precio} — ${item.imagen ? "CON IMAGEN" : "SIN IMAGEN"}`
                         );
@@ -1512,7 +1388,6 @@ async function obtenerTiendaRust() {
             }
 
         } catch (error) {
-
             console.error(
                 `❌ Error en intento ${intento + 1}:`,
                 error.message
@@ -1542,7 +1417,6 @@ async function obtenerTiendaRust() {
 function crearEmbedItem(
     item
 ) {
-
     const embed =
         new EmbedBuilder()
             .setTitle(
@@ -1554,8 +1428,10 @@ function crearEmbedItem(
             .addFields({
                 name:
                     "💰 Precio",
+
                 value:
                     `**${item.precio}**`,
+
                 inline:
                     true
             })
@@ -1572,17 +1448,12 @@ function crearEmbedItem(
                     "RustLogix • Rust Item Store"
             });
 
-    // =================================================
-    // IMAGEN INDIVIDUAL
-    // =================================================
-
     if (
         item.imagen &&
         /^https?:\/\//i.test(
             item.imagen
         )
     ) {
-
         embed.setImage(
             item.imagen
         );
@@ -1598,7 +1469,6 @@ function crearEmbedItem(
 function crearBotonItem(
     item
 ) {
-
     if (
         !item ||
         !item.enlace
@@ -1632,7 +1502,6 @@ async function publicarItem(
     channel,
     item
 ) {
-
     const embed =
         crearEmbedItem(
             item
@@ -1667,7 +1536,6 @@ async function publicarItem(
 async function publicarTienda(
     channel
 ) {
-
     const items =
         await obtenerTiendaRust();
 
@@ -1690,9 +1558,7 @@ async function publicarTienda(
         const item
         of items
     ) {
-
         try {
-
             await publicarItem(
                 channel,
                 item
@@ -1705,7 +1571,6 @@ async function publicarTienda(
             );
 
         } catch (error) {
-
             console.error(
                 `❌ Error publicando ${item.nombre}: ${error.message}`
             );
@@ -1726,7 +1591,6 @@ async function publicarTienda(
 async function publicarTiendaManual(
     interaction
 ) {
-
     const items =
         await obtenerTiendaRust();
 
@@ -1755,30 +1619,22 @@ async function publicarTiendaManual(
         );
     }
 
-    // =================================================
-    // RESPUESTA INICIAL
-    // =================================================
-
     await interaction.editReply({
         content:
             `🛒 Se encontraron **${items.length} artículos** en la tienda semanal.\n\nPublicando artículos...`,
+
         embeds: [],
+
         components: []
     });
 
     let publicados = 0;
 
-    // =================================================
-    // 1 MENSAJE POR ITEM
-    // =================================================
-
     for (
         const item
         of items
     ) {
-
         try {
-
             await publicarItem(
                 channel,
                 item
@@ -1791,7 +1647,6 @@ async function publicarTiendaManual(
             );
 
         } catch (error) {
-
             console.error(
                 `❌ Error publicando ${item.nombre}:`,
                 error.message
@@ -1799,17 +1654,11 @@ async function publicarTiendaManual(
         }
     }
 
-    // =================================================
-    // ACTUALIZAR RESPUESTA
-    // =================================================
-
     try {
-
         await interaction.editReply({
             content:
                 `✅ Tienda publicada correctamente.\n🛒 **${publicados}/${items.length} artículos** publicados.`
         });
-
     } catch {
         // La interacción puede haber expirado.
     }
@@ -1827,7 +1676,6 @@ let tiendaRevisando =
 async function revisarTiendaAutomatica(
     client
 ) {
-
     if (
         tiendaRevisando
     ) {
@@ -1838,13 +1686,13 @@ async function revisarTiendaAutomatica(
         true;
 
     try {
-
         const dia =
             new Intl.DateTimeFormat(
                 "en-US",
                 {
                     timeZone:
                         TIMEZONE_CHILE,
+
                     weekday:
                         "short"
                 }
@@ -1891,7 +1739,6 @@ async function revisarTiendaAutomatica(
             !items ||
             items.length === 0
         ) {
-
             console.log(
                 "⚠️ Steam todavía no entregó artículos."
             );
@@ -1912,10 +1759,13 @@ async function revisarTiendaAutomatica(
                 {
                     timeZone:
                         TIMEZONE_CHILE,
+
                     year:
                         "numeric",
+
                     month:
                         "2-digit",
+
                     day:
                         "2-digit"
                 }
@@ -1955,9 +1805,7 @@ async function revisarTiendaAutomatica(
             const config
             of configs
         ) {
-
             try {
-
                 if (
                     config.rustStoreLastPublishedWeek ===
                     semana
@@ -1974,7 +1822,6 @@ async function revisarTiendaAutomatica(
                     !canal ||
                     !canal.isTextBased()
                 ) {
-
                     console.log(
                         `⚠️ Canal de tienda inválido en ${config.guildId}`
                     );
@@ -1989,17 +1836,11 @@ async function revisarTiendaAutomatica(
                 let publicados =
                     0;
 
-                // =================================================
-                // 1 MENSAJE POR ITEM
-                // =================================================
-
                 for (
                     const item
                     of items
                 ) {
-
                     try {
-
                         await publicarItem(
                             canal,
                             item
@@ -2012,7 +1853,6 @@ async function revisarTiendaAutomatica(
                         );
 
                     } catch (error) {
-
                         console.error(
                             `❌ Error publicando ${item.nombre} en ${config.guildId}:`,
                             error.message
@@ -2034,7 +1874,6 @@ async function revisarTiendaAutomatica(
                 );
 
             } catch (error) {
-
                 console.error(
                     `❌ Error publicando tienda en ${config.guildId}:`,
                     error.message
@@ -2043,14 +1882,12 @@ async function revisarTiendaAutomatica(
         }
 
     } catch (error) {
-
         console.error(
             "❌ ERROR EN REVISIÓN AUTOMÁTICA TIENDA:",
             error.message
         );
 
     } finally {
-
         tiendaRevisando =
             false;
     }
@@ -2063,29 +1900,24 @@ async function revisarTiendaAutomatica(
 function iniciarTiendaAutomatica(
     client
 ) {
-
     console.log(
         "🛒 Sistema automático de tienda Rust iniciado correctamente."
     );
 
     setTimeout(
         () => {
-
             revisarTiendaAutomatica(
                 client
             );
-
         },
         15000
     );
 
     setInterval(
         () => {
-
             revisarTiendaAutomatica(
                 client
             );
-
         },
         CHECK_INTERVAL
     );
