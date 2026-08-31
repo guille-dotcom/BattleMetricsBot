@@ -802,6 +802,24 @@ client.on(
 
             }
 
+            // =================================================
+            // MENÚS DESPLEGABLES (SELECT MENUS) Y MODALES
+            // =================================================
+
+            if (interaction.isStringSelectMenu() && interaction.customId === "config_tienda_selector") {
+                const comandoConfigTienda = client.commands.get("configurar-tienda");
+                if (comandoConfigTienda && typeof comandoConfigTienda.manejarSelectMenu === "function") {
+                    return await comandoConfigTienda.manejarSelectMenu(interaction);
+                }
+            }
+
+            if (interaction.isModalSubmit() && interaction.customId.startsWith("modal_config_tienda")) {
+                const comandoConfigTienda = client.commands.get("configurar-tienda");
+                if (comandoConfigTienda && typeof comandoConfigTienda.manejarModal === "function") {
+                    return await comandoConfigTienda.manejarModal(interaction);
+                }
+            }
+
             return;
         }
 
