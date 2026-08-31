@@ -334,7 +334,6 @@ async function consultarRaid(nombreQuery) {
                         if (normalizarTexto(herramienta) === "herramienta de raideos") return;
                         if (!pareceTiempo(tiempo)) return;
 
-                        // Guardamos el texto crudo original para evaluar reglas especiales (como Deployed o Right Click Stuck)
                         const nombreCrudo = limpiarTexto(herramienta);
                         const nombreLimpio = limpiarNombreHerramient(herramienta);
                         if (!nombreLimpio) return;
@@ -366,12 +365,11 @@ async function consultarRaid(nombreQuery) {
             );
         });
 
-        // Asegurar que CADA herramienta aparezca una sola vez con sus reglas específicas
         const unicosMap = new Map();
         for (const item of raidingCostFiltrado) {
             let nombreBase = normalizarTexto(item.herramienta);
             
-            // 3. Regla para la bomba de propano (priorizar "Deployed")
+            // Regla para la bomba de propano (priorizar "Deployed")
             if (nombreBase.includes("propano") || nombreBase.includes("propane")) {
                 const esDeployed = /deployed/i.test(item.nombreCrudo);
                 const clavePropano = "bomba explosiva de propano";
@@ -393,7 +391,7 @@ async function consultarRaid(nombreQuery) {
                 continue;
             }
 
-            // 4. Regla para las granadas de lata / Beancan (priorizar "Right Click Stuck")
+            // Regla para las granadas de lata / Beancan (priorizar "Right Click Stuck")
             if (nombreBase.includes("lata") || nombreBase.includes("beancan")) {
                 const esClickDerecho = /right click stuck/i.test(item.nombreCrudo);
                 const claveGranada = "granada de lata";
@@ -415,7 +413,6 @@ async function consultarRaid(nombreQuery) {
                 continue;
             }
 
-            // Para el resto de herramientas normales (evita duplicados exactos y se queda con la más rápida)
             if (!unicosMap.has(nombreBase)) {
                 unicosMap.set(nombreBase, item);
             } else {
