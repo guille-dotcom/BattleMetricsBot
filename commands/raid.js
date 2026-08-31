@@ -80,7 +80,7 @@ function formatearStartingItems(items) {
 }
 
 // =====================================================
-// FORMATEAR RAIDING COST (Con filtro de categoría)
+// FORMATEAR RAIDING COST (Con filtro y ordenado por tiempo)
 // =====================================================
 
 function formatearRaidingCost(items, categoriaFiltro = "all") {
@@ -88,7 +88,7 @@ function formatearRaidingCost(items, categoriaFiltro = "all") {
         return "No hay datos disponibles.";
     }
 
-    // Filtrar por categoría si se especifica ('melee' o 'all')
+    // Filtrar por categoría ('melee' o 'all')
     const itemsFiltrados = items.filter(item => {
         if (categoriaFiltro === "melee") {
             return item.categoria === "melee";
@@ -101,7 +101,7 @@ function formatearRaidingCost(items, categoriaFiltro = "all") {
         return "No hay elementos de esta categoría disponibles.";
     }
 
-    // Ordenar explícitamente de menor a mayor tiempo
+    // Ordenar estrictamente de menor a mayor tiempo
     const itemsOrdenados = [...itemsFiltrados].sort((a, b) => {
         return convertirASegundosVista(a.tiempo) - convertirASegundosVista(b.tiempo);
     });
@@ -169,7 +169,7 @@ function crearEmbed(resultado) {
 }
 
 // =====================================================
-// CREAR BOTONES (3 Botones requeridos)
+// CREAR BOTONES (3 Botones exactos)
 // =====================================================
 
 function crearBotones(cacheKey) {
