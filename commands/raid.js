@@ -13,7 +13,6 @@ const { consultarRaid } = require("../services/rusthelp");
 // =====================================================
 
 const raidCache = new Map();
-
 const CACHE_TIME = 5 * 60 * 1000;
 
 // =====================================================
@@ -37,7 +36,7 @@ function limitarTexto(texto, max = 1024) {
 }
 
 // =====================================================
-// FORMATEAR STARTING ITEMS
+// FORMATEAR STARTING ITEMS (Corregido y Limpio)
 // =====================================================
 
 function formatearStartingItems(items) {
@@ -50,14 +49,17 @@ function formatearStartingItems(items) {
         const tiempo = limpiarTexto(item.tiempo);
         const cantidad = limpiarTexto(item.cantidad);
 
-        let linea = `**${index + 1}. ${nombre}**`;
+        // Formato limpio: 1. Nombre — 📦 x1 — ⏱️ 11s
+        let linea = `**${index + 1}.** ${nombre}`;
 
-        if (cantidad) {
-            linea += ` — **×${cantidad.replace(/^x/i, "")}**`;
+        if (cantidad && cantidad !== "x0" && cantidad !== "0") {
+            // Limpiamos la cantidad por si trae caracteres repetidos de la web
+            const cantidadLimpia = cantidad.split(" ")[0].replace(/^x/i, "");
+            linea += ` \`×${cantidadLimpia}\``;
         }
 
         if (tiempo) {
-            linea += ` — ⏱️ **${tiempo}**`;
+            linea += ` ⏱️ \`${tiempo}\``;
         }
 
         return linea;
@@ -80,14 +82,15 @@ function formatearRaidingCost(items) {
         const tiempo = limpiarTexto(item.tiempo);
         const cantidad = limpiarTexto(item.cantidad);
 
-        let linea = `**${index + 1}. ${nombre}**`;
+        let linea = `**${index + 1}.** ${nombre}`;
 
         if (cantidad) {
-            linea += ` — **×${cantidad.replace(/^x/i, "")}**`;
+            const cantidadLimpia = cantidad.replace(/^x/i, "");
+            linea += ` \`×${cantidadLimpia}\``;
         }
 
         if (tiempo) {
-            linea += ` — ⏱️ **${tiempo}**`;
+            linea += ` ⏱️ \`${tiempo}\``;
         }
 
         return linea;
@@ -109,7 +112,7 @@ function crearTextoAmount(items) {
         const nombre = limpiarTexto(item.herramienta);
         const tiempo = limpiarTexto(item.tiempo);
 
-        let linea = `**${index + 1}. ${nombre}**`;
+        let linea = `**${index + 1}.** ${nombre}`;
 
         if (tiempo) {
             linea += ` — ${tiempo}`;
@@ -161,26 +164,16 @@ function crearBotones(cacheKey) {
 // =====================================================
 
 function agregarInformacionRaid(embed, resultado) {
-    // =================================================
-    // STARTING ITEMS
-    // =================================================
-
     if (
         Array.isArray(resultado.startingItems) &&
         resultado.startingItems.length > 0
     ) {
         embed.addFields({
             name: "⚡ Starting Items",
-            value: formatearStartingItems(
-                resultado.startingItems
-            ),
+            value: formatearStartingItems(resultado.startingItems),
             inline: false
         });
     }
-
-    // =================================================
-    // RAIDING COST
-    // =================================================
 
     if (
         Array.isArray(resultado.raidingCost) &&
@@ -188,22 +181,14 @@ function agregarInformacionRaid(embed, resultado) {
     ) {
         embed.addFields({
             name: "🔨 Raiding Cost",
-            value: formatearRaidingCost(
-                resultado.raidingCost
-            ),
+            value: formatearRaidingCost(resultado.raidingCost),
             inline: false
         });
     }
 
-    // =================================================
-    // SIN DATOS
-    // =================================================
-
     if (
-        (!resultado.startingItems ||
-            resultado.startingItems.length === 0) &&
-        (!resultado.raidingCost ||
-            resultado.raidingCost.length === 0)
+        (!resultado.startingItems || resultado.startingItems.length === 0) &&
+        (!resultado.raidingCost || resultado.raidingCost.length === 0)
     ) {
         embed.addFields({
             name: "🔨 Raideo",
@@ -220,73 +205,38 @@ function agregarInformacionRaid(embed, resultado) {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("raid")
-        .setDescription(
-            "Calcula los costos de raid para un objeto de Rust."
-        )
+        .setDescription("Calcula los costos de raid para un objeto de Rust.")
         .addStringOption(option =>
             option
                 .setName("objeto")
-                .setDescription(
-                    "Nombre del objeto (ej: puerta de garaje)"
-                )
+                .setDescription("Nombre del objeto (ej: puerta de garaje)")
                 .setRequired(true)
                 .setMaxLength(100)
         ),
 
-    // =================================================
-    // EXECUTE
-    // =================================================
-
     async execute(interaction) {
         await interaction.deferReply();
 
-        const query = interaction.options
-            .getString("objeto")
-            ?.trim();
+        const query = interaction.options.getString("objeto")?.trim();
 
         if (!query) {
-            return interaction.editReply(
-                "❌ Debes indicar un objeto."
-            );
+            return interaction.editReply("❌ Debes indicar un objeto.");
         }
-
-        console.log(
-            `🔨 /raid solicitado por ${interaction.user.tag}: ${query}`
-        );
 
         let resultado;
 
         try {
             resultado = await consultarRaid(query);
         } catch (error) {
-            console.error(
-                "❌ Error ejecutando /raid:",
-                error
-            );
-
-            return interaction.editReply(
-                "❌ Ocurrió un error al consultar RustHelp."
-            );
+            console.error("❌ Error ejecutando /raid:", error);
+            return interaction.editReply("❌ Ocurrió un error al consultar RustHelp.");
         }
-
-        // =================================================
-        // SIN RESULTADOS
-        // =================================================
 
         if (!resultado) {
-            return interaction.editReply(
-                `❌ No se encontró información para **"${query}"**.`
-            );
+            return interaction.editReply(`❌ No se encontró información para **"${query}"**.`);
         }
 
-        // =================================================
-        // CACHE KEY
-        // =================================================
-
-        const cacheKey =
-            `${interaction.user.id}_${Date.now()}_${Math.random()
-                .toString(36)
-                .slice(2, 8)}`;
+        const cacheKey = `${interaction.user.id}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
         raidCache.set(cacheKey, resultado);
 
@@ -294,26 +244,10 @@ module.exports = {
             raidCache.delete(cacheKey);
         }, CACHE_TIME);
 
-        // =================================================
-        // EMBED
-        // =================================================
-
         const embed = crearEmbed(resultado);
-
-        agregarInformacionRaid(
-            embed,
-            resultado
-        );
-
-        // =================================================
-        // BOTONES
-        // =================================================
+        agregarInformacionRaid(embed, resultado);
 
         const row = crearBotones(cacheKey);
-
-        // =================================================
-        // RESPUESTA
-        // =================================================
 
         try {
             await interaction.editReply({
@@ -321,16 +255,9 @@ module.exports = {
                 components: [row]
             });
         } catch (error) {
-            console.error(
-                "❌ Error enviando respuesta /raid:",
-                error.message
-            );
+            console.error("❌ Error enviando respuesta /raid:", error.message);
         }
     },
-
-    // =====================================================
-    // MANEJAR BOTONES
-    // =====================================================
 
     async manejarBotonRaid(interaction) {
         const customId = interaction.customId;
@@ -346,85 +273,40 @@ module.exports = {
         }
 
         const tipo = parts[1];
-
-        const cacheKey = parts
-            .slice(2)
-            .join("_");
-
+        const cacheKey = parts.slice(2).join("_");
         const resultado = raidCache.get(cacheKey);
-
-        // =================================================
-        // CACHE EXPIRADO
-        // =================================================
 
         if (!resultado) {
             return interaction.reply({
-                content:
-                    "⚠️ Estos botones han expirado. " +
-                    "Vuelve a ejecutar `/raid`.",
+                content: "⚠️ Estos botones han expirado. Vuelve a ejecutar `/raid`.",
                 ephemeral: true
             });
         }
-
-        // =================================================
-        // EMBED
-        // =================================================
 
         const embed = crearEmbed(resultado);
 
-        // =================================================
-        // RAIDEO
-        // =================================================
-
         if (tipo === "raideo") {
-            agregarInformacionRaid(
-                embed,
-                resultado
-            );
-        }
-
-        // =================================================
-        // DÓNDE ENCONTRAR
-        // =================================================
-
-        else if (tipo === "donde") {
+            agregarInformacionRaid(embed, resultado);
+        } else if (tipo === "donde") {
             embed.addFields({
                 name: "🔍 Dónde encontrar",
-                value: crearTextoAmount(
-                    resultado.dondeEncontrar
-                ),
+                value: crearTextoAmount(resultado.dondeEncontrar),
                 inline: false
             });
-        }
-
-        // =================================================
-        // TIPO DESCONOCIDO
-        // =================================================
-
-        else {
+        } else {
             return interaction.reply({
-                content:
-                    "⚠️ Esta opción de raid no es válida.",
+                content: "⚠️ Esta opción de raid no es válida.",
                 ephemeral: true
             });
         }
-
-        // =================================================
-        // RESPONDER
-        // =================================================
 
         try {
             await interaction.update({
                 embeds: [embed],
-                components: [
-                    crearBotones(cacheKey)
-                ]
+                components: [crearBotones(cacheKey)]
             });
         } catch (error) {
-            console.error(
-                "❌ Error actualizando botón /raid:",
-                error.message
-            );
+            console.error("❌ Error actualizando botón /raid:", error.message);
         }
     }
 };
