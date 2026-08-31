@@ -27,7 +27,7 @@ function limpiarTexto(texto) {
 }
 
 function limitarTexto(texto, max = 1024) {
-    const limpio = limpiarTexto(texto);
+    const limpio = String(texto || "").trim();
 
     if (limpio.length <= max) {
         return limpio;
@@ -37,76 +37,63 @@ function limitarTexto(texto, max = 1024) {
 }
 
 // =====================================================
-// FORMATEAR RAID
+// FORMATEAR STARTING ITEMS
 // =====================================================
 
-function formatearRaideo(startingItems, raidingCost) {
-    let texto = "";
-
-    // -------------------------------------------------
-    // STARTING ITEMS
-    // -------------------------------------------------
-
-    if (startingItems && startingItems.length > 0) {
-        texto += "**⚡ Starting Items:**\n";
-
-        texto += startingItems
-            .map((item, index) => {
-                let formato =
-                    `> ${index + 1}. **${limpiarTexto(item.herramienta)}**`;
-
-                if (
-                    item.tiempo &&
-                    item.tiempo !== "N/A"
-                ) {
-                    formato += ` (⏱️ ${limpiarTexto(item.tiempo)})`;
-                }
-
-                if (item.cantidad) {
-                    formato += ` [Cant: ${limpiarTexto(item.cantidad)}]`;
-                }
-
-                return formato;
-            })
-            .join("\n");
+function formatearStartingItems(items) {
+    if (!Array.isArray(items) || items.length === 0) {
+        return "No hay datos disponibles.";
     }
 
-    // -------------------------------------------------
-    // RAIDING COST
-    // -------------------------------------------------
+    const lineas = items.map((item, index) => {
+        const nombre = limpiarTexto(item.herramienta);
+        const tiempo = limpiarTexto(item.tiempo);
+        const cantidad = limpiarTexto(item.cantidad);
 
-    if (raidingCost && raidingCost.length > 0) {
-        if (texto) {
-            texto += "\n\n";
+        let linea = `**${index + 1}. ${nombre}**`;
+
+        if (cantidad) {
+            linea += ` — **×${cantidad.replace(/^x/i, "")}**`;
         }
 
-        texto += "**🔨 Raiding Cost:**\n";
+        if (tiempo) {
+            linea += ` — ⏱️ **${tiempo}**`;
+        }
 
-        texto += raidingCost
-            .map((item, index) => {
-                let formato =
-                    `> ${index + 1}. **${limpiarTexto(item.herramienta)}**`;
+        return linea;
+    });
 
-                if (
-                    item.tiempo &&
-                    item.tiempo !== "N/A" &&
-                    item.tiempo !== ""
-                ) {
-                    formato += ` (⏱️ ${limpiarTexto(item.tiempo)})`;
-                }
+    return limitarTexto(lineas.join("\n"));
+}
 
-                if (item.cantidad) {
-                    formato += ` [Cant: ${limpiarTexto(item.cantidad)}]`;
-                }
+// =====================================================
+// FORMATEAR RAIDING COST
+// =====================================================
 
-                return formato;
-            })
-            .join("\n");
+function formatearRaidingCost(items) {
+    if (!Array.isArray(items) || items.length === 0) {
+        return "No hay datos disponibles.";
     }
 
-    return limitarTexto(
-        texto || "No hay datos disponibles."
-    );
+    const lineas = items.map((item, index) => {
+        const nombre = limpiarTexto(item.herramienta);
+        const tiempo = limpiarTexto(item.tiempo);
+        const cantidad = limpiarTexto(item.cantidad);
+
+        let linea = `**${index + 1}. ${nombre}**`;
+
+        if (cantidad) {
+            linea += ` — **×${cantidad.replace(/^x/i, "")}**`;
+        }
+
+        if (tiempo) {
+            linea += ` — ⏱️ **${tiempo}**`;
+        }
+
+        return linea;
+    });
+
+    return limitarTexto(lineas.join("\n"));
 }
 
 // =====================================================
@@ -114,28 +101,24 @@ function formatearRaideo(startingItems, raidingCost) {
 // =====================================================
 
 function crearTextoAmount(items) {
-    if (!items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
         return "No hay datos disponibles.";
     }
 
-    const texto = items
-        .map((item, index) => {
-            let formato =
-                `> ${index + 1}. **${limpiarTexto(item.herramienta)}**`;
+    const lineas = items.map((item, index) => {
+        const nombre = limpiarTexto(item.herramienta);
+        const tiempo = limpiarTexto(item.tiempo);
 
-            if (
-                item.tiempo &&
-                item.tiempo !== "N/A" &&
-                item.tiempo !== ""
-            ) {
-                formato += ` (⏱️ ${limpiarTexto(item.tiempo)})`;
-            }
+        let linea = `**${index + 1}. ${nombre}**`;
 
-            return formato;
-        })
-        .join("\n");
+        if (tiempo) {
+            linea += ` — ${tiempo}`;
+        }
 
-    return limitarTexto(texto);
+        return linea;
+    });
+
+    return limitarTexto(lineas.join("\n"));
 }
 
 // =====================================================
@@ -148,7 +131,7 @@ function crearEmbed(resultado) {
         .setURL(resultado.url)
         .setColor("#E67E22")
         .setFooter({
-            text: "Selecciona una categoría abajo | Fuente: RustHelp"
+            text: "Fuente: RustHelp"
         })
         .setTimestamp();
 }
@@ -174,17 +157,78 @@ function crearBotones(cacheKey) {
 }
 
 // =====================================================
+// AGREGAR INFORMACIÓN DE RAID
+// =====================================================
+
+function agregarInformacionRaid(embed, resultado) {
+    // =================================================
+    // STARTING ITEMS
+    // =================================================
+
+    if (
+        Array.isArray(resultado.startingItems) &&
+        resultado.startingItems.length > 0
+    ) {
+        embed.addFields({
+            name: "⚡ Starting Items",
+            value: formatearStartingItems(
+                resultado.startingItems
+            ),
+            inline: false
+        });
+    }
+
+    // =================================================
+    // RAIDING COST
+    // =================================================
+
+    if (
+        Array.isArray(resultado.raidingCost) &&
+        resultado.raidingCost.length > 0
+    ) {
+        embed.addFields({
+            name: "🔨 Raiding Cost",
+            value: formatearRaidingCost(
+                resultado.raidingCost
+            ),
+            inline: false
+        });
+    }
+
+    // =================================================
+    // SIN DATOS
+    // =================================================
+
+    if (
+        (!resultado.startingItems ||
+            resultado.startingItems.length === 0) &&
+        (!resultado.raidingCost ||
+            resultado.raidingCost.length === 0)
+    ) {
+        embed.addFields({
+            name: "🔨 Raideo",
+            value: "No hay datos de raideo disponibles.",
+            inline: false
+        });
+    }
+}
+
+// =====================================================
 // COMANDO
 // =====================================================
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("raid")
-        .setDescription("Calcula los costos de raid para un objeto de Rust.")
+        .setDescription(
+            "Calcula los costos de raid para un objeto de Rust."
+        )
         .addStringOption(option =>
             option
                 .setName("objeto")
-                .setDescription("Nombre del objeto (ej: puerta de garaje)")
+                .setDescription(
+                    "Nombre del objeto (ej: puerta de garaje)"
+                )
                 .setRequired(true)
                 .setMaxLength(100)
         ),
@@ -256,13 +300,10 @@ module.exports = {
 
         const embed = crearEmbed(resultado);
 
-        embed.addFields({
-            name: "🔨 Raideo",
-            value: formatearRaideo(
-                resultado.startingItems,
-                resultado.raidingCost
-            )
-        });
+        agregarInformacionRaid(
+            embed,
+            resultado
+        );
 
         // =================================================
         // BOTONES
@@ -274,10 +315,17 @@ module.exports = {
         // RESPUESTA
         // =================================================
 
-        await interaction.editReply({
-            embeds: [embed],
-            components: [row]
-        });
+        try {
+            await interaction.editReply({
+                embeds: [embed],
+                components: [row]
+            });
+        } catch (error) {
+            console.error(
+                "❌ Error enviando respuesta /raid:",
+                error.message
+            );
+        }
     },
 
     // =====================================================
@@ -329,13 +377,10 @@ module.exports = {
         // =================================================
 
         if (tipo === "raideo") {
-            embed.addFields({
-                name: "🔨 Raideo",
-                value: formatearRaideo(
-                    resultado.startingItems,
-                    resultado.raidingCost
-                )
-            });
+            agregarInformacionRaid(
+                embed,
+                resultado
+            );
         }
 
         // =================================================
@@ -347,7 +392,8 @@ module.exports = {
                 name: "🔍 Dónde encontrar",
                 value: crearTextoAmount(
                     resultado.dondeEncontrar
-                )
+                ),
+                inline: false
             });
         }
 
@@ -370,7 +416,9 @@ module.exports = {
         try {
             await interaction.update({
                 embeds: [embed],
-                components: [crearBotones(cacheKey)]
+                components: [
+                    crearBotones(cacheKey)
+                ]
             });
         } catch (error) {
             console.error(
