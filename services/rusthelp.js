@@ -53,6 +53,7 @@ const ALIASES = {
     "puerta blindada": "armored-door",
     "puerta blindada de metal": "armored-door",
     "puerta de garaje": "garage-door",
+    "garage door": "garage-door",
     "puerta de chapa": "sheet-metal-door",
     "puerta metalica": "sheet-metal-door",
     "puerta de madera": "wooden-door"
