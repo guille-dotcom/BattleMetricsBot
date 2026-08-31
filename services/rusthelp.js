@@ -319,7 +319,7 @@ async function consultarRaid(nombreQuery) {
             "carbon", "cloth", "tela", "wood", "madera",
             "metal fragments", "fragmentos de metal", "stone",
             "piedra", "low grade fuel", "combustible de baja calidad",
-            "scrap", "chatarra", "fuel", "combustible"
+            "scrap", "fuel", "combustible"
         ];
 
         const raidingCostFiltrado = raidingCost.filter(item => {
