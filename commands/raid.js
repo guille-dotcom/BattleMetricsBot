@@ -288,12 +288,15 @@ module.exports = {
             return;
         }
 
+        // Evita el error de tiempo de respuesta de Discord de inmediato
+        await interaction.deferUpdate();
+
         const tipo = parts[1];
         const cacheKey = parts.slice(2).join("_");
         const resultado = raidCache.get(cacheKey);
 
         if (!resultado) {
-            return interaction.reply({
+            return interaction.followUp({
                 content: "⚠️ Estos botones han expirado. Vuelve a ejecutar `/raid`.",
                 ephemeral: true
             });
@@ -310,14 +313,14 @@ module.exports = {
                 inline: false
             });
         } else {
-            return interaction.reply({
+            return interaction.followUp({
                 content: "⚠️ Esta opción de raid no es válida.",
                 ephemeral: true
             });
         }
 
         try {
-            await interaction.update({
+            await interaction.editReply({
                 embeds: [embed],
                 components: [crearBotones(cacheKey)]
             });

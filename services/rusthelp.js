@@ -193,15 +193,21 @@ function limpiarNombreHerramienta(nombre) {
         .replace(/\s+Using\s+.+$/i, "")
         .replace(/\s+Launched From\s+.+$/i, "")
         .replace(/\s+Deployed$/i, "")
+        .replace(/\s+Catapult$/i, "")
         .replace(/\s+Right Click Stuck$/i, "")
         .replace(/\s+Left Click Throw$/i, "")
         .replace(/\s+Lit$/i, "")
         .replace(/\s+Cost To Repair Head$/i, "")
         .trim();
 
-    // Si es munición explosiva con cualquier arma, unificamos el nombre para que no se repita el arma
-    if (/Munici[oó]n explosiva del calibre 5\.56/i.test(limpio)) {
+    // 1. Unificar munición explosiva de 5.56
+    if (/5\.56|explosiva.*5\.56|calibre 5\.56/i.test(limpio)) {
         return "Munición explosiva del calibre 5.56";
+    }
+
+    // 2. Unificar variantes de 40mm
+    if (/40mm|lanzagranadas/i.test(limpio)) {
+        return "Lanzagranadas Granada explosiva de 40mm";
     }
 
     return limpio;
@@ -328,11 +334,14 @@ async function consultarRaid(nombreQuery) {
                         if (normalizarTexto(herramienta) === "herramienta de raideos") return;
                         if (!pareceTiempo(tiempo)) return;
 
-                        const nombreLimpio = limpiarNombreHerramienta(herramienta);
+                        // Guardamos el texto crudo original para evaluar reglas especiales (como Deployed o Right Click Stuck)
+                        const nombreCrudo = limpiarTexto(herramienta);
+                        const nombreLimpio = limpiarNombreHerramient(herramienta);
                         if (!nombreLimpio) return;
 
                         raidingCost.push({
                             herramienta: nombreLimpio,
+                            nombreCrudo: nombreCrudo,
                             cantidad: limpiarTexto(cantidad),
                             tiempo: limpiarTexto(tiempo)
                         });
@@ -357,12 +366,63 @@ async function consultarRaid(nombreQuery) {
             );
         });
 
-        // Eliminar duplicados exactos (misma munición y cantidad) para evitar spam de armas
+        // Asegurar que CADA herramienta aparezca una sola vez con sus reglas específicas
         const unicosMap = new Map();
         for (const item of raidingCostFiltrado) {
-            const clave = `${normalizarTexto(item.herramienta)}_${normalizarTexto(item.cantidad)}`;
-            if (!unicosMap.has(clave)) {
-                unicosMap.set(clave, item);
+            let nombreBase = normalizarTexto(item.herramienta);
+            
+            // 3. Regla para la bomba de propano (priorizar "Deployed")
+            if (nombreBase.includes("propano") || nombreBase.includes("propane")) {
+                const esDeployed = /deployed/i.test(item.nombreCrudo);
+                const clavePropano = "bomba explosiva de propano";
+
+                if (!unicosMap.has(clavePropano)) {
+                    unicosMap.set(clavePropano, item);
+                } else {
+                    const actual = unicosMap.get(clavePropano);
+                    const actualEsDeployed = /deployed/i.test(actual.nombreCrudo);
+
+                    if (esDeployed && !actualEsDeployed) {
+                        unicosMap.set(clavePropano, item);
+                    } else if (esDeployed === actualEsDeployed) {
+                        if (convertirASegundos(item.tiempo) < convertirASegundos(actual.tiempo)) {
+                            unicosMap.set(clavePropano, item);
+                        }
+                    }
+                }
+                continue;
+            }
+
+            // 4. Regla para las granadas de lata / Beancan (priorizar "Right Click Stuck")
+            if (nombreBase.includes("lata") || nombreBase.includes("beancan")) {
+                const esClickDerecho = /right click stuck/i.test(item.nombreCrudo);
+                const claveGranada = "granada de lata";
+
+                if (!unicosMap.has(claveGranada)) {
+                    unicosMap.set(claveGranada, item);
+                } else {
+                    const actual = unicosMap.get(claveGranada);
+                    const actualEsClickDerecho = /right click stuck/i.test(actual.nombreCrudo);
+
+                    if (esClickDerecho && !actualEsClickDerecho) {
+                        unicosMap.set(claveGranada, item);
+                    } else if (esClickDerecho === actualEsClickDerecho) {
+                        if (convertirASegundos(item.tiempo) < convertirASegundos(actual.tiempo)) {
+                            unicosMap.set(claveGranada, item);
+                        }
+                    }
+                }
+                continue;
+            }
+
+            // Para el resto de herramientas normales (evita duplicados exactos y se queda con la más rápida)
+            if (!unicosMap.has(nombreBase)) {
+                unicosMap.set(nombreBase, item);
+            } else {
+                const actual = unicosMap.get(nombreBase);
+                if (convertirASegundos(item.tiempo) < convertirASegundos(actual.tiempo)) {
+                    unicosMap.set(nombreBase, item);
+                }
             }
         }
 
