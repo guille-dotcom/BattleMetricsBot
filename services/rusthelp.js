@@ -189,7 +189,8 @@ function esTablaRaidingCost($, tabla) {
     );
 }
 
-function limpiarNombreHerramienta(nombre) {
+// NUEVA FUNCIÓN RENOMBRADA PARA EVITAR CACHÉ
+function formatearHerramienta(nombre) {
     let limpio = limpiarTexto(nombre)
         .replace(/\s+Using\s+.+$/i, "")
         .replace(/\s+Launched From\s+.+$/i, "")
@@ -201,12 +202,10 @@ function limpiarNombreHerramienta(nombre) {
         .replace(/\s+Cost To Repair Head$/i, "")
         .trim();
 
-    // 1. Unificar munición explosiva de 5.56
     if (/5\.56|explosiva.*5\.56|calibre 5\.56/i.test(limpio)) {
         return "Munición explosiva del calibre 5.56";
     }
 
-    // 2. Unificar variantes de 40mm
     if (/40mm|lanzagranadas/i.test(limpio)) {
         return "Lanzagranadas Granada explosiva de 40mm";
     }
@@ -312,7 +311,7 @@ async function consultarRaid(nombreQuery) {
                         }
 
                         startingItems.push({
-                            herramienta: limpiarNombreHerramienta(primera),
+                            herramienta: formatearHerramienta(primera),
                             tiempo: limpiarTexto(segunda),
                             cantidad: limpiarTexto(tercera)
                         });
@@ -336,7 +335,7 @@ async function consultarRaid(nombreQuery) {
                         if (!pareceTiempo(tiempo)) return;
 
                         const nombreCrudo = limpiarTexto(herramienta);
-                        const nombreLimpio = limpiarNombreHerramient(herramienta);
+                        const nombreLimpio = formatearHerramienta(herramienta);
                         if (!nombreLimpio) return;
 
                         raidingCost.push({
@@ -370,7 +369,6 @@ async function consultarRaid(nombreQuery) {
         for (const item of raidingCostFiltrado) {
             let nombreBase = normalizarTexto(item.herramienta);
             
-            // Regla para la bomba de propano (priorizar "Deployed")
             if (nombreBase.includes("propano") || nombreBase.includes("propane")) {
                 const esDeployed = /deployed/i.test(item.nombreCrudo);
                 const clavePropano = "bomba explosiva de propano";
@@ -392,7 +390,6 @@ async function consultarRaid(nombreQuery) {
                 continue;
             }
 
-            // Regla para las granadas de lata / Beancan (priorizar "Right Click Stuck")
             if (nombreBase.includes("lata") || nombreBase.includes("beancan")) {
                 const esClickDerecho = /right click stuck/i.test(item.nombreCrudo);
                 const claveGranada = "granada de lata";
