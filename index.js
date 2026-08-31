@@ -629,16 +629,10 @@ client.on(
             // BOTONES RAID
             // =================================================
 
-            if (
-                [
-                    "raid_economia",
-                    "raid_cantidad",
-                    "raid_melee",
-                    "raid_municion"
-                ].includes(
-                    interaction.customId
-                )
-            ) {
+           if (
+    interaction.customId.startsWith("raid_")
+)
+        {
 
                 try {
 
