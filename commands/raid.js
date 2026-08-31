@@ -35,8 +35,21 @@ function limitarTexto(texto, max = 1024) {
     return limpio.slice(0, max - 3) + "...";
 }
 
+function convertirASegundosVista(tiempo) {
+    const texto = String(tiempo || "").toLowerCase().replace(/,/g, ".");
+    if (!texto) return 0;
+    let total = 0;
+    const horas = texto.match(/(\d+(?:\.\d+)?)\s*h/);
+    const minutos = texto.match(/(\d+(?:\.\d+)?)\s*m/);
+    const segundos = texto.match(/(\d+(?:\.\d+)?)\s*s/);
+    if (horas) total += parseFloat(horas[1]) * 3600;
+    if (minutos) total += parseFloat(minutos[1]) * 60;
+    if (segundos) total += parseFloat(segundos[1]);
+    return total;
+}
+
 // =====================================================
-// FORMATEAR STARTING ITEMS (Corregido y Limpio)
+// FORMATEAR STARTING ITEMS
 // =====================================================
 
 function formatearStartingItems(items) {
@@ -49,11 +62,9 @@ function formatearStartingItems(items) {
         const tiempo = limpiarTexto(item.tiempo);
         const cantidad = limpiarTexto(item.cantidad);
 
-        // Formato limpio: 1. Nombre — 📦 x1 — ⏱️ 11s
         let linea = `**${index + 1}.** ${nombre}`;
 
         if (cantidad && cantidad !== "x0" && cantidad !== "0") {
-            // Limpiamos la cantidad por si trae caracteres repetidos de la web
             const cantidadLimpia = cantidad.split(" ")[0].replace(/^x/i, "");
             linea += ` \`×${cantidadLimpia}\``;
         }
@@ -69,7 +80,7 @@ function formatearStartingItems(items) {
 }
 
 // =====================================================
-// FORMATEAR RAIDING COST
+// FORMATEAR RAIDING COST (Ordenado por menor tiempo)
 // =====================================================
 
 function formatearRaidingCost(items) {
@@ -77,7 +88,12 @@ function formatearRaidingCost(items) {
         return "No hay datos disponibles.";
     }
 
-    const lineas = items.map((item, index) => {
+    // Ordenamos explícitamente de menor a mayor tiempo
+    const itemsOrdenados = [...items].sort((a, b) => {
+        return convertirASegundosVista(a.tiempo) - convertirASegundosVista(b.tiempo);
+    });
+
+    const lineas = itemsOrdenados.map((item, index) => {
         const nombre = limpiarTexto(item.herramienta);
         const tiempo = limpiarTexto(item.tiempo);
         const cantidad = limpiarTexto(item.cantidad);
