@@ -163,6 +163,11 @@ function formatearHerramienta(nombre) {
 function obtenerCategoriaHerramienta(nombre) {
     const norm = normalizarTexto(nombre);
     
+    // Bloquear explícitamente cualquier balista o proyectil para que NUNCA sea melee
+    if (norm.includes("balista") || norm.includes("proyectil")) {
+        return "bullet";
+    }
+    
     // Herramientas Melee comunes en Rust
     const esMelee = 
         norm.includes("martillo") || 
@@ -174,7 +179,9 @@ function obtenerCategoriaHerramienta(nombre) {
         norm.includes("pico") ||
         norm.includes("machete") ||
         norm.includes("cuchillo") ||
-        norm.includes("espada");
+        norm.includes("espada") ||
+        norm.includes("boomerang") ||
+        norm.includes("antorcha");
 
     // Municiones / Balas
     const esBullet = 
