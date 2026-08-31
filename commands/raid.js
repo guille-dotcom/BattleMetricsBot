@@ -16,6 +16,90 @@ const raidCache = new Map();
 const CACHE_TIME = 5 * 60 * 1000;
 
 // =====================================================
+// LISTA COMPLETA DE TODOS LOS ÍTEMS RAIDEABLES DE RUST
+// =====================================================
+
+const OBJETOS_RUST = [
+    // 🚪 PUERTAS Y ESCOTILLAS
+    { name: "Puerta de Madera (Wood Door)", value: "Wood Door" },
+    { name: "Puerta de Chapa / Metal (Sheet Metal Door)", value: "Sheet Metal Door" },
+    { name: "Puerta de Garaje (Garage Door)", value: "Garage Door" },
+    { name: "Puerta Blindada (Armored Door)", value: "Armored Door" },
+    { name: "Puerta Doble de Madera (Wood Double Door)", value: "Wood Double Door" },
+    { name: "Puerta Doble de Metal (Sheet Metal Double Door)", value: "Sheet Metal Double Door" },
+    { name: "Puerta Doble Blindada (Armored Double Door)", value: "Armored Double Door" },
+    { name: "Trampilla de Madera (Wood Ladder Hatch)", value: "Wood Ladder Hatch" },
+    { name: "Trampilla de Hierro (Ladder Hatch)", value: "Ladder Hatch" },
+    { name: "Trampilla de HQ / Blindada (Armored Ladder Hatch)", value: "Armored Ladder Hatch" },
+
+    // 🧱 PAREDES (BUILDING BLOCKS)
+    { name: "Pared de ramita / Twig (Twig Wall)", value: "Twig Wall" },
+    { name: "Pared de Madera (Wood Wall)", value: "Wood Wall" },
+    { name: "Pared de Piedra (Stone Wall)", value: "Stone Wall" },
+    { name: "Pared de Metal (Metal Wall)", value: "Metal Wall" },
+    { name: "Pared Blindada / HQ (Armored Wall)", value: "Armored Wall" },
+    { name: "Pared con Ventana de Piedra (Stone Window Wall)", value: "Stone Window Wall" },
+    { name: "Pared con Puerta de Piedra (Stone Doorway)", value: "Stone Doorway" },
+    { name: "Medio Muro de Piedra (Stone Half Wall)", value: "Stone Half Wall" },
+
+    // 🏗️ CIMIENTOS Y SUELOS
+    { name: "Cimiento de Madera (Wood Foundation)", value: "Wood Foundation" },
+    { name: "Cimiento de Piedra (Stone Foundation)", value: "Stone Foundation" },
+    { name: "Cimiento de Metal (Metal Foundation)", value: "Metal Foundation" },
+    { name: "Cimiento Blindado (Armored Foundation)", value: "Armored Foundation" },
+    { name: "Suelo de Madera (Wood Floor)", value: "Wood Floor" },
+    { name: "Suelo de Piedra (Stone Floor)", value: "Stone Floor" },
+    { name: "Suelo de Metal (Metal Floor)", value: "Metal Floor" },
+    { name: "Suelo Blindado (Armored Floor)", value: "Armored Floor" },
+    { name: "Techo / Roof", value: "Roof" },
+
+    // 🪟 VENTANAS Y REJAS
+    { name: "Reja de Ventana de Madera (Wooden Window Bars)", value: "Wooden Window Bars" },
+    { name: "Reja de Ventana de Metal (Metal Window Bars)", value: "Metal Window Bars" },
+    { name: "Reja de Suelo / Floor Grill", value: "Floor Grill" },
+    { name: "Ventana de Cristal Reforzado (Reinforced Glass Window)", value: "Reinforced Glass Window" },
+    { name: "Ventana de Cristal Fuerte (Strengthened Glass Window)", value: "Strengthened Glass Window" },
+    { name: "Tienda / Mostrador de Metal (Metal Shop Front)", value: "Metal Shop Front" },
+    { name: "Pared de Celda de Prisión (Prison Cell Wall)", value: "Prison Cell Wall" },
+    { name: "Puerta de Celda de Prisión (Prison Cell Gate)", value: "Prison Cell Gate" },
+
+    // 🏰 MUROS Y PORTONES EXTERNOS
+    { name: "Muro Alto de Madera (High External Wooden Wall)", value: "High External Wooden Wall" },
+    { name: "Muro Alto de Piedra (High External Stone Wall)", value: "High External Stone Wall" },
+    { name: "Portón Alto de Madera (High External Wooden Gate)", value: "High External Wooden Gate" },
+    { name: "Portón Alto de Piedra (High External Stone Gate)", value: "High External Stone Gate" },
+
+    // 📦 ALMACENAMIENTO Y DEPLOYABLES
+    { name: "Armario de Herramientas / TC (Tool Cupboard)", value: "Tool Cupboard" },
+    { name: "Caja Pequeña de Madera (Small Wood Box)", value: "Small Wood Box" },
+    { name: "Caja Grande de Madera (Large Wood Box)", value: "Large Wood Box" },
+    { name: "Ataúd / Coffin", value: "Coffin" },
+    { name: "Locker / Armario de Ropa", value: "Locker" },
+    { name: "Nevera / Fridge", value: "Fridge" },
+    { name: "Máquina Expendedora (Vending Machine)", value: "Vending Machine" },
+    { name: "Horno Pequeño (Furnace)", value: "Furnace" },
+    { name: "Horno Grande (Large Furnace)", value: "Large Furnace" },
+    { name: "Refinería de Aceite (Small Oil Refinery)", value: "Small Oil Refinery" },
+
+    // 🛠️ MESAS DE TRABAJO Y UTILIDADES
+    { name: "Mesa de Trabajo Nivel 1 (Workbench Level 1)", value: "Workbench Level 1" },
+    { name: "Mesa de Trabajo Nivel 2 (Workbench Level 2)", value: "Workbench Level 2" },
+    { name: "Mesa de Trabajo Nivel 3 (Workbench Level 3)", value: "Workbench Level 3" },
+    { name: "Mesa de Investigación (Research Table)", value: "Research Table" },
+    { name: "Banco de Reparación (Repair Bench)", value: "Repair Bench" },
+    { name: "Mesa de Mezclas (Mixing Table)", value: "Mixing Table" },
+
+    // ⚔️ DEFENSAS, TRAMPAS Y BARRICADAS
+    { name: "Torreta Automática (Auto Turret)", value: "Auto Turret" },
+    { name: "Torreta Lanzallamas (Flame Turret)", value: "Flame Turret" },
+    { name: "Trampa de Escopeta (Shotgun Trap)", value: "Shotgun Trap" },
+    { name: "Sitio SAM / Antiaéreo (SAM Site)", value: "SAM Site" },
+    { name: "Barricada de Madera con Púas (Barbed Wooden Barricade)", value: "Barbed Wooden Barricade" },
+    { name: "Barricada de Metal (Metal Barricade)", value: "Metal Barricade" },
+    { name: "Barco Remolcador / Tugboat", value: "Tugboat" }
+];
+
+// =====================================================
 // UTILIDADES
 // =====================================================
 
@@ -239,14 +323,33 @@ function agregarInformacionRaid(embed, resultado, tipoVista = "all") {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("raid")
-        .setDescription("Calcula los costos de raid para un objeto de Rust.")
+        .setDescription("Calcula los costos de raid para cualquier objeto de Rust.")
         .addStringOption(option =>
             option
                 .setName("objeto")
-                .setDescription("Nombre del objeto (ej: puerta de garaje)")
+                .setDescription("Busca y selecciona cualquier objeto a raidear")
                 .setRequired(true)
+                .setAutocomplete(true) // 👈 Autocompletado nativo activado
                 .setMaxLength(100)
         ),
+
+    // =====================================================
+    // FUNCIÓN DE AUTOCOMPLETADO
+    // =====================================================
+    async autocomplete(interaction) {
+        const focusedValue = interaction.options.getFocused().toLowerCase();
+
+        // Filtra dinámicamente entre todos los elementos de la lista
+        const filtered = OBJETOS_RUST.filter(choice => 
+            choice.name.toLowerCase().includes(focusedValue) ||
+            choice.value.toLowerCase().includes(focusedValue)
+        );
+
+        // Discord solo permite un máximo de 25 opciones por respuesta de autocompletado
+        await interaction.respond(
+            filtered.slice(0, 25).map(choice => ({ name: choice.name, value: choice.value }))
+        );
+    },
 
     async execute(interaction) {
         await interaction.deferReply();

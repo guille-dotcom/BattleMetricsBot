@@ -618,6 +618,22 @@ client.on(
     async interaction => {
 
         // =====================================================
+        // AUTOCOMPLETADO (AUTOCOMPLETE)
+        // =====================================================
+
+        if (interaction.isAutocomplete()) {
+            const command = client.commands.get(interaction.commandName);
+            if (!command || typeof command.autocomplete !== "function") return;
+
+            try {
+                await command.autocomplete(interaction);
+            } catch (error) {
+                console.error(`❌ Error en autocompletado para /${interaction.commandName}:`, error);
+            }
+            return;
+        }
+
+        // =====================================================
         // BOTONES
         // =====================================================
 
