@@ -1,5 +1,5 @@
 const axios = require("axios");
-const cheerio = io = require("cheerio"); // Corregido el tipado o importación limpia
+const cheerio = io = require("cheerio");
 
 // =====================================================
 // CONFIGURACIÓN
@@ -459,12 +459,12 @@ async function consultarRaid(nombreQuery) {
         });
 
         // =================================================
-        // ORDENAR POR TIEMPO Y LIMITAR
+        // ORDENAR POR TIEMPO Y AMPLIAR LÍMITE (Ahora hasta 15)
         // =================================================
 
         const raidingCostOrdenado = raidingCostFiltrado
             .sort((a, b) => convertirASegundos(a.tiempo) - convertirASegundos(b.tiempo))
-            .slice(0, 7);
+            .slice(0, 15); // Ampleado de 7 a 15 elementos para mostrar más información
 
         const startingItemsFinales = startingItems.slice(0, 3);
 
