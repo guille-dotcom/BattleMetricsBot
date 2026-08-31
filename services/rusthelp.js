@@ -1,5 +1,5 @@
 const axios = require("axios");
-const cheerio = io = require("cheerio");
+const cheerio = require("cheerio");
 
 // =====================================================
 // CONFIGURACIÓN
@@ -136,10 +136,6 @@ function obtenerColumnas($, fila) {
     return columnas;
 }
 
-// =====================================================
-// HEADER DE TABLA
-// =====================================================
-
 function obtenerHeaderTabla($, tabla) {
     const primeraFila = $(tabla).find("tr").first();
 
@@ -149,10 +145,6 @@ function obtenerHeaderTabla($, tabla) {
 
     return obtenerColumnas($, primeraFila).map(normalizarTexto);
 }
-
-// =====================================================
-// IDENTIFICAR TABLAS
-// =====================================================
 
 function esTablaLoot($, tabla) {
     const headers = obtenerHeaderTabla($, tabla);
@@ -196,12 +188,8 @@ function esTablaRaidingCost($, tabla) {
     );
 }
 
-// =====================================================
-// EXTRAER NOMBRE DE ITEM
-// =====================================================
-
 function limpiarNombreHerramienta(nombre) {
-    return limpiarTexto(nombre)
+    let limpio = limpiarTexto(nombre)
         .replace(/\s+Using\s+.+$/i, "")
         .replace(/\s+Launched From\s+.+$/i, "")
         .replace(/\s+Deployed$/i, "")
@@ -210,6 +198,13 @@ function limpiarNombreHerramienta(nombre) {
         .replace(/\s+Lit$/i, "")
         .replace(/\s+Cost To Repair Head$/i, "")
         .trim();
+
+    // Si es munición explosiva con cualquier arma, unificamos el nombre para que no se repita el arma
+    if (/Munici[oó]n explosiva del calibre 5\.56/i.test(limpio)) {
+        return "Munición explosiva del calibre 5.56";
+    }
+
+    return limpio;
 }
 
 // =====================================================
@@ -233,8 +228,6 @@ async function consultarRaid(nombreQuery) {
     const urlRaideo = `${BASE_URL}/${slug}#raiding`;
 
     try {
-        console.log(`🔎 Consultando RustHelp: ${urlLoot}`);
-
         const response = await axios.get(urlLoot, {
             headers: HEADERS,
             timeout: 15000,
@@ -243,15 +236,10 @@ async function consultarRaid(nombreQuery) {
         });
 
         if (!response || !response.data) {
-            console.log(`⚠️ RustHelp no devolvió contenido para ${slug}`);
             return null;
         }
 
         const $ = cheerio.load(response.data);
-
-        // =================================================
-        // NOMBRE
-        // =================================================
 
         let nombreObjeto =
             limpiarTexto($("h1").first().text()) ||
@@ -263,60 +251,26 @@ async function consultarRaid(nombreQuery) {
             .replace(/\s*-\s*RustHelp.*$/i, "")
             .trim();
 
-        // =================================================
-        // RESULTADOS
-        // =================================================
-
         const startingItems = [];
         const raidingCost = [];
         const dondeEncontrar = [];
 
-        // =================================================
-        // RECORRER TABLAS
-        // =================================================
-
         $("table").each((index, tabla) => {
-            const headers = obtenerHeaderTabla($, tabla);
-
-            console.log(`📋 Tabla ${index}: ${headers.join(" | ")}`);
-
-            // -------------------------------------------------
-            // LOOT
-            // -------------------------------------------------
-
             if (esTablaLoot($, tabla)) {
-                console.log(`📦 Tabla ${index} identificada como LOOT`);
-
                 $(tabla)
                     .find("tr")
                     .each((_, fila) => {
                         const columnas = obtenerColumnas($, fila);
-
-                        if (columnas.length < 2) {
-                            return;
-                        }
-
+                        if (columnas.length < 2) return;
                         const primera = columnas[0];
-
-                        if (normalizarTexto(primera) === "de") {
-                            return;
-                        }
-
+                        if (normalizarTexto(primera) === "de") return;
                         const posibilidad = columnas[1] || "";
                         const cantidad = columnas[2] || "";
+                        if (!primera) return;
 
-                        if (!primera) {
-                            return;
-                        }
-
-                        const textoLoot = [posibilidad, cantidad]
-                            .filter(Boolean)
-                            .join(" ");
-
+                        const textoLoot = [posibilidad, cantidad].filter(Boolean).join(" ");
                         const existe = dondeEncontrar.some(
-                            item =>
-                                normalizarTexto(item.herramienta) ===
-                                normalizarTexto(primera)
+                            item => normalizarTexto(item.herramienta) === normalizarTexto(primera)
                         );
 
                         if (!existe) {
@@ -326,43 +280,25 @@ async function consultarRaid(nombreQuery) {
                             });
                         }
                     });
-
                 return;
             }
 
-            // -------------------------------------------------
-            // STARTING ITEMS
-            // -------------------------------------------------
-
             if (esTablaStarting($, tabla)) {
-                console.log(`⚡ Tabla ${index} identificada como STARTING ITEMS`);
-
                 $(tabla)
                     .find("tr")
                     .each((_, fila) => {
                         const columnas = obtenerColumnas($, fila);
-
-                        if (columnas.length < 2) {
-                            return;
-                        }
-
+                        if (columnas.length < 2) return;
                         const primera = columnas[0];
                         const segunda = columnas[1] || "";
                         const tercera = columnas[2] || "";
 
-                        if (normalizarTexto(primera).includes("starting item")) {
-                            return;
-                        }
-
-                        if (!primera || !pareceTiempo(segunda)) {
-                            return;
-                        }
+                        if (normalizarTexto(primera).includes("starting item")) return;
+                        if (!primera || !pareceTiempo(segunda)) return;
 
                         if (
                             startingItems.some(
-                                item =>
-                                    normalizarTexto(item.herramienta) ===
-                                    normalizarTexto(primera)
+                                item => normalizarTexto(item.herramienta) === normalizarTexto(primera)
                             )
                         ) {
                             return;
@@ -374,59 +310,26 @@ async function consultarRaid(nombreQuery) {
                             cantidad: limpiarTexto(tercera)
                         });
                     });
-
                 return;
             }
 
-            // -------------------------------------------------
-            // RAIDING COST
-            // -------------------------------------------------
-
             if (esTablaRaidingCost($, tabla)) {
-                console.log(`🔨 Tabla ${index} identificada como RAIDING COST`);
-
                 $(tabla)
                     .find("tr")
                     .each((_, fila) => {
                         const columnas = obtenerColumnas($, fila);
-
-                        if (columnas.length < 3) {
-                            return;
-                        }
+                        if (columnas.length < 3) return;
 
                         const herramienta = columnas[0] || "";
                         const cantidad = columnas[1] || "";
                         const tiempo = columnas[2] || "";
 
-                        if (!herramienta) {
-                            return;
-                        }
-
-                        const herramientaNormalizada = normalizarTexto(herramienta);
-
-                        if (herramientaNormalizada === "herramienta de raideos") {
-                            return;
-                        }
-
-                        if (!pareceTiempo(tiempo)) {
-                            return;
-                        }
+                        if (!herramienta) return;
+                        if (normalizarTexto(herramienta) === "herramienta de raideos") return;
+                        if (!pareceTiempo(tiempo)) return;
 
                         const nombreLimpio = limpiarNombreHerramienta(herramienta);
-
-                        if (!nombreLimpio) {
-                            return;
-                        }
-
-                        const existe = raidingCost.some(
-                            item =>
-                                normalizarTexto(item.herramienta) ===
-                                normalizarTexto(nombreLimpio)
-                        );
-
-                        if (existe) {
-                            return;
-                        }
+                        if (!nombreLimpio) return;
 
                         raidingCost.push({
                             herramienta: nombreLimpio,
@@ -436,10 +339,6 @@ async function consultarRaid(nombreQuery) {
                     });
             }
         });
-
-        // =================================================
-        // FILTRO DE RAID
-        // =================================================
 
         const palabrasExcluir = [
             "raw material", "material cost", "costo de material",
@@ -458,26 +357,25 @@ async function consultarRaid(nombreQuery) {
             );
         });
 
-        // =================================================
-        // ORDENAR POR TIEMPO Y AMPLIAR LÍMITE (Ahora hasta 15)
-        // =================================================
+        // Eliminar duplicados exactos (misma munición y cantidad) para evitar spam de armas
+        const unicosMap = new Map();
+        for (const item of raidingCostFiltrado) {
+            const clave = `${normalizarTexto(item.herramienta)}_${normalizarTexto(item.cantidad)}`;
+            if (!unicosMap.has(clave)) {
+                unicosMap.set(clave, item);
+            }
+        }
 
-        const raidingCostOrdenado = raidingCostFiltrado
+        const raidingCostSinDuplicados = Array.from(unicosMap.values());
+
+        const raidingCostOrdenado = raidingCostSinDuplicados
             .sort((a, b) => convertirASegundos(a.tiempo) - convertirASegundos(b.tiempo))
-            .slice(0, 15); // Ampleado de 7 a 15 elementos para mostrar más información
+            .slice(0, 15);
 
         const startingItemsFinales = startingItems.slice(0, 3);
-
         const dondeEncontrarFinal = dondeEncontrar.length > 0
             ? dondeEncontrar
             : [{ herramienta: "No disponible", tiempo: "" }];
-
-        console.log(
-            `✅ RustHelp: ${nombreObjeto} | ` +
-            `Starting: ${startingItemsFinales.length} | ` +
-            `Raid: ${raidingCostOrdenado.length} | ` +
-            `Loot: ${dondeEncontrarFinal.length}`
-        );
 
         return {
             nombre: nombreObjeto,
@@ -490,18 +388,9 @@ async function consultarRaid(nombreQuery) {
 
     } catch (error) {
         console.error("❌ Error en servicio rusthelp:", error.message);
-
-        if (error.response) {
-            console.error(`❌ HTTP ${error.response.status} al consultar ${slug}`);
-        }
-
         return null;
     }
 }
-
-// =====================================================
-// EXPORT
-// =====================================================
 
 module.exports = {
     consultarRaid
