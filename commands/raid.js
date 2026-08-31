@@ -80,16 +80,29 @@ function formatearStartingItems(items) {
 }
 
 // =====================================================
-// FORMATEAR RAIDING COST (Ordenado por menor tiempo)
+// FORMATEAR RAIDING COST (Con filtro de categoría)
 // =====================================================
 
-function formatearRaidingCost(items) {
+function formatearRaidingCost(items, categoriaFiltro = "all") {
     if (!Array.isArray(items) || items.length === 0) {
         return "No hay datos disponibles.";
     }
 
-    // Ordenamos explícitamente de menor a mayor tiempo
-    const itemsOrdenados = [...items].sort((a, b) => {
+    // Filtrar por categoría si se especifica ('melee' o 'all')
+    const itemsFiltrados = items.filter(item => {
+        if (categoriaFiltro === "melee") {
+            return item.categoria === "melee";
+        }
+        // Para "all" (botón Raideo), excluimos los de melee para dejar explosivos y balas arriba
+        return item.categoria !== "melee";
+    });
+
+    if (itemsFiltrados.length === 0) {
+        return "No hay elementos de esta categoría disponibles.";
+    }
+
+    // Ordenar explícitamente de menor a mayor tiempo
+    const itemsOrdenados = [...itemsFiltrados].sort((a, b) => {
         return convertirASegundosVista(a.tiempo) - convertirASegundosVista(b.tiempo);
     });
 
@@ -156,7 +169,7 @@ function crearEmbed(resultado) {
 }
 
 // =====================================================
-// CREAR BOTONES
+// CREAR BOTONES (3 Botones requeridos)
 // =====================================================
 
 function crearBotones(cacheKey) {
@@ -166,6 +179,12 @@ function crearBotones(cacheKey) {
             .setLabel("Raideo")
             .setStyle(ButtonStyle.Primary)
             .setEmoji("🔨"),
+
+        new ButtonBuilder()
+            .setCustomId(`raid_melee_${cacheKey}`)
+            .setLabel("Melee")
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji("⚔️"),
 
         new ButtonBuilder()
             .setCustomId(`raid_donde_${cacheKey}`)
@@ -179,33 +198,32 @@ function crearBotones(cacheKey) {
 // AGREGAR INFORMACIÓN DE RAID
 // =====================================================
 
-function agregarInformacionRaid(embed, resultado) {
-    if (
-        Array.isArray(resultado.startingItems) &&
-        resultado.startingItems.length > 0
-    ) {
-        embed.addFields({
-            name: "⚡ Starting Items",
-            value: formatearStartingItems(resultado.startingItems),
-            inline: false
-        });
+function agregarInformacionRaid(embed, resultado, tipoVista = "all") {
+    if (tipoVista === "all") {
+        if (
+            Array.isArray(resultado.startingItems) &&
+            resultado.startingItems.length > 0
+        ) {
+            embed.addFields({
+                name: "⚡ Starting Items",
+                value: formatearStartingItems(resultado.startingItems),
+                inline: false
+            });
+        }
     }
 
     if (
         Array.isArray(resultado.raidingCost) &&
         resultado.raidingCost.length > 0
     ) {
+        const tituloSeccion = tipoVista === "melee" ? "⚔️ Raiding Cost (Melee)" : "🔨 Raiding Cost";
+        
         embed.addFields({
-            name: "🔨 Raiding Cost",
-            value: formatearRaidingCost(resultado.raidingCost),
+            name: tituloSeccion,
+            value: formatearRaidingCost(resultado.raidingCost, tipoVista),
             inline: false
         });
-    }
-
-    if (
-        (!resultado.startingItems || resultado.startingItems.length === 0) &&
-        (!resultado.raidingCost || resultado.raidingCost.length === 0)
-    ) {
+    } else {
         embed.addFields({
             name: "🔨 Raideo",
             value: "No hay datos de raideo disponibles.",
@@ -261,7 +279,7 @@ module.exports = {
         }, CACHE_TIME);
 
         const embed = crearEmbed(resultado);
-        agregarInformacionRaid(embed, resultado);
+        agregarInformacionRaid(embed, resultado, "all");
 
         const row = crearBotones(cacheKey);
 
@@ -288,7 +306,6 @@ module.exports = {
             return;
         }
 
-        // Evita el error de tiempo de respuesta de Discord de inmediato
         await interaction.deferUpdate();
 
         const tipo = parts[1];
@@ -305,7 +322,9 @@ module.exports = {
         const embed = crearEmbed(resultado);
 
         if (tipo === "raideo") {
-            agregarInformacionRaid(embed, resultado);
+            agregarInformacionRaid(embed, resultado, "all");
+        } else if (tipo === "melee") {
+            agregarInformacionRaid(embed, resultado, "melee");
         } else if (tipo === "donde") {
             embed.addFields({
                 name: "🔍 Dónde encontrar",
