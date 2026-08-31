@@ -16,7 +16,7 @@ const raidCache = new Map();
 const CACHE_TIME = 5 * 60 * 1000;
 
 // =====================================================
-// LISTA COMPLETA DE TODOS LOS ÍTEMS RAIDEABLES DE RUST
+// LISTA MASIVA Y DEFINITIVA DE TODOS LOS ÍTEMS RAIDEABLES DE RUST
 // =====================================================
 
 const OBJETOS_RUST = [
@@ -30,10 +30,11 @@ const OBJETOS_RUST = [
     { name: "Puerta Doble Blindada (Armored Double Door)", value: "Armored Double Door" },
     { name: "Trampilla de Madera (Wood Ladder Hatch)", value: "Wood Ladder Hatch" },
     { name: "Trampilla de Hierro (Ladder Hatch)", value: "Ladder Hatch" },
-    { name: "Trampilla de HQ / Blindada (Armored Ladder Hatch)", value: "Armored Ladder Hatch" },
+    { name: "Trampilla Blindada (Armored Ladder Hatch)", value: "Armored Ladder Hatch" },
+    { name: "Trampilla Triangular Blindada (Armored Triangle Ladder Hatch)", value: "Armored Triangle Ladder Hatch" },
 
-    // 🧱 PAREDES (BUILDING BLOCKS)
-    { name: "Pared de ramita / Twig (Twig Wall)", value: "Twig Wall" },
+    // 🧱 PAREDES Y ESTRUCTURAS (BUILDING BLOCKS)
+    { name: "Pared de Ramita / Twig (Twig Wall)", value: "Twig Wall" },
     { name: "Pared de Madera (Wood Wall)", value: "Wood Wall" },
     { name: "Pared de Piedra (Stone Wall)", value: "Stone Wall" },
     { name: "Pared de Metal (Metal Wall)", value: "Metal Wall" },
@@ -52,13 +53,19 @@ const OBJETOS_RUST = [
     { name: "Suelo de Metal (Metal Floor)", value: "Metal Floor" },
     { name: "Suelo Blindado (Armored Floor)", value: "Armored Floor" },
     { name: "Techo / Roof", value: "Roof" },
+    // 🚧 BARRICADAS Y TRAMPAS
+    { name: "Barricada de madera (Wooden Barricade)", value: "Wooden Barricade" },
+    { name: "Barricada de metal (Metal Barricade)", value: "Metal Barricade" },
+    { name: "Barricada de pinchos (Wooden Spike Barricade)", value: "Wooden Spike Barricade" },
+    { name: "Barricada de pinchos con espino (Spike Trap)", value: "Spike Trap" },
 
-    // 🪟 VENTANAS Y REJAS
+    // 🪟 VENTANAS, REJAS Y TRONERAS
     { name: "Reja de Ventana de Madera (Wooden Window Bars)", value: "Wooden Window Bars" },
     { name: "Reja de Ventana de Metal (Metal Window Bars)", value: "Metal Window Bars" },
-    { name: "Reja de Suelo / Floor Grill", value: "Floor Grill" },
+    { name: "Tronera Horizontal de Metal (Metal Horizontal Embrasure)", value: "Metal Horizontal Embrasure" },
+    { name: "Tronera Vertical de Metal (Metal Vertical Embrasure)", value: "Metal Vertical Embrasure" },
+    { name: "Reja de Suelo (Floor Grill)", value: "Floor Grill" },
     { name: "Ventana de Cristal Reforzado (Reinforced Glass Window)", value: "Reinforced Glass Window" },
-    { name: "Ventana de Cristal Fuerte (Strengthened Glass Window)", value: "Strengthened Glass Window" },
     { name: "Tienda / Mostrador de Metal (Metal Shop Front)", value: "Metal Shop Front" },
     { name: "Pared de Celda de Prisión (Prison Cell Wall)", value: "Prison Cell Wall" },
     { name: "Puerta de Celda de Prisión (Prison Cell Gate)", value: "Prison Cell Gate" },
@@ -73,13 +80,19 @@ const OBJETOS_RUST = [
     { name: "Armario de Herramientas / TC (Tool Cupboard)", value: "Tool Cupboard" },
     { name: "Caja Pequeña de Madera (Small Wood Box)", value: "Small Wood Box" },
     { name: "Caja Grande de Madera (Large Wood Box)", value: "Large Wood Box" },
-    { name: "Ataúd / Coffin", value: "Coffin" },
-    { name: "Locker / Armario de Ropa", value: "Locker" },
-    { name: "Nevera / Fridge", value: "Fridge" },
+    { name: "Ataúd (Coffin)", value: "Coffin" },
+    { name: "Armario / Locker", value: "Locker" },
+    { name: "Nevera (Fridge)", value: "Fridge" },
     { name: "Máquina Expendedora (Vending Machine)", value: "Vending Machine" },
     { name: "Horno Pequeño (Furnace)", value: "Furnace" },
     { name: "Horno Grande (Large Furnace)", value: "Large Furnace" },
     { name: "Refinería de Aceite (Small Oil Refinery)", value: "Small Oil Refinery" },
+
+    // ⚡ ELECTRICIDAD Y ENERGÍA
+    { name: "Molino de Viento (Wind Turbine)", value: "Wind Turbine" },
+    { name: "Panel Solar (Solar Panel)", value: "Solar Panel" },
+    { name: "Batería Grande (Large Rechargeable Battery)", value: "Large Rechargeable Battery" },
+    { name: "Batería Mediana (Medium Rechargeable Battery)", value: "Medium Rechargeable Battery" },
 
     // 🛠️ MESAS DE TRABAJO Y UTILIDADES
     { name: "Mesa de Trabajo Nivel 1 (Workbench Level 1)", value: "Workbench Level 1" },
@@ -96,7 +109,7 @@ const OBJETOS_RUST = [
     { name: "Sitio SAM / Antiaéreo (SAM Site)", value: "SAM Site" },
     { name: "Barricada de Madera con Púas (Barbed Wooden Barricade)", value: "Barbed Wooden Barricade" },
     { name: "Barricada de Metal (Metal Barricade)", value: "Metal Barricade" },
-    { name: "Barco Remolcador / Tugboat", value: "Tugboat" }
+    { name: "Barco Remolcador (Tugboat)", value: "Tugboat" }
 ];
 
 // =====================================================
