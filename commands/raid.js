@@ -16,11 +16,58 @@ const raidCache = new Map();
 const CACHE_TIME = 5 * 60 * 1000;
 
 // =====================================================
-// LISTA MASIVA Y DEFINITIVA DE TODOS LOS ÍTEMS RAIDEABLES DE RUST
+// LISTA COMPLETA DE CONSTRUCCIÓN Y OBJETOS RAIDEABLES DE RUST
 // =====================================================
 
 const OBJETOS_RUST = [
-    // 🚪 PUERTAS Y ESCOTILLAS
+    // 🧱 PAREDES (WALLS)
+    { name: "Pared de ramita / Twig (Twig Wall)", value: "Twig Wall" },
+    { name: "Pared de Madera (Wood Wall)", value: "Wood Wall" },
+    { name: "Pared de Piedra (Stone Wall)", value: "Stone Wall" },
+    { name: "Pared de Metal (Metal Wall)", value: "Metal Wall" },
+    { name: "Pared Blindada / HQ (Armored Wall)", value: "Armored Wall" },
+    { name: "Pared con Ventana de Madera (Wood Window Wall)", value: "Wood Window Wall" },
+    { name: "Pared con Ventana de Piedra (Stone Window Wall)", value: "Stone Window Wall" },
+    { name: "Pared con Ventana de Metal (Metal Window Wall)", value: "Metal Window Wall" },
+    { name: "Pared con Ventana Blindada (Armored Window Wall)", value: "Armored Window Wall" },
+    { name: "Pared con Puerta de Madera (Wood Doorway)", value: "Wood Doorway" },
+    { name: "Pared con Puerta de Piedra (Stone Doorway)", value: "Stone Doorway" },
+    { name: "Pared con Puerta de Metal (Metal Doorway)", value: "Metal Doorway" },
+    { name: "Pared con Puerta Blindada (Armored Doorway)", value: "Armored Doorway" },
+    { name: "Medio Muro de Madera (Wood Half Wall)", value: "Wood Half Wall" },
+    { name: "Medio Muro de Piedra (Stone Half Wall)", value: "Stone Half Wall" },
+    { name: "Medio Muro de Metal (Metal Half Wall)", value: "Metal Half Wall" },
+    { name: "Medio Muro Blindado (Armored Half Wall)", value: "Armored Half Wall" },
+    { name: "Muro Bajo de Madera (Wood Low Wall)", value: "Wood Low Wall" },
+    { name: "Muro Bajo de Piedra (Stone Low Wall)", value: "Stone Low Wall" },
+    { name: "Muro Bajo de Metal (Metal Low Wall)", value: "Metal Low Wall" },
+    { name: "Muro Bajo Blindado (Armored Low Wall)", value: "Armored Low Wall" },
+
+    // 🏗️ CIMIENTOS (FOUNDATIONS)
+    { name: "Cimiento de Madera (Wood Foundation)", value: "Wood Foundation" },
+    { name: "Cimiento de Piedra (Stone Foundation)", value: "Stone Foundation" },
+    { name: "Cimiento de Metal (Metal Foundation)", value: "Metal Foundation" },
+    { name: "Cimiento Blindado (Armored Foundation)", value: "Armored Foundation" },
+    { name: "Cimiento Triangular de Madera (Wood Triangle Foundation)", value: "Wood Triangle Foundation" },
+    { name: "Cimiento Triangular de Piedra (Stone Triangle Foundation)", value: "Stone Triangle Foundation" },
+    { name: "Cimiento Triangular de Metal (Metal Triangle Foundation)", value: "Metal Triangle Foundation" },
+    { name: "Cimiento Triangular Blindado (Armored Triangle Foundation)", value: "Armored Triangle Foundation" },
+
+    // 🏠 SUELOS Y TECHOS (FLOORS & ROOFS)
+    { name: "Suelo de Madera (Wood Floor)", value: "Wood Floor" },
+    { name: "Suelo de Piedra (Stone Floor)", value: "Stone Floor" },
+    { name: "Suelo de Metal (Metal Floor)", value: "Metal Floor" },
+    { name: "Suelo Blindado (Armored Floor)", value: "Armored Floor" },
+    { name: "Suelo Triangular de Madera (Wood Triangle Floor)", value: "Wood Triangle Floor" },
+    { name: "Suelo Triangular de Piedra (Stone Triangle Floor)", value: "Stone Triangle Floor" },
+    { name: "Suelo Triangular de Metal (Metal Triangle Floor)", value: "Metal Triangle Floor" },
+    { name: "Suelo Triangular Blindado (Armored Triangle Floor)", value: "Armored Triangle Floor" },
+    { name: "Techo de Madera (Wood Roof)", value: "Wood Roof" },
+    { name: "Techo de Piedra (Stone Roof)", value: "Stone Roof" },
+    { name: "Techo de Metal (Metal Roof)", value: "Metal Roof" },
+    { name: "Techo Blindado (Armored Roof)", value: "Armored Roof" },
+
+    // 🚪 PUERTAS Y ESCOTILLAS (DOORS & HATCHES)
     { name: "Puerta de Madera (Wood Door)", value: "Wood Door" },
     { name: "Puerta de Chapa / Metal (Sheet Metal Door)", value: "Sheet Metal Door" },
     { name: "Puerta de Garaje (Garage Door)", value: "Garage Door" },
@@ -33,33 +80,7 @@ const OBJETOS_RUST = [
     { name: "Trampilla Blindada (Armored Ladder Hatch)", value: "Armored Ladder Hatch" },
     { name: "Trampilla Triangular Blindada (Armored Triangle Ladder Hatch)", value: "Armored Triangle Ladder Hatch" },
 
-    // 🧱 PAREDES Y ESTRUCTURAS (BUILDING BLOCKS)
-    { name: "Pared de Ramita / Twig (Twig Wall)", value: "Twig Wall" },
-    { name: "Pared de Madera (Wood Wall)", value: "Wood Wall" },
-    { name: "Pared de Piedra (Stone Wall)", value: "Stone Wall" },
-    { name: "Pared de Metal (Metal Wall)", value: "Metal Wall" },
-    { name: "Pared Blindada / HQ (Armored Wall)", value: "Armored Wall" },
-    { name: "Pared con Ventana de Piedra (Stone Window Wall)", value: "Stone Window Wall" },
-    { name: "Pared con Puerta de Piedra (Stone Doorway)", value: "Stone Doorway" },
-    { name: "Medio Muro de Piedra (Stone Half Wall)", value: "Stone Half Wall" },
-
-    // 🏗️ CIMIENTOS Y SUELOS
-    { name: "Cimiento de Madera (Wood Foundation)", value: "Wood Foundation" },
-    { name: "Cimiento de Piedra (Stone Foundation)", value: "Stone Foundation" },
-    { name: "Cimiento de Metal (Metal Foundation)", value: "Metal Foundation" },
-    { name: "Cimiento Blindado (Armored Foundation)", value: "Armored Foundation" },
-    { name: "Suelo de Madera (Wood Floor)", value: "Wood Floor" },
-    { name: "Suelo de Piedra (Stone Floor)", value: "Stone Floor" },
-    { name: "Suelo de Metal (Metal Floor)", value: "Metal Floor" },
-    { name: "Suelo Blindado (Armored Floor)", value: "Armored Floor" },
-    { name: "Techo / Roof", value: "Roof" },
-    // 🚧 BARRICADAS Y TRAMPAS
-    { name: "Barricada de madera (Wooden Barricade)", value: "Wooden Barricade" },
-    { name: "Barricada de metal (Metal Barricade)", value: "Metal Barricade" },
-    { name: "Barricada de pinchos (Wooden Spike Barricade)", value: "Wooden Spike Barricade" },
-    { name: "Barricada de pinchos con espino (Spike Trap)", value: "Spike Trap" },
-
-    // 🪟 VENTANAS, REJAS Y TRONERAS
+    // 🪟 VENTANAS, REJAS Y TRONERAS (WINDOWS & BARS)
     { name: "Reja de Ventana de Madera (Wooden Window Bars)", value: "Wooden Window Bars" },
     { name: "Reja de Ventana de Metal (Metal Window Bars)", value: "Metal Window Bars" },
     { name: "Tronera Horizontal de Metal (Metal Horizontal Embrasure)", value: "Metal Horizontal Embrasure" },
@@ -70,7 +91,7 @@ const OBJETOS_RUST = [
     { name: "Pared de Celda de Prisión (Prison Cell Wall)", value: "Prison Cell Wall" },
     { name: "Puerta de Celda de Prisión (Prison Cell Gate)", value: "Prison Cell Gate" },
 
-    // 🏰 MUROS Y PORTONES EXTERNOS
+    // 🏰 MUROS Y PORTONES EXTERNOS (EXTERNAL WALLS)
     { name: "Muro Alto de Madera (High External Wooden Wall)", value: "High External Wooden Wall" },
     { name: "Muro Alto de Piedra (High External Stone Wall)", value: "High External Stone Wall" },
     { name: "Portón Alto de Madera (High External Wooden Gate)", value: "High External Wooden Gate" },
@@ -88,28 +109,16 @@ const OBJETOS_RUST = [
     { name: "Horno Grande (Large Furnace)", value: "Large Furnace" },
     { name: "Refinería de Aceite (Small Oil Refinery)", value: "Small Oil Refinery" },
 
-    // ⚡ ELECTRICIDAD Y ENERGÍA
-    { name: "Molino de Viento (Wind Turbine)", value: "Wind Turbine" },
-    { name: "Panel Solar (Solar Panel)", value: "Solar Panel" },
-    { name: "Batería Grande (Large Rechargeable Battery)", value: "Large Rechargeable Battery" },
-    { name: "Batería Mediana (Medium Rechargeable Battery)", value: "Medium Rechargeable Battery" },
-
-    // 🛠️ MESAS DE TRABAJO Y UTILIDADES
+    // 🛠️ UTILIDADES Y OTROS
     { name: "Mesa de Trabajo Nivel 1 (Workbench Level 1)", value: "Workbench Level 1" },
     { name: "Mesa de Trabajo Nivel 2 (Workbench Level 2)", value: "Workbench Level 2" },
     { name: "Mesa de Trabajo Nivel 3 (Workbench Level 3)", value: "Workbench Level 3" },
     { name: "Mesa de Investigación (Research Table)", value: "Research Table" },
     { name: "Banco de Reparación (Repair Bench)", value: "Repair Bench" },
-    { name: "Mesa de Mezclas (Mixing Table)", value: "Mixing Table" },
-
-    // ⚔️ DEFENSAS, TRAMPAS Y BARRICADAS
-    { name: "Torreta Automática (Auto Turret)", value: "Auto Turret" },
-    { name: "Torreta Lanzallamas (Flame Turret)", value: "Flame Turret" },
-    { name: "Trampa de Escopeta (Shotgun Trap)", value: "Shotgun Trap" },
-    { name: "Sitio SAM / Antiaéreo (SAM Site)", value: "SAM Site" },
-    { name: "Barricada de Madera con Púas (Barbed Wooden Barricade)", value: "Barbed Wooden Barricade" },
-    { name: "Barricada de Metal (Metal Barricade)", value: "Metal Barricade" },
-    { name: "Barco Remolcador (Tugboat)", value: "Tugboat" }
+    { name: "Barricada de madera (Wooden Barricade)", value: "Wooden Barricade" },
+    { name: "Barricada de metal (Metal Barricade)", value: "Metal Barricade" },
+    { name: "Barricada de pinchos (Wooden Spike Barricade)", value: "Wooden Spike Barricade" },
+    { name: "Barricada de pinchos con espino (Spike Trap)", value: "Spike Trap" }
 ];
 
 // =====================================================
