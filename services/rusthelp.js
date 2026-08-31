@@ -65,15 +65,8 @@ const ALIASES = {
 
 function obtenerSlug(nombre) {
     const normalizado = normalizarTexto(nombre);
-
-    if (!normalizado) {
-        return null;
-    }
-
-    if (ALIASES[normalizado]) {
-        return ALIASES[normalizado];
-    }
-
+    if (!normalizado) return null;
+    if (ALIASES[normalizado]) return ALIASES[normalizado];
     return normalizado
         .replace(/\s+/g, "-")
         .replace(/-+/g, "-")
@@ -85,111 +78,66 @@ function obtenerSlug(nombre) {
 // =====================================================
 
 function convertirASegundos(tiempo) {
-    const texto = String(tiempo || "")
-        .toLowerCase()
-        .replace(/,/g, ".");
-
-    if (!texto) {
-        return 0;
-    }
-
+    const texto = String(tiempo || "").toLowerCase().replace(/,/g, ".");
+    if (!texto) return 0;
     let total = 0;
-
     const horas = texto.match(/(\d+(?:\.\d+)?)\s*h/);
     const minutos = texto.match(/(\d+(?:\.\d+)?)\s*m/);
     const segundos = texto.match(/(\d+(?:\.\d+)?)\s*s/);
-
-    if (horas) {
-        total += parseFloat(horas[1]) * 3600;
-    }
-
-    if (minutos) {
-        total += parseFloat(minutos[1]) * 60;
-    }
-
-    if (segundos) {
-        total += parseFloat(segundos[1]);
-    }
-
+    if (horas) total += parseFloat(horas[1]) * 3600;
+    if (minutos) total += parseFloat(minutos[1]) * 60;
+    if (segundos) total += parseFloat(segundos[1]);
     return total;
 }
 
 function pareceTiempo(texto) {
-    return /\d+\s*(?:h|m|s)\b/i.test(
-        String(texto || "")
-    );
+    return /\d+\s*(?:h|m|s)\b/i.test(String(texto || ""));
 }
 
 // =====================================================
-// COLUMNAS
+// COLUMNAS Y TABLAS
 // =====================================================
 
 function obtenerColumnas($, fila) {
     const columnas = [];
-
-    $(fila)
-        .find("th, td")
-        .each((_, elemento) => {
-            const texto = limpiarTexto($(elemento).text());
-            columnas.push(texto);
-        });
-
+    $(fila).find("th, td").each((_, elemento) => {
+        columnas.push(limpiarTexto($(elemento).text()));
+    });
     return columnas;
 }
 
 function obtenerHeaderTabla($, tabla) {
     const primeraFila = $(tabla).find("tr").first();
-
-    if (!primeraFila.length) {
-        return [];
-    }
-
+    if (!primeraFila.length) return [];
     return obtenerColumnas($, primeraFila).map(normalizarTexto);
 }
 
 function esTablaLoot($, tabla) {
     const headers = obtenerHeaderTabla($, tabla);
     const texto = normalizarTexto($(tabla).text().slice(0, 500));
-
-    const tieneDe = headers.includes("de");
-    const tienePosibilidad = headers.includes("posibilidad");
-    const tieneCantidad = headers.includes("cantidad");
-    const tieneEstado = headers.includes("estado");
-
     return (
-        (tieneDe && tienePosibilidad && tieneCantidad) ||
-        (tienePosibilidad && tieneCantidad && tieneEstado) ||
+        (headers.includes("de") && headers.includes("posibilidad") && headers.includes("cantidad")) ||
+        (headers.includes("posibilidad") && headers.includes("cantidad") && headers.includes("estado")) ||
         /looted from/.test(texto)
     );
 }
 
 function esTablaStarting($, tabla) {
     const headers = obtenerHeaderTabla($, tabla);
-
     return (
         headers.includes("starting item") ||
-        (
-            headers.includes("time to raid") &&
-            headers.includes("amount")
-        )
+        (headers.includes("time to raid") && headers.includes("amount"))
     );
 }
 
 function esTablaRaidingCost($, tabla) {
     const headers = obtenerHeaderTabla($, tabla);
-
     return (
         headers.includes("herramienta de raideos") ||
-        (
-            headers.includes("cantidad") &&
-            headers.some(header =>
-                header.includes("tiempo para raideo")
-            )
-        )
+        (headers.includes("cantidad") && headers.some(header => header.includes("tiempo para raideo")))
     );
 }
 
-// NUEVA FUNCIÓN RENOMBRADA PARA EVITAR CACHÉ
 function formatearHerramienta(nombre) {
     let limpio = limpiarTexto(nombre)
         .replace(/\s+Using\s+.+$/i, "")
@@ -205,12 +153,39 @@ function formatearHerramienta(nombre) {
     if (/5\.56|explosiva.*5\.56|calibre 5\.56/i.test(limpio)) {
         return "Munición explosiva del calibre 5.56";
     }
-
     if (/40mm|lanzagranadas/i.test(limpio)) {
         return "Lanzagranadas Granada explosiva de 40mm";
     }
-
     return limpio;
+}
+
+// Clasificar categoría (explosive, bullet, melee)
+function obtenerCategoriaHerramienta(nombre) {
+    const norm = normalizarTexto(nombre);
+    
+    // Herramientas Melee comunes en Rust
+    const esMelee = 
+        norm.includes("martillo") || 
+        norm.includes("lucero") || 
+        norm.includes("remo") || 
+        norm.includes("porra") || 
+        norm.includes("hacha") || 
+        norm.includes("roca") || 
+        norm.includes("pico") ||
+        norm.includes("machete") ||
+        norm.includes("cuchillo") ||
+        norm.includes("espada");
+
+    // Municiones / Balas
+    const esBullet = 
+        norm.includes("munici") || 
+        norm.includes("5.56") || 
+        norm.includes("pistola") ||
+        norm.includes("rifle");
+
+    if (esMelee) return "melee";
+    if (esBullet) return "bullet";
+    return "explosive"; // Por defecto C4, Cohetes, Satchels, Cargas, etc.
 }
 
 // =====================================================
@@ -219,16 +194,10 @@ function formatearHerramienta(nombre) {
 
 async function consultarRaid(nombreQuery) {
     const queryLimpia = limpiarTexto(nombreQuery);
-
-    if (!queryLimpia) {
-        return null;
-    }
+    if (!queryLimpia) return null;
 
     const slug = obtenerSlug(queryLimpia);
-
-    if (!slug) {
-        return null;
-    }
+    if (!slug) return null;
 
     const urlLoot = `${BASE_URL}/${slug}`;
     const urlRaideo = `${BASE_URL}/${slug}#raiding`;
@@ -241,9 +210,7 @@ async function consultarRaid(nombreQuery) {
             validateStatus: status => status >= 200 && status < 400
         });
 
-        if (!response || !response.data) {
-            return null;
-        }
+        if (!response || !response.data) return null;
 
         const $ = cheerio.load(response.data);
 
@@ -263,88 +230,79 @@ async function consultarRaid(nombreQuery) {
 
         $("table").each((index, tabla) => {
             if (esTablaLoot($, tabla)) {
-                $(tabla)
-                    .find("tr")
-                    .each((_, fila) => {
-                        const columnas = obtenerColumnas($, fila);
-                        if (columnas.length < 2) return;
-                        const primera = columnas[0];
-                        if (normalizarTexto(primera) === "de") return;
-                        const posibilidad = columnas[1] || "";
-                        const cantidad = columnas[2] || "";
-                        if (!primera) return;
+                $(tabla).find("tr").each((_, fila) => {
+                    const columnas = obtenerColumnas($, fila);
+                    if (columnas.length < 2) return;
+                    const primera = columnas[0];
+                    if (normalizarTexto(primera) === "de") return;
+                    const posibilidad = columnas[1] || "";
+                    const cantidad = columnas[2] || "";
+                    if (!primera) return;
 
-                        const textoLoot = [posibilidad, cantidad].filter(Boolean).join(" ");
-                        const existe = dondeEncontrar.some(
-                            item => normalizarTexto(item.herramienta) === normalizarTexto(primera)
-                        );
+                    const textoLoot = [posibilidad, cantidad].filter(Boolean).join(" ");
+                    const existe = dondeEncontrar.some(
+                        item => normalizarTexto(item.herramienta) === normalizarTexto(primera)
+                    );
 
-                        if (!existe) {
-                            dondeEncontrar.push({
-                                herramienta: limpiarTexto(primera),
-                                tiempo: limpiarTexto(textoLoot)
-                            });
-                        }
-                    });
+                    if (!existe) {
+                        dondeEncontrar.push({
+                            herramienta: limpiarTexto(primera),
+                            tiempo: limpiarTexto(textoLoot)
+                        });
+                    }
+                });
                 return;
             }
 
             if (esTablaStarting($, tabla)) {
-                $(tabla)
-                    .find("tr")
-                    .each((_, fila) => {
-                        const columnas = obtenerColumnas($, fila);
-                        if (columnas.length < 2) return;
-                        const primera = columnas[0];
-                        const segunda = columnas[1] || "";
-                        const tercera = columnas[2] || "";
+                $(tabla).find("tr").each((_, fila) => {
+                    const columnas = obtenerColumnas($, fila);
+                    if (columnas.length < 2) return;
+                    const primera = columnas[0];
+                    const segunda = columnas[1] || "";
+                    const tercera = columnas[2] || "";
 
-                        if (normalizarTexto(primera).includes("starting item")) return;
-                        if (!primera || !pareceTiempo(segunda)) return;
+                    if (normalizarTexto(primera).includes("starting item")) return;
+                    if (!primera || !pareceTiempo(segunda)) return;
 
-                        if (
-                            startingItems.some(
-                                item => normalizarTexto(item.herramienta) === normalizarTexto(primera)
-                            )
-                        ) {
-                            return;
-                        }
+                    if (startingItems.some(item => normalizarTexto(item.herramienta) === normalizarTexto(primera))) {
+                        return;
+                    }
 
-                        startingItems.push({
-                            herramienta: formatearHerramienta(primera),
-                            tiempo: limpiarTexto(segunda),
-                            cantidad: limpiarTexto(tercera)
-                        });
+                    startingItems.push({
+                        herramienta: formatearHerramienta(primera),
+                        tiempo: limpiarTexto(segunda),
+                        cantidad: limpiarTexto(tercera)
                     });
+                });
                 return;
             }
 
             if (esTablaRaidingCost($, tabla)) {
-                $(tabla)
-                    .find("tr")
-                    .each((_, fila) => {
-                        const columnas = obtenerColumnas($, fila);
-                        if (columnas.length < 3) return;
+                $(tabla).find("tr").each((_, fila) => {
+                    const columnas = obtenerColumnas($, fila);
+                    if (columnas.length < 3) return;
 
-                        const herramienta = columnas[0] || "";
-                        const cantidad = columnas[1] || "";
-                        const tiempo = columnas[2] || "";
+                    const herramienta = columnas[0] || "";
+                    const cantidad = columnas[1] || "";
+                    const tiempo = columnas[2] || "";
 
-                        if (!herramienta) return;
-                        if (normalizarTexto(herramienta) === "herramienta de raideos") return;
-                        if (!pareceTiempo(tiempo)) return;
+                    if (!herramienta) return;
+                    if (normalizarTexto(herramienta) === "herramienta de raideos") return;
+                    if (!pareceTiempo(tiempo)) return;
 
-                        const nombreCrudo = limpiarTexto(herramienta);
-                        const nombreLimpio = formatearHerramienta(herramienta);
-                        if (!nombreLimpio) return;
+                    const nombreCrudo = limpiarTexto(herramienta);
+                    const nombreLimpio = formatearHerramienta(herramienta);
+                    if (!nombreLimpio) return;
 
-                        raidingCost.push({
-                            herramienta: nombreLimpio,
-                            nombreCrudo: nombreCrudo,
-                            cantidad: limpiarTexto(cantidad),
-                            tiempo: limpiarTexto(tiempo)
-                        });
+                    raidingCost.push({
+                        herramienta: nombreLimpio,
+                        nombreCrudo: nombreCrudo,
+                        cantidad: limpiarTexto(cantidad),
+                        tiempo: limpiarTexto(tiempo),
+                        categoria: obtenerCategoriaHerramienta(nombreLimpio)
                     });
+                });
             }
         });
 
@@ -354,63 +312,17 @@ async function consultarRaid(nombreQuery) {
             "carbon", "cloth", "tela", "wood", "madera",
             "metal fragments", "fragmentos de metal", "stone",
             "piedra", "low grade fuel", "combustible de baja calidad",
-            "scrap", "chatarra", "fuel", "combustible",
-            "recurso", "recursos", "material", "materiales"
+            "scrap", "chatarra", "fuel", "combustible"
         ];
 
         const raidingCostFiltrado = raidingCost.filter(item => {
             const nombre = normalizarTexto(item.herramienta);
-            return !palabrasExcluir.some(palabra =>
-                nombre.includes(normalizarTexto(palabra))
-            );
+            return !palabrasExcluir.some(palabra => nombre.includes(normalizarTexto(palabra)));
         });
 
         const unicosMap = new Map();
         for (const item of raidingCostFiltrado) {
             let nombreBase = normalizarTexto(item.herramienta);
-            
-            if (nombreBase.includes("propano") || nombreBase.includes("propane")) {
-                const esDeployed = /deployed/i.test(item.nombreCrudo);
-                const clavePropano = "bomba explosiva de propano";
-
-                if (!unicosMap.has(clavePropano)) {
-                    unicosMap.set(clavePropano, item);
-                } else {
-                    const actual = unicosMap.get(clavePropano);
-                    const actualEsDeployed = /deployed/i.test(actual.nombreCrudo);
-
-                    if (esDeployed && !actualEsDeployed) {
-                        unicosMap.set(clavePropano, item);
-                    } else if (esDeployed === actualEsDeployed) {
-                        if (convertirASegundos(item.tiempo) < convertirASegundos(actual.tiempo)) {
-                            unicosMap.set(clavePropano, item);
-                        }
-                    }
-                }
-                continue;
-            }
-
-            if (nombreBase.includes("lata") || nombreBase.includes("beancan")) {
-                const esClickDerecho = /right click stuck/i.test(item.nombreCrudo);
-                const claveGranada = "granada de lata";
-
-                if (!unicosMap.has(claveGranada)) {
-                    unicosMap.set(claveGranada, item);
-                } else {
-                    const actual = unicosMap.get(claveGranada);
-                    const actualEsClickDerecho = /right click stuck/i.test(actual.nombreCrudo);
-
-                    if (esClickDerecho && !actualEsClickDerecho) {
-                        unicosMap.set(claveGranada, item);
-                    } else if (esClickDerecho === actualEsClickDerecho) {
-                        if (convertirASegundos(item.tiempo) < convertirASegundos(actual.tiempo)) {
-                            unicosMap.set(claveGranada, item);
-                        }
-                    }
-                }
-                continue;
-            }
-
             if (!unicosMap.has(nombreBase)) {
                 unicosMap.set(nombreBase, item);
             } else {
@@ -423,22 +335,17 @@ async function consultarRaid(nombreQuery) {
 
         const raidingCostSinDuplicados = Array.from(unicosMap.values());
 
+        // Ordenar todos por tiempo de menor a mayor
         const raidingCostOrdenado = raidingCostSinDuplicados
-            .sort((a, b) => convertirASegundos(a.tiempo) - convertirASegundos(b.tiempo))
-            .slice(0, 15);
-
-        const startingItemsFinales = startingItems.slice(0, 3);
-        const dondeEncontrarFinal = dondeEncontrar.length > 0
-            ? dondeEncontrar
-            : [{ herramienta: "No disponible", tiempo: "" }];
+            .sort((a, b) => convertirASegundos(a.tiempo) - convertirASegundos(b.tiempo));
 
         return {
             nombre: nombreObjeto,
             url: urlLoot,
             urlRaideo,
-            startingItems: startingItemsFinales,
+            startingItems: startingItems.slice(0, 3),
             raidingCost: raidingCostOrdenado,
-            dondeEncontrar: dondeEncontrarFinal
+            dondeEncontrar: dondeEncontrar.length > 0 ? dondeEncontrar : [{ herramienta: "No disponible", tiempo: "" }]
         };
 
     } catch (error) {
