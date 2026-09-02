@@ -51,11 +51,22 @@ module.exports = {
 
           const playerData = await response.json();
           
-          // Verificar si el jugador está conectado en el servidor configurado
-          // Battlemetrics incluye las relaciones en 'included' y el estado actual en 'relationships'
-          const currentServerId = playerData.data?.relationships?.server?.data?.id;
+          // Imprimimos la respuesta completa en la consola de Render para analizarla
+          console.log(`Respuesta API Player (${v.alias}):`, JSON.stringify(playerData, null, 2));
 
-          if (currentServerId && currentServerId.toString() === bmServerId.toString()) {
+          // Verificamos de varias formas posibles dónde viene el servidor actual
+          const relServerId = playerData.data?.relationships?.server?.data?.id;
+          
+          // También podemos revisar si el servidor viene dentro de la propiedad 'included'
+          let includedServerId = null;
+          if (playerData.included) {
+            const serverInc = playerData.included.find(item => item.type === 'server');
+            if (serverInc) includedServerId = serverInc.id;
+          }
+
+          const activeServerId = relServerId || includedServerId;
+
+          if (activeServerId && activeServerId.toString() === bmServerId.toString()) {
             encontradosOnline.push(v.alias);
           } else {
             offline.push(v.alias);
