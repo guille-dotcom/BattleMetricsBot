@@ -46,7 +46,7 @@ module.exports = {
         });
       }
 
-      // 3. Consultar las relaciones de jugadores activos del servidor de forma directa
+      // 3. Consultar las relaciones de jugadores activos del servidor
       const response = await axios.get(`${BM_API}/servers/${bmServerId}/relationships/players`, {
         headers: getHeaders(),
         params: {
@@ -55,12 +55,18 @@ module.exports = {
         timeout: 10000
       });
 
-      // Extraer los IDs de jugadores online que devuelve esta relación
       const idsOnlineEnServidor = new Set();
       const relData = response.data?.data || [];
+      
       for (const rel of relData) {
         idsOnlineEnServidor.add(rel.id.toString());
       }
+
+      // --- DEPURACIÓN EN CONSOLA ---
+      console.log(`[DEBUG /revisar] Servidor ID: ${bmServerId}`);
+      console.log(`[DEBUG /revisar] IDs Online en BM:`, Array.from(idsOnlineEnServidor));
+      console.log(`[DEBUG /revisar] Perfiles vigilados en BD:`, vigilados.map(v => ({ alias: v.alias, battlemetricsId: v.battlemetricsId })));
+      // -----------------------------
 
       // 4. Cruzar con los perfiles vigilados
       const encontradosOnline = [];
