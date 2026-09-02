@@ -46,27 +46,28 @@ module.exports = {
         });
       }
 
-      // 3. Consultar las relaciones de jugadores activos del servidor
-      const response = await axios.get(`${BM_API}/servers/${bmServerId}/relationships/players`, {
+      // 3. Consultar los jugadores activos usando el endpoint de jugadores con filtro de servidor correcto
+      const response = await axios.get(`${BM_API}/players`, {
         headers: getHeaders(),
         params: {
-          page: { size: 100 }
+          "filter[servers]": bmServerId,
+          "filter[online]": "true",
+          "page[size]": 100
         },
         timeout: 10000
       });
 
       const idsOnlineEnServidor = new Set();
-      const relData = response.data?.data || [];
+      const playersData = response.data?.data || [];
       
-      for (const rel of relData) {
-        idsOnlineEnServidor.add(rel.id.toString());
+      for (const player of playersData) {
+        idsOnlineEnServidor.add(player.id.toString());
       }
 
-      // --- DEPURACIÓN EN CONSOLA ---
+      // Depuración en consola para verificar los datos cruzados
       console.log(`[DEBUG /revisar] Servidor ID: ${bmServerId}`);
       console.log(`[DEBUG /revisar] IDs Online en BM:`, Array.from(idsOnlineEnServidor));
       console.log(`[DEBUG /revisar] Perfiles vigilados en BD:`, vigilados.map(v => ({ alias: v.alias, battlemetricsId: v.battlemetricsId })));
-      // -----------------------------
 
       // 4. Cruzar con los perfiles vigilados
       const encontradosOnline = [];
