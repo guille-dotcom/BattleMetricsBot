@@ -2,24 +2,20 @@ const {
     SlashCommandBuilder,
     EmbedBuilder,
     MessageFlags
-} = require('discord.js');
+} = require("discord.js");
 
-const axios = require('axios');
+const axios = require("axios");
 
-const ServerConfig = require('../models/ServerConfig');
-const Vigilado = require('../models/Vigilado');
+const ServerConfig = require("../models/ServerConfig");
+const Vigilado = require("../models/Vigilado");
 
 // =====================================================
-// CONFIGURACION
+// CONFIGURACIÓN
 // =====================================================
 
-const BM_API = 'https://api.battlemetrics.com';
+const BM_API = "https://api.battlemetrics.com";
 
 const REQUEST_TIMEOUT = 30000;
-
-// 100 jugadores por pagina.
-// Revisaremos como maximo 10 paginas = 1000 jugadores.
-const MAX_PAGES = 10;
 
 // =====================================================
 // HEADERS BATTLEMETRICS
@@ -28,16 +24,16 @@ const MAX_PAGES = 10;
 function getHeaders() {
     const token = process.env.BATTLEMETRICS_TOKEN;
 
+    const headers = {
+        Accept: "application/vnd.api+json",
+        "Content-Type": "application/vnd.api+json"
+    };
+
     if (token) {
-        return {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        };
+        headers.Authorization = `Bearer ${token}`;
     }
 
-    return {
-        'Content-Type': 'application/json'
-    };
+    return headers;
 }
 
 // =====================================================
@@ -51,12 +47,14 @@ function extraerBattleMetricsId(valor) {
 
     const texto = String(valor).trim();
 
-    // Si ya es solamente el ID
+    // ID directo
     if (/^\d+$/.test(texto)) {
         return texto;
     }
 
-    // Si es una URL de BattleMetrics
+    // URL:
+    // https://www.battlemetrics.com/players/1201726097
+    // https://battlemetrics.com/players/1201726097
     const match = texto.match(
         /battlemetrics\.com\/players\/(\d+)/i
     );
@@ -69,19 +67,40 @@ function extraerBattleMetricsId(valor) {
 }
 
 // =====================================================
-// OBTENER SERVER ID DEL PLAYER
+// OBTENER ID DE SERVIDOR DESDE UN RECURSO
 // =====================================================
 
-function obtenerServerId(player) {
+function obtenerServerId(recurso) {
+    if (!recurso) {
+        return null;
+    }
+
+    // Caso 1:
+    // relationships.server.data.id
     const serverRelationship =
-        player?.relationships?.server?.data?.id;
+        recurso?.relationships?.server?.data?.id;
 
     if (serverRelationship) {
         return String(serverRelationship);
     }
 
+    // Caso 2:
+    // relationships.servers.data[]
+    const serversRelationship =
+        recurso?.relationships?.servers?.data;
+
+    if (Array.isArray(serversRelationship)) {
+        for (const server of serversRelationship) {
+            if (server?.id) {
+                return String(server.id);
+            }
+        }
+    }
+
+    // Caso 3:
+    // attributes.serverId
     const serverAttribute =
-        player?.attributes?.serverId;
+        recurso?.attributes?.serverId;
 
     if (serverAttribute) {
         return String(serverAttribute);
@@ -91,14 +110,437 @@ function obtenerServerId(player) {
 }
 
 // =====================================================
+// OBTENER TODOS LOS SERVER IDS DE UN RECURSO
+// =====================================================
+
+function obtenerTodosLosServerIds(recurso) {
+    const ids = new Set();
+
+    if (!recurso) {
+        return ids;
+    }
+
+    // relationships.server
+    const server =
+        recurso?.relationships?.server?.data;
+
+    if (server?.id) {
+        ids.add(String(server.id));
+    }
+
+    // relationships.servers
+    const servers =
+        recurso?.relationships?.servers?.data;
+
+    if (Array.isArray(servers)) {
+        for (const item of servers) {
+            if (item?.id) {
+                ids.add(String(item.id));
+            }
+        }
+    }
+
+    // attributes.serverId
+    if (recurso?.attributes?.serverId) {
+        ids.add(
+            String(recurso.attributes.serverId)
+        );
+    }
+
+    return ids;
+}
+
+// =====================================================
+// OBTENER NOMBRE DEL SERVIDOR
+// =====================================================
+
+function obtenerNombreServidor(recurso) {
+    return (
+        recurso?.attributes?.name ||
+        recurso?.attributes?.serverName ||
+        "Servidor desconocido"
+    );
+}
+
+// =====================================================
+// DETECTAR SI UNA SESIÓN ESTÁ ACTIVA
+// =====================================================
+
+function sesionEstaActiva(session) {
+    const attributes = session?.attributes || {};
+
+    // BattleMetrics normalmente utiliza stop para
+    // indicar cuándo terminó una sesión.
+    if (
+        attributes.stop === null ||
+        attributes.stop === undefined ||
+        attributes.stop === ""
+    ) {
+        return true;
+    }
+
+    // Algunos recursos pueden indicar online.
+    if (
+        attributes.online === true ||
+        attributes.online === "true"
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
+// =====================================================
+// OBTENER DATOS DEL PLAYER
+// =====================================================
+
+async function obtenerPlayer(playerId) {
+    console.log(
+        `   👤 Consultando perfil BM ${playerId}`
+    );
+
+    const response = await axios.get(
+        `${BM_API}/players/${encodeURIComponent(playerId)}`,
+        {
+            headers: getHeaders(),
+            timeout: REQUEST_TIMEOUT,
+            params: {
+                include: "server"
+            }
+        }
+    );
+
+    return response.data;
+}
+
+// =====================================================
+// OBTENER SESIONES DEL PLAYER
+// =====================================================
+
+async function obtenerSesionesPlayer(playerId) {
+    console.log(
+        `   📡 Consultando sesiones del jugador ${playerId}`
+    );
+
+    /*
+     * BattleMetrics expone el historial de sesiones
+     * mediante el recurso /sessions.
+     *
+     * No utilizamos page[number], que era precisamente
+     * lo que estaba provocando el HTTP 400 del código
+     * anterior.
+     */
+
+    const response = await axios.get(
+        `${BM_API}/sessions`,
+        {
+            headers: getHeaders(),
+            timeout: REQUEST_TIMEOUT,
+            params: {
+                "filter[players]": playerId,
+                "page[size]": 100
+            }
+        }
+    );
+
+    return response.data;
+}
+
+// =====================================================
+// COMPROBAR PLAYER EN SERVIDOR
+// =====================================================
+
+async function comprobarJugadorEnServidor(
+    playerId,
+    servidorObjetivo
+) {
+    const resultado = {
+        encontrado: false,
+        online: false,
+        sesiones: [],
+        motivo: null
+    };
+
+    // =================================================
+    // 1. OBTENER PERFIL
+    // =================================================
+
+    let playerResponse;
+
+    try {
+        playerResponse =
+            await obtenerPlayer(playerId);
+    } catch (error) {
+        if (error.response?.status === 404) {
+            resultado.motivo =
+                "Perfil BattleMetrics no encontrado";
+
+            return resultado;
+        }
+
+        throw error;
+    }
+
+    const player =
+        playerResponse?.data || null;
+
+    if (!player) {
+        resultado.motivo =
+            "BattleMetrics no devolvió el perfil";
+
+        return resultado;
+    }
+
+    console.log(
+        `   ✅ Perfil encontrado: ${player.id}`
+    );
+
+    if (player.attributes?.name) {
+        console.log(
+            `   🏷️ Nombre BM: ${player.attributes.name}`
+        );
+    }
+
+    // =================================================
+    // 2. COMPROBAR RELACIONES DIRECTAS
+    // =================================================
+
+    const serverIds =
+        obtenerTodosLosServerIds(player);
+
+    if (serverIds.size > 0) {
+        console.log(
+            `   🎮 Servers asociados al perfil: ${Array.from(serverIds).join(", ")}`
+        );
+    } else {
+        console.log(
+            "   ℹ️ El perfil no trae serverId directo."
+        );
+    }
+
+    // =================================================
+    // 3. OBTENER SESIONES
+    // =================================================
+
+    let sessionsResponse;
+
+    try {
+        sessionsResponse =
+            await obtenerSesionesPlayer(playerId);
+    } catch (error) {
+        /*
+         * Si BattleMetrics no permite consultar sesiones
+         * con el filtro actual, no damos un falso positivo.
+         *
+         * El perfil por sí solo NO demuestra que esté
+         * actualmente conectado al servidor.
+         */
+
+        console.error(
+            `   ❌ Error consultando sesiones de ${playerId}`
+        );
+
+        if (error.response) {
+            console.error(
+                `   HTTP: ${error.response.status}`
+            );
+
+            console.error(
+                "   Respuesta:",
+                error.response.data
+            );
+        }
+
+        resultado.motivo =
+            "No fue posible consultar las sesiones del jugador";
+
+        return resultado;
+    }
+
+    const sesiones =
+        sessionsResponse?.data || [];
+
+    console.log(
+        `   📊 Sesiones recibidas: ${sesiones.length}`
+    );
+
+    // =================================================
+    // 4. REVISAR SESIONES
+    // =================================================
+
+    for (const session of sesiones) {
+        if (!session) {
+            continue;
+        }
+
+        const sessionServerIds =
+            obtenerTodosLosServerIds(session);
+
+        // =================================================
+        // INCLUIDOS / RELATIONSHIPS
+        // =================================================
+
+        let coincideServidor = false;
+
+        for (const id of sessionServerIds) {
+            if (id === String(servidorObjetivo)) {
+                coincideServidor = true;
+                break;
+            }
+        }
+
+        // =================================================
+        // BUSCAR SERVER EN ATTRIBUTES
+        // =================================================
+
+        if (!coincideServidor) {
+            const sessionServerId =
+                obtenerServerId(session);
+
+            if (
+                sessionServerId ===
+                String(servidorObjetivo)
+            ) {
+                coincideServidor = true;
+            }
+        }
+
+        if (!coincideServidor) {
+            continue;
+        }
+
+        // =================================================
+        // SERVIDOR CORRECTO
+        // =================================================
+
+        resultado.encontrado = true;
+
+        const activa =
+            sesionEstaActiva(session);
+
+        const inicio =
+            session?.attributes?.start || null;
+
+        const stop =
+            session?.attributes?.stop || null;
+
+        resultado.sesiones.push({
+            session,
+            activa,
+            inicio,
+            stop
+        });
+
+        console.log(
+            `   🎮 Sesión encontrada en servidor ${servidorObjetivo}`
+        );
+
+        console.log(
+            `   📅 Inicio: ${inicio || "desconocido"}`
+        );
+
+        console.log(
+            `   📅 Fin: ${stop || "sesión activa"}`
+        );
+
+        if (activa) {
+            resultado.online = true;
+
+            console.log(
+                `   🚨 ONLINE CONFIRMADO en ${servidorObjetivo}`
+            );
+
+            // Ya tenemos lo que necesitamos.
+            break;
+        }
+    }
+
+    // =================================================
+    // 5. RESULTADO FINAL
+    // =================================================
+
+    if (!resultado.encontrado) {
+        resultado.motivo =
+            "No existe una sesión registrada en el servidor objetivo";
+
+        console.log(
+            `   💤 No se encontró sesión en ${servidorObjetivo}`
+        );
+    } else if (!resultado.online) {
+        resultado.motivo =
+            "El jugador tiene historial en el servidor, pero no hay una sesión activa";
+
+        console.log(
+            `   💤 Tiene historial en ${servidorObjetivo}, pero está offline`
+        );
+    }
+
+    return resultado;
+}
+
+// =====================================================
+// FORMATEAR DURACIÓN
+// =====================================================
+
+function formatearDuracion(inicio, fin = null) {
+    if (!inicio) {
+        return null;
+    }
+
+    const fechaInicio =
+        new Date(inicio);
+
+    const fechaFin =
+        fin
+            ? new Date(fin)
+            : new Date();
+
+    if (
+        Number.isNaN(
+            fechaInicio.getTime()
+        ) ||
+        Number.isNaN(
+            fechaFin.getTime()
+        )
+    ) {
+        return null;
+    }
+
+    let segundos = Math.floor(
+        (
+            fechaFin.getTime() -
+            fechaInicio.getTime()
+        ) / 1000
+    );
+
+    if (segundos < 0) {
+        segundos = 0;
+    }
+
+    const horas =
+        Math.floor(segundos / 3600);
+
+    const minutos =
+        Math.floor(
+            (segundos % 3600) / 60
+        );
+
+    if (horas > 0) {
+        return `${horas}h ${minutos}m`;
+    }
+
+    return `${minutos}m`;
+}
+
+// =====================================================
 // COMANDO
 // =====================================================
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('revisar')
+        .setName("revisar")
         .setDescription(
-            'Revisa si hay algún perfil vigilado conectado en el servidor actual'
+            "Revisa si hay algún perfil vigilado conectado en el servidor actual"
         ),
 
     async execute(interaction) {
@@ -106,35 +548,51 @@ module.exports = {
             flags: MessageFlags.Ephemeral
         });
 
-        const guildId = interaction.guild.id;
-        const inicio = Date.now();
+        const guildId =
+            interaction.guild.id;
+
+        const inicio =
+            Date.now();
 
         try {
-            console.log('==============================================');
-            console.log('🎯 Ejecutando /revisar');
-            console.log(`🏠 Guild ID: ${guildId}`);
+            console.log(
+                "=============================================="
+            );
+
+            console.log(
+                "🎯 Ejecutando /revisar"
+            );
+
+            console.log(
+                `🏠 Guild ID: ${guildId}`
+            );
 
             // =================================================
             // 1. SERVIDOR CONFIGURADO
             // =================================================
 
-            const configServer = await ServerConfig.findOne({
-                guildId
-            });
+            const configServer =
+                await ServerConfig.findOne({
+                    guildId
+                });
 
             const bmServerId =
                 configServer?.battleMetricsServerId ||
                 configServer?.battlemetricsServerId ||
                 configServer?.serverId;
 
-            if (!configServer || !bmServerId) {
+            if (
+                !configServer ||
+                !bmServerId
+            ) {
                 return interaction.editReply({
                     content:
-                        '❌ No hay ningún servidor de Rust configurado. Usa `/configurar-servidor` primero.'
+                        "❌ No hay ningún servidor de Rust configurado. Usa `/configurar-servidor` primero."
                 });
             }
 
-            const servidorObjetivo = String(bmServerId).trim();
+            const servidorObjetivo =
+                String(bmServerId).trim();
 
             console.log(
                 `🎮 BattleMetrics Server ID: ${servidorObjetivo}`
@@ -144,14 +602,17 @@ module.exports = {
             // 2. PERFILES VIGILADOS
             // =================================================
 
-            const vigilados = await Vigilado.find({
-                guildId
-            });
+            const vigilados =
+                await Vigilado.find({
+                    guildId
+                });
 
-            if (vigilados.length === 0) {
+            if (
+                vigilados.length === 0
+            ) {
                 return interaction.editReply({
                     content:
-                        '⚠️ No tienes ningún perfil guardado para vigilar. Usa `/vigilar` para añadir algunos.'
+                        "⚠️ No tienes ningún perfil guardado para vigilar. Usa `/vigilar` para añadir algunos."
                 });
             }
 
@@ -192,319 +653,250 @@ module.exports = {
                 }
 
                 perfiles.push({
-                    alias: vigilado.alias,
+                    alias:
+                        vigilado.alias,
+
                     battlemetricsId
                 });
             }
 
-            if (perfiles.length === 0) {
+            if (
+                perfiles.length === 0
+            ) {
                 return interaction.editReply({
                     content:
-                        '❌ Ninguno de los perfiles vigilados tiene un ID válido de BattleMetrics.'
+                        "❌ Ninguno de los perfiles vigilados tiene un ID válido de BattleMetrics."
                 });
             }
 
-            const idsBuscados = new Set(
+            console.log(
+                "[DEBUG /revisar] IDs que se comprobarán:",
                 perfiles.map(
-                    perfil => perfil.battlemetricsId
+                    perfil =>
+                        perfil.battlemetricsId
                 )
             );
 
-            console.log(
-                '[DEBUG /revisar] IDs que se buscan:',
-                Array.from(idsBuscados)
-            );
-
             // =================================================
-            // 4. CONSULTAR JUGADORES ONLINE DEL SERVIDOR
+            // 4. COMPROBAR CADA PERFIL
             // =================================================
 
-            const jugadoresDetectados = new Map();
+            const resultados =
+                [];
 
-            let pagina = 1;
-            let totalConsultados = 0;
+            const inicioBM =
+                Date.now();
 
-            const inicioBM = Date.now();
-
-            while (pagina <= MAX_PAGES) {
+            for (const perfil of perfiles) {
                 console.log(
-                    `🌐 BattleMetrics página ${pagina}/${MAX_PAGES}`
+                    "----------------------------------------------"
                 );
-
-                const response = await axios.get(
-                    `${BM_API}/players`,
-                    {
-                        headers: getHeaders(),
-                        params: {
-                            'filter[servers]': servidorObjetivo,
-                            'filter[online]': 'true',
-                            'page[size]': 100,
-                            'page[number]': pagina
-                        },
-                        timeout: REQUEST_TIMEOUT
-                    }
-                );
-
-                const jugadores =
-                    response.data?.data || [];
-
-                totalConsultados += jugadores.length;
 
                 console.log(
-                    `👥 Jugadores recibidos: ${jugadores.length}`
+                    `[DEBUG /revisar] Comprobando ${perfil.alias}`
                 );
 
-                // =================================================
-                // 5. COMPROBAR LOS JUGADORES
-                // =================================================
+                console.log(
+                    `   ID BM: ${perfil.battlemetricsId}`
+                );
 
-                for (const player of jugadores) {
-                    if (!player?.id) {
-                        continue;
-                    }
-
-                    const playerId = String(player.id);
-
-                    // No nos interesa si no es uno de los vigilados
-                    if (!idsBuscados.has(playerId)) {
-                        continue;
-                    }
-
-                    const serverId =
-                        obtenerServerId(player);
-
-                    console.log(
-                        `🔎 Perfil vigilado encontrado: ${playerId}`
+                const resultado =
+                    await comprobarJugadorEnServidor(
+                        perfil.battlemetricsId,
+                        servidorObjetivo
                     );
 
-                    console.log(
-                        `   Server ID informado por BM: ${serverId || 'no disponible'}`
-                    );
-
-                    // =================================================
-                    // COMPROBACION DEL SERVIDOR
-                    // =================================================
-
-                    if (serverId) {
-                        if (serverId === servidorObjetivo) {
-                            jugadoresDetectados.set(
-                                playerId,
-                                player
-                            );
-
-                            console.log(
-                                `🚨 CONFIRMADO: ${playerId} está en ${servidorObjetivo}`
-                            );
-                        } else {
-                            console.log(
-                                `⚠️ ${playerId} está en ${serverId}, no en ${servidorObjetivo}`
-                            );
-                        }
-                    } else {
-                        // La consulta ya está filtrada por servidor.
-                        // Si BM no entrega serverId en el objeto,
-                        // usamos el filtro del endpoint como confirmación.
-
-                        jugadoresDetectados.set(
-                            playerId,
-                            player
-                        );
-
-                        console.log(
-                            `🚨 CONFIRMADO POR FILTRO: ${playerId} está en ${servidorObjetivo}`
-                        );
-                    }
-                }
-
-                // =================================================
-                // 6. SI YA ENCONTRAMOS TODOS, TERMINAMOS
-                // =================================================
-
-                if (
-                    jugadoresDetectados.size >=
-                    idsBuscados.size
-                ) {
-                    console.log(
-                        '✅ Se encontraron todos los perfiles vigilados.'
-                    );
-
-                    break;
-                }
-
-                // =================================================
-                // 7. COMPROBAR SI EXISTE OTRA PAGINA
-                // =================================================
-
-                const meta =
-                    response.data?.meta || {};
-
-                const total =
-                    Number(meta.total || 0);
-
-                const totalPages =
-                    Number(
-                        meta.last_page ||
-                        meta.total_pages ||
-                        0
-                    );
-
-                if (
-                    totalPages > 0 &&
-                    pagina >= totalPages
-                ) {
-                    console.log(
-                        'ℹ️ Última página alcanzada según BattleMetrics.'
-                    );
-
-                    break;
-                }
-
-                if (
-                    total > 0 &&
-                    pagina * 100 >= total
-                ) {
-                    console.log(
-                        'ℹ️ Se alcanzó el total indicado por BattleMetrics.'
-                    );
-
-                    break;
-                }
-
-                if (jugadores.length < 100) {
-                    console.log(
-                        'ℹ️ BattleMetrics devolvió menos de 100 jugadores. Última página.'
-                    );
-
-                    break;
-                }
-
-                pagina++;
+                resultados.push({
+                    ...perfil,
+                    ...resultado
+                });
             }
 
             const tiempoBM =
-                Date.now() - inicioBM;
+                Date.now() -
+                inicioBM;
 
             // =================================================
-            // 8. CRUZAR LOS RESULTADOS
+            // 5. SEPARAR RESULTADOS
             // =================================================
 
-            const encontradosOnline = [];
-            const fuera = [];
+            const encontradosOnline =
+                resultados.filter(
+                    resultado =>
+                        resultado.online === true
+                );
 
-            for (const perfil of perfiles) {
-                if (
-                    jugadoresDetectados.has(
-                        perfil.battlemetricsId
-                    )
-                ) {
-                    encontradosOnline.push(
-                        perfil
-                    );
-                } else {
-                    fuera.push(
-                        perfil
-                    );
-                }
-            }
+            const historialServidor =
+                resultados.filter(
+                    resultado =>
+                        resultado.encontrado === true &&
+                        resultado.online === false
+                );
+
+            const fuera =
+                resultados.filter(
+                    resultado =>
+                        resultado.encontrado === false
+                );
 
             // =================================================
-            // 9. LOG FINAL
+            // 6. LOG FINAL
             // =================================================
 
-            console.log('==============================================');
+            console.log(
+                "=============================================="
+            );
 
             console.log(
                 `🎮 Servidor objetivo: ${servidorObjetivo}`
             );
 
             console.log(
-                `📄 Páginas consultadas: ${pagina}`
+                `👁️ Perfiles comprobados: ${resultados.length}`
             );
 
             console.log(
-                `👥 Jugadores consultados: ${totalConsultados}`
+                `🚨 Online confirmado: ${encontradosOnline.length}`
             );
 
             console.log(
-                `🚨 Detectados: ${encontradosOnline.length}`
+                `💤 Historial pero offline: ${historialServidor.length}`
             );
 
             console.log(
-                `💤 Fuera: ${fuera.length}`
+                `❓ Sin sesión en servidor: ${fuera.length}`
             );
 
             console.log(
                 `⏱️ Tiempo BM: ${tiempoBM} ms`
             );
 
-            console.log('==============================================');
+            console.log(
+                "=============================================="
+            );
 
             // =================================================
-            // 10. CREAR EMBED
+            // 7. CREAR EMBED
             // =================================================
 
-            const embed = new EmbedBuilder()
-                .setColor(
-                    encontradosOnline.length > 0
-                        ? 0xE74C3C
-                        : 0x2ECC71
-                )
-                .setTitle('🔍 Resultado de la Revisión')
-                .setDescription(
-                    `Servidor BattleMetrics: \`${servidorObjetivo}\``
-                )
-                .setTimestamp();
+            const embed =
+                new EmbedBuilder()
+                    .setColor(
+                        encontradosOnline.length > 0
+                            ? 0xE74C3C
+                            : 0x2ECC71
+                    )
+                    .setTitle(
+                        "🔍 Resultado de la Revisión"
+                    )
+                    .setDescription(
+                        `Servidor BattleMetrics: \`${servidorObjetivo}\``
+                    )
+                    .setTimestamp();
 
             // =================================================
             // ONLINE
             // =================================================
 
-            if (encontradosOnline.length > 0) {
+            if (
+                encontradosOnline.length > 0
+            ) {
+                const textoOnline =
+                    encontradosOnline
+                        .map(perfil => {
+                            const sesionActiva =
+                                perfil.sesiones?.find(
+                                    sesion =>
+                                        sesion.activa
+                                );
+
+                            const duracion =
+                                sesionActiva
+                                    ? formatearDuracion(
+                                          sesionActiva.inicio
+                                      )
+                                    : null;
+
+                            return (
+                                `• **${perfil.alias}**` +
+                                (
+                                    duracion
+                                        ? ` — Jugando: **${duracion}**`
+                                        : ""
+                                )
+                            );
+                        })
+                        .join("\n");
+
                 embed.addFields({
-                    name: '🚨 ¡Detectados Online!',
-                    value: encontradosOnline
-                        .map(
-                            perfil =>
-                                `• **${perfil.alias}**`
-                        )
-                        .join('\n'),
+                    name:
+                        "🚨 ¡Detectados Online!",
+                    value:
+                        textoOnline,
                     inline: false
                 });
             } else {
                 embed.addFields({
-                    name: '🟢 Estado',
+                    name:
+                        "🟢 Estado",
                     value:
-                        'Ningún perfil vigilado se encuentra online en este servidor.',
+                        "Ningún perfil vigilado se encuentra online en este servidor.",
                     inline: false
                 });
             }
 
             // =================================================
-            // FUERA / OFFLINE
+            // HISTORIAL / OFFLINE
             // =================================================
 
-            if (fuera.length > 0) {
+            if (
+                historialServidor.length > 0
+            ) {
                 embed.addFields({
-                    name: '💤 Offline / Fuera',
-                    value: fuera
-                        .map(
-                            perfil =>
-                                `• ${perfil.alias}`
-                        )
-                        .join('\n'),
+                    name:
+                        "💤 Historial en el servidor",
+                    value:
+                        historialServidor
+                            .map(
+                                perfil =>
+                                    `• ${perfil.alias} — Offline`
+                            )
+                            .join("\n"),
                     inline: false
                 });
             }
 
             // =================================================
-            // INFORMACION DE LA CONSULTA
+            // SIN SESIÓN
+            // =================================================
+
+            if (
+                fuera.length > 0
+            ) {
+                embed.addFields({
+                    name:
+                        "ℹ️ Sin sesión en este servidor",
+                    value:
+                        fuera
+                            .map(
+                                perfil =>
+                                    `• ${perfil.alias}`
+                            )
+                            .join("\n"),
+                    inline: false
+                });
+            }
+
+            // =================================================
+            // INFORMACIÓN DE LA CONSULTA
             // =================================================
 
             embed.addFields({
-                name: '📡 BattleMetrics',
+                name:
+                    "📡 BattleMetrics",
                 value:
-                    `Jugadores consultados: **${totalConsultados}**\n` +
-                    `Páginas revisadas: **${pagina}**\n` +
+                    `Perfiles comprobados: **${resultados.length}**\n` +
+                    `Online confirmado: **${encontradosOnline.length}**\n` +
                     `Tiempo de respuesta: **${tiempoBM} ms**`,
                 inline: false
             });
@@ -518,24 +910,27 @@ module.exports = {
             });
 
             const tiempoTotal =
-                Date.now() - inicio;
+                Date.now() -
+                inicio;
 
             console.log(
                 `✅ /revisar terminado correctamente en ${tiempoTotal} ms`
             );
 
-            console.log('==============================================');
-
+            console.log(
+                "=============================================="
+            );
         } catch (error) {
             const tiempoTotal =
-                Date.now() - inicio;
+                Date.now() -
+                inicio;
 
             console.error(
-                '=============================================='
+                "=============================================="
             );
 
             console.error(
-                '❌ ERROR EN /REVISAR'
+                "❌ ERROR EN /REVISAR"
             );
 
             console.error(
@@ -543,11 +938,11 @@ module.exports = {
             );
 
             console.error(
-                `Código: ${error.code || 'N/A'}`
+                `Código: ${error.code || "N/A"}`
             );
 
             console.error(
-                `Mensaje: ${error.message || 'Sin mensaje'}`
+                `Mensaje: ${error.message || "Sin mensaje"}`
             );
 
             if (error.response) {
@@ -556,18 +951,18 @@ module.exports = {
                 );
 
                 console.error(
-                    'Respuesta:',
+                    "Respuesta:",
                     error.response.data
                 );
             }
 
             console.error(
-                '=============================================='
+                "=============================================="
             );
 
             await interaction.editReply({
                 content:
-                    '❌ Ocurrió un error al procesar la revisión de perfiles en BattleMetrics. Revisa la consola del bot para ver el motivo exacto.'
+                    "❌ Ocurrió un error al procesar la revisión de perfiles en BattleMetrics. Revisa la consola del bot para ver el motivo exacto."
             });
         }
     }
