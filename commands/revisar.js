@@ -23,7 +23,7 @@ module.exports = {
         });
       }
 
-      // 2. Obtener la lista de perfiles vigilados en este servidor de Discord
+      // 2. Obtener la lista de perfiles vigilados
       const vigilados = await Vigilado.find({ guildId });
       if (vigilados.length === 0) {
         return interaction.editReply({ 
@@ -31,8 +31,8 @@ module.exports = {
         });
       }
 
-      // 3. Consultar los jugadores conectados actualmente en el servidor configurado de BattleMetrics
-      const serverUrl = `https://api.battlemetrics.com/servers/${bmServerId}?include=player`;
+      // 3. Consultar los jugadores online de ese servidor usando el endpoint correcto de filtro de BattleMetrics
+      const serverUrl = `https://api.battlemetrics.com/players?filter[server]=${bmServerId}&filter[online]=true`;
       const response = await fetch(serverUrl, {
         headers: {
           'Authorization': `Bearer ${process.env.BATTLEMETRICS_API_KEY}`
@@ -40,29 +40,28 @@ module.exports = {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[DEBUG] Error BattleMetrics Server Query (${response.status}):`, errorText);
         return interaction.editReply({ 
-          content: '❌ No se pudo conectar con el servidor en BattleMetrics para comprobar los jugadores online.' 
+          content: `❌ Error al conectar con BattleMetrics (Status ${response.status}). Revisa la consola.` 
         });
       }
 
-      const serverData = await response.json();
+      const data = await response.json();
       
-      // Extraer los IDs de los jugadores que están online ahora mismo en el servidor
+      // Extraer los IDs de los jugadores online devueltos por el filtro
       const idsOnlineEnServidor = new Set();
-      if (serverData.included) {
-        for (const inc of serverData.included) {
-          if (inc.type === 'player') {
-            idsOnlineEnServidor.add(inc.id.toString());
-          }
+      if (data.data) {
+        for (const player of data.data) {
+          idsOnlineEnServidor.add(player.id.toString());
         }
       }
 
-      // 4. Cruzar los perfiles vigilados con los jugadores online en el servidor
+      // 4. Cruzar con los perfiles vigilados
       const encontradosOnline = [];
       const offline = [];
 
       for (const v of vigilados) {
-        // Comparamos el battlemetricsId guardado con los que están online en el servidor
         if (idsOnlineEnServidor.has(v.battlemetricsId.toString())) {
           encontradosOnline.push(v.alias);
         } else {
