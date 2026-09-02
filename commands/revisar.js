@@ -1,6 +1,21 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const axios = require('axios');
 const ServerConfig = require('../models/ServerConfig');
 const Vigilado = require('../models/Vigilado');
+
+const BM_API = "https://api.battlemetrics.com";
+
+function getHeaders() {
+    const token = process.env.BATTLEMETRICS_TOKEN;
+    return token
+        ? {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+        }
+        : {
+            "Content-Type": "application/json"
+        };
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -31,30 +46,21 @@ module.exports = {
         });
       }
 
-      // 3. Consultar los jugadores online de ese servidor usando el endpoint correcto de filtro de BattleMetrics
-      const serverUrl = `https://api.battlemetrics.com/players?filter[server]=${bmServerId}&filter[online]=true`;
-      const response = await fetch(serverUrl, {
-        headers: {
-          'Authorization': `Bearer ${process.env.BATTLEMETRICS_API_KEY}`
-        }
+      // 3. Consultar los jugadores online usando Axios con el token correcto
+      const response = await axios.get(`${BM_API}/players`, {
+        headers: getHeaders(),
+        params: {
+          "filter[server]": bmServerId,
+          "filter[online]": "true"
+        },
+        timeout: 10000
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[DEBUG] Error BattleMetrics Server Query (${response.status}):`, errorText);
-        return interaction.editReply({ 
-          content: `❌ Error al conectar con BattleMetrics (Status ${response.status}). Revisa la consola.` 
-        });
-      }
-
-      const data = await response.json();
-      
-      // Extraer los IDs de los jugadores online devueltos por el filtro
+      // Extraer los IDs de los jugadores online
       const idsOnlineEnServidor = new Set();
-      if (data.data) {
-        for (const player of data.data) {
-          idsOnlineEnServidor.add(player.id.toString());
-        }
+      const playersData = response.data?.data || [];
+      for (const player of playersData) {
+        idsOnlineEnServidor.add(player.id.toString());
       }
 
       // 4. Cruzar con los perfiles vigilados
@@ -101,9 +107,9 @@ module.exports = {
       await interaction.editReply({ embeds: [embed] });
 
     } catch (error) {
-      console.error("Detalle del error en /revisar:", error);
+      console.error("Detalle del error en /revisar:", error.response?.data || error.message);
       await interaction.editReply({ 
-        content: '❌ Ocurrió un error al procesar la revisión de perfiles.' 
+        content: '❌ Ocurrió un error al procesar la revisión de perfiles en BattleMetrics.' 
       });
     }
   },
