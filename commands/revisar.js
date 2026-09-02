@@ -16,8 +16,8 @@ module.exports = {
       // 1. Obtener el BattleMetrics Server ID configurado para este Discord
       const configServer = await ServerConfig.findOne({ guildId });
       
-      // Acepta tanto battlemetricsServerId como serverId para evitar fallos de claves
-      const bmServerId = configServer?.battlemetricsServerId || configServer?.serverId;
+      // Busca considerando la mayúscula exacta que usa configurar-servidor.js
+      const bmServerId = configServer?.battleMetricsServerId || configServer?.battlemetricsServerId || configServer?.serverId;
 
       if (!configServer || !bmServerId) {
         return interaction.editReply({ 
