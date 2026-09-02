@@ -15,8 +15,6 @@ module.exports = {
     try {
       // 1. Obtener el BattleMetrics Server ID configurado para este Discord
       const configServer = await ServerConfig.findOne({ guildId });
-      
-      // Busca considerando la mayúscula exacta que usa configurar-servidor.js
       const bmServerId = configServer?.battleMetricsServerId || configServer?.battlemetricsServerId || configServer?.serverId;
 
       if (!configServer || !bmServerId) {
@@ -33,15 +31,27 @@ module.exports = {
         });
       }
 
-      // 3. Consultar la API pública de BattleMetrics para ver quiénes están online en el servidor
-      const response = await fetch(`https://api.battlemetrics.com/servers/${bmServerId}?include=player`);
+      // 3. Consultar la API pública de BattleMetrics
+      const url = `https://api.battlemetrics.com/servers/${bmServerId}?include=player`;
+      
+      // Si tienes un token en tus variables de entorno (.env), puedes descomentar la línea de headers de abajo:
+      const options = {
+        headers: {
+          // 'Authorization': `Bearer ${process.env.BATTLEMETRICS_API_KEY}` 
+        }
+      };
+
+      const response = await fetch(url, options);
+      
       if (!response.ok) {
-        throw new Error('No se pudo conectar con la API de BattleMetrics.');
+        const errorText = await response.text();
+        console.error(`Error en BattleMetrics [${response.status} ${response.statusText}]:`, errorText);
+        throw new Error(`BattleMetrics respondió con estado ${response.status}`);
       }
 
       const data = await response.json();
 
-      // Extraer los IDs de los jugadores que están online actualmente en el servidor
+      // Extraer los IDs de los jugadores online
       const jugadoresOnlineIds = new Set();
       if (data.included) {
         data.included.forEach(item => {
@@ -51,7 +61,7 @@ module.exports = {
         });
       }
 
-      // 4. Cruzar los datos (Comparar los vigilados con los que están online)
+      // 4. Cruzar los datos
       const encontradosOnline = [];
       const offline = [];
 
@@ -65,7 +75,7 @@ module.exports = {
 
       // 5. Crear el Embed con los resultados
       const embed = new EmbedBuilder()
-        .setColor(encontradosOnline.length > 0 ? 0xE74C3C : 0x2ECC71) // Rojo si hay alguien, verde si está limpio
+        .setColor(encontradosOnline.length > 0 ? 0xE74C3C : 0x2ECC71)
         .setTitle('🔍 Resultado de la Revisión')
         .setDescription(`Servidor ID: \`${bmServerId}\``)
         .setTimestamp();
@@ -95,7 +105,7 @@ module.exports = {
       await interaction.editReply({ embeds: [embed] });
 
     } catch (error) {
-      console.error(error);
+      console.error("Detalle del error en /revisar:", error);
       await interaction.editReply({ 
         content: '❌ Ocurrió un error al consultar la API de BattleMetrics o la base de datos.' 
       });
