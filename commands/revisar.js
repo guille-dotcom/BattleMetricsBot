@@ -1,7 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const ServerConfig = require('../models/ServerConfig');
 const Vigilado = require('../models/Vigilado');
-const { getBattleMetricsHours } = require('../services/battlemetricsHours.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -24,7 +23,7 @@ module.exports = {
         });
       }
 
-      // 2. Obtener la lista de perfiles vigilados
+      // 2. Obtener la lista de perfiles vigilados en este servidor de Discord
       const vigilados = await Vigilado.find({ guildId });
       if (vigilados.length === 0) {
         return interaction.editReply({ 
@@ -32,45 +31,46 @@ module.exports = {
         });
       }
 
+      // 3. Consultar los jugadores conectados actualmente en el servidor configurado de BattleMetrics
+      const serverUrl = `https://api.battlemetrics.com/servers/${bmServerId}?include=player`;
+      const response = await fetch(serverUrl, {
+        headers: {
+          'Authorization': `Bearer ${process.env.BATTLEMETRICS_API_KEY}`
+        }
+      });
+
+      if (!response.ok) {
+        return interaction.editReply({ 
+          content: '❌ No se pudo conectar con el servidor en BattleMetrics para comprobar los jugadores online.' 
+        });
+      }
+
+      const serverData = await response.json();
+      
+      // Extraer los IDs de los jugadores que están online ahora mismo en el servidor
+      const idsOnlineEnServidor = new Set();
+      if (serverData.included) {
+        for (const inc of serverData.included) {
+          if (inc.type === 'player') {
+            idsOnlineEnServidor.add(inc.id.toString());
+          }
+        }
+      }
+
+      // 4. Cruzar los perfiles vigilados con los jugadores online en el servidor
       const encontradosOnline = [];
       const offline = [];
 
-      // 3. Consultar cada jugador usando la misma lógica robusta del servicio de horas
       for (const v of vigilados) {
-        try {
-          const datos = await getBattleMetricsHours(v.battlemetricsId);
-
-          if (!datos) {
-            offline.push(v.alias);
-            continue;
-          }
-
-          // Verificamos si está online y si el ID o nombre del servidor coincide con el configurado
-          const online = Boolean(datos.online);
-          
-          // Comprobamos si el servidor actual devuelto coincide con el ID configurado
-          const serverActualId = datos.serverId || datos.serverID || datos.currentServerId;
-          const serverActualNombre = (datos.servidor || datos.server || "").toLowerCase();
-
-          // Determinar si está conectado en este servidor específico
-          const estaEnEsteServidor = online && (
-            (serverActualId && serverActualId.toString() === bmServerId.toString()) ||
-            serverActualNombre.includes(bmServerId.toString())
-          );
-
-          if (estaEnEsteServidor) {
-            encontradosOnline.push(v.alias);
-          } else {
-            offline.push(v.alias);
-          }
-
-        } catch (err) {
-          console.error(`Error consultando al jugador ${v.alias}:`, err);
+        // Comparamos el battlemetricsId guardado con los que están online en el servidor
+        if (idsOnlineEnServidor.has(v.battlemetricsId.toString())) {
+          encontradosOnline.push(v.alias);
+        } else {
           offline.push(v.alias);
         }
       }
 
-      // 4. Crear el Embed con los resultados
+      // 5. Crear el Embed con los resultados
       const embed = new EmbedBuilder()
         .setColor(encontradosOnline.length > 0 ? 0xE74C3C : 0x2ECC71)
         .setTitle('🔍 Resultado de la Revisión')
@@ -104,7 +104,7 @@ module.exports = {
     } catch (error) {
       console.error("Detalle del error en /revisar:", error);
       await interaction.editReply({ 
-        content: '❌ Ocurrió un error al consultar la API de BattleMetrics.' 
+        content: '❌ Ocurrió un error al procesar la revisión de perfiles.' 
       });
     }
   },
