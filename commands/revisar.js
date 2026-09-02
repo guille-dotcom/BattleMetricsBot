@@ -31,49 +31,42 @@ module.exports = {
         });
       }
 
-      // 3. Consultar la API pública de BattleMetrics
-      const url = `https://api.battlemetrics.com/servers/${bmServerId}?include=player`;
-      
-      // Si tienes un token en tus variables de entorno (.env), puedes descomentar la línea de headers de abajo:
-      const options = {
-        headers: {
-          // 'Authorization': `Bearer ${process.env.BATTLEMETRICS_API_KEY}` 
-        }
-      };
-
-      const response = await fetch(url, options);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Error en BattleMetrics [${response.status} ${response.statusText}]:`, errorText);
-        throw new Error(`BattleMetrics respondió con estado ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      // Extraer los IDs de los jugadores online
-      const jugadoresOnlineIds = new Set();
-      if (data.included) {
-        data.included.forEach(item => {
-          if (item.type === 'player') {
-            jugadoresOnlineIds.add(item.id);
-          }
-        });
-      }
-
-      // 4. Cruzar los datos
       const encontradosOnline = [];
       const offline = [];
 
+      // 3. Consultar el estado de cada jugador vigilado individualmente
       for (const v of vigilados) {
-        if (jugadoresOnlineIds.has(v.battlemetricsId)) {
-          encontradosOnline.push(v.alias);
-        } else {
+        try {
+          const playerUrl = `https://api.battlemetrics.com/players/${v.battlemetricsId}?include=server`;
+          const response = await fetch(playerUrl, {
+            headers: {
+              'Authorization': `Bearer ${process.env.BATTLEMETRICS_API_KEY}`
+            }
+          });
+
+          if (!response.ok) {
+            offline.push(v.alias);
+            continue;
+          }
+
+          const playerData = await response.json();
+          
+          // Verificar si el jugador está conectado en el servidor configurado
+          // Battlemetrics incluye las relaciones en 'included' y el estado actual en 'relationships'
+          const currentServerId = playerData.data?.relationships?.server?.data?.id;
+
+          if (currentServerId && currentServerId.toString() === bmServerId.toString()) {
+            encontradosOnline.push(v.alias);
+          } else {
+            offline.push(v.alias);
+          }
+        } catch (err) {
+          console.error(`Error consultando al jugador ${v.alias}:`, err);
           offline.push(v.alias);
         }
       }
 
-      // 5. Crear el Embed con los resultados
+      // 4. Crear el Embed con los resultados
       const embed = new EmbedBuilder()
         .setColor(encontradosOnline.length > 0 ? 0xE74C3C : 0x2ECC71)
         .setTitle('🔍 Resultado de la Revisión')
@@ -89,7 +82,7 @@ module.exports = {
       } else {
         embed.addFields({ 
           name: '🟢 Estado', 
-          value: 'Ningún perfil vigilado se encuentra online en este momento.',
+          value: 'Ningún perfil vigilado se encuentra online en este servidor.',
           inline: false 
         });
       }
@@ -107,7 +100,7 @@ module.exports = {
     } catch (error) {
       console.error("Detalle del error en /revisar:", error);
       await interaction.editReply({ 
-        content: '❌ Ocurrió un error al consultar la API de BattleMetrics o la base de datos.' 
+        content: '❌ Ocurrió un error al consultar la API de BattleMetrics.' 
       });
     }
   },
