@@ -17,8 +17,6 @@ module.exports = {
       const configServer = await ServerConfig.findOne({ guildId });
       const bmServerId = configServer?.battleMetricsServerId || configServer?.battlemetricsServerId || configServer?.serverId;
 
-      console.log(`[DEBUG] Servidor configurado en base de datos para este Discord: "${bmServerId}" (Tipo: ${typeof bmServerId})`);
-
       if (!configServer || !bmServerId) {
         return interaction.editReply({ 
           content: '❌ No hay ningún servidor de Rust configurado. Usa `/configurar-servidor` primero.' 
@@ -36,10 +34,10 @@ module.exports = {
       const encontradosOnline = [];
       const offline = [];
 
-      // 3. Consultar cada jugador
+      // 3. Consultar la lista de servidores activos del jugador usando el endpoint correcto de relaciones
       for (const v of vigilados) {
         try {
-          const playerUrl = `https://api.battlemetrics.com/players/${v.battlemetricsId}?include=server`;
+          const playerUrl = `https://api.battlemetrics.com/players/${v.battlemetricsId}/servers?include=server`;
           const response = await fetch(playerUrl, {
             headers: {
               'Authorization': `Bearer ${process.env.BATTLEMETRICS_API_KEY}`
@@ -52,26 +50,35 @@ module.exports = {
             continue;
           }
 
-          const playerData = await response.json();
+          const data = await response.json();
           
-          // Extraer IDs de servidor de la respuesta
-          const relServerId = playerData.data?.relationships?.server?.data?.id;
-          
-          let includedServerId = null;
-          if (playerData.included) {
-            const serverInc = playerData.included.find(item => item.type === 'server');
-            if (serverInc) includedServerId = serverInc.id;
+          let estaConectadoEnEsteServer = false;
+
+          // Revisamos los servidores devueltos en la relación
+          if (data.data) {
+            for (const rel of data.data) {
+              const serverId = rel.relationships?.server?.data?.id || rel.id;
+              // Comprobamos si coincide con nuestro servidor y si su estado indica que está jugando ahora mismo
+              if (serverId && serverId.toString() === bmServerId.toString()) {
+                // Verificamos si la sesión sigue activa (sin fecha de parada o meta online)
+                if (rel.attributes && rel.attributes.active === true) {
+                  estaConectadoEnEsteServer = true;
+                  break;
+                }
+              }
+            }
           }
 
-          console.log(`[DEBUG] Jugador: ${v.alias} (${v.battlemetricsId})`);
-          console.log(`[DEBUG] -> relServerId encontrado: "${relServerId}"`);
-          console.log(`[DEBUG] -> includedServerId encontrado: "${includedServerId}"`);
+          // Alternativa por si el 'included' trae el servidor online actual
+          if (!estaConectadoEnEsteServer && data.included) {
+            const serverInc = data.included.find(item => item.type === 'server' && item.id.toString() === bmServerId.toString());
+            // Si el servidor aparece en la lista de incluidos recientes del jugador
+            if (serverInc) {
+              estaConectadoEnEsteServer = true;
+            }
+          }
 
-          const isOnlineOnThisServer = 
-            (relServerId && relServerId.toString() === bmServerId.toString()) ||
-            (includedServerId && includedServerId.toString() === bmServerId.toString());
-
-          if (isOnlineOnThisServer) {
+          if (estaConectadoEnEsteServer) {
             encontradosOnline.push(v.alias);
           } else {
             offline.push(v.alias);
