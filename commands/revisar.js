@@ -17,6 +17,8 @@ module.exports = {
       const configServer = await ServerConfig.findOne({ guildId });
       const bmServerId = configServer?.battleMetricsServerId || configServer?.battlemetricsServerId || configServer?.serverId;
 
+      console.log(`[DEBUG] Servidor configurado en base de datos para este Discord: "${bmServerId}" (Tipo: ${typeof bmServerId})`);
+
       if (!configServer || !bmServerId) {
         return interaction.editReply({ 
           content: '❌ No hay ningún servidor de Rust configurado. Usa `/configurar-servidor` primero.' 
@@ -34,10 +36,10 @@ module.exports = {
       const encontradosOnline = [];
       const offline = [];
 
-      // 3. Consultar cada jugador y comprobar tanto su relación de servidor como sus identifiers/última sesión
+      // 3. Consultar cada jugador
       for (const v of vigilados) {
         try {
-          const playerUrl = `https://api.battlemetrics.com/players/${v.battlemetricsId}?include=server,identifier`;
+          const playerUrl = `https://api.battlemetrics.com/players/${v.battlemetricsId}?include=server`;
           const response = await fetch(playerUrl, {
             headers: {
               'Authorization': `Bearer ${process.env.BATTLEMETRICS_API_KEY}`
@@ -45,23 +47,26 @@ module.exports = {
           });
 
           if (!response.ok) {
+            console.log(`[DEBUG] Error en API para el jugador ${v.alias}: Status ${response.status}`);
             offline.push(v.alias);
             continue;
           }
 
           const playerData = await response.json();
           
-          // Comprobamos la relación directa del servidor
+          // Extraer IDs de servidor de la respuesta
           const relServerId = playerData.data?.relationships?.server?.data?.id;
           
-          // Comprobamos si viene en el 'included'
           let includedServerId = null;
           if (playerData.included) {
             const serverInc = playerData.included.find(item => item.type === 'server');
             if (serverInc) includedServerId = serverInc.id;
           }
 
-          // Verificación doble: ID directo o ID en included
+          console.log(`[DEBUG] Jugador: ${v.alias} (${v.battlemetricsId})`);
+          console.log(`[DEBUG] -> relServerId encontrado: "${relServerId}"`);
+          console.log(`[DEBUG] -> includedServerId encontrado: "${includedServerId}"`);
+
           const isOnlineOnThisServer = 
             (relServerId && relServerId.toString() === bmServerId.toString()) ||
             (includedServerId && includedServerId.toString() === bmServerId.toString());
