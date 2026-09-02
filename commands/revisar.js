@@ -1,7 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const ServerConfig = require('../models/ServerConfig'); // Ajusta la ruta a tu modelo de config del servidor
+const ServerConfig = require('../models/ServerConfig');
 const Vigilado = require('../models/Vigilado');
-const fetch = require('node-fetch'); // O usa axios si lo prefieres
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -9,20 +8,22 @@ module.exports = {
     .setDescription('Revisa si hay algún perfil vigilado conectado en el servidor actual'),
 
   async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true }); // Por si la API tarda un segundo en responder
+    await interaction.deferReply({ ephemeral: true });
 
     const guildId = interaction.guild.id;
 
     try {
       // 1. Obtener el BattleMetrics Server ID configurado para este Discord
       const configServer = await ServerConfig.findOne({ guildId });
-      if (!configServer || !configServer.battlemetricsServerId) {
+      
+      // Acepta tanto battlemetricsServerId como serverId para evitar fallos de claves
+      const bmServerId = configServer?.battlemetricsServerId || configServer?.serverId;
+
+      if (!configServer || !bmServerId) {
         return interaction.editReply({ 
           content: '❌ No hay ningún servidor de Rust configurado. Usa `/configurar-servidor` primero.' 
         });
       }
-
-      const bmServerId = configServer.battlemetricsServerId;
 
       // 2. Obtener la lista de perfiles vigilados en este Discord
       const vigilados = await Vigilado.find({ guildId });
@@ -33,7 +34,6 @@ module.exports = {
       }
 
       // 3. Consultar la API pública de BattleMetrics para ver quiénes están online en el servidor
-      // BattleMetrics permite ver los jugadores conectados mediante la relación de inclusión 'relationships=player'
       const response = await fetch(`https://api.battlemetrics.com/servers/${bmServerId}?include=player`);
       if (!response.ok) {
         throw new Error('No se pudo conectar con la API de BattleMetrics.');
@@ -42,12 +42,11 @@ module.exports = {
       const data = await response.json();
 
       // Extraer los IDs de los jugadores que están online actualmente en el servidor
-      // BattleMetrics devuelve los jugadores incluidos en la respuesta
       const jugadoresOnlineIds = new Set();
       if (data.included) {
         data.included.forEach(item => {
           if (item.type === 'player') {
-            jugadoresOnlineIds.add(item.id); // Este es el ID del perfil de BattleMetrics del jugador
+            jugadoresOnlineIds.add(item.id);
           }
         });
       }
