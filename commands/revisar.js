@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const ServerConfig = require('../models/ServerConfig');
 const Vigilado = require('../models/Vigilado');
+const { getBattleMetricsHours } = require('../services/battlemetricsHours.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -34,51 +35,30 @@ module.exports = {
       const encontradosOnline = [];
       const offline = [];
 
-      // 3. Consultar la lista de servidores activos del jugador usando el endpoint correcto de relaciones
+      // 3. Consultar cada jugador usando la misma lógica robusta del servicio de horas
       for (const v of vigilados) {
         try {
-          const playerUrl = `https://api.battlemetrics.com/players/${v.battlemetricsId}/servers?include=server`;
-          const response = await fetch(playerUrl, {
-            headers: {
-              'Authorization': `Bearer ${process.env.BATTLEMETRICS_API_KEY}`
-            }
-          });
+          const datos = await getBattleMetricsHours(v.battlemetricsId);
 
-          if (!response.ok) {
-            console.log(`[DEBUG] Error en API para el jugador ${v.alias}: Status ${response.status}`);
+          if (!datos) {
             offline.push(v.alias);
             continue;
           }
 
-          const data = await response.json();
+          // Verificamos si está online y si el ID o nombre del servidor coincide con el configurado
+          const online = Boolean(datos.online);
           
-          let estaConectadoEnEsteServer = false;
+          // Comprobamos si el servidor actual devuelto coincide con el ID configurado
+          const serverActualId = datos.serverId || datos.serverID || datos.currentServerId;
+          const serverActualNombre = (datos.servidor || datos.server || "").toLowerCase();
 
-          // Revisamos los servidores devueltos en la relación
-          if (data.data) {
-            for (const rel of data.data) {
-              const serverId = rel.relationships?.server?.data?.id || rel.id;
-              // Comprobamos si coincide con nuestro servidor y si su estado indica que está jugando ahora mismo
-              if (serverId && serverId.toString() === bmServerId.toString()) {
-                // Verificamos si la sesión sigue activa (sin fecha de parada o meta online)
-                if (rel.attributes && rel.attributes.active === true) {
-                  estaConectadoEnEsteServer = true;
-                  break;
-                }
-              }
-            }
-          }
+          // Determinar si está conectado en este servidor específico
+          const estaEnEsteServidor = online && (
+            (serverActualId && serverActualId.toString() === bmServerId.toString()) ||
+            serverActualNombre.includes(bmServerId.toString())
+          );
 
-          // Alternativa por si el 'included' trae el servidor online actual
-          if (!estaConectadoEnEsteServer && data.included) {
-            const serverInc = data.included.find(item => item.type === 'server' && item.id.toString() === bmServerId.toString());
-            // Si el servidor aparece en la lista de incluidos recientes del jugador
-            if (serverInc) {
-              estaConectadoEnEsteServer = true;
-            }
-          }
-
-          if (estaConectadoEnEsteServer) {
+          if (estaEnEsteServidor) {
             encontradosOnline.push(v.alias);
           } else {
             offline.push(v.alias);
