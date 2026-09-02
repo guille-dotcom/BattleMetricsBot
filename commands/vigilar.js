@@ -24,8 +24,7 @@ module.exports = {
       const existe = await Vigilado.findOne({ guildId, battlemetricsId });
       if (existe) {
         return interaction.reply({ 
-          content: `⚠️ El ID **${battlemetricsId}** ya está registrado bajo el alias **${existe.alias}**.`, 
-          ephemeral: true 
+          content: `⚠️ El ID **${battlemetricsId}** ya está registrado bajo el alias **${existe.alias}**.`
         });
       }
 
@@ -37,13 +36,14 @@ module.exports = {
       });
 
       await interaction.reply({ 
-        content: `✅ ¡Perfil guardado con éxito!\n👤 **Alias:** ${alias}\n🔗 **ID BattleMetrics:** ${battlemetricsId}`, 
-        ephemeral: true 
+        content: `✅ ¡Perfil guardado con éxito!\n👤 **Alias:** ${alias}\n🔗 **ID BattleMetrics:** ${battlemetricsId}`
       });
 
     } catch (error) {
       console.error(error);
-      await interaction.reply({ content: '❌ Hubo un error al guardar el perfil en la base de datos.', ephemeral: true });
+      await interaction.reply({ 
+        content: '❌ Hubo un error al guardar el perfil en la base de datos.'
+      });
     }
   },
 };
