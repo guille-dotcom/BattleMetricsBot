@@ -13,7 +13,7 @@ module.exports = {
     const guildId = interaction.guild.id;
 
     try {
-      // 1. Obtener el BattleMetrics Server ID configurado para este Discord
+      // 1. Obtener el BattleMetrics Server ID configurado
       const configServer = await ServerConfig.findOne({ guildId });
       const bmServerId = configServer?.battleMetricsServerId || configServer?.battlemetricsServerId || configServer?.serverId;
 
@@ -23,7 +23,7 @@ module.exports = {
         });
       }
 
-      // 2. Obtener la lista de perfiles vigilados en este Discord
+      // 2. Obtener la lista de perfiles vigilados
       const vigilados = await Vigilado.find({ guildId });
       if (vigilados.length === 0) {
         return interaction.editReply({ 
@@ -34,10 +34,10 @@ module.exports = {
       const encontradosOnline = [];
       const offline = [];
 
-      // 3. Consultar el estado de cada jugador vigilado individualmente
+      // 3. Consultar cada jugador y comprobar tanto su relación de servidor como sus identifiers/última sesión
       for (const v of vigilados) {
         try {
-          const playerUrl = `https://api.battlemetrics.com/players/${v.battlemetricsId}?include=server`;
+          const playerUrl = `https://api.battlemetrics.com/players/${v.battlemetricsId}?include=server,identifier`;
           const response = await fetch(playerUrl, {
             headers: {
               'Authorization': `Bearer ${process.env.BATTLEMETRICS_API_KEY}`
@@ -51,26 +51,27 @@ module.exports = {
 
           const playerData = await response.json();
           
-          // Imprimimos la respuesta completa en la consola de Render para analizarla
-          console.log(`Respuesta API Player (${v.alias}):`, JSON.stringify(playerData, null, 2));
-
-          // Verificamos de varias formas posibles dónde viene el servidor actual
+          // Comprobamos la relación directa del servidor
           const relServerId = playerData.data?.relationships?.server?.data?.id;
           
-          // También podemos revisar si el servidor viene dentro de la propiedad 'included'
+          // Comprobamos si viene en el 'included'
           let includedServerId = null;
           if (playerData.included) {
             const serverInc = playerData.included.find(item => item.type === 'server');
             if (serverInc) includedServerId = serverInc.id;
           }
 
-          const activeServerId = relServerId || includedServerId;
+          // Verificación doble: ID directo o ID en included
+          const isOnlineOnThisServer = 
+            (relServerId && relServerId.toString() === bmServerId.toString()) ||
+            (includedServerId && includedServerId.toString() === bmServerId.toString());
 
-          if (activeServerId && activeServerId.toString() === bmServerId.toString()) {
+          if (isOnlineOnThisServer) {
             encontradosOnline.push(v.alias);
           } else {
             offline.push(v.alias);
           }
+
         } catch (err) {
           console.error(`Error consultando al jugador ${v.alias}:`, err);
           offline.push(v.alias);
