@@ -23,7 +23,6 @@ module.exports = {
     .setDescription('Revisa si hay algún perfil vigilado conectado en el servidor actual'),
 
   async execute(interaction) {
-    // Usamos el flag moderno para evitar el aviso de deprecación de discord.js
     await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
     const guildId = interaction.guild.id;
@@ -47,22 +46,20 @@ module.exports = {
         });
       }
 
-      // 3. Consultar el servidor incluyendo los jugadores online (método seguro y compatible con BM)
-      const response = await axios.get(`${BM_API}/servers/${bmServerId}`, {
+      // 3. Consultar las relaciones de jugadores activos del servidor de forma directa
+      const response = await axios.get(`${BM_API}/servers/${bmServerId}/relationships/players`, {
         headers: getHeaders(),
         params: {
-          include: "player"
+          page: { size: 100 }
         },
         timeout: 10000
       });
 
-      // Extraer los jugadores que están online en este servidor
-      const included = response.data?.included || [];
-      const playersOnline = included.filter(item => item.type === "player");
-
+      // Extraer los IDs de jugadores online que devuelve esta relación
       const idsOnlineEnServidor = new Set();
-      for (const player of playersOnline) {
-        idsOnlineEnServidor.add(player.id.toString());
+      const relData = response.data?.data || [];
+      for (const rel of relData) {
+        idsOnlineEnServidor.add(rel.id.toString());
       }
 
       // 4. Cruzar con los perfiles vigilados
@@ -111,7 +108,7 @@ module.exports = {
     } catch (error) {
       console.error("Detalle del error en /revisar:", error.response?.data || error.message);
       await interaction.editReply({ 
-        content: '❌ Ocurrió al procesar la revisión de perfiles en BattleMetrics.' 
+        content: '❌ Ocurrió un error al procesar la revisión de perfiles en BattleMetrics.' 
       });
     }
   },
