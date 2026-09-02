@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const axios = require('axios');
 const ServerConfig = require('../models/ServerConfig');
 const Vigilado = require('../models/Vigilado');
@@ -23,7 +23,8 @@ module.exports = {
     .setDescription('Revisa si hay algún perfil vigilado conectado en el servidor actual'),
 
   async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    // Usamos el flag moderno para evitar el aviso de deprecación de discord.js
+    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
     const guildId = interaction.guild.id;
 
@@ -46,20 +47,21 @@ module.exports = {
         });
       }
 
-      // 3. Consultar los jugadores online usando Axios con el token correcto
-      const response = await axios.get(`${BM_API}/players`, {
+      // 3. Consultar el servidor incluyendo los jugadores online (método seguro y compatible con BM)
+      const response = await axios.get(`${BM_API}/servers/${bmServerId}`, {
         headers: getHeaders(),
         params: {
-          "filter[server]": bmServerId,
-          "filter[online]": "true"
+          include: "player"
         },
         timeout: 10000
       });
 
-      // Extraer los IDs de los jugadores online
+      // Extraer los jugadores que están online en este servidor
+      const included = response.data?.included || [];
+      const playersOnline = included.filter(item => item.type === "player");
+
       const idsOnlineEnServidor = new Set();
-      const playersData = response.data?.data || [];
-      for (const player of playersData) {
+      for (const player of playersOnline) {
         idsOnlineEnServidor.add(player.id.toString());
       }
 
@@ -109,7 +111,7 @@ module.exports = {
     } catch (error) {
       console.error("Detalle del error en /revisar:", error.response?.data || error.message);
       await interaction.editReply({ 
-        content: '❌ Ocurrió un error al procesar la revisión de perfiles en BattleMetrics.' 
+        content: '❌ Ocurrió al procesar la revisión de perfiles en BattleMetrics.' 
       });
     }
   },
