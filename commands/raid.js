@@ -16,11 +16,13 @@ const raidCache = new Map();
 const CACHE_TIME = 5 * 60 * 1000;
 
 // =====================================================
-// LISTA COMPLETA DE OBJETOS DE RUST (JERGA DE JUGADORES)
+// LISTA COMPLETA DE OBJETOS DE RUST
 // =====================================================
 
 const OBJETOS_RUST = [
+
     // 🚪 PUERTAS
+
     { name: "Puerta simple de madera", value: "Wooden Door" },
     { name: "Puerta doble de madera", value: "Wood Double Door" },
     { name: "Puerta simple de chapa / metal", value: "Sheet Metal Door" },
@@ -28,14 +30,16 @@ const OBJETOS_RUST = [
     { name: "Puerta de garaje (Garage Door)", value: "Garage Door" },
     { name: "Puerta simple blindada / HQ", value: "Armored Door" },
     { name: "Puerta doble blindada / HQ", value: "Armored Double Door" },
-    
+
     // 🪜 TRAMPILLAS
+
     { name: "Trampilla simple de metal / chapa", value: "Ladder Hatch" },
     { name: "Trampilla triangular de metal / chapa", value: "Triangle Ladder Hatch" },
     { name: "Trampilla simple blindada / HQ", value: "Armored Ladder Hatch" },
     { name: "Trampilla triangular blindada / HQ", value: "Armored Triangle Ladder Hatch" },
 
-    // 🧱 PAREDES (BUILDING BLOCKS)
+    // 🧱 PAREDES
+
     { name: "Pared de paja (Twig)", value: "Twig Wall" },
     { name: "Pared de madera", value: "Wood Wall" },
     { name: "Pared de piedra", value: "Stone Wall" },
@@ -46,6 +50,7 @@ const OBJETOS_RUST = [
     { name: "Medio muro de piedra", value: "Stone Half Wall" },
 
     // 🏗️ CIMIENTOS Y SUELOS
+
     { name: "Cimiento de piedra", value: "Stone Foundation" },
     { name: "Cimiento de metal", value: "Metal Foundation" },
     { name: "Cimiento blindado / HQ", value: "Armored Foundation" },
@@ -57,6 +62,7 @@ const OBJETOS_RUST = [
     { name: "Techo (Roof)", value: "Roof" },
 
     // 🪟 VENTANAS, REJAS Y TRONERAS
+
     { name: "Reja de ventana de metal", value: "Metal Window Bars" },
     { name: "Tronera horizontal de metal", value: "Metal Horizontal Embrasure" },
     { name: "Tronera vertical de metal", value: "Metal Vertical Embrasure" },
@@ -67,12 +73,14 @@ const OBJETOS_RUST = [
     { name: "Puerta de celda de prisión", value: "Prison Cell Gate" },
 
     // 🏰 MUROS Y PORTONES EXTERNOS
+
     { name: "Muro alto de madera (High External)", value: "High External Wooden Wall" },
     { name: "Muro alto de piedra", value: "High External Stone Wall" },
     { name: "Portón alto de madera", value: "High External Wooden Gate" },
     { name: "Portón alto de piedra", value: "High External Stone Gate" },
 
     // 📦 ALMACENAMIENTO Y DEPLOYABLES
+
     { name: "Armario de herramientas (TC)", value: "Tool Cupboard" },
     { name: "Caja pequeña de madera", value: "Small Wood Box" },
     { name: "Caja grande de madera", value: "Large Wood Box" },
@@ -85,12 +93,14 @@ const OBJETOS_RUST = [
     { name: "Refinería de aceite", value: "Small Oil Refinery" },
 
     // ⚡ ELECTRICIDAD Y ENERGÍA
+
     { name: "Molino de viento (Wind Turbine)", value: "Wind Turbine" },
     { name: "Panel solar", value: "Solar Panel" },
     { name: "Batería grande", value: "Large Rechargeable Battery" },
     { name: "Batería mediana", value: "Medium Rechargeable Battery" },
 
     // 🛠️ MESAS DE TRABAJO Y UTILIDADES
+
     { name: "Mesa de trabajo nivel 1 (WB1)", value: "Workbench Level 1" },
     { name: "Mesa de trabajo nivel 2 (WB2)", value: "Workbench Level 2" },
     { name: "Mesa de trabajo nivel 3 (WB3)", value: "Workbench Level 3" },
@@ -98,10 +108,11 @@ const OBJETOS_RUST = [
     { name: "Banco de reparación", value: "Repair Bench" },
 
     // ⚔️ DEFENSAS Y BARRICADAS
+
     { name: "Torreta automática (Auto Turret)", value: "Auto Turret" },
     { name: "Torreta lanzallamas", value: "Flame Turret" },
     { name: "Trampa de escopeta", value: "Shotgun Trap" },
-    { name: "SAM / Antiaéreo/ SAM-SITE", value: "SAM Site" },
+    { name: "SAM / Antiaéreo / SAM-SITE", value: "SAM Site" },
     { name: "Barricada de madera", value: "Wooden Barricade" },
     { name: "Barricada de metal", value: "Metal Barricade" },
     { name: "Barricada de pinchos", value: "Wooden Spike Barricade" },
@@ -114,13 +125,16 @@ const OBJETOS_RUST = [
 // =====================================================
 
 function limpiarTexto(texto) {
+
     return String(texto || "")
         .replace(/\s+/g, " ")
         .trim();
 }
 
 function limitarTexto(texto, max = 1024) {
-    const limpio = String(texto || "").trim();
+
+    const limpio =
+        String(texto || "").trim();
 
     if (limpio.length <= max) {
         return limpio;
@@ -130,15 +144,48 @@ function limitarTexto(texto, max = 1024) {
 }
 
 function convertirASegundosVista(tiempo) {
-    const texto = String(tiempo || "").toLowerCase().replace(/,/g, ".");
-    if (!texto) return 0;
+
+    const texto =
+        String(tiempo || "")
+            .toLowerCase()
+            .replace(/,/g, ".");
+
+    if (!texto) {
+        return 0;
+    }
+
     let total = 0;
-    const horas = texto.match(/(\d+(?:\.\d+)?)\s*h/);
-    const minutos = texto.match(/(\d+(?:\.\d+)?)\s*m/);
-    const segundos = texto.match(/(\d+(?:\.\d+)?)\s*s/);
-    if (horas) total += parseFloat(horas[1]) * 3600;
-    if (minutos) total += parseFloat(minutos[1]) * 60;
-    if (segundos) total += parseFloat(segundos[1]);
+
+    const horas =
+        texto.match(
+            /(\d+(?:\.\d+)?)\s*h/
+        );
+
+    const minutos =
+        texto.match(
+            /(\d+(?:\.\d+)?)\s*m/
+        );
+
+    const segundos =
+        texto.match(
+            /(\d+(?:\.\d+)?)\s*s/
+        );
+
+    if (horas) {
+        total +=
+            parseFloat(horas[1]) * 3600;
+    }
+
+    if (minutos) {
+        total +=
+            parseFloat(minutos[1]) * 60;
+    }
+
+    if (segundos) {
+        total +=
+            parseFloat(segundos[1]);
+    }
+
     return total;
 }
 
@@ -147,79 +194,164 @@ function convertirASegundosVista(tiempo) {
 // =====================================================
 
 function formatearStartingItems(items) {
-    if (!Array.isArray(items) || items.length === 0) {
+
+    if (
+        !Array.isArray(items) ||
+        items.length === 0
+    ) {
         return "No hay datos disponibles.";
     }
 
-    const lineas = items.map((item, index) => {
-        const nombre = limpiarTexto(item.herramienta);
-        const tiempo = limpiarTexto(item.tiempo);
-        const cantidad = limpiarTexto(item.cantidad);
+    const lineas =
+        items.map(
+            (item, index) => {
 
-        let linea = `**${index + 1}.** ${nombre}`;
+                const nombre =
+                    limpiarTexto(
+                        item.herramienta
+                    );
 
-        if (cantidad && cantidad !== "x0" && cantidad !== "0") {
-            const cantidadLimpia = cantidad.split(" ")[0].replace(/^x/i, "");
-            linea += ` \`×${cantidadLimpia}\``;
-        }
+                const tiempo =
+                    limpiarTexto(
+                        item.tiempo
+                    );
 
-        if (tiempo) {
-            linea += ` ⏱️ \`${tiempo}\``;
-        }
+                const cantidad =
+                    limpiarTexto(
+                        item.cantidad
+                    );
 
-        return linea;
-    });
+                let linea =
+                    `**${index + 1}.** ${nombre}`;
 
-    return limitarTexto(lineas.join("\n"));
+                if (
+                    cantidad &&
+                    cantidad !== "x0" &&
+                    cantidad !== "0"
+                ) {
+
+                    const cantidadLimpia =
+                        cantidad
+                            .split(" ")[0]
+                            .replace(/^x/i, "");
+
+                    linea +=
+                        ` \`×${cantidadLimpia}\``;
+                }
+
+                if (tiempo) {
+
+                    linea +=
+                        ` ⏱️ \`${tiempo}\``;
+                }
+
+                return linea;
+            }
+        );
+
+    return limitarTexto(
+        lineas.join("\n")
+    );
 }
 
 // =====================================================
-// FORMATEAR RAIDING COST (Con filtro y ordenado por tiempo)
+// FORMATEAR RAIDING COST
 // =====================================================
 
-function formatearRaidingCost(items, categoriaFiltro = "all") {
-    if (!Array.isArray(items) || items.length === 0) {
+function formatearRaidingCost(
+    items,
+    categoriaFiltro = "all"
+) {
+
+    if (
+        !Array.isArray(items) ||
+        items.length === 0
+    ) {
         return "No hay datos disponibles.";
     }
 
-    // Filtrar por categoría ('melee' o 'all')
-    const itemsFiltrados = items.filter(item => {
-        if (categoriaFiltro === "melee") {
-            return item.categoria === "melee";
-        }
-        // Para "all" (botón Raideo), excluimos los de melee para dejar explosivos y balas arriba
-        return item.categoria !== "melee";
-    });
+    const itemsFiltrados =
+        items.filter(
+            item => {
 
-    if (itemsFiltrados.length === 0) {
+                if (
+                    categoriaFiltro === "melee"
+                ) {
+                    return item.categoria === "melee";
+                }
+
+                return item.categoria !== "melee";
+            }
+        );
+
+    if (
+        itemsFiltrados.length === 0
+    ) {
         return "No hay elementos de esta categoría disponibles.";
     }
 
-    // Ordenar estrictamente de menor a mayor tiempo
-    const itemsOrdenados = [...itemsFiltrados].sort((a, b) => {
-        return convertirASegundosVista(a.tiempo) - convertirASegundosVista(b.tiempo);
-    });
+    const itemsOrdenados =
+        [...itemsFiltrados].sort(
+            (a, b) => {
 
-    const lineas = itemsOrdenados.map((item, index) => {
-        const nombre = limpiarTexto(item.herramienta);
-        const tiempo = limpiarTexto(item.tiempo);
-        const cantidad = limpiarTexto(item.cantidad);
+                return (
+                    convertirASegundosVista(
+                        a.tiempo
+                    ) -
+                    convertirASegundosVista(
+                        b.tiempo
+                    )
+                );
+            }
+        );
 
-        let linea = `**${index + 1}.** ${nombre}`;
+    const lineas =
+        itemsOrdenados.map(
+            (item, index) => {
 
-        if (cantidad) {
-            const cantidadLimpia = cantidad.replace(/^x/i, "");
-            linea += ` \`×${cantidadLimpia}\``;
-        }
+                const nombre =
+                    limpiarTexto(
+                        item.herramienta
+                    );
 
-        if (tiempo) {
-            linea += ` ⏱️ \`${tiempo}\``;
-        }
+                const tiempo =
+                    limpiarTexto(
+                        item.tiempo
+                    );
 
-        return linea;
-    });
+                const cantidad =
+                    limpiarTexto(
+                        item.cantidad
+                    );
 
-    return limitarTexto(lineas.join("\n"));
+                let linea =
+                    `**${index + 1}.** ${nombre}`;
+
+                if (cantidad) {
+
+                    const cantidadLimpia =
+                        cantidad.replace(
+                            /^x/i,
+                            ""
+                        );
+
+                    linea +=
+                        ` \`×${cantidadLimpia}\``;
+                }
+
+                if (tiempo) {
+
+                    linea +=
+                        ` ⏱️ \`${tiempo}\``;
+                }
+
+                return linea;
+            }
+        );
+
+    return limitarTexto(
+        lineas.join("\n")
+    );
 }
 
 // =====================================================
@@ -227,24 +359,44 @@ function formatearRaidingCost(items, categoriaFiltro = "all") {
 // =====================================================
 
 function crearTextoAmount(items) {
-    if (!Array.isArray(items) || items.length === 0) {
+
+    if (
+        !Array.isArray(items) ||
+        items.length === 0
+    ) {
         return "No hay datos disponibles.";
     }
 
-    const lineas = items.map((item, index) => {
-        const nombre = limpiarTexto(item.herramienta);
-        const tiempo = limpiarTexto(item.tiempo);
+    const lineas =
+        items.map(
+            (item, index) => {
 
-        let linea = `**${index + 1}.** ${nombre}`;
+                const nombre =
+                    limpiarTexto(
+                        item.herramienta
+                    );
 
-        if (tiempo) {
-            linea += ` — ${tiempo}`;
-        }
+                const tiempo =
+                    limpiarTexto(
+                        item.tiempo
+                    );
 
-        return linea;
-    });
+                let linea =
+                    `**${index + 1}.** ${nombre}`;
 
-    return limitarTexto(lineas.join("\n"));
+                if (tiempo) {
+
+                    linea +=
+                        ` — ${tiempo}`;
+                }
+
+                return linea;
+            }
+        );
+
+    return limitarTexto(
+        lineas.join("\n")
+    );
 }
 
 // =====================================================
@@ -252,76 +404,171 @@ function crearTextoAmount(items) {
 // =====================================================
 
 function crearEmbed(resultado) {
-    return new EmbedBuilder()
-        .setTitle(`💥 Raid Calculator: ${resultado.nombre}`)
-        .setURL(resultado.url)
-        .setColor("#E67E22")
-        .setFooter({
-            text: "Fuente: RustHelp"
-        })
-        .setTimestamp();
+
+    const embed =
+        new EmbedBuilder()
+            .setTitle(
+                `💥 Raid Calculator: ${resultado.nombre}`
+            )
+            .setURL(
+                resultado.url
+            )
+            .setColor(
+                "#E67E22"
+            )
+            .setFooter({
+                text: "Fuente: RustHelp"
+            })
+            .setTimestamp();
+
+    // =================================================
+    // IMAGEN DEL OBJETO
+    // =================================================
+
+    if (
+        resultado.imagen &&
+        /^https?:\/\//i.test(
+            resultado.imagen
+        )
+    ) {
+
+        embed.setThumbnail(
+            resultado.imagen
+        );
+    }
+
+    return embed;
 }
 
 // =====================================================
-// CREAR BOTONES (3 Botones exactos)
+// CREAR BOTONES
 // =====================================================
 
 function crearBotones(cacheKey) {
-    return new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId(`raid_raideo_${cacheKey}`)
-            .setLabel("Raideo")
-            .setStyle(ButtonStyle.Primary)
-            .setEmoji("🔨"),
 
-        new ButtonBuilder()
-            .setCustomId(`raid_melee_${cacheKey}`)
-            .setLabel("Melee")
-            .setStyle(ButtonStyle.Secondary)
-            .setEmoji("⚔️"),
+    return new ActionRowBuilder()
+        .addComponents(
 
-        new ButtonBuilder()
-            .setCustomId(`raid_donde_${cacheKey}`)
-            .setLabel("Dónde encontrar")
-            .setStyle(ButtonStyle.Success)
-            .setEmoji("🔍")
-    );
+            new ButtonBuilder()
+                .setCustomId(
+                    `raid_raideo_${cacheKey}`
+                )
+                .setLabel(
+                    "Raideo"
+                )
+                .setStyle(
+                    ButtonStyle.Primary
+                )
+                .setEmoji(
+                    "🔨"
+                ),
+
+            new ButtonBuilder()
+                .setCustomId(
+                    `raid_melee_${cacheKey}`
+                )
+                .setLabel(
+                    "Melee"
+                )
+                .setStyle(
+                    ButtonStyle.Secondary
+                )
+                .setEmoji(
+                    "⚔️"
+                ),
+
+            new ButtonBuilder()
+                .setCustomId(
+                    `raid_donde_${cacheKey}`
+                )
+                .setLabel(
+                    "Dónde encontrar"
+                )
+                .setStyle(
+                    ButtonStyle.Success
+                )
+                .setEmoji(
+                    "🔍"
+                )
+        );
 }
 
 // =====================================================
 // AGREGAR INFORMACIÓN DE RAID
 // =====================================================
 
-function agregarInformacionRaid(embed, resultado, tipoVista = "all") {
-    if (tipoVista === "all") {
+function agregarInformacionRaid(
+    embed,
+    resultado,
+    tipoVista = "all"
+) {
+
+    if (
+        tipoVista === "all"
+    ) {
+
         if (
-            Array.isArray(resultado.startingItems) &&
+            Array.isArray(
+                resultado.startingItems
+            ) &&
             resultado.startingItems.length > 0
         ) {
+
             embed.addFields({
-                name: "⚡ Starting Items",
-                value: formatearStartingItems(resultado.startingItems),
-                inline: false
+
+                name:
+                    "⚡ Starting Items",
+
+                value:
+                    formatearStartingItems(
+                        resultado.startingItems
+                    ),
+
+                inline:
+                    false
             });
         }
     }
 
     if (
-        Array.isArray(resultado.raidingCost) &&
+        Array.isArray(
+            resultado.raidingCost
+        ) &&
         resultado.raidingCost.length > 0
     ) {
-        const tituloSeccion = tipoVista === "melee" ? "⚔️ Raiding Cost (Melee)" : "🔨 Raiding Cost";
-        
+
+        const tituloSeccion =
+            tipoVista === "melee"
+                ? "⚔️ Raiding Cost (Melee)"
+                : "🔨 Raiding Cost";
+
         embed.addFields({
-            name: tituloSeccion,
-            value: formatearRaidingCost(resultado.raidingCost, tipoVista),
-            inline: false
+
+            name:
+                tituloSeccion,
+
+            value:
+                formatearRaidingCost(
+                    resultado.raidingCost,
+                    tipoVista
+                ),
+
+            inline:
+                false
         });
+
     } else {
+
         embed.addFields({
-            name: "🔨 Raideo",
-            value: "No hay datos de raideo disponibles.",
-            inline: false
+
+            name:
+                "🔨 Raideo",
+
+            value:
+                "No hay datos de raideo disponibles.",
+
+            inline:
+                false
         });
     }
 }
@@ -331,133 +578,341 @@ function agregarInformacionRaid(embed, resultado, tipoVista = "all") {
 // =====================================================
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName("raid")
-        .setDescription("Calcula los costos de raid para cualquier objeto de Rust.")
-        .addStringOption(option =>
-            option
-                .setName("objeto")
-                .setDescription("Busca y selecciona cualquier objeto a raidear")
-                .setRequired(true)
-                .setAutocomplete(true) // 👈 Autocompletado nativo activado
-                .setMaxLength(100)
-        ),
+
+    data:
+        new SlashCommandBuilder()
+
+            .setName(
+                "raid"
+            )
+
+            .setDescription(
+                "Calcula los costos de raid para cualquier objeto de Rust."
+            )
+
+            .addStringOption(
+                option =>
+                    option
+                        .setName(
+                            "objeto"
+                        )
+                        .setDescription(
+                            "Busca y selecciona cualquier objeto a raidear"
+                        )
+                        .setRequired(
+                            true
+                        )
+                        .setAutocomplete(
+                            true
+                        )
+                        .setMaxLength(
+                            100
+                        )
+            ),
 
     // =====================================================
-    // FUNCIÓN DE AUTOCOMPLETADO
+    // AUTOCOMPLETADO
     // =====================================================
-    async autocomplete(interaction) {
-        const focusedValue = interaction.options.getFocused().toLowerCase();
 
-        // Filtra dinámicamente entre todos los elementos de la lista
-        const filtered = OBJETOS_RUST.filter(choice => 
-            choice.name.toLowerCase().includes(focusedValue) ||
-            choice.value.toLowerCase().includes(focusedValue)
-        );
+    async autocomplete(
+        interaction
+    ) {
 
-        // Discord solo permite un máximo de 25 opciones por respuesta de autocompletado
+        const focusedValue =
+            interaction.options
+                .getFocused()
+                .toLowerCase();
+
+        const filtered =
+            OBJETOS_RUST.filter(
+                choice =>
+
+                    choice.name
+                        .toLowerCase()
+                        .includes(
+                            focusedValue
+                        ) ||
+
+                    choice.value
+                        .toLowerCase()
+                        .includes(
+                            focusedValue
+                        )
+            );
+
         await interaction.respond(
-            filtered.slice(0, 25).map(choice => ({ name: choice.name, value: choice.value }))
+
+            filtered
+                .slice(0, 25)
+                .map(
+                    choice => ({
+                        name:
+                            choice.name,
+
+                        value:
+                            choice.value
+                    })
+                )
         );
     },
 
-    async execute(interaction) {
+    // =====================================================
+    // EXECUTE
+    // =====================================================
+
+    async execute(
+        interaction
+    ) {
+
         await interaction.deferReply();
 
-        const query = interaction.options.getString("objeto")?.trim();
+        const query =
+            interaction.options
+                .getString(
+                    "objeto"
+                )
+                ?.trim();
 
         if (!query) {
-            return interaction.editReply("❌ Debes indicar un objeto.");
+
+            return interaction.editReply(
+                "❌ Debes indicar un objeto."
+            );
         }
 
         let resultado;
 
         try {
-            resultado = await consultarRaid(query);
+
+            console.log(
+                `💥 /raid solicitado: ${query}`
+            );
+
+            resultado =
+                await consultarRaid(
+                    query
+                );
+
         } catch (error) {
-            console.error("❌ Error ejecutando /raid:", error);
-            return interaction.editReply("❌ Ocurrió un error al consultar RustHelp.");
+
+            console.error(
+                "❌ Error ejecutando /raid:",
+                error
+            );
+
+            return interaction.editReply(
+                "❌ Ocurrió un error al consultar RustHelp."
+            );
         }
 
         if (!resultado) {
-            return interaction.editReply(`❌ No se encontró información para **"${query}"**.`);
+
+            return interaction.editReply(
+                `❌ No se encontró información para **"${query}"**.`
+            );
         }
 
-        const cacheKey = `${interaction.user.id}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        console.log(
+            `✅ Raid encontrado: ${resultado.nombre}`
+        );
 
-        raidCache.set(cacheKey, resultado);
+        if (
+            resultado.imagen
+        ) {
 
-        setTimeout(() => {
-            raidCache.delete(cacheKey);
-        }, CACHE_TIME);
+            console.log(
+                `🖼️ Imagen: ${resultado.imagen}`
+            );
+        }
 
-        const embed = crearEmbed(resultado);
-        agregarInformacionRaid(embed, resultado, "all");
+        const cacheKey =
+            `${interaction.user.id}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-        const row = crearBotones(cacheKey);
+        raidCache.set(
+            cacheKey,
+            resultado
+        );
+
+        setTimeout(
+            () => {
+
+                raidCache.delete(
+                    cacheKey
+                );
+
+            },
+            CACHE_TIME
+        );
+
+        const embed =
+            crearEmbed(
+                resultado
+            );
+
+        agregarInformacionRaid(
+            embed,
+            resultado,
+            "all"
+        );
+
+        const row =
+            crearBotones(
+                cacheKey
+            );
 
         try {
+
             await interaction.editReply({
-                embeds: [embed],
-                components: [row]
+
+                embeds: [
+                    embed
+                ],
+
+                components: [
+                    row
+                ]
             });
+
         } catch (error) {
-            console.error("❌ Error enviando respuesta /raid:", error.message);
+
+            console.error(
+                "❌ Error enviando respuesta /raid:",
+                error.message
+            );
         }
     },
 
-    async manejarBotonRaid(interaction) {
-        const customId = interaction.customId;
+    // =====================================================
+    // BOTONES
+    // =====================================================
 
-        if (!customId.startsWith("raid_")) {
+    async manejarBotonRaid(
+        interaction
+    ) {
+
+        const customId =
+            interaction.customId;
+
+        if (
+            !customId.startsWith(
+                "raid_"
+            )
+        ) {
             return;
         }
 
-        const parts = customId.split("_");
+        const parts =
+            customId.split("_");
 
-        if (parts.length < 3) {
+        if (
+            parts.length < 3
+        ) {
             return;
         }
 
         await interaction.deferUpdate();
 
-        const tipo = parts[1];
-        const cacheKey = parts.slice(2).join("_");
-        const resultado = raidCache.get(cacheKey);
+        const tipo =
+            parts[1];
+
+        const cacheKey =
+            parts
+                .slice(2)
+                .join("_");
+
+        const resultado =
+            raidCache.get(
+                cacheKey
+            );
 
         if (!resultado) {
+
             return interaction.followUp({
-                content: "⚠️ Estos botones han expirado. Vuelve a ejecutar `/raid`.",
-                ephemeral: true
+
+                content:
+                    "⚠️ Estos botones han expirado. Vuelve a ejecutar `/raid`.",
+
+                ephemeral:
+                    true
             });
         }
 
-        const embed = crearEmbed(resultado);
+        const embed =
+            crearEmbed(
+                resultado
+            );
 
-        if (tipo === "raideo") {
-            agregarInformacionRaid(embed, resultado, "all");
-        } else if (tipo === "melee") {
-            agregarInformacionRaid(embed, resultado, "melee");
-        } else if (tipo === "donde") {
+        if (
+            tipo === "raideo"
+        ) {
+
+            agregarInformacionRaid(
+                embed,
+                resultado,
+                "all"
+            );
+
+        } else if (
+            tipo === "melee"
+        ) {
+
+            agregarInformacionRaid(
+                embed,
+                resultado,
+                "melee"
+            );
+
+        } else if (
+            tipo === "donde"
+        ) {
+
             embed.addFields({
-                name: "🔍 Dónde encontrar",
-                value: crearTextoAmount(resultado.dondeEncontrar),
-                inline: false
+
+                name:
+                    "🔍 Dónde encontrar",
+
+                value:
+                    crearTextoAmount(
+                        resultado.dondeEncontrar
+                    ),
+
+                inline:
+                    false
             });
+
         } else {
+
             return interaction.followUp({
-                content: "⚠️ Esta opción de raid no es válida.",
-                ephemeral: true
+
+                content:
+                    "⚠️ Esta opción de raid no es válida.",
+
+                ephemeral:
+                    true
             });
         }
 
         try {
+
             await interaction.editReply({
-                embeds: [embed],
-                components: [crearBotones(cacheKey)]
+
+                embeds: [
+                    embed
+                ],
+
+                components: [
+                    crearBotones(
+                        cacheKey
+                    )
+                ]
             });
+
         } catch (error) {
-            console.error("❌ Error actualizando botón /raid:", error.message);
+
+            console.error(
+                "❌ Error actualizando botón /raid:",
+                error.message
+            );
         }
     }
 };
