@@ -56,6 +56,16 @@ async function getSteamIDData(input) {
         );
 
         // ==========================================
+        // MOSTRAR RESPUESTA COMPLETA
+        // ==========================================
+
+        console.log("==============================================");
+        console.log("RESPUESTA DE STEAMID.UK");
+        console.log("==============================================");
+        console.log(JSON.stringify(response.data, null, 2));
+        console.log("==============================================");
+
+        // ==========================================
         // COMPROBAR RESPUESTA
         // ==========================================
 
