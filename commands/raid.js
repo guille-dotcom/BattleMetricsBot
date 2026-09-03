@@ -21,7 +21,7 @@ const CACHE_TIME = 5 * 60 * 1000;
 
 const OBJETOS_RUST = [
     // 🚪 PUERTAS
-    { name: "Puerta simple de madera", value: "Wood Door" },
+    { name: "Puerta simple de madera", value: "Wooden Door" },
     { name: "Puerta doble de madera", value: "Wood Double Door" },
     { name: "Puerta simple de chapa / metal", value: "Sheet Metal Door" },
     { name: "Puerta doble de chapa / metal", value: "Sheet Metal Double Door" },
