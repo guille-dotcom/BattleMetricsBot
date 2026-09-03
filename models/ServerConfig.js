@@ -46,7 +46,14 @@ const serverConfigSchema = new mongoose.Schema({
         default: false
     },
 
+    // Fecha/identificador de la última publicación
     rustStoreLastPublishedWeek: {
+        type: String,
+        default: null
+    },
+
+    // Firma de la última tienda publicada
+    rustStoreLastSignature: {
         type: String,
         default: null
     }
