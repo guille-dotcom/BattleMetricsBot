@@ -3,9 +3,217 @@ const {
     EmbedBuilder
 } = require("discord.js");
 
+const axios = require("axios");
+
 const {
     getSteamIDData
 } = require("../services/steamid.js");
+
+
+// =====================================================
+// OBTENER NOMBRES HISTÓRICOS DESDE STEAMID.UK
+// =====================================================
+
+async function getSteamIDNameHistory(steamId64) {
+
+    try {
+
+        const url =
+            `https://steamid.uk/profile/${steamId64}`;
+
+        const response =
+            await axios.get(
+                url,
+                {
+                    timeout: 15000,
+
+                    headers: {
+                        "User-Agent":
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36",
+                        "Accept":
+                            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language":
+                            "en-US,en;q=0.9"
+                    }
+                }
+            );
+
+        const html =
+            response.data || "";
+
+        const names = [];
+
+        // =================================================
+        // BUSCAR BLOQUES DE HISTORIAL DE NOMBRES
+        // =================================================
+
+        const possiblePatterns = [
+
+            /Previous Names[\s\S]{0,10000}/i,
+
+            /Name History[\s\S]{0,10000}/i,
+
+            /Name history[\s\S]{0,10000}/i,
+
+            /Aliases[\s\S]{0,10000}/i,
+
+            /Previous name[\s\S]{0,10000}/i
+
+        ];
+
+        let historySection = "";
+
+        for (
+            const pattern of possiblePatterns
+        ) {
+
+            const match =
+                html.match(pattern);
+
+            if (match) {
+
+                historySection =
+                    match[0];
+
+                break;
+
+            }
+
+        }
+
+        // =================================================
+        // EXTRAER TEXTO DE ELEMENTOS HTML
+        // =================================================
+
+        if (historySection) {
+
+            const text =
+                historySection
+
+                    .replace(
+                        /<script[\s\S]*?<\/script>/gi,
+                        " "
+                    )
+
+                    .replace(
+                        /<style[\s\S]*?<\/style>/gi,
+                        " "
+                    )
+
+                    .replace(
+                        /<[^>]+>/g,
+                        "\n"
+                    )
+
+                    .replace(
+                        /&nbsp;/gi,
+                        " "
+                    )
+
+                    .replace(
+                        /&amp;/gi,
+                        "&"
+                    )
+
+                    .replace(
+                        /&quot;/gi,
+                        '"'
+                    )
+
+                    .replace(
+                        /&#39;/gi,
+                        "'"
+                    )
+
+                    .replace(
+                        /\r/g,
+                        ""
+                    );
+
+            const lines =
+                text
+                    .split("\n")
+                    .map(line =>
+                        line.trim()
+                    )
+                    .filter(Boolean);
+
+            // =================================================
+            // FILTRAR ELEMENTOS QUE NO SON NOMBRES
+            // =================================================
+
+            for (
+                const line of lines
+            ) {
+
+                if (
+                    line.length < 2 ||
+                    line.length > 100
+                ) {
+                    continue;
+                }
+
+                if (
+                    /previous names/i.test(line) ||
+                    /name history/i.test(line) ||
+                    /aliases/i.test(line) ||
+                    /history/i.test(line) ||
+                    /steamid/i.test(line) ||
+                    /steam3/i.test(line) ||
+                    /steam64/i.test(line) ||
+                    /profile/i.test(line) ||
+                    /friends/i.test(line) ||
+                    /avatars/i.test(line) ||
+                    /vac/i.test(line) ||
+                    /trade/i.test(line) ||
+                    /community/i.test(line)
+                ) {
+                    continue;
+                }
+
+                if (
+                    /^\d+$/.test(line)
+                ) {
+                    continue;
+                }
+
+                if (
+                    /^\d{4}$/.test(line)
+                ) {
+                    continue;
+                }
+
+                if (
+                    !names.includes(line)
+                ) {
+
+                    names.push(line);
+
+                }
+
+            }
+
+        }
+
+        // =================================================
+        // LIMPIAR RESULTADOS
+        // =================================================
+
+        return names;
+
+    } catch (error) {
+
+        console.error(
+            "⚠️ No se pudo obtener el historial de nombres desde SteamID.uk:",
+            error.response?.status ||
+            error.message
+        );
+
+        return [];
+
+    }
+
+}
 
 
 // =====================================================
@@ -61,16 +269,17 @@ module.exports = {
 
 
         // =================================================
-        // CONSULTAR STEAMID.UK
+        // CONSULTAR STEAMID.UK API
         // =================================================
 
         let data;
 
         try {
 
-            data = await getSteamIDData(
-                steamId
-            );
+            data =
+                await getSteamIDData(
+                    steamId
+                );
 
         } catch (error) {
 
@@ -80,10 +289,6 @@ module.exports = {
                 error.message
             );
 
-
-            // ---------------------------------------------
-            // ERROR API KEY
-            // ---------------------------------------------
 
             if (
                 error.message?.includes(
@@ -98,10 +303,6 @@ module.exports = {
             }
 
 
-            // ---------------------------------------------
-            // ERROR MYID
-            // ---------------------------------------------
-
             if (
                 error.message?.includes(
                     "STEAMID_MYID"
@@ -114,10 +315,6 @@ module.exports = {
 
             }
 
-
-            // ---------------------------------------------
-            // ERROR GENERAL
-            // ---------------------------------------------
 
             return await interaction.editReply(
                 "❌ No se pudo obtener la información desde SteamID.uk."
@@ -141,6 +338,22 @@ module.exports = {
 
         const watch =
             data.custom_watch_list || {};
+
+
+        // =================================================
+        // OBTENER NOMBRES INDIVIDUALES
+        // =================================================
+
+        const historicalNames =
+            await getSteamIDNameHistory(
+                steamId
+            );
+
+
+        console.log(
+            "📜 NOMBRES HISTÓRICOS ENCONTRADOS:",
+            historicalNames
+        );
 
 
         // =================================================
@@ -225,17 +438,13 @@ module.exports = {
 
 
         // =================================================
-        // PERFIL STEAMID.UK
+        // ENLACES
         // =================================================
 
         const steamIdUkUrl =
             profile.steamidurl ||
             `https://steamid.uk/profile/${steamId64}`;
 
-
-        // =================================================
-        // PERFIL STEAM
-        // =================================================
 
         const steamProfileUrl =
             `https://steamcommunity.com/profiles/${steamId64}`;
@@ -270,10 +479,116 @@ module.exports = {
             "0";
 
 
-        const nameHistory =
+        // =================================================
+        // HISTORIAL DE NOMBRES
+        // =================================================
+
+        const nameHistoryTotal =
             steamData.name_history_count ||
             "0";
 
+
+        const nameHistoryYears =
+            Array.isArray(
+                data.name_history_count_year
+            )
+                ? [...data.name_history_count_year]
+                : [];
+
+
+        nameHistoryYears.sort(
+            (a, b) =>
+                Number(b.year) -
+                Number(a.year)
+        );
+
+
+        let nameHistoryTexto =
+            `📊 Total: \`${nameHistoryTotal}\``;
+
+
+        // =================================================
+        // MOSTRAR NOMBRES INDIVIDUALES
+        // =================================================
+
+        if (
+            historicalNames.length > 0
+        ) {
+
+            const namesText =
+                historicalNames
+                    .map(
+                        (name, index) =>
+                            `\`${index + 1}.\` ${name}`
+                    )
+                    .join("\n");
+
+
+            nameHistoryTexto +=
+                `\n\n${namesText}`;
+
+        }
+
+
+        // =================================================
+        // DESGLOSE POR AÑO
+        // =================================================
+
+        if (
+            nameHistoryYears.length > 0
+        ) {
+
+            const yearsText =
+                nameHistoryYears
+
+                    .map(item =>
+                        `\`${item.year}\` → \`${item.count}\` nombre(s)`
+                    )
+
+                    .join("\n");
+
+
+            nameHistoryTexto +=
+                `\n\n📅 Por año:\n${yearsText}`;
+
+        }
+
+
+        // =================================================
+        // SI NO SE PUDIERON OBTENER LOS NOMBRES
+        // =================================================
+
+        if (
+            historicalNames.length === 0
+        ) {
+
+            nameHistoryTexto +=
+                "\n\n⚠️ No se pudieron obtener los nombres individuales desde la página de SteamID.uk.";
+
+        }
+
+
+        // =================================================
+        // LIMITAR CAMPO DE DISCORD
+        // =================================================
+
+        if (
+            nameHistoryTexto.length > 1024
+        ) {
+
+            nameHistoryTexto =
+                nameHistoryTexto.substring(
+                    0,
+                    1000
+                ) +
+                "\n...";
+
+        }
+
+
+        // =================================================
+        // HISTORIAL DE AMIGOS
+        // =================================================
 
         const friendHistory =
             steamData.friend_history_count ||
@@ -281,28 +596,24 @@ module.exports = {
 
 
         // =================================================
-        // DETECTAR PRIVACIDAD DE AMIGOS
+        // PRIVACIDAD DE AMIGOS
         // =================================================
-        //
-        // SteamID.uk puede devolver 0 cuando Steam
-        // mantiene los amigos privados.
-        //
-        // En ese caso mostramos:
-        //
-        // 🔒 Steam Friends - Private
-        //
-        // Si existen datos, mostramos el número.
-        // =================================================
-
-        let friendHistoryTexto;
-
 
         const friendCountNumber =
-            parseInt(friendCount, 10) || 0;
+            parseInt(
+                friendCount,
+                10
+            ) || 0;
 
 
         const friendHistoryNumber =
-            parseInt(friendHistory, 10) || 0;
+            parseInt(
+                friendHistory,
+                10
+            ) || 0;
+
+
+        let friendHistoryTexto;
 
 
         if (
@@ -338,228 +649,243 @@ module.exports = {
 
                 .addFields(
 
-
-                    // -------------------------------------
-                    // IDENTIFICACIÓN
-                    // -------------------------------------
-
                     {
-                        name: "🆔 SteamID64",
+                        name:
+                            "🆔 SteamID64",
 
                         value:
                             `\`${steamId64}\``,
 
-                        inline: false
+                        inline:
+                            false
                     },
 
 
                     {
-                        name: "Steam2",
+                        name:
+                            "Steam2",
 
                         value:
                             `\`${steam2}\``,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
                     {
-                        name: "Steam3",
+                        name:
+                            "Steam3",
 
                         value:
                             `\`${steam3}\``,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
                     {
-                        name: "CSGO Friend ID",
+                        name:
+                            "CSGO Friend ID",
 
                         value:
                             `\`${csgoFriend}\``,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
-                    // -------------------------------------
-                    // ENLACES
-                    // -------------------------------------
-
                     {
-                        name: "🔗 Perfil SteamID.uk",
+                        name:
+                            "🔗 Perfil SteamID.uk",
 
                         value:
                             `[Abrir perfil](${steamIdUkUrl})`,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
                     {
-                        name: "🎮 Perfil de Steam",
+                        name:
+                            "🎮 Perfil de Steam",
 
                         value:
                             `[Abrir perfil](${steamProfileUrl})`,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
-                    // -------------------------------------
-                    // BANEOS
-                    // -------------------------------------
-
                     {
-                        name: "🛡️ VAC",
+                        name:
+                            "🛡️ VAC",
 
                         value:
                             vac,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
                     {
-                        name: "🔨 Game Bans",
+                        name:
+                            "🔨 Game Bans",
 
                         value:
                             `\`${gameBans}\``,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
                     {
-                        name: "🚫 Trade Ban",
+                        name:
+                            "🚫 Trade Ban",
 
                         value:
                             trade,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
                     {
-                        name: "🏛️ Community Ban",
+                        name:
+                            "🏛️ Community Ban",
 
                         value:
                             community,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
                     {
-                        name: "🆔 SteamID Ban",
+                        name:
+                            "🆔 SteamID Ban",
 
                         value:
                             steamIdBan,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
                     {
-                        name: "🦀 RustHackReport",
+                        name:
+                            "🦀 RustHackReport",
 
                         value:
                             rustHack,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
-                    // -------------------------------------
-                    // AMIGOS
-                    // -------------------------------------
-
                     {
-                        name: "👥 Amigos",
+                        name:
+                            "👥 Amigos",
 
                         value:
                             `\`${friendCount}\``,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
                     {
-                        name: "👤 Amigos con VAC",
+                        name:
+                            "👤 Amigos con VAC",
 
                         value:
                             `\`${vacFriends}\``,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
                     {
-                        name: "⚠️ Amigos con Game Ban",
+                        name:
+                            "⚠️ Amigos con Game Ban",
 
                         value:
                             `\`${gameBannedFriends}\``,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
                     {
-                        name: "🚫 Amigos con Trade Ban",
+                        name:
+                            "🚫 Amigos con Trade Ban",
 
                         value:
                             `\`${tradeBannedFriends}\``,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
                     {
-                        name: "🏛️ Amigos con Community Ban",
+                        name:
+                            "🏛️ Amigos con Community Ban",
 
                         value:
                             `\`${communityBannedFriends}\``,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
-                    // -------------------------------------
-                    // HISTORIAL
-                    // -------------------------------------
-
                     {
-                        name: "📜 Historial de nombres",
+                        name:
+                            "📜 Historial de nombres",
 
                         value:
-                            `\`${nameHistory}\``,
+                            nameHistoryTexto,
 
-                        inline: true
+                        inline:
+                            false
                     },
 
 
                     {
-                        name: "📚 Historial de amigos",
+                        name:
+                            "📚 Historial de amigos",
 
                         value:
                             friendHistoryTexto,
 
-                        inline: true
+                        inline:
+                            true
                     },
 
 
-                    // -------------------------------------
-                    // WATCH LIST
-                    // -------------------------------------
-
                     {
-                        name: "👁️ Watch List",
+                        name:
+                            "👁️ Watch List",
 
                         value:
                             watchList,
 
-                        inline: false
+                        inline:
+                            false
                     }
 
                 )
@@ -581,13 +907,8 @@ module.exports = {
         // =================================================
 
         if (
-
-            bans.rusthackreport === "1"
-
-            &&
-
+            bans.rusthackreport === "1" &&
             bans.rusthackreport_url
-
         ) {
 
             embed.addFields({
