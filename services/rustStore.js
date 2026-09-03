@@ -24,7 +24,8 @@ const STEAM_BASE_URL =
 const TIMEZONE_CHILE =
     "America/Santiago";
 
-const MAX_ITEMS = 50;
+const MAX_ITEMS =
+    50;
 
 // Revisar Steam cada 10 minutos
 const CHECK_INTERVAL =
@@ -34,10 +35,38 @@ const REQUEST_DELAY =
     250;
 
 // =====================================================
+// PROTECCIÓN CONTRA DUPLICADOS
+// =====================================================
+
+// Protección dentro del mismo proceso
+let tiendaRevisando =
+    false;
+
+// Evita que iniciarTiendaAutomatica()
+// cree varios intervalos en el mismo proceso.
+let tiendaAutomaticaIniciada =
+    false;
+
+// Identificador único de esta instancia del bot
+const INSTANCE_ID =
+    `${process.pid}-${crypto.randomUUID()}`;
+
+// Nombre del documento de bloqueo
+const LOCK_ID =
+    "rust-store-global-lock";
+
+// Tiempo máximo que puede durar un bloqueo.
+// 5 minutos es más que suficiente incluso
+// publicando 50 artículos.
+const LOCK_DURATION =
+    5 * 60 * 1000;
+
+// =====================================================
 // HEADERS
 // =====================================================
 
 const STEAM_HEADERS = {
+
     "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
 
@@ -88,7 +117,8 @@ function convertirUrl(url) {
         return "";
     }
 
-    url = String(url).trim();
+    url =
+        String(url).trim();
 
     if (!url) {
         return "";
@@ -107,9 +137,188 @@ function convertirUrl(url) {
 
 function esperar(ms) {
 
-    return new Promise(resolve => {
-        setTimeout(resolve, ms);
-    });
+    return new Promise(
+        resolve => {
+            setTimeout(
+                resolve,
+                ms
+            );
+        }
+    );
+}
+
+// =====================================================
+// BLOQUEO DISTRIBUIDO MONGODB
+// =====================================================
+
+/*
+    Este bloqueo es importante.
+
+    tiendaRevisando protege solamente este proceso.
+
+    Este bloqueo protege también si existen:
+
+    - dos procesos Node
+    - dos instancias del bot
+    - PM2 duplicado
+    - dos contenedores
+    - dos procesos ejecutándose al mismo tiempo
+
+    Se utiliza una colección independiente para no
+    modificar el esquema de ServerConfig.
+*/
+
+function obtenerColeccionLocks() {
+
+    return ServerConfig
+        .db
+        .collection("rustStoreLocks");
+}
+
+async function adquirirBloqueoTienda() {
+
+    const ahora =
+        new Date();
+
+    const expira =
+        new Date(
+            ahora.getTime() +
+            LOCK_DURATION
+        );
+
+    const token =
+        INSTANCE_ID;
+
+    try {
+
+        const collection =
+            obtenerColeccionLocks();
+
+        const resultado =
+            await collection.findOneAndUpdate(
+
+                {
+                    _id:
+                        LOCK_ID,
+
+                    $or: [
+                        {
+                            expiresAt: {
+                                $lte:
+                                    ahora
+                            }
+                        },
+                        {
+                            expiresAt: {
+                                $exists:
+                                    false
+                            }
+                        },
+                        {
+                            lockToken:
+                                token
+                        }
+                    ]
+                },
+
+                {
+                    $set: {
+                        lockToken:
+                            token,
+
+                        expiresAt:
+                            expira,
+
+                        updatedAt:
+                            ahora
+                    }
+                },
+
+                {
+                    upsert:
+                        true,
+
+                    returnDocument:
+                        "after"
+                }
+            );
+
+        if (!resultado) {
+
+            console.log(
+                "⏳ Otra instancia del bot ya está revisando/publicando la tienda."
+            );
+
+            return false;
+        }
+
+        const documento =
+            resultado.value ||
+            resultado;
+
+        if (
+            documento &&
+            documento.lockToken === token
+        ) {
+
+            console.log(
+                `🔐 Bloqueo de tienda adquirido por ${INSTANCE_ID}`
+            );
+
+            return true;
+        }
+
+        console.log(
+            "⏳ No se pudo adquirir el bloqueo de tienda."
+        );
+
+        return false;
+
+    } catch (error) {
+
+        /*
+            Si MongoDB rechaza el upsert por una condición
+            de carrera, simplemente no publicamos.
+
+            Es mejor perder una revisión que publicar
+            la misma tienda dos veces.
+        */
+
+        console.error(
+            "❌ Error adquiriendo bloqueo de tienda:",
+            error.message
+        );
+
+        return false;
+    }
+}
+
+async function liberarBloqueoTienda() {
+
+    try {
+
+        const collection =
+            obtenerColeccionLocks();
+
+        await collection.deleteOne({
+            _id:
+                LOCK_ID,
+
+            lockToken:
+                INSTANCE_ID
+        });
+
+        console.log(
+            `🔓 Bloqueo de tienda liberado por ${INSTANCE_ID}`
+        );
+
+    } catch (error) {
+
+        console.error(
+            "⚠️ Error liberando bloqueo de tienda:",
+            error.message
+        );
+    }
 }
 
 // =====================================================
@@ -131,6 +340,7 @@ function generarFirmaTienda(items) {
             .map(item => {
 
                 return {
+
                     id:
                         String(
                             item.id || ""
@@ -148,21 +358,27 @@ function generarFirmaTienda(items) {
                 };
 
             })
-            .sort((a, b) => {
+            .sort(
+                (a, b) => {
 
-                const idA =
-                    a.id || a.nombre;
+                    const idA =
+                        a.id ||
+                        a.nombre;
 
-                const idB =
-                    b.id || b.nombre;
+                    const idB =
+                        b.id ||
+                        b.nombre;
 
-                return idA.localeCompare(
-                    idB
-                );
-            });
+                    return idA.localeCompare(
+                        idB
+                    );
+                }
+            );
 
     const contenido =
-        JSON.stringify(datos);
+        JSON.stringify(
+            datos
+        );
 
     return crypto
         .createHash("sha256")
@@ -184,12 +400,19 @@ function extraerPrecio(texto) {
         limpiarTexto(texto);
 
     const patrones = [
+
         /(?:US\s*)?\$\s*\d+(?:[.,]\d{1,2})?/i,
+
         /R\$\s*\d+(?:[.,]\d{1,2})?/i,
+
         /€\s*\d+(?:[.,]\d{1,2})?/i,
+
         /£\s*\d+(?:[.,]\d{1,2})?/i,
+
         /¥\s*\d+(?:[.,]\d{1,2})?/i,
+
         /₹\s*\d+(?:[.,]\d{1,2})?/i,
+
         /₽\s*\d+(?:[.,]\d{1,2})?/i
     ];
 
@@ -199,10 +422,14 @@ function extraerPrecio(texto) {
     ) {
 
         const match =
-            limpio.match(regex);
+            limpio.match(
+                regex
+            );
 
         if (match) {
-            return match[0].trim();
+
+            return match[0]
+                .trim();
         }
     }
 
@@ -270,6 +497,7 @@ function obtenerImagenElemento(
             imagenes.eq(i);
 
         const atributos = [
+
             "src",
             "data-src",
             "data-original",
@@ -416,9 +644,13 @@ function obtenerImagenElemento(
 function obtenerImagenMeta($) {
 
     const selectores = [
+
         'meta[property="og:image"]',
+
         'meta[property="og:image:url"]',
+
         'meta[name="twitter:image"]',
+
         'meta[itemprop="image"]'
     ];
 
@@ -504,6 +736,7 @@ function extraerImagenSteamEconomy(
             imagenes.eq(i);
 
         const atributos = [
+
             "src",
             "data-src",
             "data-original",
@@ -548,7 +781,9 @@ function extraerImagenSteamEconomy(
             /https?:\/\/(?:community|store|shared)\.(?:akamai\.)?steamstatic\.com\/economy\/image\/[^"'\\\s<]+/gi;
 
         const encontrados =
-            html.match(regex);
+            html.match(
+                regex
+            );
 
         if (encontrados) {
 
@@ -595,9 +830,12 @@ async function obtenerImagenDesdeDetail(
             await axios.get(
                 url,
                 {
-                    timeout: 25000,
 
-                    maxRedirects: 5,
+                    timeout:
+                        25000,
+
+                    maxRedirects:
+                        5,
 
                     validateStatus:
                         status =>
@@ -619,7 +857,9 @@ async function obtenerImagenDesdeDetail(
         }
 
         const $ =
-            cheerio.load(html);
+            cheerio.load(
+                html
+            );
 
         let imagen =
             extraerImagenSteamEconomy(
@@ -632,7 +872,9 @@ async function obtenerImagenDesdeDetail(
         }
 
         imagen =
-            obtenerImagenMeta($);
+            obtenerImagenMeta(
+                $
+            );
 
         if (imagen) {
             return imagen;
@@ -670,7 +912,9 @@ function nombreValido(nombre) {
     }
 
     nombre =
-        limpiarTexto(nombre);
+        limpiarTexto(
+            nombre
+        );
 
     if (
         nombre.length < 2 ||
@@ -680,6 +924,7 @@ function nombreValido(nombre) {
     }
 
     const ignorar = [
+
         "rust item store",
         "rust on steam",
         "featured",
@@ -729,7 +974,9 @@ function limpiarNombre(nombre) {
     }
 
     let resultado =
-        limpiarTexto(nombre);
+        limpiarTexto(
+            nombre
+        );
 
     resultado =
         resultado
@@ -768,6 +1015,7 @@ function obtenerNombreDesdeElemento(
     }
 
     const selectores = [
+
         ".item_store_item_name",
         ".itemstore_item_name",
         ".item_name",
@@ -809,6 +1057,7 @@ function obtenerNombreDesdeElemento(
     }
 
     const atributos = [
+
         "data-item-name",
         "data-name",
         "data-title",
@@ -901,6 +1150,7 @@ function obtenerContenedorItem(
     }
 
     const selectores = [
+
         ".item_store_item",
         ".itemstore_item",
         ".item_store_item_cap",
@@ -1146,6 +1396,7 @@ function extraerItemsDesdeEnlaces(
             if (!precio) {
 
                 const atributosPrecio = [
+
                     "data-price",
                     "data-item-price",
                     "data-final-price"
@@ -1193,10 +1444,16 @@ function extraerItemsDesdeEnlaces(
                 items,
                 vistos,
                 {
-                    id: match[1],
+
+                    id:
+                        match[1],
+
                     nombre,
+
                     precio,
+
                     imagen,
+
                     enlace
                 }
             );
@@ -1215,6 +1472,7 @@ function extraerItemsVisuales(
 ) {
 
     const selectores = [
+
         ".item_store_item",
         ".itemstore_item",
         ".item_store_item_cap",
@@ -1291,9 +1549,13 @@ function extraerItemsVisuales(
                         items,
                         vistos,
                         {
+
                             nombre,
+
                             precio,
+
                             imagen,
+
                             enlace
                         }
                     );
@@ -1327,7 +1589,6 @@ async function obtenerTiendaRust() {
         `${STEAM_STORE_URL}&cc=cl&l=english`,
 
         `${STEAM_STORE_URL}&cc=cl&l=spanish`
-
     ];
 
     for (
@@ -1349,9 +1610,12 @@ async function obtenerTiendaRust() {
                 await axios.get(
                     url,
                     {
-                        timeout: 30000,
 
-                        maxRedirects: 5,
+                        timeout:
+                            30000,
+
+                        maxRedirects:
+                            5,
 
                         validateStatus:
                             status =>
@@ -1461,7 +1725,9 @@ async function obtenerTiendaRust() {
                                     );
 
                                 return {
+
                                     item,
+
                                     imagen
                                 };
                             }
@@ -1591,6 +1857,7 @@ function crearEmbedItem(
                 "🔥 **Artículo disponible esta semana en la tienda Limited de Rust.**"
             )
             .addFields({
+
                 name:
                     "💰 Precio",
 
@@ -1609,6 +1876,7 @@ function crearEmbedItem(
             )
             .setTimestamp()
             .setFooter({
+
                 text:
                     "RustLogix • Rust Item Store"
             });
@@ -1645,16 +1913,21 @@ function crearBotonItem(
 
     return new ActionRowBuilder()
         .addComponents(
+
             new ButtonBuilder()
+
                 .setLabel(
                     "Ver en Steam"
                 )
+
                 .setEmoji(
                     "🛒"
                 )
+
                 .setStyle(
                     ButtonStyle.Link
                 )
+
                 .setURL(
                     item.enlace
                 )
@@ -1681,6 +1954,7 @@ async function publicarItem(
         );
 
     const mensaje = {
+
         embeds: [
             embed
         ]
@@ -1794,6 +2068,7 @@ async function publicarTiendaManual(
     }
 
     await interaction.editReply({
+
         content:
             `🛒 Se encontraron **${items.length} artículos** en la tienda semanal.\n\nPublicando artículos...`,
 
@@ -1835,6 +2110,7 @@ async function publicarTiendaManual(
     try {
 
         await interaction.editReply({
+
             content:
                 `✅ Tienda publicada correctamente.\n🛒 **${publicados}/${items.length} artículos** publicados.`
         });
@@ -1850,12 +2126,13 @@ async function publicarTiendaManual(
 // REVISIÓN AUTOMÁTICA
 // =====================================================
 
-let tiendaRevisando =
-    false;
-
 async function revisarTiendaAutomatica(
     client
 ) {
+
+    // =================================================
+    // PROTECCIÓN LOCAL
+    // =================================================
 
     if (
         tiendaRevisando
@@ -1871,12 +2148,20 @@ async function revisarTiendaAutomatica(
     tiendaRevisando =
         true;
 
+    let bloqueoAdquirido =
+        false;
+
     try {
+
+        // =================================================
+        // DÍA ACTUAL EN CHILE
+        // =================================================
 
         const dia =
             new Intl.DateTimeFormat(
                 "en-US",
                 {
+
                     timeZone:
                         TIMEZONE_CHILE,
 
@@ -1904,8 +2189,13 @@ async function revisarTiendaAutomatica(
             return;
         }
 
+        // =================================================
+        // CONFIGURACIONES
+        // =================================================
+
         const configs =
             await ServerConfig.find({
+
                 rustStoreEnabled:
                     true,
 
@@ -1966,6 +2256,24 @@ async function revisarTiendaAutomatica(
         console.log(
             `🔐 Firma actual: ${firmaActual}`
         );
+
+        // =================================================
+        // ADQUIRIR BLOQUEO GLOBAL
+        // =================================================
+
+        bloqueoAdquirido =
+            await adquirirBloqueoTienda();
+
+        if (
+            !bloqueoAdquirido
+        ) {
+
+            console.log(
+                "⏳ Otra instancia está procesando la tienda. Esta revisión no publicará nada."
+            );
+
+            return;
+        }
 
         // =================================================
         // SERVIDORES
@@ -2079,17 +2387,40 @@ async function revisarTiendaAutomatica(
                 }
 
                 // =================================================
-                // GUARDAR FIRMA
+                // GUARDAR FIRMA SOLO DESPUÉS DE PUBLICAR
                 // =================================================
 
-                config.rustStoreLastSignature =
-                    firmaActual;
+                /*
+                    IMPORTANTE:
 
-                await config.save();
+                    La firma NO se guarda antes de publicar.
 
-                console.log(
-                    `✅ Nueva tienda guardada en ${config.guildId}: ${publicados}/${items.length} artículos.`
-                );
+                    Si Discord falla a mitad de publicación,
+                    la próxima revisión podrá volver a intentarlo.
+
+                    Como tenemos el bloqueo MongoDB, otra instancia
+                    no podrá publicar simultáneamente.
+                */
+
+                if (
+                    publicados > 0
+                ) {
+
+                    config.rustStoreLastSignature =
+                        firmaActual;
+
+                    await config.save();
+
+                    console.log(
+                        `✅ Nueva tienda guardada en ${config.guildId}: ${publicados}/${items.length} artículos.`
+                    );
+
+                } else {
+
+                    console.log(
+                        `⚠️ ${config.guildId}: no se publicó ningún artículo. No se actualizará la firma.`
+                    );
+                }
 
             } catch (error) {
 
@@ -2109,6 +2440,21 @@ async function revisarTiendaAutomatica(
 
     } finally {
 
+        // =================================================
+        // LIBERAR BLOQUEO MONGODB
+        // =================================================
+
+        if (
+            bloqueoAdquirido
+        ) {
+
+            await liberarBloqueoTienda();
+        }
+
+        // =================================================
+        // LIBERAR BLOQUEO LOCAL
+        // =================================================
+
         tiendaRevisando =
             false;
     }
@@ -2122,6 +2468,24 @@ function iniciarTiendaAutomatica(
     client
 ) {
 
+    // =================================================
+    // EVITAR DOS INTERVALOS EN EL MISMO PROCESO
+    // =================================================
+
+    if (
+        tiendaAutomaticaIniciada
+    ) {
+
+        console.log(
+            "⚠️ El sistema automático de tienda ya estaba iniciado. No se creará otro intervalo."
+        );
+
+        return;
+    }
+
+    tiendaAutomaticaIniciada =
+        true;
+
     console.log(
         "🛒 Sistema automático de tienda Rust iniciado correctamente."
     );
@@ -2134,8 +2498,9 @@ function iniciarTiendaAutomatica(
         "📅 Detección activa jueves, viernes y sábado."
     );
 
-    // Primera revisión 15 segundos después
-    // de iniciar el bot.
+    // =================================================
+    // PRIMERA REVISIÓN
+    // =================================================
 
     setTimeout(
         () => {
@@ -2148,7 +2513,9 @@ function iniciarTiendaAutomatica(
         15000
     );
 
-    // Después cada 10 minutos.
+    // =================================================
+    // REVISIÓN CADA 10 MINUTOS
+    // =================================================
 
     setInterval(
         () => {
@@ -2181,5 +2548,4 @@ module.exports = {
     revisarTiendaAutomatica,
 
     iniciarTiendaAutomatica
-
 };
