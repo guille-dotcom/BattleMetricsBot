@@ -175,12 +175,10 @@ module.exports = {
                         } else {
 
                             // ====================================================
-                            // RUST DESCONOCIDO
+                            // RUST NO CONFIRMADO
                             //
-                            // IMPORTANTE:
-                            // NO significa que NO tenga Rust.
-                            // Simplemente Steam no nos permitió confirmarlo.
-                            // Esto incluye perfiles privados.
+                            // NO significa que no tenga Rust.
+                            // Simplemente no pudimos comprobarlo.
                             // ====================================================
 
                             descripcion +=
@@ -283,9 +281,8 @@ module.exports = {
                         buttonInteraction.customId ===
                         "steam_anterior"
                     ) {
-                        if (
-                            pagina > 0
-                        ) {
+
+                        if (pagina > 0) {
                             pagina--;
                         }
                     }
@@ -294,6 +291,7 @@ module.exports = {
                         buttonInteraction.customId ===
                         "steam_siguiente"
                     ) {
+
                         if (
                             pagina < totalPaginas - 1
                         ) {
@@ -352,8 +350,7 @@ module.exports = {
                             ]
                         });
 
-                    } catch (error) {
-
+                    } catch {
                         console.log(
                             "[STEAM] No se pudieron desactivar los botones."
                         );
@@ -365,7 +362,7 @@ module.exports = {
 
             console.error(
                 "[STEAM] ERROR:",
-                error.message
+                error
             );
 
             const embed =
@@ -510,7 +507,7 @@ async function obtenerNombreBattleMetrics(url) {
         if (!nombre) {
 
             console.log(
-                "[STEAM] No se encontró el nombre en el HTML de BattleMetrics."
+                "[STEAM] No se encontró el nombre en BattleMetrics."
             );
 
             return null;
@@ -545,9 +542,7 @@ async function buscarPerfilesSteam(nombreBuscado) {
     const vistos =
         new Set();
 
-    const resultadosPorPagina = 20;
-
-    const maxPaginas = 20;
+    const maxPaginas = 50;
 
     const cliente =
         axios.create({
@@ -696,14 +691,13 @@ async function buscarPerfilesSteam(nombreBuscado) {
                 );
 
             // ====================================================
-            // OBTENER HTML
+            // OBTENER HTML DE LA RESPUESTA
             // ====================================================
 
             let html = "";
 
             if (
-                typeof response.data ===
-                "string"
+                typeof response.data === "string"
             ) {
 
                 try {
@@ -716,7 +710,9 @@ async function buscarPerfilesSteam(nombreBuscado) {
                     html =
                         json.html ||
                         json.results_html ||
+                        json.resultsHtml ||
                         json.content ||
+                        json.data ||
                         "";
 
                 } catch {
@@ -726,34 +722,71 @@ async function buscarPerfilesSteam(nombreBuscado) {
                 }
 
             } else if (
-                response.data
+                response.data &&
+                typeof response.data === "object"
             ) {
 
                 html =
                     response.data.html ||
                     response.data.results_html ||
+                    response.data.resultsHtml ||
                     response.data.content ||
+                    response.data.data ||
                     "";
             }
 
-            if (!html) {
+            if (
+                typeof html !== "string"
+            ) {
+
+                html = "";
+            }
+
+            console.log(
+                `[STEAM] HTML recibido página ${pagina}: ${html.length} caracteres`
+            );
+
+            // ====================================================
+            // SI ESTA PÁGINA NO TRAE RESULTADOS
+            //
+            // NO hacemos break inmediatamente.
+            // Probamos la siguiente página para evitar que Steam
+            // deje una página vacía temporalmente.
+            // ====================================================
+
+            if (!html.trim()) {
 
                 console.log(
-                    "[STEAM] Steam no devolvió HTML de resultados."
+                    `[STEAM] Página ${pagina} vacía. Probando siguiente página.`
                 );
 
-                break;
+                await esperar(500);
+
+                continue;
             }
+
+            // ====================================================
+            // EXTRAER BLOQUES
+            // ====================================================
 
             const bloques =
                 extraerBloques(html);
 
             console.log(
-                `[STEAM] Resultados encontrados en HTML: ${bloques.length}`
+                `[STEAM] Bloques search_row encontrados: ${bloques.length}`
             );
 
             if (!bloques.length) {
-                break;
+
+                console.log(
+                    `[STEAM] No se encontraron search_row en página ${pagina}.`
+                );
+
+                // No cortar inmediatamente.
+                // Intentamos continuar algunas páginas.
+                await esperar(500);
+
+                continue;
             }
 
             let coincidenciasExactas =
@@ -769,8 +802,7 @@ async function buscarPerfilesSteam(nombreBuscado) {
 
                 const perfil =
                     procesarBloque(
-                        bloque,
-                        nombreBuscado
+                        bloque
                     );
 
                 if (!perfil) {
@@ -782,7 +814,13 @@ async function buscarPerfilesSteam(nombreBuscado) {
                 );
 
                 // ====================================================
-                // NOMBRE EXACTO
+                // COMPARACIÓN EXACTA
+                //
+                // CASE-SENSITIVE:
+                //
+                // low  = low
+                // Low  != low
+                // low1 != low
                 // ====================================================
 
                 if (
@@ -797,11 +835,16 @@ async function buscarPerfilesSteam(nombreBuscado) {
                     continue;
                 }
 
+                // ====================================================
+                // EVITAR DUPLICADOS
+                // ====================================================
+
                 if (
                     vistos.has(
                         perfil.url
                     )
                 ) {
+
                     continue;
                 }
 
@@ -812,22 +855,15 @@ async function buscarPerfilesSteam(nombreBuscado) {
                 coincidenciasExactas++;
 
                 console.log(
-                    `[STEAM] Nombre exacto encontrado: ${perfil.nombre}`
+                    `[STEAM] ✅ NOMBRE EXACTO: ${perfil.nombre}`
                 );
 
                 console.log(
-                    `[STEAM] Comprobando referencias de Rust: ${perfil.url}`
+                    `[STEAM] Perfil: ${perfil.url}`
                 );
 
                 // ====================================================
                 // COMPROBAR RUST
-                //
-                // IMPORTANTE:
-                // NUNCA DESCARTAMOS EL PERFIL.
-                //
-                // Si tiene Rust -> se marca.
-                //
-                // Si no podemos comprobarlo -> también se guarda.
                 // ====================================================
 
                 const datosRust =
@@ -864,19 +900,12 @@ async function buscarPerfilesSteam(nombreBuscado) {
                     perfil
                 );
 
-                await esperar(300);
+                await esperar(250);
             }
 
             console.log(
                 `[STEAM] Coincidencias exactas página ${pagina}: ${coincidenciasExactas}`
             );
-
-            if (
-                bloques.length <
-                resultadosPorPagina
-            ) {
-                break;
-            }
 
             await esperar(500);
 
@@ -887,17 +916,21 @@ async function buscarPerfilesSteam(nombreBuscado) {
                 error.message
             );
 
-            break;
+            // No rompemos toda la búsqueda por un error
+            // de una página concreta.
+            await esperar(1000);
+
+            continue;
         }
     }
 
     // ========================================================
     // ORDEN FINAL
     //
-    // NO ELIMINAMOS NINGÚN PERFIL.
+    // RUST CONFIRMADO PRIMERO.
+    // DESCONOCIDOS DESPUÉS.
     //
-    // 1. Primero los que tienen Rust confirmado.
-    // 2. Después los que no pudimos confirmar.
+    // NO SE ELIMINA NINGÚN PERFIL.
     // ========================================================
 
     perfilesExactos.sort(
@@ -932,7 +965,19 @@ async function buscarPerfilesSteam(nombreBuscado) {
         cantidadRust;
 
     console.log(
-        `[STEAM] RESULTADO FINAL: ${perfilesExactos.length} coincidencias exactas.`
+        `[STEAM] ========================================`
+    );
+
+    console.log(
+        `[STEAM] RESULTADO FINAL`
+    );
+
+    console.log(
+        `[STEAM] Nombre buscado: ${nombreBuscado}`
+    );
+
+    console.log(
+        `[STEAM] Coincidencias exactas: ${perfilesExactos.length}`
     );
 
     console.log(
@@ -941,6 +986,10 @@ async function buscarPerfilesSteam(nombreBuscado) {
 
     console.log(
         `[STEAM] Rust no confirmado: ${cantidadNoConfirmados}`
+    );
+
+    console.log(
+        `[STEAM] ========================================`
     );
 
     return perfilesExactos;
@@ -966,7 +1015,7 @@ async function comprobarRustSteam(perfil) {
             perfil.steamid;
 
         // ========================================================
-        // SI YA TENEMOS STEAMID64
+        // OBTENER STEAMID DESDE URL
         // ========================================================
 
         if (!steamid) {
@@ -984,8 +1033,7 @@ async function comprobarRustSteam(perfil) {
         }
 
         // ========================================================
-        // SI ES /ID/NOMBRE
-        // OBTENER STEAMID64
+        // RESOLVER /ID/
         // ========================================================
 
         if (!steamid) {
@@ -1001,7 +1049,6 @@ async function comprobarRustSteam(perfil) {
                         perfil.url,
                         {
                             headers: {
-
                                 "User-Agent":
                                     USER_AGENT,
 
@@ -1062,7 +1109,7 @@ async function comprobarRustSteam(perfil) {
         }
 
         // ========================================================
-        // SIN STEAMID
+        // SI NO TENEMOS STEAMID
         // ========================================================
 
         if (!steamid) {
@@ -1087,7 +1134,7 @@ async function comprobarRustSteam(perfil) {
         };
 
         // ========================================================
-        // COMPROBAR PERFIL PRINCIPAL
+        // PERFIL PRINCIPAL
         // ========================================================
 
         try {
@@ -1120,10 +1167,10 @@ async function comprobarRustSteam(perfil) {
 
             const referenciasRust = [
 
-                // Inventario / skins de Rust
+                // Inventario / skins
                 /#252490_/i,
 
-                // /inventory/STEAMID/252490
+                // Inventario Rust
                 /\/inventory\/(?:\d+)\/252490/i,
 
                 // Gamecards
@@ -1132,13 +1179,13 @@ async function comprobarRustSteam(perfil) {
                 // AppID
                 /appid["'=:\s]+["']?252490/i,
 
-                // Steam app
+                // Steam App
                 /\/app\/252490(?:\/|["'#?])/i,
 
-                // Referencia directa al AppID
+                // AppID directo
                 /\b252490\b/i,
 
-                // Nombre del juego
+                // Nombre Rust
                 /\bRust\b/i
             ];
 
@@ -1163,7 +1210,7 @@ async function comprobarRustSteam(perfil) {
             }
 
             // ====================================================
-            // INVENTARIO / SKINS DE RUST
+            // INVENTARIO / SKINS
             // ====================================================
 
             if (
@@ -1187,12 +1234,12 @@ async function comprobarRustSteam(perfil) {
                     true;
 
                 console.log(
-                    `[STEAM] ✅ Inventario/skins de Rust detectado en el perfil: ${steamid}`
+                    `[STEAM] ✅ Inventario/skins de Rust detectado: ${steamid}`
                 );
             }
 
             // ====================================================
-            // CUALQUIER OTRA REFERENCIA A RUST
+            // REFERENCIA GENERAL A RUST
             // ====================================================
 
             if (
@@ -1203,7 +1250,7 @@ async function comprobarRustSteam(perfil) {
                     true;
 
                 console.log(
-                    `[STEAM] ✅ Referencia de Rust encontrada en perfil: ${steamid}`
+                    `[STEAM] ✅ Referencia de Rust encontrada: ${steamid}`
                 );
             }
 
@@ -1215,7 +1262,7 @@ async function comprobarRustSteam(perfil) {
         }
 
         // ========================================================
-        // COMPROBAR PÁGINA DE JUEGOS
+        // PÁGINA DE JUEGOS
         // ========================================================
 
         try {
@@ -1280,7 +1327,7 @@ async function comprobarRustSteam(perfil) {
         }
 
         // ========================================================
-        // COMPROBAR INVENTARIO DIRECTAMENTE
+        // INVENTARIO DIRECTO
         // ========================================================
 
         try {
@@ -1315,7 +1362,7 @@ async function comprobarRustSteam(perfil) {
                     true;
 
                 console.log(
-                    `[STEAM] ✅ Inventario de Rust encontrado directamente: ${steamid}`
+                    `[STEAM] ✅ Inventario directo de Rust encontrado: ${steamid}`
                 );
             }
 
@@ -1327,7 +1374,7 @@ async function comprobarRustSteam(perfil) {
             ) {
 
                 console.log(
-                    `[STEAM] Inventario ${steamid} devuelve 403. NO se descarta el perfil.`
+                    `[STEAM] Inventario ${steamid} devuelve 403. NO se descarta.`
                 );
 
             } else {
@@ -1350,7 +1397,7 @@ async function comprobarRustSteam(perfil) {
 
 
 // ============================================================
-// EXTRAER BLOQUES
+// EXTRAER BLOQUES DE RESULTADOS
 // ============================================================
 
 function extraerBloques(html) {
@@ -1376,12 +1423,11 @@ function extraerBloques(html) {
 
 
 // ============================================================
-// PROCESAR RESULTADO
+// PROCESAR RESULTADO DE STEAM
 // ============================================================
 
 function procesarBloque(
-    bloque,
-    nombreBuscado
+    bloque
 ) {
 
     try {
@@ -1389,7 +1435,7 @@ function procesarBloque(
         let nombre = "";
 
         // ========================================================
-        // BUSCAR searchPersonaName
+        // NOMBRE PRINCIPAL
         // ========================================================
 
         const nombreMatch =
@@ -1413,7 +1459,7 @@ function procesarBloque(
         }
 
         // ========================================================
-        // FALLBACK
+        // FALLBACK DE NOMBRE
         // ========================================================
 
         if (!nombre) {
@@ -1462,7 +1508,7 @@ function procesarBloque(
         }
 
         // ========================================================
-        // BUSCAR URL DEL PERFIL
+        // URL DEL PERFIL
         // ========================================================
 
         const urlMatch =
@@ -1484,6 +1530,10 @@ function procesarBloque(
         let url =
             urlMatch[1];
 
+        // ========================================================
+        // CONVERTIR URL RELATIVA
+        // ========================================================
+
         if (
             url.startsWith("/")
         ) {
@@ -1492,8 +1542,16 @@ function procesarBloque(
                 `${STEAM_BASE}${url}`;
         }
 
+        // ========================================================
+        // QUITAR QUERY
+        // ========================================================
+
         url =
             url.split("?")[0];
+
+        // ========================================================
+        // OBTENER STEAMID64
+        // ========================================================
 
         let steamid = "";
 
