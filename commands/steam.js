@@ -14,10 +14,9 @@ const USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36";
 
 module.exports = {
-
     data: new SlashCommandBuilder()
         .setName("steam")
-        .setDescription("Busca perfiles de Steam por nombre exacto y filtra jugadores de Rust")
+        .setDescription("Busca perfiles de Steam por nombre exacto")
         .addStringOption(option =>
             option
                 .setName("nombre")
@@ -27,7 +26,6 @@ module.exports = {
         ),
 
     async execute(interaction) {
-
         const entrada =
             interaction.options.getString("nombre").trim();
 
@@ -38,7 +36,6 @@ module.exports = {
         await interaction.deferReply();
 
         try {
-
             let nombreBuscado = entrada;
 
             // ========================================================
@@ -48,7 +45,6 @@ module.exports = {
             if (
                 entrada.includes("battlemetrics.com/players/")
             ) {
-
                 console.log(
                     "[STEAM] Se detectó un enlace de BattleMetrics."
                 );
@@ -59,7 +55,6 @@ module.exports = {
                     );
 
                 if (!nombreBuscado) {
-
                     const embed =
                         new EmbedBuilder()
                             .setTitle("❌ BattleMetrics")
@@ -93,7 +88,7 @@ module.exports = {
                 );
 
             console.log(
-                `[STEAM] PERFILES DE RUST ENCONTRADOS: ${perfiles.length}`
+                `[STEAM] PERFILES DEVUELTOS: ${perfiles.length}`
             );
 
             // ========================================================
@@ -101,14 +96,11 @@ module.exports = {
             // ========================================================
 
             if (!perfiles.length) {
-
                 const embed =
                     new EmbedBuilder()
                         .setTitle("🔎 Búsqueda de Steam")
                         .setDescription(
-                            `No se encontraron perfiles de Steam que:\n\n` +
-                            `• Se llamen exactamente **${nombreBuscado}**\n` +
-                            `• Tengan **Rust** visible en su perfil o inventario.`
+                            `No se encontraron perfiles de Steam con el nombre exacto **${nombreBuscado}**.`
                         )
                         .setColor(0x171a21)
                         .setFooter({
@@ -126,7 +118,6 @@ module.exports = {
             // ========================================================
 
             let pagina = 0;
-
             const porPagina = 10;
 
             const totalPaginas =
@@ -135,7 +126,6 @@ module.exports = {
                 );
 
             function crearEmbed() {
-
                 const inicio =
                     pagina * porPagina;
 
@@ -157,18 +147,24 @@ module.exports = {
                             `🔗 [Ver perfil](${perfil.url})\n`;
 
                         if (perfil.steamid) {
-
                             descripcion +=
                                 `🆔 \`${perfil.steamid}\`\n`;
                         }
 
-                        descripcion +=
-                            `🎮 **Rust: Sí**\n`;
-
-                        if (perfil.inventarioRust) {
-
+                        if (perfil.tieneRust) {
                             descripcion +=
-                                `🎒 **Inventario/skins de Rust: Sí**\n`;
+                                `🎮 **Rust: Sí**\n`;
+
+                            if (perfil.inventarioRust) {
+                                descripcion +=
+                                    `🎒 **Inventario/skins de Rust: Sí**\n`;
+                            } else {
+                                descripcion +=
+                                    `🎒 Inventario/skins de Rust: No confirmado\n`;
+                            }
+                        } else {
+                            descripcion +=
+                                `🎮 **Rust: No detectado**\n`;
                         }
 
                         descripcion += "\n";
@@ -183,12 +179,11 @@ module.exports = {
                     .setColor(0x171a21)
                     .setFooter({
                         text:
-                            `Página ${pagina + 1}/${totalPaginas} • ${perfiles.length} perfiles de Rust • Nombre exacto: ${nombreBuscado}`
+                            `Página ${pagina + 1}/${totalPaginas} • ${perfiles.length} coincidencias exactas • Nombre: ${nombreBuscado}`
                     });
             }
 
             function crearBotones() {
-
                 return new ActionRowBuilder()
                     .addComponents(
 
@@ -226,11 +221,9 @@ module.exports = {
 
             const mensaje =
                 await interaction.editReply({
-
                     embeds: [
                         crearEmbed()
                     ],
-
                     components:
                         totalPaginas > 1
                             ? [crearBotones()]
@@ -256,7 +249,6 @@ module.exports = {
                         buttonInteraction.user.id !==
                         interaction.user.id
                     ) {
-
                         return buttonInteraction.reply({
                             content:
                                 "❌ Solo la persona que ejecutó este comando puede usar estos botones.",
@@ -268,7 +260,6 @@ module.exports = {
                         buttonInteraction.customId ===
                         "steam_anterior"
                     ) {
-
                         if (
                             pagina > 0
                         ) {
@@ -280,7 +271,6 @@ module.exports = {
                         buttonInteraction.customId ===
                         "steam_siguiente"
                     ) {
-
                         if (
                             pagina < totalPaginas - 1
                         ) {
@@ -289,11 +279,9 @@ module.exports = {
                     }
 
                     await buttonInteraction.update({
-
                         embeds: [
                             crearEmbed()
                         ],
-
                         components: [
                             crearBotones()
                         ]
@@ -304,13 +292,9 @@ module.exports = {
             collector.on(
                 "end",
                 async () => {
-
                     try {
-
                         await interaction.editReply({
-
                             components: [
-
                                 new ActionRowBuilder()
                                     .addComponents(
 
@@ -342,9 +326,7 @@ module.exports = {
                                     )
                             ]
                         });
-
                     } catch (error) {
-
                         console.log(
                             "[STEAM] No se pudieron desactivar los botones."
                         );
@@ -371,7 +353,6 @@ module.exports = {
                 interaction.deferred ||
                 interaction.replied
             ) {
-
                 await interaction.editReply({
                     embeds: [embed],
                     components: []
@@ -399,7 +380,6 @@ async function obtenerNombreBattleMetrics(url) {
                 url,
                 {
                     headers: {
-
                         "User-Agent":
                             USER_AGENT,
 
@@ -426,6 +406,7 @@ async function obtenerNombreBattleMetrics(url) {
             /<title[^>]*>([\s\S]*?)<\/title>/i,
 
             /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i
+
         ];
 
         for (
@@ -456,7 +437,6 @@ async function obtenerNombreBattleMetrics(url) {
                 posibleNombre &&
                 posibleNombre.length <= 100
             ) {
-
                 nombre =
                     posibleNombre;
 
@@ -479,6 +459,7 @@ async function obtenerNombreBattleMetrics(url) {
                 html.match(
                     /"username"\s*:\s*"([^"]+)"/i
                 )
+
             ];
 
             for (
@@ -533,19 +514,17 @@ async function obtenerNombreBattleMetrics(url) {
 
 async function buscarPerfilesSteam(nombreBuscado) {
 
-    const perfiles = [];
+    const perfilesExactos = [];
 
-    const vistos = new Set();
+    const vistos =
+        new Set();
 
-    const resultadosPorPagina = 50;
-
+    const resultadosPorPagina = 20;
     const maxPaginas = 20;
 
     const cliente =
         axios.create({
-
             headers: {
-
                 "User-Agent":
                     USER_AGENT,
 
@@ -651,9 +630,7 @@ async function buscarPerfilesSteam(nombreBuscado) {
                 await cliente.get(
                     `${STEAM_BASE}/search/SearchCommunityAjax`,
                     {
-
                         params: {
-
                             text:
                                 nombreBuscado,
 
@@ -671,7 +648,6 @@ async function buscarPerfilesSteam(nombreBuscado) {
                         },
 
                         headers: {
-
                             "User-Agent":
                                 USER_AGENT,
 
@@ -691,6 +667,11 @@ async function buscarPerfilesSteam(nombreBuscado) {
                         timeout: 20000
                     }
                 );
+
+
+            // ====================================================
+            // OBTENER HTML
+            // ====================================================
 
             let html = "";
 
@@ -729,6 +710,7 @@ async function buscarPerfilesSteam(nombreBuscado) {
                     "";
             }
 
+
             if (!html) {
 
                 console.log(
@@ -738,6 +720,7 @@ async function buscarPerfilesSteam(nombreBuscado) {
                 break;
             }
 
+
             const bloques =
                 extraerBloques(html);
 
@@ -745,11 +728,19 @@ async function buscarPerfilesSteam(nombreBuscado) {
                 `[STEAM] Resultados encontrados en HTML: ${bloques.length}`
             );
 
+
             if (!bloques.length) {
                 break;
             }
 
-            let coincidenciasPagina = 0;
+
+            let coincidenciasExactas =
+                0;
+
+
+            // ====================================================
+            // PROCESAR RESULTADOS
+            // ====================================================
 
             for (
                 const bloque of bloques
@@ -765,20 +756,28 @@ async function buscarPerfilesSteam(nombreBuscado) {
                     continue;
                 }
 
+
                 console.log(
                     `[STEAM] Resultado encontrado: "${perfil.nombre}"`
                 );
 
+
                 // ====================================================
-                // COMPARACIÓN EXACTA Y SENSIBLE A MAYÚSCULAS
+                // COINCIDENCIA EXACTA
                 // ====================================================
 
                 if (
                     perfil.nombre !==
                     nombreBuscado
                 ) {
+
+                    console.log(
+                        `[STEAM] DESCARTADO POR NOMBRE: "${perfil.nombre}"`
+                    );
+
                     continue;
                 }
+
 
                 if (
                     vistos.has(
@@ -788,56 +787,85 @@ async function buscarPerfilesSteam(nombreBuscado) {
                     continue;
                 }
 
+
                 vistos.add(
                     perfil.url
                 );
+
+
+                coincidenciasExactas++;
+
 
                 console.log(
                     `[STEAM] Nombre exacto encontrado: ${perfil.nombre}`
                 );
 
                 console.log(
-                    `[STEAM] Comprobando si tiene Rust: ${perfil.url}`
+                    `[STEAM] Comprobando referencias de Rust: ${perfil.url}`
                 );
+
+
+                // ====================================================
+                // COMPROBAR RUST
+                //
+                // IMPORTANTE:
+                // NO DESCARTAMOS SI NO TIENE RUST.
+                //
+                // Guardamos TODOS los nombres exactos.
+                // Después priorizamos los que tengan Rust.
+                // ====================================================
 
                 const datosRust =
                     await comprobarRustSteam(
                         perfil
                     );
 
-                if (
-                    !datosRust.tieneRust
-                ) {
-
-                    console.log(
-                        `[STEAM] DESCARTADO: ${perfil.nombre} no tiene Rust visible.`
-                    );
-
-                    continue;
-                }
 
                 perfil.tieneRust =
-                    true;
+                    datosRust.tieneRust;
 
                 perfil.inventarioRust =
                     datosRust.inventarioRust;
 
-                perfiles.push(
+
+                if (
+                    perfil.tieneRust
+                ) {
+
+                    console.log(
+                        `[STEAM] ✅ RUST DETECTADO: ${perfil.nombre}`
+                    );
+
+                } else {
+
+                    console.log(
+                        `[STEAM] ⚪ Coincidencia exacta sin Rust visible: ${perfil.nombre}`
+                    );
+                }
+
+
+                // ====================================================
+                // GUARDAR SIEMPRE LA COINCIDENCIA EXACTA
+                // ====================================================
+
+                perfilesExactos.push(
                     perfil
                 );
 
-                coincidenciasPagina++;
-
-                console.log(
-                    `[STEAM] ACEPTADO: ${perfil.nombre} tiene Rust.`
-                );
 
                 await esperar(300);
             }
 
+
             console.log(
-                `[STEAM] Coincidencias exactas de Rust página ${pagina}: ${coincidenciasPagina}`
+                `[STEAM] Coincidencias exactas página ${pagina}: ${coincidenciasExactas}`
             );
+
+
+            // ====================================================
+            // SI HAY MENOS RESULTADOS QUE EL MÁXIMO,
+            // YA NO HAY MÁS PÁGINAS
+            // ====================================================
 
             if (
                 bloques.length <
@@ -845,6 +873,7 @@ async function buscarPerfilesSteam(nombreBuscado) {
             ) {
                 break;
             }
+
 
             await esperar(500);
 
@@ -859,7 +888,42 @@ async function buscarPerfilesSteam(nombreBuscado) {
         }
     }
 
-    return perfiles;
+
+    // ========================================================
+    // PRIORIDAD RUST
+    //
+    // SI HAY ALGÚN PERFIL EXACTO CON RUST:
+    // DEVOLVEMOS SOLO LOS DE RUST.
+    //
+    // SI NINGUNO TIENE RUST:
+    // DEVOLVEMOS TODAS LAS COINCIDENCIAS EXACTAS.
+    // ========================================================
+
+    const perfilesConRust =
+        perfilesExactos.filter(
+            perfil =>
+                perfil.tieneRust === true
+        );
+
+
+    if (
+        perfilesConRust.length > 0
+    ) {
+
+        console.log(
+            `[STEAM] PRIORIDAD RUST: ${perfilesConRust.length} perfiles exactos con Rust.`
+        );
+
+        return perfilesConRust;
+    }
+
+
+    console.log(
+        `[STEAM] Ningún perfil exacto tiene Rust. Devolviendo ${perfilesExactos.length} coincidencias exactas.`
+    );
+
+
+    return perfilesExactos;
 }
 
 
@@ -870,12 +934,8 @@ async function buscarPerfilesSteam(nombreBuscado) {
 async function comprobarRustSteam(perfil) {
 
     const resultado = {
-
-        tieneRust:
-            false,
-
-        inventarioRust:
-            false
+        tieneRust: false,
+        inventarioRust: false
     };
 
     try {
@@ -904,7 +964,8 @@ async function comprobarRustSteam(perfil) {
 
 
         // ========================================================
-        // SI ES /ID/NOMBRE, ABRIR PERFIL Y OBTENER STEAMID64
+        // SI ES /ID/NOMBRE
+        // OBTENER STEAMID64
         // ========================================================
 
         if (!steamid) {
@@ -919,9 +980,7 @@ async function comprobarRustSteam(perfil) {
                     await axios.get(
                         perfil.url,
                         {
-
                             headers: {
-
                                 "User-Agent":
                                     USER_AGENT,
 
@@ -936,8 +995,10 @@ async function comprobarRustSteam(perfil) {
                         }
                     );
 
+
                 const perfilHTML =
                     perfilResponse.data || "";
+
 
                 const steamIDMatch =
                     perfilHTML.match(
@@ -952,6 +1013,7 @@ async function comprobarRustSteam(perfil) {
                     perfilHTML.match(
                         /\/profiles\/(\d+)/i
                     );
+
 
                 if (
                     steamIDMatch &&
@@ -979,7 +1041,7 @@ async function comprobarRustSteam(perfil) {
 
 
         // ========================================================
-        // SI NO PUDIMOS OBTENER STEAMID
+        // SIN STEAMID
         // ========================================================
 
         if (!steamid) {
@@ -1006,11 +1068,7 @@ async function comprobarRustSteam(perfil) {
 
 
         // ========================================================
-        // COMPROBAR EL PERFIL PRINCIPAL
-        //
-        // IMPORTANTE:
-        // Aquí detectamos referencias a Rust aunque el endpoint
-        // del inventario devuelva 403.
+        // COMPROBAR PERFIL PRINCIPAL
         // ========================================================
 
         try {
@@ -1019,14 +1077,15 @@ async function comprobarRustSteam(perfil) {
                 `[STEAM] Analizando perfil público: ${steamid}`
             );
 
+
             const perfilURL =
                 `${STEAM_BASE}/profiles/${steamid}`;
+
 
             const perfilResponse =
                 await axios.get(
                     perfilURL,
                     {
-
                         headers:
                             headers,
 
@@ -1035,37 +1094,43 @@ async function comprobarRustSteam(perfil) {
                     }
                 );
 
+
             const perfilHTML =
                 perfilResponse.data || "";
 
 
             // ====================================================
-            // RUST APPID 252490
+            // REFERENCIAS A RUST
             // ====================================================
 
             const referenciasRust = [
 
-                // Inventario de Rust
+                // Inventario / skins de Rust
                 /#252490_/i,
 
-                // Inventory URL de Rust
+                // /inventory/STEAMID/252490
                 /\/inventory\/(?:\d+)\/252490/i,
 
-                // Gamecards / referencias de Rust
+                // Gamecards
                 /\/gamecards\/252490/i,
 
-                // AppID directo
+                // AppID
                 /appid["'=:\s]+["']?252490/i,
 
-                // Enlaces a la aplicación
+                // Steam app
                 /\/app\/252490(?:\/|["'#?])/i,
 
-                // Referencias generales al AppID
-                /\b252490\b/i
+                // Referencia al AppID
+                /\b252490\b/i,
+
+                // Nombre del juego
+                /\bRust\b/i
             ];
+
 
             let rustEncontrado =
                 false;
+
 
             for (
                 const patron of referenciasRust
@@ -1086,17 +1151,29 @@ async function comprobarRustSteam(perfil) {
 
 
             // ====================================================
-            // DETECCIÓN ESPECÍFICA DE INVENTARIO RUST
+            // INVENTARIO / SKINS DE RUST
+            //
+            // ESTE ES EL CASO IMPORTANTE DE PAPITO:
+            //
+            // #252490_XXXXXXXX
+            //
+            // Eso demuestra que el perfil tiene referencias
+            // al inventario de Rust aunque el endpoint del
+            // inventario devuelva 403.
             // ====================================================
 
             if (
+
                 /#252490_/i.test(
                     perfilHTML
                 )
+
                 ||
+
                 /\/inventory\/(?:\d+)\/252490/i.test(
                     perfilHTML
                 )
+
             ) {
 
                 resultado.inventarioRust =
@@ -1105,6 +1182,7 @@ async function comprobarRustSteam(perfil) {
                 resultado.tieneRust =
                     true;
 
+
                 console.log(
                     `[STEAM] ✅ Inventario/skins de Rust detectado en el perfil: ${steamid}`
                 );
@@ -1112,7 +1190,7 @@ async function comprobarRustSteam(perfil) {
 
 
             // ====================================================
-            // RUST COMO JUEGO
+            // CUALQUIER OTRA REFERENCIA A RUST
             // ====================================================
 
             if (
@@ -1121,6 +1199,7 @@ async function comprobarRustSteam(perfil) {
 
                 resultado.tieneRust =
                     true;
+
 
                 console.log(
                     `[STEAM] ✅ Referencia de Rust encontrada en perfil: ${steamid}`
@@ -1144,11 +1223,11 @@ async function comprobarRustSteam(perfil) {
             const juegosURL =
                 `${STEAM_BASE}/profiles/${steamid}/games/?tab=all`;
 
+
             const juegosResponse =
                 await axios.get(
                     juegosURL,
                     {
-
                         headers:
                             headers,
 
@@ -1157,8 +1236,10 @@ async function comprobarRustSteam(perfil) {
                     }
                 );
 
+
             const juegosHTML =
                 juegosResponse.data || "";
+
 
             if (
 
@@ -1178,10 +1259,17 @@ async function comprobarRustSteam(perfil) {
                     juegosHTML
                 )
 
+                ||
+
+                /\bRust\b/i.test(
+                    juegosHTML
+                )
+
             ) {
 
                 resultado.tieneRust =
                     true;
+
 
                 console.log(
                     `[STEAM] ✅ Rust encontrado en juegos: ${steamid}`
@@ -1198,10 +1286,6 @@ async function comprobarRustSteam(perfil) {
 
         // ========================================================
         // COMPROBAR INVENTARIO DIRECTAMENTE
-        //
-        // Si devuelve 403 NO descartamos al jugador.
-        // El perfil principal ya puede haber demostrado que tiene
-        // inventario de Rust.
         // ========================================================
 
         try {
@@ -1209,11 +1293,11 @@ async function comprobarRustSteam(perfil) {
             const inventarioURL =
                 `${STEAM_BASE}/inventory/${steamid}/252490/2?l=english&count=1`;
 
+
             const inventarioResponse =
                 await axios.get(
                     inventarioURL,
                     {
-
                         headers:
                             headers,
 
@@ -1222,8 +1306,10 @@ async function comprobarRustSteam(perfil) {
                     }
                 );
 
+
             const inventario =
                 inventarioResponse.data;
+
 
             if (
                 inventario &&
@@ -1235,6 +1321,7 @@ async function comprobarRustSteam(perfil) {
 
                 resultado.tieneRust =
                     true;
+
 
                 console.log(
                     `[STEAM] ✅ Inventario de Rust encontrado directamente: ${steamid}`
@@ -1249,7 +1336,7 @@ async function comprobarRustSteam(perfil) {
             ) {
 
                 console.log(
-                    `[STEAM] Inventario ${steamid} devuelve 403. No se descarta porque ya comprobamos el perfil.`
+                    `[STEAM] Inventario ${steamid} devuelve 403. NO se descarta el perfil.`
                 );
 
             } else {
@@ -1267,6 +1354,7 @@ async function comprobarRustSteam(perfil) {
         );
     }
 
+
     return resultado;
 }
 
@@ -1282,7 +1370,9 @@ function extraerBloques(html) {
     const regex =
         /<div[^>]+class=["'][^"']*search_row[^"']*["'][^>]*>[\s\S]*?(?=<div[^>]+class=["'][^"']*search_row[^"']*["']|$)/gi;
 
+
     let match;
+
 
     while (
         (match = regex.exec(html)) !== null
@@ -1292,6 +1382,7 @@ function extraerBloques(html) {
             match[0]
         );
     }
+
 
     return bloques;
 }
@@ -1319,9 +1410,7 @@ function procesarBloque(
             bloque.match(
                 /class=["'][^"']*searchPersonaName[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i
             )
-
             ||
-
             bloque.match(
                 /searchPersonaName[^>]*>([\s\S]*?)<\/[^>]+>/i
             );
@@ -1353,6 +1442,7 @@ function procesarBloque(
                 )
             ];
 
+
             for (
                 const match of posiblesNombres
             ) {
@@ -1366,6 +1456,7 @@ function procesarBloque(
                         limpiarHTML(
                             match[1]
                         ).trim();
+
 
                     if (
                         posible &&
@@ -1395,9 +1486,7 @@ function procesarBloque(
             bloque.match(
                 /href=["'](https?:\/\/steamcommunity\.com\/(?:profiles\/\d+|id\/[^"'?#]+)[^"']*)["']/i
             )
-
             ||
-
             bloque.match(
                 /href=["'](\/(?:profiles\/\d+|id\/[^"'?#]+)[^"']*)["']/i
             );
@@ -1450,7 +1539,13 @@ function procesarBloque(
                 url,
 
             steamid:
-                steamid
+                steamid,
+
+            tieneRust:
+                false,
+
+            inventarioRust:
+                false
         };
 
     } catch (error) {
@@ -1474,6 +1569,7 @@ function limpiarHTML(texto) {
     if (!texto) {
         return "";
     }
+
 
     return texto
 
