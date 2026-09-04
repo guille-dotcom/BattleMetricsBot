@@ -106,7 +106,7 @@ module.exports = {
                 );
 
             console.log(
-                `[STEAM] Perfiles con nombre exacto encontrados: ${perfiles.length}`
+                `[STEAM] PERFILES DE RUST ENCONTRADOS: ${perfiles.length}`
             );
 
             if (!perfiles.length) {
@@ -121,7 +121,7 @@ module.exports = {
 
                         `• Se llamen exactamente **${nombreBuscado}**\n` +
 
-                        `• Tengan **Rust** visible en su perfil o inventario.`
+                        `• Tengan **Rust** visible en su perfil.`
 
                     )
 
@@ -184,21 +184,15 @@ module.exports = {
 
                         }
 
-                        if (
-                            perfil.tieneRust
-                        ) {
-
-                            descripcion +=
-                                `🎮 **Rust: Sí**\n`;
-
-                        }
+                        descripcion +=
+                            `🎮 **Rust: Sí**\n`;
 
                         if (
                             perfil.inventarioRust
                         ) {
 
                             descripcion +=
-                                `🎒 **Skins/Inventario Rust: Sí**\n`;
+                                `🎒 **Inventario/skins de Rust: Sí**\n`;
 
                         }
 
@@ -911,6 +905,10 @@ async function buscarPerfilesSteam(nombreBuscado) {
 
                 }
 
+                console.log(
+                    `[STEAM] Resultado encontrado: "${perfil.nombre}"`
+                );
+
                 /*
                  * COMPARACIÓN EXACTA.
                  */
@@ -939,7 +937,11 @@ async function buscarPerfilesSteam(nombreBuscado) {
                 );
 
                 console.log(
-                    `[STEAM] Comprobando Rust: ${perfil.nombre} - ${perfil.url}`
+                    `[STEAM] Nombre exacto encontrado: ${perfil.nombre}`
+                );
+
+                console.log(
+                    `[STEAM] Comprobando si tiene Rust: ${perfil.url}`
                 );
 
                 const datosRust =
@@ -960,7 +962,7 @@ async function buscarPerfilesSteam(nombreBuscado) {
                 }
 
                 perfil.tieneRust =
-                    datosRust.tieneRust;
+                    true;
 
                 perfil.inventarioRust =
                     datosRust.inventarioRust;
@@ -1026,15 +1028,6 @@ async function comprobarRustSteam(perfil) {
 
     };
 
-    if (
-        !perfil.steamid &&
-        !perfil.url
-    ) {
-
-        return resultado;
-
-    }
-
     try {
 
         let steamid =
@@ -1059,7 +1052,7 @@ async function comprobarRustSteam(perfil) {
         if (!steamid) {
 
             console.log(
-                "[STEAM] No se pudo obtener SteamID64 para comprobar Rust."
+                "[STEAM] No se pudo obtener SteamID64."
             );
 
             return resultado;
@@ -1081,13 +1074,13 @@ async function comprobarRustSteam(perfil) {
 
 
         /* ========================================================
-           COMPROBAR JUEGOS DEL PERFIL
+           COMPROBAR JUEGOS
            ======================================================== */
 
-        const juegosURL =
-            `https://steamcommunity.com/profiles/${steamid}/games/?tab=all`;
-
         try {
+
+            const juegosURL =
+                `https://steamcommunity.com/profiles/${steamid}/games/?tab=all`;
 
             const juegosResponse =
                 await axios.get(
@@ -1097,7 +1090,6 @@ async function comprobarRustSteam(perfil) {
                     {
 
                         headers:
-
                             headers,
 
                         timeout: 12000
@@ -1109,22 +1101,24 @@ async function comprobarRustSteam(perfil) {
             const juegosHTML =
                 juegosResponse.data || "";
 
-            /*
-             * Rust utiliza el AppID 252490.
-             */
-
             if (
+
+                juegosHTML.includes(
+                    "/app/252490/"
+                )
+
+                ||
+
                 juegosHTML.includes(
                     "app/252490"
                 )
+
                 ||
+
                 juegosHTML.includes(
                     "252490"
                 )
-                ||
-                /Rust/i.test(
-                    juegosHTML
-                )
+
             ) {
 
                 resultado.tieneRust =
@@ -1139,20 +1133,20 @@ async function comprobarRustSteam(perfil) {
         } catch (error) {
 
             console.log(
-                `[STEAM] No se pudo comprobar juegos de ${steamid}: ${error.message}`
+                `[STEAM] Error comprobando juegos ${steamid}: ${error.message}`
             );
 
         }
 
 
         /* ========================================================
-           COMPROBAR INVENTARIO DE RUST
+           COMPROBAR INVENTARIO
            ======================================================== */
 
-        const inventarioURL =
-            `https://steamcommunity.com/inventory/${steamid}/252490/2?l=english&count=1`;
-
         try {
+
+            const inventarioURL =
+                `https://steamcommunity.com/inventory/${steamid}/252490/2?l=english&count=1`;
 
             const inventarioResponse =
                 await axios.get(
@@ -1162,7 +1156,6 @@ async function comprobarRustSteam(perfil) {
                     {
 
                         headers:
-
                             headers,
 
                         timeout: 12000
@@ -1176,32 +1169,25 @@ async function comprobarRustSteam(perfil) {
 
             if (
                 inventario &&
-                typeof inventario ===
-                "object"
+                inventario.success === 1
             ) {
 
-                if (
-                    inventario.success === 1
-                ) {
+                resultado.inventarioRust =
+                    true;
 
-                    resultado.inventarioRust =
-                        true;
+                resultado.tieneRust =
+                    true;
 
-                    resultado.tieneRust =
-                        true;
-
-                    console.log(
-                        `[STEAM] Inventario de Rust encontrado: ${steamid}`
-                    );
-
-                }
+                console.log(
+                    `[STEAM] Inventario de Rust encontrado: ${steamid}`
+                );
 
             }
 
         } catch (error) {
 
             console.log(
-                `[STEAM] No se pudo comprobar inventario de ${steamid}: ${error.message}`
+                `[STEAM] Error comprobando inventario ${steamid}: ${error.message}`
             );
 
         }
@@ -1209,7 +1195,7 @@ async function comprobarRustSteam(perfil) {
     } catch (error) {
 
         console.log(
-            `[STEAM] Error comprobando Rust de ${perfil.nombre}: ${error.message}`
+            `[STEAM] Error comprobando Rust: ${error.message}`
         );
 
     }
@@ -1260,11 +1246,18 @@ function procesarBloque(
 
         let nombre = "";
 
+        /*
+         * Steam puede utilizar span, div, a u otro elemento
+         * alrededor de searchPersonaName.
+         *
+         * Por eso no obligamos a que termine en </a>.
+         */
+
         const nombreMatch =
 
             bloque.match(
 
-                /class=["'][^"']*searchPersonaName[^"']*["'][^>]*>([\s\S]*?)<\/a>/i
+                /class=["'][^"']*searchPersonaName[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i
 
             )
 
@@ -1272,7 +1265,7 @@ function procesarBloque(
 
             bloque.match(
 
-                /searchPersonaName[^>]*>([\s\S]*?)</i
+                /searchPersonaName[^>]*>([\s\S]*?)<\/[^>]+>/i
 
             );
 
@@ -1282,6 +1275,58 @@ function procesarBloque(
                 limpiarHTML(
                     nombreMatch[1]
                 ).trim();
+
+        }
+
+        /*
+         * Fallback:
+         * buscar el nombre dentro del bloque si la clase
+         * ha cambiado.
+         */
+
+        if (!nombre) {
+
+            const posiblesNombres = [
+
+                bloque.match(
+                    /<span[^>]*>([^<]+)<\/span>/i
+                ),
+
+                bloque.match(
+                    /<div[^>]*>([^<]+)<\/div>/i
+                )
+
+            ];
+
+            for (
+                const match of posiblesNombres
+            ) {
+
+                if (
+                    match &&
+                    match[1]
+                ) {
+
+                    const posible =
+                        limpiarHTML(
+                            match[1]
+                        ).trim();
+
+                    if (
+                        posible &&
+                        posible.length <= 100
+                    ) {
+
+                        nombre =
+                            posible;
+
+                        break;
+
+                    }
+
+                }
+
+            }
 
         }
 
