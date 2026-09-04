@@ -20,7 +20,7 @@ module.exports = {
 
         .setName("steam")
 
-        .setDescription("Busca perfiles de Steam por nombre exacto o enlace de BattleMetrics")
+        .setDescription("Busca perfiles de Steam por nombre exacto y filtra jugadores de Rust")
 
         .addStringOption(option =>
 
@@ -106,7 +106,7 @@ module.exports = {
                 );
 
             console.log(
-                `[STEAM] TOTAL COINCIDENCIAS EXACTAS: ${perfiles.length}`
+                `[STEAM] Perfiles con nombre exacto encontrados: ${perfiles.length}`
             );
 
             if (!perfiles.length) {
@@ -116,7 +116,13 @@ module.exports = {
                     .setTitle("🔎 Búsqueda de Steam")
 
                     .setDescription(
-                        `No se encontraron perfiles con el nombre exacto: **${nombreBuscado}**`
+
+                        `No se encontraron perfiles de Steam que:\n\n` +
+
+                        `• Se llamen exactamente **${nombreBuscado}**\n` +
+
+                        `• Tengan **Rust** visible en su perfil o inventario.`
+
                     )
 
                     .setColor(0x171a21)
@@ -178,6 +184,24 @@ module.exports = {
 
                         }
 
+                        if (
+                            perfil.tieneRust
+                        ) {
+
+                            descripcion +=
+                                `🎮 **Rust: Sí**\n`;
+
+                        }
+
+                        if (
+                            perfil.inventarioRust
+                        ) {
+
+                            descripcion +=
+                                `🎒 **Skins/Inventario Rust: Sí**\n`;
+
+                        }
+
                         descripcion += "\n";
 
                     }
@@ -196,7 +220,7 @@ module.exports = {
                     .setFooter({
 
                         text:
-                            `Página ${pagina + 1}/${totalPaginas} • ${perfiles.length} coincidencias exactas • Nombre: ${nombreBuscado}`
+                            `Página ${pagina + 1}/${totalPaginas} • ${perfiles.length} perfiles de Rust • Nombre exacto: ${nombreBuscado}`
 
                     });
 
@@ -506,11 +530,6 @@ async function obtenerNombreBattleMetrics(url) {
         const html =
             response.data || "";
 
-        /*
-         * BattleMetrics muestra el nombre del jugador
-         * dentro de la página del perfil.
-         */
-
         let nombre = "";
 
         const patrones = [
@@ -564,11 +583,6 @@ async function obtenerNombreBattleMetrics(url) {
         }
 
         if (!nombre) {
-
-            /*
-             * BattleMetrics puede cargar parte del contenido
-             * mediante datos JSON dentro del HTML.
-             */
 
             const posiblesNombres = [
 
@@ -924,16 +938,49 @@ async function buscarPerfilesSteam(nombreBuscado) {
                     perfil.url
                 );
 
+                console.log(
+                    `[STEAM] Comprobando Rust: ${perfil.nombre} - ${perfil.url}`
+                );
+
+                const datosRust =
+                    await comprobarRustSteam(
+                        perfil
+                    );
+
+                if (
+                    !datosRust.tieneRust
+                ) {
+
+                    console.log(
+                        `[STEAM] DESCARTADO: ${perfil.nombre} no tiene Rust visible.`
+                    );
+
+                    continue;
+
+                }
+
+                perfil.tieneRust =
+                    datosRust.tieneRust;
+
+                perfil.inventarioRust =
+                    datosRust.inventarioRust;
+
                 perfiles.push(
                     perfil
                 );
 
                 coincidenciasPagina++;
 
+                console.log(
+                    `[STEAM] ACEPTADO: ${perfil.nombre} tiene Rust.`
+                );
+
+                await esperar(300);
+
             }
 
             console.log(
-                `[STEAM] Coincidencias exactas página ${pagina}: ${coincidenciasPagina}`
+                `[STEAM] Coincidencias exactas de Rust página ${pagina}: ${coincidenciasPagina}`
             );
 
             if (
@@ -961,6 +1008,213 @@ async function buscarPerfilesSteam(nombreBuscado) {
     }
 
     return perfiles;
+
+}
+
+
+/* ============================================================
+   COMPROBAR RUST EN STEAM
+   ============================================================ */
+
+async function comprobarRustSteam(perfil) {
+
+    const resultado = {
+
+        tieneRust: false,
+
+        inventarioRust: false
+
+    };
+
+    if (
+        !perfil.steamid &&
+        !perfil.url
+    ) {
+
+        return resultado;
+
+    }
+
+    try {
+
+        let steamid =
+            perfil.steamid;
+
+        if (!steamid) {
+
+            const match =
+                perfil.url.match(
+                    /\/profiles\/(\d+)/
+                );
+
+            if (match) {
+
+                steamid =
+                    match[1];
+
+            }
+
+        }
+
+        if (!steamid) {
+
+            console.log(
+                "[STEAM] No se pudo obtener SteamID64 para comprobar Rust."
+            );
+
+            return resultado;
+
+        }
+
+        const headers = {
+
+            "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+
+            "Accept":
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+
+            "Accept-Language":
+                "es-ES,es;q=0.9,en;q=0.8"
+
+        };
+
+
+        /* ========================================================
+           COMPROBAR JUEGOS DEL PERFIL
+           ======================================================== */
+
+        const juegosURL =
+            `https://steamcommunity.com/profiles/${steamid}/games/?tab=all`;
+
+        try {
+
+            const juegosResponse =
+                await axios.get(
+
+                    juegosURL,
+
+                    {
+
+                        headers:
+
+                            headers,
+
+                        timeout: 12000
+
+                    }
+
+                );
+
+            const juegosHTML =
+                juegosResponse.data || "";
+
+            /*
+             * Rust utiliza el AppID 252490.
+             */
+
+            if (
+                juegosHTML.includes(
+                    "app/252490"
+                )
+                ||
+                juegosHTML.includes(
+                    "252490"
+                )
+                ||
+                /Rust/i.test(
+                    juegosHTML
+                )
+            ) {
+
+                resultado.tieneRust =
+                    true;
+
+                console.log(
+                    `[STEAM] Rust encontrado en juegos: ${steamid}`
+                );
+
+            }
+
+        } catch (error) {
+
+            console.log(
+                `[STEAM] No se pudo comprobar juegos de ${steamid}: ${error.message}`
+            );
+
+        }
+
+
+        /* ========================================================
+           COMPROBAR INVENTARIO DE RUST
+           ======================================================== */
+
+        const inventarioURL =
+            `https://steamcommunity.com/inventory/${steamid}/252490/2?l=english&count=1`;
+
+        try {
+
+            const inventarioResponse =
+                await axios.get(
+
+                    inventarioURL,
+
+                    {
+
+                        headers:
+
+                            headers,
+
+                        timeout: 12000
+
+                    }
+
+                );
+
+            const inventario =
+                inventarioResponse.data;
+
+            if (
+                inventario &&
+                typeof inventario ===
+                "object"
+            ) {
+
+                if (
+                    inventario.success === 1
+                ) {
+
+                    resultado.inventarioRust =
+                        true;
+
+                    resultado.tieneRust =
+                        true;
+
+                    console.log(
+                        `[STEAM] Inventario de Rust encontrado: ${steamid}`
+                    );
+
+                }
+
+            }
+
+        } catch (error) {
+
+            console.log(
+                `[STEAM] No se pudo comprobar inventario de ${steamid}: ${error.message}`
+            );
+
+        }
+
+    } catch (error) {
+
+        console.log(
+            `[STEAM] Error comprobando Rust de ${perfil.nombre}: ${error.message}`
+        );
+
+    }
+
+    return resultado;
 
 }
 
