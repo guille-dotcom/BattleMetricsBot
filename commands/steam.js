@@ -20,7 +20,7 @@ module.exports = {
 
         .setName("steam")
 
-        .setDescription("Busca perfiles de Steam por nombre exacto")
+        .setDescription("Busca perfiles de Steam por nombre exacto o enlace de BattleMetrics")
 
         .addStringOption(option =>
 
@@ -28,29 +28,82 @@ module.exports = {
 
                 .setName("nombre")
 
-                .setDescription("Nombre exacto del perfil de Steam")
+                .setDescription("Nombre exacto de Steam o enlace de BattleMetrics")
 
                 .setRequired(true)
 
-                .setMaxLength(100)
+                .setMaxLength(200)
 
         ),
 
     async execute(interaction) {
 
-        const nombreBuscado =
+        const entrada =
             interaction.options.getString("nombre").trim();
 
         console.log(
-            `[STEAM] Buscando perfiles con nombre exacto: ${nombreBuscado}`
+            `[STEAM] Entrada recibida: ${entrada}`
         );
 
         await interaction.deferReply();
 
         try {
 
+            let nombreBuscado = entrada;
+
+            /* ========================================================
+               SI ES UN ENLACE DE BATTLEMETRICS
+               ======================================================== */
+
+            if (
+                entrada.includes("battlemetrics.com/players/")
+            ) {
+
+                console.log(
+                    "[STEAM] Se detectó un enlace de BattleMetrics."
+                );
+
+                nombreBuscado =
+                    await obtenerNombreBattleMetrics(
+                        entrada
+                    );
+
+                if (!nombreBuscado) {
+
+                    const embed = new EmbedBuilder()
+
+                        .setTitle("❌ BattleMetrics")
+
+                        .setDescription(
+                            "No pude obtener el nombre del jugador desde ese perfil de BattleMetrics."
+                        )
+
+                        .setColor(0xff0000);
+
+                    return interaction.editReply({
+
+                        embeds: [embed],
+
+                        components: []
+
+                    });
+
+                }
+
+                console.log(
+                    `[STEAM] Nombre obtenido desde BattleMetrics: ${nombreBuscado}`
+                );
+
+            }
+
+            console.log(
+                `[STEAM] Buscando perfiles con nombre exacto: ${nombreBuscado}`
+            );
+
             const perfiles =
-                await buscarPerfilesSteam(nombreBuscado);
+                await buscarPerfilesSteam(
+                    nombreBuscado
+                );
 
             console.log(
                 `[STEAM] TOTAL COINCIDENCIAS EXACTAS: ${perfiles.length}`
@@ -69,12 +122,16 @@ module.exports = {
                     .setColor(0x171a21)
 
                     .setFooter({
+
                         text: "Steam Community"
+
                     });
 
                 return interaction.editReply({
 
-                    embeds: [embed]
+                    embeds: [embed],
+
+                    components: []
 
                 });
 
@@ -85,7 +142,9 @@ module.exports = {
             const porPagina = 10;
 
             const totalPaginas =
-                Math.ceil(perfiles.length / porPagina);
+                Math.ceil(
+                    perfiles.length / porPagina
+                );
 
             function crearEmbed() {
 
@@ -94,43 +153,50 @@ module.exports = {
 
                 const perfilesPagina =
                     perfiles.slice(
+
                         inicio,
+
                         inicio + porPagina
+
                     );
 
                 let descripcion = "";
 
-                perfilesPagina.forEach((perfil, index) => {
-
-                    descripcion +=
-                        `**${inicio + index + 1}. ${perfil.nombre}**\n`;
-
-                    descripcion +=
-                        `🔗 [Ver perfil](${perfil.url})\n`;
-
-                    if (perfil.steamid) {
+                perfilesPagina.forEach(
+                    (perfil, index) => {
 
                         descripcion +=
-                            `🆔 \`${perfil.steamid}\`\n`;
+                            `**${inicio + index + 1}. ${perfil.nombre}**\n`;
+
+                        descripcion +=
+                            `🔗 [Ver perfil](${perfil.url})\n`;
+
+                        if (perfil.steamid) {
+
+                            descripcion +=
+                                `🆔 \`${perfil.steamid}\`\n`;
+
+                        }
+
+                        descripcion += "\n";
 
                     }
-
-                    descripcion += "\n";
-
-                });
+                );
 
                 return new EmbedBuilder()
 
                     .setTitle("🔎 Búsqueda de Steam")
 
-                    .setDescription(descripcion)
+                    .setDescription(
+                        descripcion
+                    )
 
                     .setColor(0x171a21)
 
                     .setFooter({
 
                         text:
-                            `Página ${pagina + 1}/${totalPaginas} • ${perfiles.length} coincidencias exactas`
+                            `Página ${pagina + 1}/${totalPaginas} • ${perfiles.length} coincidencias exactas • Nombre: ${nombreBuscado}`
 
                     });
 
@@ -144,9 +210,13 @@ module.exports = {
 
                         new ButtonBuilder()
 
-                            .setCustomId("steam_anterior")
+                            .setCustomId(
+                                "steam_anterior"
+                            )
 
-                            .setLabel("Anterior")
+                            .setLabel(
+                                "Anterior"
+                            )
 
                             .setEmoji("⬅️")
 
@@ -160,9 +230,13 @@ module.exports = {
 
                         new ButtonBuilder()
 
-                            .setCustomId("steam_siguiente")
+                            .setCustomId(
+                                "steam_siguiente"
+                            )
 
-                            .setLabel("Siguiente")
+                            .setLabel(
+                                "Siguiente"
+                            )
 
                             .setEmoji("➡️")
 
@@ -171,7 +245,8 @@ module.exports = {
                             )
 
                             .setDisabled(
-                                pagina >= totalPaginas - 1
+                                pagina >=
+                                totalPaginas - 1
                             )
 
                     );
@@ -194,7 +269,9 @@ module.exports = {
 
                 });
 
-            if (totalPaginas <= 1) {
+            if (
+                totalPaginas <= 1
+            ) {
 
                 return;
 
@@ -232,7 +309,9 @@ module.exports = {
                         "steam_anterior"
                     ) {
 
-                        if (pagina > 0) {
+                        if (
+                            pagina > 0
+                        ) {
 
                             pagina--;
 
@@ -275,69 +354,76 @@ module.exports = {
                 }
             );
 
-            collector.on("end", async () => {
+            collector.on(
+                "end",
+                async () => {
 
-                try {
+                    try {
 
-                    await interaction.editReply({
+                        await interaction.editReply({
 
-                        components: [
+                            components: [
 
-                            new ActionRowBuilder()
+                                new ActionRowBuilder()
 
-                                .addComponents(
+                                    .addComponents(
 
-                                    new ButtonBuilder()
+                                        new ButtonBuilder()
 
-                                        .setCustomId(
-                                            "steam_anterior"
-                                        )
+                                            .setCustomId(
+                                                "steam_anterior"
+                                            )
 
-                                        .setLabel(
-                                            "Anterior"
-                                        )
+                                            .setLabel(
+                                                "Anterior"
+                                            )
 
-                                        .setEmoji("⬅️")
+                                            .setEmoji("⬅️")
 
-                                        .setStyle(
-                                            ButtonStyle.Secondary
-                                        )
+                                            .setStyle(
+                                                ButtonStyle.Secondary
+                                            )
 
-                                        .setDisabled(true),
+                                            .setDisabled(
+                                                true
+                                            ),
 
-                                    new ButtonBuilder()
+                                        new ButtonBuilder()
 
-                                        .setCustomId(
-                                            "steam_siguiente"
-                                        )
+                                            .setCustomId(
+                                                "steam_siguiente"
+                                            )
 
-                                        .setLabel(
-                                            "Siguiente"
-                                        )
+                                            .setLabel(
+                                                "Siguiente"
+                                            )
 
-                                        .setEmoji("➡️")
+                                            .setEmoji("➡️")
 
-                                        .setStyle(
-                                            ButtonStyle.Secondary
-                                        )
+                                            .setStyle(
+                                                ButtonStyle.Secondary
+                                            )
 
-                                        .setDisabled(true)
+                                            .setDisabled(
+                                                true
+                                            )
 
-                                )
+                                    )
 
-                        ]
+                            ]
 
-                    });
+                        });
 
-                } catch (error) {
+                    } catch (error) {
 
-                    console.log(
-                        "[STEAM] No se pudieron desactivar los botones."
-                    );
+                        console.log(
+                            "[STEAM] No se pudieron desactivar los botones."
+                        );
+
+                    }
 
                 }
-
-            });
+            );
 
         } catch (error) {
 
@@ -346,15 +432,16 @@ module.exports = {
                 error.message
             );
 
-            const embed = new EmbedBuilder()
+            const embed =
+                new EmbedBuilder()
 
-                .setTitle("❌ Error")
+                    .setTitle("❌ Error")
 
-                .setDescription(
-                    "Ocurrió un error al buscar perfiles en Steam."
-                )
+                    .setDescription(
+                        "Ocurrió un error al buscar perfiles en Steam."
+                    )
 
-                .setColor(0xff0000);
+                    .setColor(0xff0000);
 
             if (
                 interaction.deferred ||
@@ -376,6 +463,179 @@ module.exports = {
     }
 
 };
+
+
+/* ============================================================
+   OBTENER NOMBRE DESDE BATTLEMETRICS
+   ============================================================ */
+
+async function obtenerNombreBattleMetrics(url) {
+
+    try {
+
+        console.log(
+            `[STEAM] Abriendo BattleMetrics: ${url}`
+        );
+
+        const response =
+            await axios.get(
+
+                url,
+
+                {
+
+                    headers: {
+
+                        "User-Agent":
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+
+                        "Accept":
+                            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+
+                        "Accept-Language":
+                            "es-ES,es;q=0.9,en;q=0.8"
+
+                    },
+
+                    timeout: 20000
+
+                }
+
+            );
+
+        const html =
+            response.data || "";
+
+        /*
+         * BattleMetrics muestra el nombre del jugador
+         * dentro de la página del perfil.
+         */
+
+        let nombre = "";
+
+        const patrones = [
+
+            /<h1[^>]*>([\s\S]*?)<\/h1>/i,
+
+            /<title[^>]*>([\s\S]*?)<\/title>/i,
+
+            /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i
+
+        ];
+
+        for (
+            const patron of patrones
+        ) {
+
+            const match =
+                html.match(patron);
+
+            if (!match) {
+
+                continue;
+
+            }
+
+            let posibleNombre =
+                limpiarHTML(
+                    match[1]
+                ).trim();
+
+            posibleNombre =
+                posibleNombre
+                    .replace(
+                        /\s*-\s*BattleMetrics.*$/i,
+                        ""
+                    )
+                    .trim();
+
+            if (
+                posibleNombre &&
+                posibleNombre.length <= 100
+            ) {
+
+                nombre =
+                    posibleNombre;
+
+                break;
+
+            }
+
+        }
+
+        if (!nombre) {
+
+            /*
+             * BattleMetrics puede cargar parte del contenido
+             * mediante datos JSON dentro del HTML.
+             */
+
+            const posiblesNombres = [
+
+                html.match(
+                    /"name"\s*:\s*"([^"]+)"/i
+                ),
+
+                html.match(
+                    /"displayName"\s*:\s*"([^"]+)"/i
+                ),
+
+                html.match(
+                    /"username"\s*:\s*"([^"]+)"/i
+                )
+
+            ];
+
+            for (
+                const match of posiblesNombres
+            ) {
+
+                if (
+                    match &&
+                    match[1]
+                ) {
+
+                    nombre =
+                        limpiarHTML(
+                            match[1]
+                        ).trim();
+
+                    break;
+
+                }
+
+            }
+
+        }
+
+        if (!nombre) {
+
+            console.log(
+                "[STEAM] No se encontró el nombre en el HTML de BattleMetrics."
+            );
+
+            return null;
+
+        }
+
+        console.log(
+            `[STEAM] Nombre BattleMetrics encontrado: ${nombre}`
+        );
+
+        return nombre;
+
+    } catch (error) {
+
+        console.error(
+            "[STEAM] Error obteniendo BattleMetrics:",
+            error.message
+        );
+
+        return null;
+
+    }
+
+}
 
 
 /* ============================================================
@@ -435,8 +695,9 @@ async function buscarPerfilesSteam(nombreBuscado) {
         cookies =
             paginaInicial.headers["set-cookie"]
 
-                .map(cookie =>
-                    cookie.split(";")[0]
+                .map(
+                    cookie =>
+                        cookie.split(";")[0]
                 )
 
                 .join("; ");
@@ -637,14 +898,7 @@ async function buscarPerfilesSteam(nombreBuscado) {
                 }
 
                 /*
-                 * IMPORTANTE:
-                 * Comparación EXACTA.
-                 *
-                 * "low" = "low"       ✅
-                 * "Low" = "low"       ❌
-                 * "low123"            ❌
-                 * "the low"           ❌
-                 * "low_"              ❌
+                 * COMPARACIÓN EXACTA.
                  */
 
                 if (
