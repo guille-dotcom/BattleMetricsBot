@@ -49,7 +49,6 @@ const steam = axios.create({
     timeout: 20000,
     maxRedirects: 5,
     validateStatus: () => true,
-
     headers: {
         "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
@@ -238,6 +237,7 @@ function extraerResultados(html) {
             .first();
 
         let nombre = limpiarTexto(enlace.text());
+
         let url = enlace.attr("href") || "";
 
         if (!url) {
@@ -557,6 +557,7 @@ async function iniciarChrome() {
         );
 
         return false;
+
     } catch (error) {
         console.log(
             `[STEAM] Error iniciando Chrome: ${error.message}`
@@ -601,6 +602,7 @@ async function conectarChromeSteam() {
         );
 
         return browser;
+
     } catch (error) {
         console.log(
             `[STEAM] Error conectando a Chrome: ${error.message}`
@@ -641,6 +643,7 @@ async function obtenerPaginaSteamChrome(
             width: 1400,
             height: 900
         });
+
     } else {
         console.log(
             `[STEAM] Utilizando pestaña Steam existente: ${pagina.url()}`
@@ -670,10 +673,7 @@ async function extraerResultadosDesdeChrome(
             }
 
             if (url.startsWith("/")) {
-                return (
-                    "https://steamcommunity.com" +
-                    url
-                );
+                return "https://steamcommunity.com" + url;
             }
 
             return url;
@@ -808,6 +808,7 @@ async function buscarPaginaChrome(
             rateLimited: false,
             resultados
         };
+
     } catch (error) {
         console.log(
             `[STEAM] Error Chrome página ${numeroPagina}: ${error.message}`
@@ -901,6 +902,7 @@ async function buscarConChrome(
         );
 
         return perfiles;
+
     } catch (error) {
         console.log(
             `[STEAM] Error general usando Chrome: ${error.message}`
@@ -943,6 +945,7 @@ async function buscarPerfilesExactos(
                     nombreBuscado,
                     pagina
                 );
+
         } catch (error) {
             console.log(
                 `[STEAM] Error página normal ${pagina}: ${error.message}`
@@ -1075,6 +1078,7 @@ async function buscarPerfilesExactos(
                     );
                 }
             }
+
         } catch (error) {
             console.log(
                 `[STEAM] Error en método AJAX: ${error.message}`
@@ -1187,9 +1191,7 @@ async function obtenerNombreBattleMetrics(
 
         if (!nombre) {
             const meta =
-                $(
-                    'meta[name="description"]'
-                )
+                $('meta[name="description"]')
                     .attr("content");
 
             if (meta) {
@@ -1210,6 +1212,7 @@ async function obtenerNombreBattleMetrics(
         }
 
         return nombre || null;
+
     } catch (error) {
         console.log(
             `[BATTLEMETRICS] Error: ${error.message}`
@@ -1352,9 +1355,11 @@ async function comprobarRust(perfil) {
             ...perfil,
             rust:
                 resultado.rust,
+
             inventarioRust:
                 resultado.inventario
         };
+
     } catch (error) {
         console.log(
             `[RUST] Error ${perfil.nombre}: ${error.message}`
@@ -1854,6 +1859,7 @@ module.exports = {
                             )
                         ]
                     });
+
                 } catch (error) {
                     console.log(
                         `[STEAM] Error botón: ${error.message}`
@@ -1880,6 +1886,7 @@ module.exports = {
                             )
                         ]
                     });
+
                 } catch (error) {
                     // Mensaje eliminado.
                 }
