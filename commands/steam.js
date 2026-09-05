@@ -8,6 +8,7 @@ const {
 
 const axios = require("axios");
 const cheerio = require("cheerio");
+const puppeteer = require("puppeteer-core");
 
 // =====================================================
 // CONFIGURACIÓN
@@ -19,11 +20,13 @@ const STEAM_SEARCH_AJAX = `${STEAM_BASE}/search/SearchCommunityAjax`;
 
 const RESULTADOS_POR_PAGINA = 10;
 const MAX_PAGINAS = 10;
-
-const DELAY_PAGINAS = 1500;
+const DELAY_PAGINAS = 1200;
 
 const RUST_APPID = "252490";
 const CONCURRENCIA_RUST = 3;
+
+// Chrome que ya utiliza tu bot
+const CHROME_DEBUG_URL = "http://localhost:9222";
 
 // =====================================================
 // AXIOS
@@ -33,7 +36,6 @@ const steam = axios.create({
     timeout: 20000,
     maxRedirects: 5,
     validateStatus: () => true,
-
     headers: {
         "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
@@ -68,14 +70,41 @@ function limpiarTexto(texto) {
         .trim();
 }
 
+function normalizarUrlSteam(url) {
+    if (!url) {
+        return "";
+    }
+
+    let resultado = String(url).trim();
+
+    if (resultado.startsWith("//")) {
+        resultado = "https:" + resultado;
+    }
+
+    if (resultado.startsWith("/")) {
+        resultado = STEAM_BASE + resultado;
+    }
+
+    return resultado;
+}
+
 function extraerSteamID(url) {
-    if (!url) return null;
+    if (!url) {
+        return null;
+    }
 
     const match = String(url).match(
         /steamcommunity\.com\/profiles\/(\d{17})/i
     );
 
     return match ? match[1] : null;
+}
+
+function clavePerfil(perfil) {
+    return (
+        perfil.steamID64 ||
+        String(perfil.url || "").toLowerCase()
+    );
 }
 
 // =====================================================
@@ -112,8 +141,9 @@ async function obtenerSesionSteam(nombre) {
 
     let sessionId = null;
 
-    const matchSession =
-        html.match(/g_sessionID\s*=\s*["']([^"']+)["']/i);
+    const matchSession = html.match(
+        /g_sessionID\s*=\s*["']([^"']+)["']/i
+    );
 
     if (matchSession) {
         sessionId = matchSession[1];
@@ -131,7 +161,9 @@ async function obtenerSesionSteam(nombre) {
 
     console.log(
         `[STEAM] Cookies disponibles: ${
-            Object.keys(cookies).length > 0 ? "Sí" : "No"
+            Object.keys(cookies).length > 0
+                ? "Sí"
+                : "No"
         }`
     );
 
@@ -187,54 +219,44 @@ function extraerResultados(html) {
     $(".search_row").each((index, elemento) => {
         const row = $(elemento);
 
-        let enlace =
-            row.find("a.searchPersonaName").first();
+        let enlace = row
+            .find("a.searchPersonaName")
+            .first();
 
-        let nombre =
-            limpiarTexto(enlace.text());
+        let nombre = limpiarTexto(enlace.text());
+        let url = enlace.attr("href") || "";
 
-        let url =
-            enlace.attr("href") || "";
-
-        // Buscar cualquier enlace del perfil si no existe
+        // Buscar cualquier enlace del perfil
         if (!url) {
-            const cualquierEnlace =
-                row.find("a").filter((i, el) => {
-                    const href =
-                        $(el).attr("href") || "";
+            const cualquierEnlace = row
+                .find("a")
+                .filter((i, el) => {
+                    const href = $(el).attr("href") || "";
 
                     return (
                         href.includes("steamcommunity.com/id/") ||
                         href.includes("steamcommunity.com/profiles/")
                     );
-                }).first();
+                })
+                .first();
 
-            url =
-                cualquierEnlace.attr("href") || "";
+            url = cualquierEnlace.attr("href") || "";
 
-            nombre =
-                limpiarTexto(cualquierEnlace.text());
+            nombre = limpiarTexto(
+                cualquierEnlace.text()
+            );
         }
 
         if (!nombre || !url) {
             return;
         }
 
-        if (url.startsWith("//")) {
-            url = "https:" + url;
-        }
-
-        if (url.startsWith("/")) {
-            url = STEAM_BASE + url;
-        }
-
-        const steamID64 =
-            extraerSteamID(url);
+        url = normalizarUrlSteam(url);
 
         resultados.push({
             nombre,
             url,
-            steamID64
+            steamID64: extraerSteamID(url)
         });
     });
 
@@ -246,8 +268,7 @@ function extraerResultados(html) {
         $("a").each((index, elemento) => {
             const enlace = $(elemento);
 
-            const href =
-                enlace.attr("href") || "";
+            const href = enlace.attr("href") || "";
 
             if (
                 !href.includes("steamcommunity.com/id/") &&
@@ -268,23 +289,12 @@ function extraerResultados(html) {
                 return;
             }
 
-            let url = href;
-
-            if (url.startsWith("//")) {
-                url = "https:" + url;
-            }
-
-            if (url.startsWith("/")) {
-                url = STEAM_BASE + url;
-            }
-
-            const steamID64 =
-                extraerSteamID(url);
+            const url = normalizarUrlSteam(href);
 
             resultados.push({
                 nombre,
                 url,
-                steamID64
+                steamID64: extraerSteamID(url)
             });
         });
     }
@@ -296,9 +306,7 @@ function extraerResultados(html) {
     const vistos = new Set();
 
     return resultados.filter(perfil => {
-        const clave =
-            perfil.steamID64 ||
-            perfil.url.toLowerCase();
+        const clave = clavePerfil(perfil);
 
         if (vistos.has(clave)) {
             return false;
@@ -311,7 +319,7 @@ function extraerResultados(html) {
 }
 
 // =====================================================
-// BUSCAR PÁGINA NORMAL
+// BÚSQUEDA NORMAL
 // =====================================================
 
 async function buscarPaginaNormal(nombre, pagina) {
@@ -321,12 +329,9 @@ async function buscarPaginaNormal(nombre, pagina) {
         `&filter=users` +
         `&page=${pagina}`;
 
-    console.log(
-        `[STEAM] Página normal ${pagina}`
-    );
+    console.log(`[STEAM] Página normal ${pagina}`);
 
-    const respuesta =
-        await steam.get(url);
+    const respuesta = await steam.get(url);
 
     console.log(
         `[STEAM] Página normal ${pagina}: HTTP ${respuesta.status}`
@@ -346,10 +351,9 @@ async function buscarPaginaNormal(nombre, pagina) {
         };
     }
 
-    const resultados =
-        extraerResultados(
-            String(respuesta.data || "")
-        );
+    const resultados = extraerResultados(
+        String(respuesta.data || "")
+    );
 
     console.log(
         `[STEAM] Resultados encontrados en HTML: ${resultados.length}`
@@ -362,7 +366,7 @@ async function buscarPaginaNormal(nombre, pagina) {
 }
 
 // =====================================================
-// BUSCAR MEDIANTE AJAX
+// BÚSQUEDA AJAX
 // =====================================================
 
 async function buscarPaginaAjax(
@@ -370,11 +374,10 @@ async function buscarPaginaAjax(
     pagina,
     sesion
 ) {
-    const cookies =
-        construirCookieHeader(
-            sesion.cookies,
-            sesion.sessionId
-        );
+    const cookies = construirCookieHeader(
+        sesion.cookies,
+        sesion.sessionId
+    );
 
     const parametros = {
         text: nombre,
@@ -384,32 +387,28 @@ async function buscarPaginaAjax(
         page: pagina
     };
 
-    const respuesta =
-        await steam.get(
-            STEAM_SEARCH_AJAX,
-            {
-                params: parametros,
+    const respuesta = await steam.get(
+        STEAM_SEARCH_AJAX,
+        {
+            params: parametros,
 
-                headers: {
-                    "X-Requested-With":
-                        "XMLHttpRequest",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
 
-                    "Referer":
-                        `${STEAM_SEARCH_PAGE}?text=${encodeURIComponent(
-                            nombre
-                        )}&filter=users`,
+                "Referer":
+                    `${STEAM_SEARCH_PAGE}?text=${encodeURIComponent(
+                        nombre
+                    )}&filter=users`,
 
-                    "Origin":
-                        STEAM_BASE,
+                "Origin": STEAM_BASE,
 
-                    "Cookie":
-                        cookies,
+                "Cookie": cookies,
 
-                    "Accept":
-                        "application/json, text/javascript, */*; q=0.01"
-                }
+                "Accept":
+                    "application/json, text/javascript, */*; q=0.01"
             }
-        );
+        }
+    );
 
     console.log(
         `[STEAM] AJAX página ${pagina}: HTTP ${respuesta.status}`
@@ -441,8 +440,7 @@ async function buscarPaginaAjax(
             "";
     }
 
-    const resultados =
-        extraerResultados(html);
+    const resultados = extraerResultados(html);
 
     return {
         rateLimited: false,
@@ -464,6 +462,293 @@ function filtrarNombreExacto(
 }
 
 // =====================================================
+// CONECTAR A CHROME
+// =====================================================
+
+async function conectarChromeSteam() {
+    console.log("[STEAM] Intentando utilizar Chrome existente...");
+
+    try {
+        const browser = await puppeteer.connect({
+            browserURL: CHROME_DEBUG_URL,
+            defaultViewport: null
+        });
+
+        console.log("[STEAM] Conectado a Chrome.");
+
+        return browser;
+    } catch (error) {
+        console.log(
+            `[STEAM] No se pudo conectar a Chrome: ${error.message}`
+        );
+
+        return null;
+    }
+}
+
+// =====================================================
+// OBTENER PÁGINA DE STEAM EN CHROME
+// =====================================================
+
+async function obtenerPaginaSteamChrome(browser) {
+    const paginas = await browser.pages();
+
+    let pagina = paginas.find(page => {
+        const url = page.url();
+
+        return url.includes("steamcommunity.com");
+    });
+
+    if (!pagina) {
+        console.log(
+            "[STEAM] No existe pestaña de Steam. Creando..."
+        );
+
+        pagina = await browser.newPage();
+
+        await pagina.setViewport({
+            width: 1400,
+            height: 900
+        });
+    } else {
+        console.log(
+            `[STEAM] Utilizando pestaña Steam existente: ${pagina.url()}`
+        );
+    }
+
+    return pagina;
+}
+
+// =====================================================
+// EXTRAER RESULTADOS DESDE DOM DE CHROME
+// =====================================================
+
+async function extraerResultadosDesdeChrome(pagina) {
+    return await pagina.evaluate(() => {
+        const resultados = [];
+
+        const normalizarUrl = url => {
+            if (!url) {
+                return "";
+            }
+
+            if (url.startsWith("//")) {
+                return "https:" + url;
+            }
+
+            if (url.startsWith("/")) {
+                return "https://steamcommunity.com" + url;
+            }
+
+            return url;
+        };
+
+        const extraerSteamID = url => {
+            const match = String(url || "").match(
+                /steamcommunity\.com\/profiles\/(\d{17})/i
+            );
+
+            return match ? match[1] : null;
+        };
+
+        const filas = document.querySelectorAll(
+            ".search_row"
+        );
+
+        filas.forEach(fila => {
+            let enlace = fila.querySelector(
+                "a.searchPersonaName"
+            );
+
+            if (!enlace) {
+                const enlaces = fila.querySelectorAll("a");
+
+                for (const a of enlaces) {
+                    const href = a.getAttribute("href") || "";
+
+                    if (
+                        href.includes(
+                            "steamcommunity.com/id/"
+                        ) ||
+                        href.includes(
+                            "steamcommunity.com/profiles/"
+                        )
+                    ) {
+                        enlace = a;
+                        break;
+                    }
+                }
+            }
+
+            if (!enlace) {
+                return;
+            }
+
+            const nombre =
+                (enlace.innerText || "")
+                    .replace(/\s+/g, " ")
+                    .trim();
+
+            let url =
+                enlace.getAttribute("href") || "";
+
+            if (!nombre || !url) {
+                return;
+            }
+
+            url = normalizarUrl(url);
+
+            resultados.push({
+                nombre,
+                url,
+                steamID64: extraerSteamID(url)
+            });
+        });
+
+        return resultados;
+    });
+}
+
+// =====================================================
+// BUSCAR UNA PÁGINA MEDIANTE CHROME
+// =====================================================
+
+async function buscarPaginaChrome(
+    pagina,
+    nombre,
+    numeroPagina
+) {
+    const url =
+        `${STEAM_SEARCH_PAGE}` +
+        `?text=${encodeURIComponent(nombre)}` +
+        `&filter=users` +
+        `&page=${numeroPagina}`;
+
+    console.log(
+        `[STEAM] Chrome buscando página ${numeroPagina}...`
+    );
+
+    try {
+        await pagina.goto(
+            url,
+            {
+                waitUntil: "domcontentloaded",
+                timeout: 30000
+            }
+        );
+
+        await esperar(1500);
+
+        const resultados =
+            await extraerResultadosDesdeChrome(
+                pagina
+            );
+
+        console.log(
+            `[STEAM] Chrome página ${numeroPagina}: ${resultados.length} resultados`
+        );
+
+        return {
+            rateLimited: false,
+            resultados
+        };
+    } catch (error) {
+        console.log(
+            `[STEAM] Error Chrome página ${numeroPagina}: ${error.message}`
+        );
+
+        return {
+            rateLimited: false,
+            resultados: []
+        };
+    }
+}
+
+// =====================================================
+// BÚSQUEDA COMPLETA MEDIANTE CHROME
+// =====================================================
+
+async function buscarConChrome(nombreBuscado) {
+    let browser = null;
+    let pagina = null;
+
+    try {
+        browser = await conectarChromeSteam();
+
+        if (!browser) {
+            return [];
+        }
+
+        pagina = await obtenerPaginaSteamChrome(browser);
+
+        const perfiles = [];
+        const vistos = new Set();
+
+        for (
+            let paginaNumero = 1;
+            paginaNumero <= MAX_PAGINAS;
+            paginaNumero++
+        ) {
+            const respuesta =
+                await buscarPaginaChrome(
+                    pagina,
+                    nombreBuscado,
+                    paginaNumero
+                );
+
+            const exactos =
+                filtrarNombreExacto(
+                    respuesta.resultados,
+                    nombreBuscado
+                );
+
+            for (const perfil of exactos) {
+                const clave = clavePerfil(perfil);
+
+                if (!vistos.has(clave)) {
+                    vistos.add(clave);
+                    perfiles.push(perfil);
+                }
+            }
+
+            if (
+                respuesta.resultados.length === 0
+            ) {
+                break;
+            }
+
+            if (
+                respuesta.resultados.length <
+                RESULTADOS_POR_PAGINA
+            ) {
+                break;
+            }
+
+            if (
+                paginaNumero <
+                MAX_PAGINAS
+            ) {
+                await esperar(
+                    DELAY_PAGINAS
+                );
+            }
+        }
+
+        console.log(
+            `[STEAM] Chrome encontró ${perfiles.length} coincidencias exactas.`
+        );
+
+        return perfiles;
+    } catch (error) {
+        console.log(
+            `[STEAM] Error general usando Chrome: ${error.message}`
+        );
+
+        return [];
+    }
+}
+
+// =====================================================
 // BUSCAR TODOS LOS PERFILES EXACTOS
 // =====================================================
 
@@ -477,8 +762,10 @@ async function buscarPerfilesExactos(
     const perfiles = [];
     const vistos = new Set();
 
+    let huboRateLimit = false;
+
     // =================================================
-    // PÁGINA NORMAL
+    // MÉTODO NORMAL
     // =================================================
 
     for (
@@ -510,6 +797,7 @@ async function buscarPerfilesExactos(
                 "[STEAM] Steam está limitando la búsqueda normal."
             );
 
+            huboRateLimit = true;
             break;
         }
 
@@ -520,9 +808,7 @@ async function buscarPerfilesExactos(
             );
 
         for (const perfil of exactos) {
-            const clave =
-                perfil.steamID64 ||
-                perfil.url.toLowerCase();
+            const clave = clavePerfil(perfil);
 
             if (!vistos.has(clave)) {
                 vistos.add(clave);
@@ -536,20 +822,28 @@ async function buscarPerfilesExactos(
             break;
         }
 
+        if (
+            respuesta.resultados.length <
+            RESULTADOS_POR_PAGINA
+        ) {
+            break;
+        }
+
         if (pagina < MAX_PAGINAS) {
-            await esperar(DELAY_PAGINAS);
+            await esperar(
+                DELAY_PAGINAS
+            );
         }
     }
 
     // =================================================
-    // AJAX SOLO SI NORMAL NO ENCONTRÓ NADA
+    // AJAX
     // =================================================
 
-    if (perfiles.length === 0) {
-        console.log(
-            "[STEAM] La búsqueda normal no encontró resultados."
-        );
-
+    if (
+        perfiles.length === 0 ||
+        huboRateLimit
+    ) {
         console.log(
             "[STEAM] Intentando método AJAX..."
         );
@@ -588,8 +882,7 @@ async function buscarPerfilesExactos(
 
                 for (const perfil of exactos) {
                     const clave =
-                        perfil.steamID64 ||
-                        perfil.url.toLowerCase();
+                        clavePerfil(perfil);
 
                     if (!vistos.has(clave)) {
                         vistos.add(clave);
@@ -603,7 +896,17 @@ async function buscarPerfilesExactos(
                     break;
                 }
 
-                if (pagina < MAX_PAGINAS) {
+                if (
+                    respuesta.resultados.length <
+                    RESULTADOS_POR_PAGINA
+                ) {
+                    break;
+                }
+
+                if (
+                    pagina <
+                    MAX_PAGINAS
+                ) {
                     await esperar(
                         DELAY_PAGINAS
                     );
@@ -613,6 +916,35 @@ async function buscarPerfilesExactos(
             console.log(
                 `[STEAM] Error en método AJAX: ${error.message}`
             );
+        }
+    }
+
+    // =================================================
+    // CHROME COMO ÚLTIMO MÉTODO
+    // =================================================
+
+    if (perfiles.length === 0) {
+        console.log(
+            "[STEAM] Los métodos HTTP no devolvieron resultados."
+        );
+
+        console.log(
+            "[STEAM] Intentando búsqueda mediante Chrome..."
+        );
+
+        const chromePerfiles =
+            await buscarConChrome(
+                nombreBuscado
+            );
+
+        for (const perfil of chromePerfiles) {
+            const clave =
+                clavePerfil(perfil);
+
+            if (!vistos.has(clave)) {
+                vistos.add(clave);
+                perfiles.push(perfil);
+            }
         }
     }
 
@@ -627,16 +959,15 @@ async function buscarPerfilesExactos(
 // EXTRAER NOMBRE DESDE BATTLEMETRICS
 // =====================================================
 
-async function obtenerNombreBattleMetrics(
-    url
-) {
+async function obtenerNombreBattleMetrics(url) {
     console.log(
         `[BATTLEMETRICS] Obteniendo jugador desde: ${url}`
     );
 
     try {
-        const respuesta =
-            await axios.get(url, {
+        const respuesta = await axios.get(
+            url,
+            {
                 timeout: 15000,
 
                 headers: {
@@ -647,55 +978,52 @@ async function obtenerNombreBattleMetrics(
                 },
 
                 validateStatus: () => true
-            });
+            }
+        );
 
-        if (respuesta.status !== 200) {
-            console.log(
-                `[BATTLEMETRICS] HTTP ${respuesta.status}`
-            );
-        }
+        console.log(
+            `[BATTLEMETRICS] HTTP ${respuesta.status}`
+        );
 
-        const $ =
-            cheerio.load(
-                String(respuesta.data || "")
-            );
+        const $ = cheerio.load(
+            String(respuesta.data || "")
+        );
 
         let nombre = "";
 
-        const h1 =
-            $("h1").first().text();
+        const h1 = $("h1")
+            .first()
+            .text();
 
         if (h1) {
-            nombre =
-                limpiarTexto(h1);
+            nombre = limpiarTexto(h1);
         }
 
         if (!nombre) {
-            const title =
-                $("title").first().text();
+            const title = $("title")
+                .first()
+                .text();
 
-            nombre =
-                limpiarTexto(
-                    title.replace(
-                        /\s*-\s*BattleMetrics.*$/i,
+            nombre = limpiarTexto(
+                title.replace(
+                    /\s*-\s*BattleMetrics.*$/i,
+                    ""
+                )
+            );
+        }
+
+        if (!nombre) {
+            const meta = $(
+                'meta[name="description"]'
+            ).attr("content");
+
+            if (meta) {
+                nombre = limpiarTexto(
+                    meta.replace(
+                        /^.*?player\s*/i,
                         ""
                     )
                 );
-        }
-
-        if (!nombre) {
-            const meta =
-                $('meta[name="description"]')
-                    .attr("content");
-
-            if (meta) {
-                nombre =
-                    limpiarTexto(
-                        meta.replace(
-                            /^.*?player\s*/i,
-                            ""
-                        )
-                    );
             }
         }
 
@@ -705,7 +1033,7 @@ async function obtenerNombreBattleMetrics(
             );
         }
 
-        return nombre;
+        return nombre || null;
     } catch (error) {
         console.log(
             `[BATTLEMETRICS] Error: ${error.message}`
@@ -728,7 +1056,7 @@ function analizarRustHTML(html) {
     }
 
     const texto =
-        html.toLowerCase();
+        String(html).toLowerCase();
 
     // =================================================
     // INVENTARIO / SKINS DE RUST
@@ -812,7 +1140,9 @@ async function comprobarRust(perfil) {
 
         console.log(
             `[RUST] ${perfil.nombre} -> Rust: ${
-                resultado.rust ? "Sí" : "No confirmado"
+                resultado.rust
+                    ? "Sí"
+                    : "No confirmado"
             } | Inventario: ${
                 resultado.inventario
                     ? "Sí"
@@ -843,9 +1173,7 @@ async function comprobarRust(perfil) {
 // COMPROBAR RUST CON CONCURRENCIA
 // =====================================================
 
-async function comprobarRustTodos(
-    perfiles
-) {
+async function comprobarRustTodos(perfiles) {
     const resultados =
         new Array(perfiles.length);
 
@@ -899,14 +1227,11 @@ async function comprobarRustTodos(
 // ORDENAR RESULTADOS
 // =====================================================
 
-function ordenarPerfiles(
-    perfiles
-) {
+function ordenarPerfiles(perfiles) {
     return [...perfiles].sort(
         (a, b) => {
-            function prioridad(
-                perfil
-            ) {
+            function prioridad(perfil) {
+                // Rust + inventario confirmado
                 if (
                     perfil.rust === true &&
                     perfil.inventarioRust === true
@@ -914,12 +1239,14 @@ function ordenarPerfiles(
                     return 3;
                 }
 
+                // Rust confirmado
                 if (
                     perfil.rust === true
                 ) {
                     return 2;
                 }
 
+                // Desconocido / privado / no confirmado
                 return 1;
             }
 
@@ -1032,7 +1359,8 @@ function crearEmbed(
             )
             .setFooter({
                 text:
-                    `Página ${pagina + 1}/${totalPaginas} • ${total} coincidencias exactas`
+                    `Página ${pagina + 1}/${totalPaginas} • ` +
+                    `${total} coincidencias exactas`
             });
 
     return embed;
@@ -1173,7 +1501,7 @@ module.exports = {
             await interaction.editReply({
                 content:
                     `❌ No se encontraron perfiles de Steam con el nombre exacto **${nombreBuscado}**.\n\n` +
-                    `Si Steam está devolviendo **429**, significa que Steam está limitando temporalmente las peticiones desde la conexión/IP.`
+                    `Steam puede estar limitando temporalmente las búsquedas desde esta conexión/IP.`
             });
 
             console.log(
