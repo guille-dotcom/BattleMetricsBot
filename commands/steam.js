@@ -9,6 +9,7 @@ const {
 const axios = require("axios");
 const cheerio = require("cheerio");
 const puppeteer = require("puppeteer-core");
+const { spawn } = require("child_process");
 
 // =====================================================
 // CONFIGURACIÓN
@@ -25,8 +26,20 @@ const DELAY_PAGINAS = 1200;
 const RUST_APPID = "252490";
 const CONCURRENCIA_RUST = 3;
 
-// Chrome que ya utiliza tu bot
-const CHROME_DEBUG_URL = "http://localhost:9222";
+// =====================================================
+// CHROME
+// =====================================================
+
+const CHROME_PATH =
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+
+const CHROME_PROFILE =
+    "C:\\BattleMetricsBotProfile";
+
+const CHROME_DEBUG_PORT = 9222;
+
+const CHROME_DEBUG_URL =
+    `http://localhost:${CHROME_DEBUG_PORT}`;
 
 // =====================================================
 // AXIOS
@@ -36,6 +49,7 @@ const steam = axios.create({
     timeout: 20000,
     maxRedirects: 5,
     validateStatus: () => true,
+
     headers: {
         "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
@@ -200,7 +214,7 @@ function construirCookieHeader(cookies, sessionId) {
 }
 
 // =====================================================
-// EXTRAER RESULTADOS DE STEAM
+// EXTRAER RESULTADOS
 // =====================================================
 
 function extraerResultados(html) {
@@ -226,7 +240,6 @@ function extraerResultados(html) {
         let nombre = limpiarTexto(enlace.text());
         let url = enlace.attr("href") || "";
 
-        // Buscar cualquier enlace del perfil
         if (!url) {
             const cualquierEnlace = row
                 .find("a")
@@ -300,7 +313,7 @@ function extraerResultados(html) {
     }
 
     // =================================================
-    // ELIMINAR DUPLICADOS
+    // DUPLICADOS
     // =================================================
 
     const vistos = new Set();
@@ -329,9 +342,12 @@ async function buscarPaginaNormal(nombre, pagina) {
         `&filter=users` +
         `&page=${pagina}`;
 
-    console.log(`[STEAM] Página normal ${pagina}`);
+    console.log(
+        `[STEAM] Página normal ${pagina}`
+    );
 
-    const respuesta = await steam.get(url);
+    const respuesta =
+        await steam.get(url);
 
     console.log(
         `[STEAM] Página normal ${pagina}: HTTP ${respuesta.status}`
@@ -351,9 +367,10 @@ async function buscarPaginaNormal(nombre, pagina) {
         };
     }
 
-    const resultados = extraerResultados(
-        String(respuesta.data || "")
-    );
+    const resultados =
+        extraerResultados(
+            String(respuesta.data || "")
+        );
 
     console.log(
         `[STEAM] Resultados encontrados en HTML: ${resultados.length}`
@@ -366,7 +383,7 @@ async function buscarPaginaNormal(nombre, pagina) {
 }
 
 // =====================================================
-// BÚSQUEDA AJAX
+// AJAX
 // =====================================================
 
 async function buscarPaginaAjax(
@@ -374,10 +391,11 @@ async function buscarPaginaAjax(
     pagina,
     sesion
 ) {
-    const cookies = construirCookieHeader(
-        sesion.cookies,
-        sesion.sessionId
-    );
+    const cookies =
+        construirCookieHeader(
+            sesion.cookies,
+            sesion.sessionId
+        );
 
     const parametros = {
         text: nombre,
@@ -387,28 +405,32 @@ async function buscarPaginaAjax(
         page: pagina
     };
 
-    const respuesta = await steam.get(
-        STEAM_SEARCH_AJAX,
-        {
-            params: parametros,
+    const respuesta =
+        await steam.get(
+            STEAM_SEARCH_AJAX,
+            {
+                params: parametros,
 
-            headers: {
-                "X-Requested-With": "XMLHttpRequest",
+                headers: {
+                    "X-Requested-With":
+                        "XMLHttpRequest",
 
-                "Referer":
-                    `${STEAM_SEARCH_PAGE}?text=${encodeURIComponent(
-                        nombre
-                    )}&filter=users`,
+                    "Referer":
+                        `${STEAM_SEARCH_PAGE}?text=${encodeURIComponent(
+                            nombre
+                        )}&filter=users`,
 
-                "Origin": STEAM_BASE,
+                    "Origin":
+                        STEAM_BASE,
 
-                "Cookie": cookies,
+                    "Cookie":
+                        cookies,
 
-                "Accept":
-                    "application/json, text/javascript, */*; q=0.01"
+                    "Accept":
+                        "application/json, text/javascript, */*; q=0.01"
+                }
             }
-        }
-    );
+        );
 
     console.log(
         `[STEAM] AJAX página ${pagina}: HTTP ${respuesta.status}`
@@ -440,16 +462,14 @@ async function buscarPaginaAjax(
             "";
     }
 
-    const resultados = extraerResultados(html);
-
     return {
         rateLimited: false,
-        resultados
+        resultados: extraerResultados(html)
     };
 }
 
 // =====================================================
-// FILTRAR NOMBRE EXACTO
+// NOMBRE EXACTO
 // =====================================================
 
 function filtrarNombreExacto(
@@ -462,24 +482,128 @@ function filtrarNombreExacto(
 }
 
 // =====================================================
+// COMPROBAR CHROME
+// =====================================================
+
+async function chromeDisponible() {
+    try {
+        const respuesta =
+            await axios.get(
+                `${CHROME_DEBUG_URL}/json/version`,
+                {
+                    timeout: 3000,
+                    validateStatus: () => true
+                }
+            );
+
+        return respuesta.status === 200;
+    } catch {
+        return false;
+    }
+}
+
+// =====================================================
+// INICIAR CHROME
+// =====================================================
+
+async function iniciarChrome() {
+    console.log(
+        "[STEAM] Chrome no está disponible en 9222."
+    );
+
+    console.log(
+        "[STEAM] Iniciando Chrome con depuración remota..."
+    );
+
+    try {
+        const proceso =
+            spawn(
+                CHROME_PATH,
+                [
+                    `--remote-debugging-port=${CHROME_DEBUG_PORT}`,
+                    `--user-data-dir=${CHROME_PROFILE}`,
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                    "--disable-background-networking",
+                    "--disable-component-update"
+                ],
+                {
+                    detached: true,
+                    stdio: "ignore",
+                    windowsHide: true
+                }
+            );
+
+        proceso.unref();
+
+        for (
+            let intento = 1;
+            intento <= 20;
+            intento++
+        ) {
+            await esperar(500);
+
+            if (await chromeDisponible()) {
+                console.log(
+                    "[STEAM] Chrome iniciado correctamente."
+                );
+
+                return true;
+            }
+        }
+
+        console.log(
+            "[STEAM] Chrome se inició pero el puerto 9222 no respondió."
+        );
+
+        return false;
+    } catch (error) {
+        console.log(
+            `[STEAM] Error iniciando Chrome: ${error.message}`
+        );
+
+        return false;
+    }
+}
+
+// =====================================================
 // CONECTAR A CHROME
 // =====================================================
 
 async function conectarChromeSteam() {
-    console.log("[STEAM] Intentando utilizar Chrome existente...");
+    console.log(
+        "[STEAM] Comprobando Chrome en puerto 9222..."
+    );
+
+    if (!(await chromeDisponible())) {
+        const iniciado =
+            await iniciarChrome();
+
+        if (!iniciado) {
+            return null;
+        }
+    } else {
+        console.log(
+            "[STEAM] Chrome ya está disponible en 9222."
+        );
+    }
 
     try {
-        const browser = await puppeteer.connect({
-            browserURL: CHROME_DEBUG_URL,
-            defaultViewport: null
-        });
+        const browser =
+            await puppeteer.connect({
+                browserURL:
+                    CHROME_DEBUG_URL,
+                defaultViewport: null
+            });
 
-        console.log("[STEAM] Conectado a Chrome.");
+        console.log(
+            "[STEAM] Conectado a Chrome correctamente."
+        );
 
         return browser;
     } catch (error) {
         console.log(
-            `[STEAM] No se pudo conectar a Chrome: ${error.message}`
+            `[STEAM] Error conectando a Chrome: ${error.message}`
         );
 
         return null;
@@ -487,24 +611,31 @@ async function conectarChromeSteam() {
 }
 
 // =====================================================
-// OBTENER PÁGINA DE STEAM EN CHROME
+// OBTENER PÁGINA STEAM
 // =====================================================
 
-async function obtenerPaginaSteamChrome(browser) {
-    const paginas = await browser.pages();
+async function obtenerPaginaSteamChrome(
+    browser
+) {
+    const paginas =
+        await browser.pages();
 
-    let pagina = paginas.find(page => {
-        const url = page.url();
-
-        return url.includes("steamcommunity.com");
-    });
+    let pagina =
+        paginas.find(page => {
+            return page
+                .url()
+                .includes(
+                    "steamcommunity.com"
+                );
+        });
 
     if (!pagina) {
         console.log(
             "[STEAM] No existe pestaña de Steam. Creando..."
         );
 
-        pagina = await browser.newPage();
+        pagina =
+            await browser.newPage();
 
         await pagina.setViewport({
             width: 1400,
@@ -520,10 +651,12 @@ async function obtenerPaginaSteamChrome(browser) {
 }
 
 // =====================================================
-// EXTRAER RESULTADOS DESDE DOM DE CHROME
+// EXTRAER RESULTADOS DESDE CHROME
 // =====================================================
 
-async function extraerResultadosDesdeChrome(pagina) {
+async function extraerResultadosDesdeChrome(
+    pagina
+) {
     return await pagina.evaluate(() => {
         const resultados = [];
 
@@ -537,34 +670,46 @@ async function extraerResultadosDesdeChrome(pagina) {
             }
 
             if (url.startsWith("/")) {
-                return "https://steamcommunity.com" + url;
+                return (
+                    "https://steamcommunity.com" +
+                    url
+                );
             }
 
             return url;
         };
 
         const extraerSteamID = url => {
-            const match = String(url || "").match(
-                /steamcommunity\.com\/profiles\/(\d{17})/i
-            );
+            const match =
+                String(url || "").match(
+                    /steamcommunity\.com\/profiles\/(\d{17})/i
+                );
 
-            return match ? match[1] : null;
+            return match
+                ? match[1]
+                : null;
         };
 
-        const filas = document.querySelectorAll(
-            ".search_row"
-        );
-
-        filas.forEach(fila => {
-            let enlace = fila.querySelector(
-                "a.searchPersonaName"
+        const filas =
+            document.querySelectorAll(
+                ".search_row"
             );
 
+        filas.forEach(fila => {
+            let enlace =
+                fila.querySelector(
+                    "a.searchPersonaName"
+                );
+
             if (!enlace) {
-                const enlaces = fila.querySelectorAll("a");
+                const enlaces =
+                    fila.querySelectorAll("a");
 
                 for (const a of enlaces) {
-                    const href = a.getAttribute("href") || "";
+                    const href =
+                        a.getAttribute(
+                            "href"
+                        ) || "";
 
                     if (
                         href.includes(
@@ -585,23 +730,33 @@ async function extraerResultadosDesdeChrome(pagina) {
             }
 
             const nombre =
-                (enlace.innerText || "")
-                    .replace(/\s+/g, " ")
+                (
+                    enlace.innerText ||
+                    ""
+                )
+                    .replace(
+                        /\s+/g,
+                        " "
+                    )
                     .trim();
 
             let url =
-                enlace.getAttribute("href") || "";
+                enlace.getAttribute(
+                    "href"
+                ) || "";
 
             if (!nombre || !url) {
                 return;
             }
 
-            url = normalizarUrl(url);
+            url =
+                normalizarUrl(url);
 
             resultados.push({
                 nombre,
                 url,
-                steamID64: extraerSteamID(url)
+                steamID64:
+                    extraerSteamID(url)
             });
         });
 
@@ -610,7 +765,7 @@ async function extraerResultadosDesdeChrome(pagina) {
 }
 
 // =====================================================
-// BUSCAR UNA PÁGINA MEDIANTE CHROME
+// BÚSQUEDA CON CHROME
 // =====================================================
 
 async function buscarPaginaChrome(
@@ -632,12 +787,13 @@ async function buscarPaginaChrome(
         await pagina.goto(
             url,
             {
-                waitUntil: "domcontentloaded",
+                waitUntil:
+                    "domcontentloaded",
                 timeout: 30000
             }
         );
 
-        await esperar(1500);
+        await esperar(2000);
 
         const resultados =
             await extraerResultadosDesdeChrome(
@@ -665,21 +821,26 @@ async function buscarPaginaChrome(
 }
 
 // =====================================================
-// BÚSQUEDA COMPLETA MEDIANTE CHROME
+// BÚSQUEDA COMPLETA CON CHROME
 // =====================================================
 
-async function buscarConChrome(nombreBuscado) {
+async function buscarConChrome(
+    nombreBuscado
+) {
     let browser = null;
-    let pagina = null;
 
     try {
-        browser = await conectarChromeSteam();
+        browser =
+            await conectarChromeSteam();
 
         if (!browser) {
             return [];
         }
 
-        pagina = await obtenerPaginaSteamChrome(browser);
+        const pagina =
+            await obtenerPaginaSteamChrome(
+                browser
+            );
 
         const perfiles = [];
         const vistos = new Set();
@@ -703,7 +864,8 @@ async function buscarConChrome(nombreBuscado) {
                 );
 
             for (const perfil of exactos) {
-                const clave = clavePerfil(perfil);
+                const clave =
+                    clavePerfil(perfil);
 
                 if (!vistos.has(clave)) {
                     vistos.add(clave);
@@ -765,7 +927,7 @@ async function buscarPerfilesExactos(
     let huboRateLimit = false;
 
     // =================================================
-    // MÉTODO NORMAL
+    // NORMAL
     // =================================================
 
     for (
@@ -808,7 +970,8 @@ async function buscarPerfilesExactos(
             );
 
         for (const perfil of exactos) {
-            const clave = clavePerfil(perfil);
+            const clave =
+                clavePerfil(perfil);
 
             if (!vistos.has(clave)) {
                 vistos.add(clave);
@@ -920,7 +1083,7 @@ async function buscarPerfilesExactos(
     }
 
     // =================================================
-    // CHROME COMO ÚLTIMO MÉTODO
+    // CHROME
     // =================================================
 
     if (perfiles.length === 0) {
@@ -956,74 +1119,87 @@ async function buscarPerfilesExactos(
 }
 
 // =====================================================
-// EXTRAER NOMBRE DESDE BATTLEMETRICS
+// EXTRAER NOMBRE BATTLEMETRICS
 // =====================================================
 
-async function obtenerNombreBattleMetrics(url) {
+async function obtenerNombreBattleMetrics(
+    url
+) {
     console.log(
         `[BATTLEMETRICS] Obteniendo jugador desde: ${url}`
     );
 
     try {
-        const respuesta = await axios.get(
-            url,
-            {
-                timeout: 15000,
+        const respuesta =
+            await axios.get(
+                url,
+                {
+                    timeout: 15000,
 
-                headers: {
-                    "User-Agent":
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-                        "AppleWebKit/537.36 (KHTML, like Gecko) " +
-                        "Chrome/139.0.0.0 Safari/537.36"
-                },
+                    headers: {
+                        "User-Agent":
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+                            "AppleWebKit/537.36 (KHTML, like Gecko) " +
+                            "Chrome/139.0.0.0 Safari/537.36"
+                    },
 
-                validateStatus: () => true
-            }
-        );
+                    validateStatus: () => true
+                }
+            );
 
         console.log(
             `[BATTLEMETRICS] HTTP ${respuesta.status}`
         );
 
-        const $ = cheerio.load(
-            String(respuesta.data || "")
-        );
+        const $ =
+            cheerio.load(
+                String(
+                    respuesta.data || ""
+                )
+            );
 
         let nombre = "";
 
-        const h1 = $("h1")
-            .first()
-            .text();
-
-        if (h1) {
-            nombre = limpiarTexto(h1);
-        }
-
-        if (!nombre) {
-            const title = $("title")
+        const h1 =
+            $("h1")
                 .first()
                 .text();
 
-            nombre = limpiarTexto(
-                title.replace(
-                    /\s*-\s*BattleMetrics.*$/i,
-                    ""
-                )
-            );
+        if (h1) {
+            nombre =
+                limpiarTexto(h1);
         }
 
         if (!nombre) {
-            const meta = $(
-                'meta[name="description"]'
-            ).attr("content");
+            const title =
+                $("title")
+                    .first()
+                    .text();
 
-            if (meta) {
-                nombre = limpiarTexto(
-                    meta.replace(
-                        /^.*?player\s*/i,
+            nombre =
+                limpiarTexto(
+                    title.replace(
+                        /\s*-\s*BattleMetrics.*$/i,
                         ""
                     )
                 );
+        }
+
+        if (!nombre) {
+            const meta =
+                $(
+                    'meta[name="description"]'
+                )
+                    .attr("content");
+
+            if (meta) {
+                nombre =
+                    limpiarTexto(
+                        meta.replace(
+                            /^.*?player\s*/i,
+                            ""
+                        )
+                    );
             }
         }
 
@@ -1058,31 +1234,49 @@ function analizarRustHTML(html) {
     const texto =
         String(html).toLowerCase();
 
-    // =================================================
-    // INVENTARIO / SKINS DE RUST
-    // =================================================
-
     const inventario =
-        texto.includes(`#${RUST_APPID}_`) ||
-        texto.includes(`/inventory/${RUST_APPID}`) ||
-        texto.includes(`/gamecards/${RUST_APPID}`) ||
-        texto.includes(`/app/${RUST_APPID}`) ||
-        texto.includes(`inventory/#${RUST_APPID}`) ||
-        texto.includes(`inventory/#${RUST_APPID}_`);
-
-    // =================================================
-    // RUST EN PERFIL
-    // =================================================
+        texto.includes(
+            `#${RUST_APPID}_`
+        ) ||
+        texto.includes(
+            `/inventory/${RUST_APPID}`
+        ) ||
+        texto.includes(
+            `/gamecards/${RUST_APPID}`
+        ) ||
+        texto.includes(
+            `/app/${RUST_APPID}`
+        ) ||
+        texto.includes(
+            `inventory/#${RUST_APPID}`
+        ) ||
+        texto.includes(
+            `inventory/#${RUST_APPID}_`
+        );
 
     const rust =
         inventario ||
-        texto.includes("appid=252490") ||
-        texto.includes('"appid":252490') ||
-        texto.includes("'appid':252490") ||
-        texto.includes("rust™") ||
-        texto.includes(">rust<") ||
-        texto.includes("rust -") ||
-        texto.includes("rust |");
+        texto.includes(
+            "appid=252490"
+        ) ||
+        texto.includes(
+            '"appid":252490'
+        ) ||
+        texto.includes(
+            "'appid':252490"
+        ) ||
+        texto.includes(
+            "rust™"
+        ) ||
+        texto.includes(
+            ">rust<"
+        ) ||
+        texto.includes(
+            "rust -"
+        ) ||
+        texto.includes(
+            "rust |"
+        );
 
     return {
         rust,
@@ -1091,7 +1285,7 @@ function analizarRustHTML(html) {
 }
 
 // =====================================================
-// COMPROBAR RUST EN UN PERFIL
+// COMPROBAR RUST
 // =====================================================
 
 async function comprobarRust(perfil) {
@@ -1121,7 +1315,9 @@ async function comprobarRust(perfil) {
                 }
             );
 
-        if (respuesta.status !== 200) {
+        if (
+            respuesta.status !== 200
+        ) {
             console.log(
                 `[RUST] HTTP ${respuesta.status} para ${perfil.nombre}`
             );
@@ -1135,7 +1331,9 @@ async function comprobarRust(perfil) {
 
         const resultado =
             analizarRustHTML(
-                String(respuesta.data || "")
+                String(
+                    respuesta.data || ""
+                )
             );
 
         console.log(
@@ -1152,7 +1350,8 @@ async function comprobarRust(perfil) {
 
         return {
             ...perfil,
-            rust: resultado.rust,
+            rust:
+                resultado.rust,
             inventarioRust:
                 resultado.inventario
         };
@@ -1170,12 +1369,16 @@ async function comprobarRust(perfil) {
 }
 
 // =====================================================
-// COMPROBAR RUST CON CONCURRENCIA
+// RUST - CONCURRENCIA
 // =====================================================
 
-async function comprobarRustTodos(perfiles) {
+async function comprobarRustTodos(
+    perfiles
+) {
     const resultados =
-        new Array(perfiles.length);
+        new Array(
+            perfiles.length
+        );
 
     let siguiente = 0;
 
@@ -1224,14 +1427,17 @@ async function comprobarRustTodos(perfiles) {
 }
 
 // =====================================================
-// ORDENAR RESULTADOS
+// ORDENAR
 // =====================================================
 
-function ordenarPerfiles(perfiles) {
+function ordenarPerfiles(
+    perfiles
+) {
     return [...perfiles].sort(
         (a, b) => {
-            function prioridad(perfil) {
-                // Rust + inventario confirmado
+            function prioridad(
+                perfil
+            ) {
                 if (
                     perfil.rust === true &&
                     perfil.inventarioRust === true
@@ -1239,14 +1445,12 @@ function ordenarPerfiles(perfiles) {
                     return 3;
                 }
 
-                // Rust confirmado
                 if (
                     perfil.rust === true
                 ) {
                     return 2;
                 }
 
-                // Desconocido / privado / no confirmado
                 return 1;
             }
 
@@ -1259,7 +1463,7 @@ function ordenarPerfiles(perfiles) {
 }
 
 // =====================================================
-// TEXTO DE RESULTADO
+// DESCRIPCIÓN
 // =====================================================
 
 function crearDescripcion(
@@ -1280,21 +1484,15 @@ function crearDescripcion(
             `🆔 SteamID64: No disponible\n`;
     }
 
-    // =================================================
-    // RUST
-    // =================================================
-
-    if (perfil.rust === true) {
+    if (
+        perfil.rust === true
+    ) {
         texto +=
             `🎮 Rust: **Sí**\n`;
     } else {
         texto +=
             `🎮 Rust: **No confirmado**\n`;
     }
-
-    // =================================================
-    // INVENTARIO
-    // =================================================
 
     if (
         perfil.inventarioRust === true
@@ -1339,31 +1537,28 @@ function crearEmbed(
             )
         );
 
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                `🔎 Steam — "${nombreBuscado}"`
-            )
-            .setDescription(
-                paginaPerfiles
-                    .map(
-                        (perfil, index) =>
-                            crearDescripcion(
-                                perfil,
-                                inicio +
-                                    index +
-                                    1
-                            )
-                    )
-                    .join("\n")
-            )
-            .setFooter({
-                text:
-                    `Página ${pagina + 1}/${totalPaginas} • ` +
-                    `${total} coincidencias exactas`
-            });
-
-    return embed;
+    return new EmbedBuilder()
+        .setTitle(
+            `🔎 Steam — "${nombreBuscado}"`
+        )
+        .setDescription(
+            paginaPerfiles
+                .map(
+                    (perfil, index) =>
+                        crearDescripcion(
+                            perfil,
+                            inicio +
+                                index +
+                                1
+                        )
+                )
+                .join("\n")
+        )
+        .setFooter({
+            text:
+                `Página ${pagina + 1}/${totalPaginas} • ` +
+                `${total} coincidencias exactas`
+        });
 }
 
 // =====================================================
@@ -1487,7 +1682,7 @@ module.exports = {
         }
 
         // =================================================
-        // BUSCAR STEAM
+        // BUSCAR
         // =================================================
 
         const perfiles =
@@ -1501,7 +1696,7 @@ module.exports = {
             await interaction.editReply({
                 content:
                     `❌ No se encontraron perfiles de Steam con el nombre exacto **${nombreBuscado}**.\n\n` +
-                    `Steam puede estar limitando temporalmente las búsquedas desde esta conexión/IP.`
+                    `Steam está limitando temporalmente las búsquedas desde esta conexión/IP.`
             });
 
             console.log(
@@ -1512,7 +1707,7 @@ module.exports = {
         }
 
         // =================================================
-        // RESPUESTA INICIAL
+        // AVISO
         // =================================================
 
         await interaction.editReply({
@@ -1529,7 +1724,7 @@ module.exports = {
         });
 
         // =================================================
-        // COMPROBAR RUST
+        // RUST
         // =================================================
 
         const perfilesComprobados =
@@ -1668,7 +1863,7 @@ module.exports = {
         );
 
         // =================================================
-        // FINAL DEL COLLECTOR
+        // FINAL
         // =================================================
 
         collector.on(
@@ -1686,7 +1881,7 @@ module.exports = {
                         ]
                     });
                 } catch (error) {
-                    // El mensaje puede haber sido eliminado.
+                    // Mensaje eliminado.
                 }
             }
         );
