@@ -8,8 +8,6 @@ const {
 
 const axios = require("axios");
 const cheerio = require("cheerio");
-const puppeteer = require("puppeteer-core");
-const { spawn } = require("child_process");
 
 // =====================================================
 // CONFIGURACIÓN OPTIMIZADA
@@ -17,11 +15,6 @@ const { spawn } = require("child_process");
 
 const STEAM_BASE = "https://steamcommunity.com";
 const STEAM_SEARCH_PAGE = `${STEAM_BASE}/search/users/`;
-const STEAM_SEARCH_AJAX = `${STEAM_BASE}/search/SearchCommunityAjax`;
-
-const RESULTADOS_POR_PAGINA = 10;
-const MAX_PAGINAS = 1; // Reducido a 1 para evitar bloqueos y acelerar la búsqueda
-const DELAY_PAGINAS = 1500;
 
 const RUST_APPID = "252490";
 const CONCURRENCIA_RUST = 3;
@@ -29,21 +22,6 @@ const CONCURRENCIA_RUST = 3;
 // Caché temporal en memoria para evitar repetir búsquedas idénticas a Steam
 const cacheBusquedas = new Map();
 const TIEMPO_CACHE = 10 * 60 * 1000; // 10 minutos
-
-// =====================================================
-// CHROME
-// =====================================================
-
-const CHROME_PATH =
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-
-const CHROME_PROFILE =
-    "C:\\BattleMetricsBotProfile";
-
-const CHROME_DEBUG_PORT = 9222;
-
-const CHROME_DEBUG_URL =
-    `http://localhost:${CHROME_DEBUG_PORT}`;
 
 // =====================================================
 // AXIOS
@@ -70,14 +48,8 @@ const steam = axios.create({
 // UTILIDADES
 // =====================================================
 
-function esperar(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 function limpiarTexto(texto) {
-    return String(texto || "")
-        .replace(/\s+/g, " ")
-        .trim();
+    return String(texto || "").replace(/\s+/g, " ").trim();
 }
 
 function normalizarUrlSteam(url) {
@@ -96,41 +68,6 @@ function extraerSteamID(url) {
 
 function clavePerfil(perfil) {
     return perfil.steamID64 || String(perfil.url || "").toLowerCase();
-}
-
-// =====================================================
-// OBTENER SESIÓN DE STEAM
-// =====================================================
-
-async function obtenerSesionSteam(nombre) {
-    const url = `${STEAM_SEARCH_PAGE}?text=${encodeURIComponent(nombre)}&filter=users`;
-    const respuesta = await steam.get(url);
-    const cookies = {};
-    const setCookie = respuesta.headers["set-cookie"];
-
-    if (Array.isArray(setCookie)) {
-        for (const cookie of setCookie) {
-            const parte = cookie.split(";")[0];
-            const indice = parte.indexOf("=");
-            if (indice !== -1) {
-                cookies[parte.substring(0, indice)] = parte.substring(indice + 1);
-            }
-        }
-    }
-
-    const html = String(respuesta.data || "");
-    let sessionId = html.match(/g_sessionID\s*=\s*["']([^"']+)["']/i)?.[1] || cookies.sessionid || "";
-
-    return { sessionId, cookies };
-}
-
-function construirCookieHeader(cookies, sessionId) {
-    const lista = [];
-    for (const [key, value] of Object.entries(cookies || {})) {
-        if (value !== undefined) lista.push(`${key}=${value}`);
-    }
-    if (sessionId && !cookies.sessionid) lista.push(`sessionid=${sessionId}`);
-    return lista.join("; ");
 }
 
 // =====================================================
@@ -177,10 +114,10 @@ function extraerResultados(html) {
 }
 
 // =====================================================
-// BÚSQUEDA NORMAL
+// BÚSQUEDA NORMAL (PÁGINA 1)
 // =====================================================
 
-async function buscarPaginaNormal(nombre, pagina) {
+async function buscarPaginaNormal(nombre, pagina = 1) {
     const url = `${STEAM_SEARCH_PAGE}?text=${encodeURIComponent(nombre)}&filter=users&page=${pagina}`;
     const respuesta = await steam.get(url);
 
@@ -193,29 +130,19 @@ async function buscarPaginaNormal(nombre, pagina) {
     };
 }
 
-// =====================================================
-// NOMBRE EXACTO
-// =====================================================
-
 function filtrarNombreExacto(resultados, nombreBuscado) {
     return resultados.filter(perfil => perfil.nombre === nombreBuscado);
 }
-
-// =====================================================
-// BUSCAR TODOS LOS PERFILES EXACTOS (CON CACHÉ)
-// =====================================================
 
 async function buscarPerfilesExactos(nombreBuscado) {
     const ahora = Date.now();
     if (cacheBusquedas.has(nombreBuscado)) {
         const datosCache = cacheBusquedas.get(nombreBuscado);
         if (ahora - datosCache.tiempo < TIEMPO_CACHE) {
-            console.log(`[STEAM] Devolviendo resultados desde la caché para: ${nombreBuscado}`);
             return datosCache.perfiles;
         }
     }
 
-    console.log(`[STEAM] Buscando perfiles con nombre exacto: ${nombreBuscado}`);
     const perfiles = [];
     const vistos = new Set();
 
@@ -236,57 +163,47 @@ async function buscarPerfilesExactos(nombreBuscado) {
         console.log(`[STEAM] Error en búsqueda: ${error.message}`);
     }
 
-    // Guardar en caché
-    cacheBusquedas.set(nombreBuscado, {
-        tiempo: ahora,
-        perfiles
-    });
-
+    cacheBusquedas.set(nombreBuscado, { tiempo: ahora, perfiles });
     return perfiles;
 }
 
 // =====================================================
-// COMPROBAR RUST
+// DEFINICIÓN DEL COMANDO DE DISCORD
 // =====================================================
 
-function analizarRustHTML(html) {
-    if (!html) return { rust: false, inventario: false };
-    const texto = String(html).toLowerCase();
-    
-    const inventario = texto.includes(`#${RUST_APPID}_`) || texto.includes(`/inventory/${RUST_APPID}`);
-    const rust = inventario || texto.includes("appid=252490") || texto.includes("rust");
-
-    return { rust, inventario };
-}
-
-async function comprobarRust(perfil) {
-    try {
-        const respuesta = await steam.get(perfil.url, { timeout: 10000, validateStatus: () => true });
-        if (respuesta.status !== 200) return { ...perfil, rust: null, inventarioRust: null };
-
-        const resultado = analizarRustHTML(String(respuesta.data || ""));
-        return {
-            ...perfil,
-            rust: resultado.rust,
-            inventarioRust: resultado.inventario
-        };
-    } catch {
-        return { ...perfil, rust: null, inventarioRust: null };
-    }
-}
-
-async function comprobarRustTodos(perfiles) {
-    const resultadosFinales = [];
-    for (let i = 0; i < perfiles.length; i += CONCURRENCIA_RUST) {
-        const bloque = perfiles.slice(i, i + CONCURRENCIA_RUST);
-        const promesas = bloque.map(perfil => comprobarRust(perfil));
-        const resultadosBloque = await Promise.all(promesas);
-        resultadosFinales.push(...resultadosBloque);
-    }
-    return resultadosFinales;
-}
-
 module.exports = {
-    buscarPerfilesExactos,
-    comprobarRustTodos
+    data: new SlashCommandBuilder()
+        .setName("steam")
+        .setDescription("Busca perfiles de Steam por nombre exacto")
+        .addStringOption(option =>
+            option
+                .setName("nombre")
+                .setDescription("Nombre exacto del usuario a buscar")
+                .setRequired(true)
+        ),
+
+    async execute(interaction) {
+        await interaction.deferReply();
+
+        const nombreBuscado = interaction.options.getString("nombre");
+
+        try {
+            const perfiles = await buscarPerfilesExactos(nombreBuscado);
+
+            if (perfiles.length === 0) {
+                return interaction.editReply(`❌ No se encontraron perfiles de Steam con el nombre exacto **${nombreBuscado}**.`);
+            }
+
+            let textoRespuesta = `✅ Se encontraron **${perfiles.length}** perfiles para **${nombreBuscado}**:\n\n`;
+            perfiles.slice(0, 5).forEach((p, i) => {
+                textoRespuesta += `${i + 1}. [${p.nombre}](${p.url}) (ID: \`${p.steamID64 || "N/A"}\`)\n`;
+            });
+
+            return interaction.editReply(textoRespuesta);
+
+        } catch (error) {
+            console.error(error);
+            return interaction.editReply("Hubo un error al ejecutar la búsqueda en Steam.");
+        }
+    }
 };
