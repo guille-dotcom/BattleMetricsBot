@@ -25,9 +25,12 @@
     "playwright": "^1.61.1",
     "puppeteer": "^25.3.0",
     "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "sharp": "^0.35.4",
+    "tesseract.js": "^7.0.0"
   },
   "allowScripts": {
-    "puppeteer@25.3.0": true
+    "puppeteer@25.3.0": true,
+    "tesseract.js@7.0.0": true
   }
 }

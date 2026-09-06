@@ -48,15 +48,16 @@ const server =
                 {
                     "Content-Type":
                         "text/plain",
+
                     "Content-Length":
                         "2",
+
                     "Connection":
                         "close"
                 }
             );
 
             res.end("OK");
-
         }
     );
 
@@ -372,6 +373,7 @@ client.once(
                     {
                         name:
                             "chivando siempre 👀",
+
                         type:
                             0
                     }
@@ -618,18 +620,121 @@ client.on(
     async interaction => {
 
         // =====================================================
-        // AUTOCOMPLETADO (AUTOCOMPLETE)
+        // INTERACCIONES DE /STEAM
         // =====================================================
 
-        if (interaction.isAutocomplete()) {
-            const command = client.commands.get(interaction.commandName);
-            if (!command || typeof command.autocomplete !== "function") return;
+        if (
+            interaction.isButton() ||
+            interaction.isModalSubmit()
+        ) {
+
+            const comandoSteam =
+                client.commands.get(
+                    "steam"
+                );
+
+            if (
+                comandoSteam &&
+                typeof comandoSteam.handleInteraction ===
+                    "function"
+            ) {
+
+                try {
+
+                    const manejado =
+                        await comandoSteam.handleInteraction(
+                            interaction
+                        );
+
+                    if (
+                        manejado
+                    ) {
+
+                        return;
+
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        "❌ Error manejando interacción de /steam:",
+                        error
+                    );
+
+                    try {
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+
+                                content:
+                                    "❌ Ocurrió un error procesando la búsqueda de Steam.",
+
+                                ephemeral:
+                                    true
+
+                            });
+
+                        }
+
+                    } catch (replyError) {
+
+                        console.error(
+                            "❌ Error respondiendo interacción Steam:",
+                            replyError.message
+                        );
+
+                    }
+
+                    return;
+
+                }
+
+            }
+
+        }
+
+        // =====================================================
+        // AUTOCOMPLETADO
+        // =====================================================
+
+        if (
+            interaction.isAutocomplete()
+        ) {
+
+            const command =
+                client.commands.get(
+                    interaction.commandName
+                );
+
+            if (
+                !command ||
+                typeof command.autocomplete !==
+                    "function"
+            ) {
+
+                return;
+
+            }
 
             try {
-                await command.autocomplete(interaction);
+
+                await command.autocomplete(
+                    interaction
+                );
+
             } catch (error) {
-                console.error(`❌ Error en autocompletado para /${interaction.commandName}:`, error);
+
+                console.error(
+                    `❌ Error en autocompletado para /${interaction.commandName}:`,
+                    error
+                );
+
             }
+
             return;
         }
 
@@ -645,10 +750,11 @@ client.on(
             // BOTONES RAID
             // =================================================
 
-           if (
-    interaction.customId.startsWith("raid_")
-)
-        {
+            if (
+                interaction.customId.startsWith(
+                    "raid_"
+                )
+            ) {
 
                 try {
 
@@ -734,6 +840,7 @@ client.on(
                 }
 
                 return;
+
             }
 
             // =================================================
@@ -812,25 +919,66 @@ client.on(
 
             }
 
-            // =================================================
-            // MENÚS DESPLEGABLES (SELECT MENUS) Y MODALES
-            // =================================================
-
-            if (interaction.isStringSelectMenu() && interaction.customId === "config_tienda_selector") {
-                const comandoConfigTienda = client.commands.get("configurar-tienda");
-                if (comandoConfigTienda && typeof comandoConfigTienda.manejarSelectMenu === "function") {
-                    return await comandoConfigTienda.manejarSelectMenu(interaction);
-                }
-            }
-
-            if (interaction.isModalSubmit() && interaction.customId.startsWith("modal_config_tienda")) {
-                const comandoConfigTienda = client.commands.get("configurar-tienda");
-                if (comandoConfigTienda && typeof comandoConfigTienda.manejarModal === "function") {
-                    return await comandoConfigTienda.manejarModal(interaction);
-                }
-            }
-
             return;
+        }
+
+        // =====================================================
+        // MENÚS DESPLEGABLES
+        // =====================================================
+
+        if (
+            interaction.isStringSelectMenu() &&
+            interaction.customId ===
+                "config_tienda_selector"
+        ) {
+
+            const comandoConfigTienda =
+                client.commands.get(
+                    "configurar-tienda"
+                );
+
+            if (
+                comandoConfigTienda &&
+                typeof comandoConfigTienda.manejarSelectMenu ===
+                    "function"
+            ) {
+
+                return await comandoConfigTienda.manejarSelectMenu(
+                    interaction
+                );
+
+            }
+
+        }
+
+        // =====================================================
+        // MODALES DE TIENDA
+        // =====================================================
+
+        if (
+            interaction.isModalSubmit() &&
+            interaction.customId.startsWith(
+                "modal_config_tienda"
+            )
+        ) {
+
+            const comandoConfigTienda =
+                client.commands.get(
+                    "configurar-tienda"
+                );
+
+            if (
+                comandoConfigTienda &&
+                typeof comandoConfigTienda.manejarModal ===
+                    "function"
+            ) {
+
+                return await comandoConfigTienda.manejarModal(
+                    interaction
+                );
+
+            }
+
         }
 
         // =====================================================
@@ -842,6 +990,7 @@ client.on(
         ) {
 
             return;
+
         }
 
         const command =
@@ -856,6 +1005,7 @@ client.on(
             );
 
             return;
+
         }
 
         try {
@@ -863,11 +1013,6 @@ client.on(
             console.log(
                 `🎯 Ejecutando /${interaction.commandName}`
             );
-
-            // IMPORTANTE:
-            // No usamos Promise.race ni timeout artificial.
-            // Discord permite que el comando trabaje después
-            // de deferReply().
 
             await command.execute(
                 interaction
@@ -1108,6 +1253,7 @@ async function iniciarBot() {
         process.exit(1);
 
     }
+
 }
 
 // ======================
