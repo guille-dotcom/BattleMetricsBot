@@ -101,8 +101,7 @@ async function buscarEnBattleMetrics(nombre) {
         `${BATTLEMETRICS_API}/servers/${BATTLEMETRICS_SERVER_ID}`,
         {
             params: {
-                include: "player,identifier",
-                "page[size]": 1000
+                include: "player,identifier"
             },
 
             headers: {
@@ -237,7 +236,6 @@ async function buscarEnBattleMetrics(nombre) {
                 const texto =
                     String(valor).trim();
 
-                // SteamID64 = 17 dígitos
                 if (
                     /^\d{17}$/.test(texto)
                 ) {
@@ -255,8 +253,7 @@ async function buscarEnBattleMetrics(nombre) {
         }
 
         // -------------------------------------------------
-        // SEGUNDA COMPROBACIÓN:
-        // BUSCAR UN STEAMID64 DENTRO DEL RECURSO DEL PLAYER
+        // SEGUNDA COMPROBACIÓN
         // -------------------------------------------------
 
         if (!steamID64) {
@@ -302,13 +299,10 @@ async function buscarEnBattleMetrics(nombre) {
 
 // =====================================================
 // STEAM WEB API
-// SOLO PARA AVATAR/NOMBRE ACTUAL
-// NO PARA BUSCAR POR NOMBRE
+// SOLO PARA AVATAR / NOMBRE ACTUAL
 // =====================================================
 
-async function obtenerDatosSteam(
-    steamIDs
-) {
+async function obtenerDatosSteam(steamIDs) {
 
     const resultado =
         new Map();
@@ -317,6 +311,10 @@ async function obtenerDatosSteam(
         !STEAMWEBAPI_KEY ||
         !steamIDs.length
     ) {
+        console.log(
+            "[STEAM] STEAMWEBAPI_KEY no disponible. Se omiten avatares."
+        );
+
         return resultado;
     }
 
@@ -604,8 +602,10 @@ function crearEmbed(
         embed.addFields({
             name:
                 "🔗 RustHackReport",
+
             value:
                 `[Ver reporte](${bans.rusthackreport_url})`,
+
             inline: false
         });
     }
@@ -617,26 +617,30 @@ function crearEmbed(
         embed.addFields({
             name:
                 "👁️ Watch List",
+
             value:
                 `**${limpiarTexto(
                     watch.category ||
                     "Watch List"
                 )}**`,
+
             inline: false
         });
     }
 
     embed.addFields({
         name: "🔗 Perfiles",
+
         value:
             `[Steam](${steamProfileURL}) • ` +
             `[SteamID.uk](${steamIDUkURL})`,
+
         inline: false
     });
 
     embed.setFooter({
         text:
-            `BattleMetrics → SteamID64 → SteamID.uk`
+            "BattleMetrics → SteamID64 → SteamID.uk"
     });
 
     return embed;
@@ -703,7 +707,7 @@ module.exports = {
             }
 
             // =================================================
-            // 2. FILTRAR LOS QUE TIENEN STEAMID64
+            // 2. SOLO JUGADORES CON STEAMID64
             // =================================================
 
             const jugadoresConSteam =
@@ -723,7 +727,7 @@ module.exports = {
 
                 return interaction.editReply({
                     content:
-                        `⚠️ Encontré **${jugadores.length}** jugador(es) en BattleMetrics con el nombre **${nombre}**, pero BattleMetrics no entregó ningún SteamID64 para esos perfiles.`
+                        `⚠️ Encontré **${jugadores.length}** jugador(es) con el nombre **${nombre}**, pero BattleMetrics no entregó ningún SteamID64.`
                 });
             }
 
@@ -762,7 +766,7 @@ module.exports = {
             );
 
             // =================================================
-            // 4. OBTENER AVATARES
+            // 4. AVATARES
             // =================================================
 
             const steamIDs =
@@ -829,7 +833,6 @@ module.exports = {
                         error.message
                     );
 
-                    // No detenemos los demás perfiles.
                     const embed =
                         new EmbedBuilder()
                             .setTitle(
@@ -844,22 +847,30 @@ module.exports = {
                                 {
                                     name:
                                         "🆔 SteamID64",
+
                                     value:
                                         `\`${steamID64}\``,
+
                                     inline: false
                                 },
+
                                 {
                                     name:
                                         "⚠️ SteamID.uk",
+
                                     value:
                                         "No pudo devolver los datos de este perfil.",
+
                                     inline: false
                                 },
+
                                 {
                                     name:
                                         "🔗 Steam",
+
                                     value:
                                         `[Abrir perfil](https://steamcommunity.com/profiles/${steamID64})`,
+
                                     inline: false
                                 }
                             );
@@ -872,6 +883,7 @@ module.exports = {
                     if (
                         steamProfile?.avatarfull
                     ) {
+
                         embed.setThumbnail(
                             steamProfile.avatarfull
                         );
@@ -884,7 +896,7 @@ module.exports = {
             }
 
             // =================================================
-            // 6. RESULTADO
+            // 6. ENVIAR RESULTADOS
             // =================================================
 
             if (
@@ -901,7 +913,6 @@ module.exports = {
                 `[STEAM] Enviando ${embeds.length} perfil(es) a Discord.`
             );
 
-            // Discord permite máximo 10 embeds por mensaje.
             const primerGrupo =
                 embeds.slice(
                     0,
@@ -911,14 +922,12 @@ module.exports = {
             await interaction.editReply({
                 content:
                     `🔎 Resultados para **${nombre}** — ${embeds.length} perfil(es)`,
+
                 embeds:
                     primerGrupo
             });
 
-            // =================================================
-            // PERFILES ADICIONALES
-            // =================================================
-
+            // Discord permite máximo 10 embeds por mensaje.
             for (
                 let i = 10;
                 i < embeds.length;
@@ -958,13 +967,24 @@ module.exports = {
                 "=============================================="
             );
 
-            const mensaje =
+            let mensaje =
+                "❌ Ocurrió un error al consultar BattleMetrics.";
+
+            if (
                 error.response?.status === 401 ||
                 error.response?.status === 403
-                    ? "❌ BattleMetrics rechazó la solicitud. Revisa `BATTLEMETRICS_TOKEN`."
-                    : error.response?.status === 429
-                        ? "⏳ BattleMetrics está limitando las solicitudes. Inténtalo nuevamente en unos momentos."
-                        : "❌ Ocurrió un error al consultar BattleMetrics.";
+            ) {
+
+                mensaje =
+                    "❌ BattleMetrics rechazó la solicitud. Revisa `BATTLEMETRICS_TOKEN`.";
+
+            } else if (
+                error.response?.status === 429
+            ) {
+
+                mensaje =
+                    "⏳ BattleMetrics está limitando las solicitudes. Inténtalo nuevamente en unos momentos.";
+            }
 
             try {
 
