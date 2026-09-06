@@ -13,6 +13,8 @@ const axios = require("axios");
 const sharp = require("sharp");
 const { createWorker } = require("tesseract.js");
 
+const ServerConfig = require("../models/ServerConfig");
+
 // =====================================================
 // CONFIGURACIÓN
 // =====================================================
@@ -27,9 +29,6 @@ const USER_AGENT =
 // =====================================================
 // OCR
 // =====================================================
-
-// Grupos separados para que si un idioma falla,
-// no se caiga todo el OCR.
 
 const OCR_GRUPOS = [
     {
@@ -70,6 +69,18 @@ function normalizarComparacion(nombre) {
     return normalizarNombre(nombre).toLowerCase();
 }
 
+// Comparación más tolerante para nombres Unicode
+function normalizarComparacionFuerte(nombre) {
+    if (!nombre) return "";
+
+    return String(nombre)
+        .normalize("NFKC")
+        .replace(/[\u200B-\u200D\uFEFF]/gu, "")
+        .replace(/\s+/gu, " ")
+        .trim()
+        .toLocaleLowerCase();
+}
+
 // =====================================================
 // LIMPIEZA OCR
 // =====================================================
@@ -97,13 +108,10 @@ async function obtenerImagen(url) {
     const response = await axios.get(url, {
         responseType: "arraybuffer",
         timeout: 30000,
-
         headers: {
             "User-Agent": USER_AGENT,
-            Accept:
-                "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+            Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         },
-
         maxContentLength: 15 * 1024 * 1024,
         maxBodyLength: 15 * 1024 * 1024
     });
@@ -307,8 +315,7 @@ async function ejecutarOCR(buffer) {
         "🔎 Iniciando OCR multidioma avanzado..."
     );
 
-    const imagenes =
-        await prepararImagenes(buffer);
+    const imagenes = await prepararImagenes(buffer);
 
     if (!imagenes.length) {
         throw new Error(
@@ -330,9 +337,6 @@ async function ejecutarOCR(buffer) {
                 grupo.idiomas,
                 grupo.nombre
             );
-
-            // Si falla un grupo, continuamos
-            // con los demás.
 
             if (!worker) {
                 console.warn(
@@ -540,18 +544,10 @@ function puntuarCandidato(candidato) {
 
     let score = 0;
 
-    // =================================================
-    // APARICIONES
-    // =================================================
-
     score += Math.min(
         candidato.apariciones * 15,
         90
     );
-
-    // =================================================
-    // LONGITUD
-    // =================================================
 
     if (
         nombre.length >= 3 &&
@@ -567,17 +563,9 @@ function puntuarCandidato(candidato) {
         score += 10;
     }
 
-    // =================================================
-    // ESPACIOS
-    // =================================================
-
     if (/\s/u.test(nombre)) {
         score += 5;
     }
-
-    // =================================================
-    // SÍMBOLOS DE NOMBRES
-    // =================================================
 
     if (/[|_^™]/u.test(nombre)) {
         score += 15;
@@ -587,83 +575,51 @@ function puntuarCandidato(candidato) {
         score += 5;
     }
 
-    // =================================================
-    // LETRAS UNICODE
-    // =================================================
-
     if (/\p{L}/u.test(nombre)) {
         score += 10;
     }
-
-    // =================================================
-    // NÚMEROS
-    // =================================================
 
     if (/\p{N}/u.test(nombre)) {
         score += 3;
     }
 
-    // =================================================
-    // CIRÍLICO
-    // =================================================
-
+    // Cirílico
     if (/[\u0400-\u04FF]/u.test(nombre)) {
         score += 30;
     }
 
-    // =================================================
-    // GRIEGO
-    // =================================================
-
+    // Griego
     if (/[\u0370-\u03FF]/u.test(nombre)) {
         score += 25;
     }
 
-    // =================================================
-    // CHINO
-    // =================================================
-
+    // Chino
     if (
-        /[\u3400-\u4DBF\u4E00-\u9FFF]/u.test(
-            nombre
-        )
+        /[\u3400-\u4DBF\u4E00-\u9FFF]/u.test(nombre)
     ) {
         score += 35;
     }
 
-    // =================================================
-    // JAPONÉS
-    // =================================================
-
+    // Japonés
     if (
         /[\u3040-\u30FF]/u.test(nombre)
     ) {
         score += 35;
     }
 
-    // =================================================
-    // COREANO
-    // =================================================
-
+    // Coreano
     if (
         /[\uAC00-\uD7AF]/u.test(nombre)
     ) {
         score += 35;
     }
 
-    // =================================================
-    // LATÍN EXTENDIDO
-    // =================================================
-
+    // Latín extendido
     if (
         /[\u00C0-\u024F]/u.test(nombre)
     ) {
         score += 15;
     }
-
-    // =================================================
-    // EXCESO DE SÍMBOLOS
-    // =================================================
 
     const caracteresEspeciales =
         nombre.replace(
@@ -674,10 +630,6 @@ function puntuarCandidato(candidato) {
     if (caracteresEspeciales > 8) {
         score -= 20;
     }
-
-    // =================================================
-    // SOLO NÚMEROS
-    // =================================================
 
     if (
         /^[\p{N}\s]+$/u.test(nombre)
@@ -755,82 +707,266 @@ async function detectarNombreOCR(buffer) {
 }
 
 // =====================================================
+// OBTENER SERVIDOR CONFIGURADO DESDE MONGODB
+// =====================================================
+
+async function obtenerServidorConfigurado(guildId) {
+    if (!guildId) {
+        return null;
+    }
+
+    try {
+        const config =
+            await ServerConfig.findOne({
+                guildId
+            }).lean();
+
+        if (!config) {
+            console.warn(
+                `⚠️ No existe configuración para guild ${guildId}`
+            );
+
+            return null;
+        }
+
+        const serverId =
+            config.battleMetricsServerId;
+
+        if (!serverId) {
+            console.warn(
+                `⚠️ La guild ${guildId} no tiene battleMetricsServerId configurado.`
+            );
+
+            return null;
+        }
+
+        console.log(
+            `🎯 Servidor BM configurado: ${serverId}`
+        );
+
+        return String(serverId);
+    } catch (error) {
+        console.error(
+            "❌ Error leyendo ServerConfig:",
+            error.message
+        );
+
+        return null;
+    }
+}
+
+// =====================================================
+// OBTENER SERVIDOR BM
+// =====================================================
+
+async function obtenerServidorBattleMetrics(serverId) {
+    try {
+        console.log(
+            `🌐 Consultando servidor BM ${serverId}...`
+        );
+
+        const response = await axios.get(
+            `${BM_API}/servers/${encodeURIComponent(serverId)}`,
+            {
+                params: {
+                    include: "player,identifier"
+                },
+                headers: {
+                    "User-Agent": USER_AGENT,
+                    Accept: "application/json"
+                },
+                timeout: 30000
+            }
+        );
+
+        return response.data;
+    } catch (error) {
+        console.error(
+            `❌ Error obteniendo servidor BM ${serverId}:`,
+            error.response?.status ||
+            error.message
+        );
+
+        return null;
+    }
+}
+
+// =====================================================
+// OBTENER JUGADORES DEL SERVIDOR
+// =====================================================
+
+async function obtenerJugadoresDelServidor(serverId) {
+    const encontrados = [];
+
+    // =================================================
+    // PRIMER INTENTO:
+    // /servers/:id?include=player,identifier
+    // =================================================
+
+    const dataServidor =
+        await obtenerServidorBattleMetrics(
+            serverId
+        );
+
+    if (dataServidor) {
+        const included =
+            Array.isArray(dataServidor.included)
+                ? dataServidor.included
+                : [];
+
+        const players =
+            included.filter(
+                (item) =>
+                    item &&
+                    item.type === "player"
+            );
+
+        console.log(
+            `👥 Jugadores recibidos desde BM: ${players.length}`
+        );
+
+        for (const player of players) {
+            const nombre =
+                player.attributes?.name;
+
+            if (!nombre) {
+                continue;
+            }
+
+            encontrados.push({
+                id: String(player.id),
+                nombre,
+                atributos:
+                    player.attributes || {}
+            });
+        }
+    }
+
+    return encontrados;
+}
+
+// =====================================================
 // BATTLEMETRICS
 // =====================================================
 
-async function buscarEnBattleMetrics(nombre) {
+async function buscarEnBattleMetrics(
+    nombre,
+    guildId
+) {
     const nombreBuscado =
-        normalizarComparacion(nombre);
+        normalizarComparacionFuerte(nombre);
 
     console.log(
         `🔎 Buscando en BattleMetrics: ` +
         `${JSON.stringify(nombre)}`
     );
 
-    const encontrados = [];
+    // =================================================
+    // OBTENER SERVIDOR CONFIGURADO
+    // =================================================
 
-    try {
-        const response = await axios.get(
-            `${BM_API}/servers`,
-            {
-                params: {
-                    "filter[game]": "rust",
-                    "page[size]": 100,
-                    include: "player,identifier"
-                },
-
-                headers: {
-                    "User-Agent": USER_AGENT,
-                    Accept: "application/json"
-                },
-
-                timeout: 30000
-            }
+    const serverId =
+        await obtenerServidorConfigurado(
+            guildId
         );
 
-        const data = response.data;
-
-        const included =
-            Array.isArray(data?.included)
-                ? data.included
-                : [];
-
-        const players =
-            included.filter(
-                (item) =>
-                    item.type === "player"
-            );
-
-        for (const player of players) {
-            const nombreJugador =
-                player.attributes?.name;
-
-            if (!nombreJugador) {
-                continue;
-            }
-
-            if (
-                normalizarComparacion(
-                    nombreJugador
-                ) === nombreBuscado
-            ) {
-                encontrados.push({
-                    id: player.id,
-                    nombre: nombreJugador,
-                    atributos:
-                        player.attributes || {}
-                });
-            }
-        }
-    } catch (error) {
-        console.error(
-            "❌ Error BattleMetrics:",
-            error.response?.status ||
-                error.message
+    if (!serverId) {
+        console.warn(
+            "⚠️ No hay servidor BattleMetrics configurado."
         );
+
+        return {
+            encontrados: [],
+            error: "NO_SERVER_CONFIGURED"
+        };
     }
 
-    return encontrados;
+    console.log(
+        `🎯 Buscando SOLO dentro del servidor BM ${serverId}`
+    );
+
+    // =================================================
+    // OBTENER JUGADORES DEL SERVIDOR
+    // =================================================
+
+    const jugadores =
+        await obtenerJugadoresDelServidor(
+            serverId
+        );
+
+    console.log(
+        `🔎 Comparando ${jugadores.length} jugadores...`
+    );
+
+    // =================================================
+    // COINCIDENCIA EXACTA NORMALIZADA
+    // =================================================
+
+    for (const jugador of jugadores) {
+        const nombreJugador =
+            normalizarComparacionFuerte(
+                jugador.nombre
+            );
+
+        if (
+            nombreJugador ===
+            nombreBuscado
+        ) {
+            console.log(
+                `✅ Jugador encontrado: ` +
+                `${JSON.stringify(jugador.nombre)} ` +
+                `(${jugador.id})`
+            );
+
+            return {
+                encontrados: [jugador],
+                error: null,
+                serverId
+            };
+        }
+    }
+
+    // =================================================
+    // SEGUNDO INTENTO:
+    // COMPARACIÓN SIN ESPACIOS
+    // =================================================
+
+    const nombreSinEspacios =
+        nombreBuscado.replace(/\s+/gu, "");
+
+    for (const jugador of jugadores) {
+        const nombreJugador =
+            normalizarComparacionFuerte(
+                jugador.nombre
+            ).replace(/\s+/gu, "");
+
+        if (
+            nombreJugador ===
+            nombreSinEspacios
+        ) {
+            console.log(
+                `✅ Coincidencia encontrada sin espacios: ` +
+                `${JSON.stringify(jugador.nombre)} ` +
+                `(${jugador.id})`
+            );
+
+            return {
+                encontrados: [jugador],
+                error: null,
+                serverId
+            };
+        }
+    }
+
+    console.log(
+        `❌ No se encontró "${nombre}" dentro del servidor ${serverId}`
+    );
+
+    return {
+        encontrados: [],
+        error: null,
+        serverId
+    };
 }
 
 // =====================================================
@@ -840,18 +976,15 @@ async function buscarEnBattleMetrics(nombre) {
 async function obtenerDatosPlayer(playerId) {
     try {
         const response = await axios.get(
-            `${BM_API}/players/${playerId}`,
+            `${BM_API}/players/${encodeURIComponent(playerId)}`,
             {
                 params: {
-                    include:
-                        "server,identifier"
+                    include: "server,identifier"
                 },
-
                 headers: {
                     "User-Agent": USER_AGENT,
                     Accept: "application/json"
                 },
-
                 timeout: 30000
             }
         );
@@ -861,7 +994,7 @@ async function obtenerDatosPlayer(playerId) {
         console.error(
             `❌ Error obteniendo player ${playerId}:`,
             error.response?.status ||
-                error.message
+            error.message
         );
 
         return null;
@@ -875,7 +1008,9 @@ async function obtenerDatosPlayer(playerId) {
 function crearEmbed(
     nombreBuscado,
     resultados,
-    nombreOCR = null
+    nombreOCR = null,
+    errorBusqueda = null,
+    serverId = null
 ) {
     const embed =
         new EmbedBuilder()
@@ -896,25 +1031,60 @@ function crearEmbed(
         });
     }
 
-    if (!resultados.length) {
-        embed.addFields({
-            name: "❌ Resultado",
-            value:
-                "No se encontró un jugador con ese nombre exacto en BattleMetrics.",
-            inline: false
-        });
+    // =================================================
+    // SIN SERVIDOR CONFIGURADO
+    // =================================================
 
+    if (
+        errorBusqueda ===
+        "NO_SERVER_CONFIGURED"
+    ) {
         embed.addFields({
-            name: "🔎 Búsqueda manual",
+            name: "⚠️ Servidor no configurado",
             value:
-                `[Abrir búsqueda en SteamID.com](https://www.steamid.com/search?q=${encodeURIComponent(
-                    nombreBuscado
-                )})`,
+                "Este servidor de Discord no tiene configurado un servidor de BattleMetrics.",
             inline: false
         });
 
         return embed;
     }
+
+    // =================================================
+    // NO ENCONTRADO
+    // =================================================
+
+    if (!resultados.length) {
+        embed.addFields({
+            name: "❌ Resultado",
+            value:
+                serverId
+                    ? `No se encontró **${nombreBuscado}** dentro del servidor de BattleMetrics configurado.`
+                    : "No se encontró el jugador en BattleMetrics.",
+            inline: false
+        });
+
+        if (serverId) {
+            embed.addFields({
+                name: "🎯 Servidor consultado",
+                value:
+                    `[Abrir servidor en BattleMetrics](https://www.battlemetrics.com/servers/rust/${serverId})`,
+                inline: false
+            });
+        }
+
+        embed.addFields({
+            name: "🔎 Búsqueda manual",
+            value:
+                `[Abrir búsqueda en SteamID.com](https://www.steamid.com/search?q=${encodeURIComponent(nombreBuscado)})`,
+            inline: false
+        });
+
+        return embed;
+    }
+
+    // =================================================
+    // RESULTADOS
+    // =================================================
 
     for (
         const resultado of resultados.slice(0, 10)
@@ -928,15 +1098,11 @@ function crearEmbed(
 
         embed.addFields({
             name: `👤 ${nombre}`,
-
             value:
                 `**BattleMetrics:** ` +
-                `[Abrir jugador](https://www.battlemetrics.com/players/${playerId})\n` +
+                `[Abrir jugador](https://www.battlemetrics.com/players/${encodeURIComponent(playerId)})\n` +
                 `**SteamID.com:** ` +
-                `[Buscar nombre](https://www.steamid.com/search?q=${encodeURIComponent(
-                    nombre
-                )})`,
-
+                `[Buscar nombre](https://www.steamid.com/search?q=${encodeURIComponent(nombre)})`,
             inline: false
         });
     }
@@ -962,20 +1128,24 @@ async function ejecutarBusqueda(
         );
     }
 
-    const resultados =
+    const busqueda =
         await buscarEnBattleMetrics(
-            nombre
+            nombre,
+            interaction.guild?.id
         );
 
     const embed =
         crearEmbed(
             nombre,
-            resultados,
-            nombreOCR
+            busqueda.encontrados,
+            nombreOCR,
+            busqueda.error,
+            busqueda.serverId
         );
 
     return {
-        resultados,
+        resultados:
+            busqueda.encontrados,
         embed
     };
 }
@@ -989,9 +1159,8 @@ module.exports = {
         new SlashCommandBuilder()
             .setName("steam")
             .setDescription(
-                "Busca un jugador de Rust en BattleMetrics"
+                "Busca un jugador de Rust en el servidor configurado de BattleMetrics"
             )
-
             .addStringOption(
                 (option) =>
                     option
@@ -1001,7 +1170,6 @@ module.exports = {
                         )
                         .setRequired(false)
             )
-
             .addAttachmentOption(
                 (option) =>
                     option
@@ -1172,12 +1340,10 @@ module.exports = {
                         .setTitle(
                             "📸 Nombre detectado"
                         )
-
                         .setDescription(
                             `Encontré este nombre en la captura:\n\n` +
                             `# \`${nombreDetectado}\``
                         )
-
                         .addFields({
                             name:
                                 "🎯 Confianza interna",
@@ -1185,14 +1351,11 @@ module.exports = {
                                 `${resultadoOCR.score} puntos`,
                             inline: true
                         })
-
                         .setColor(0x57f287)
-
                         .setFooter({
                             text:
                                 "Comprueba que el nombre sea correcto antes de buscar."
                         })
-
                         .setTimestamp();
 
                 // =================================================
@@ -1284,6 +1447,7 @@ module.exports = {
     // =====================================================
 
     async handleInteraction(interaction) {
+
         // =================================================
         // BUSCAR OCR
         // =================================================
