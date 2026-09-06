@@ -240,248 +240,14 @@ async function buscarJugadorBattleMetrics(nombre) {
 }
 
 // =====================================================
-// OBTENER PERFIL HTML DE BATTLEMETRICS
-// =====================================================
-
-async function obtenerPerfilHTMLBattleMetrics(
-    playerId
-) {
-
-    const url =
-        `${BATTLEMETRICS_BASE}/players/${playerId}`;
-
-    console.log(
-        `[BATTLEMETRICS] Abriendo perfil: ${url}`
-    );
-
-    try {
-
-        const response =
-            await axios.get(url, {
-
-                headers: {
-
-                    "User-Agent":
-                        USER_AGENT,
-
-                    Accept:
-                        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-
-                    "Accept-Language":
-                        "es-ES,es;q=0.9,en;q=0.8"
-                },
-
-                timeout:
-                    30000,
-
-                maxRedirects:
-                    5
-            });
-
-        console.log(
-            `[BATTLEMETRICS] Perfil HTML HTTP: ${response.status}`
-        );
-
-        return String(
-            response.data || ""
-        );
-
-    } catch (error) {
-
-        console.error(
-            "[BATTLEMETRICS] Error obteniendo perfil HTML:",
-            error.response?.status ||
-            error.message
-        );
-
-        if (
-            error.response?.data
-        ) {
-
-            const respuesta =
-                String(
-                    error.response.data
-                );
-
-            console.error(
-                "[BATTLEMETRICS] Primeros 500 caracteres:",
-                respuesta.substring(
-                    0,
-                    500
-                )
-            );
-        }
-
-        return null;
-    }
-}
-
-// =====================================================
-// EXTRAER ENLACE NAME SEARCH DE STEAMID.COM
-// =====================================================
-
-function extraerEnlaceSteamIDDesdeBattleMetrics(
-    html,
-    nombre
-) {
-
-    if (
-        !html
-    ) {
-
-        return null;
-    }
-
-    console.log(
-        "[STEAMID.COM] Buscando enlace Name Search dentro del perfil de BattleMetrics..."
-    );
-
-    // -------------------------------------------------
-    // 1. Buscar cualquier enlace steamid.com/search
-    // -------------------------------------------------
-
-    const regexEnlaces =
-        /href\s*=\s*["']([^"']*steamid\.com\/search\?[^"']*)["']/gi;
-
-    const enlaces =
-        [];
-
-    let match;
-
-    while (
-        (match =
-            regexEnlaces.exec(html)) !== null
-    ) {
-
-        let enlace =
-            match[1];
-
-        enlace =
-            enlace
-                .replace(/&amp;/gi, "&")
-                .replace(/\\u0026/g, "&")
-                .replace(/\\\//g, "/");
-
-        if (
-            !/^https?:\/\//i.test(enlace)
-        ) {
-
-            if (
-                enlace.startsWith("//")
-            ) {
-
-                enlace =
-                    `https:${enlace}`;
-
-            } else if (
-                enlace.startsWith("/")
-            ) {
-
-                enlace =
-                    `${STEAMID_BASE}${enlace}`;
-
-            } else {
-
-                enlace =
-                    `${STEAMID_BASE}/${enlace}`;
-            }
-        }
-
-        if (
-            /steamid\.com\/search\?/i.test(
-                enlace
-            )
-        ) {
-
-            enlaces.push(
-                enlace
-            );
-        }
-    }
-
-    console.log(
-        `[STEAMID.COM] Enlaces Name Search encontrados: ${enlaces.length}`
-    );
-
-    // -------------------------------------------------
-    // 2. Eliminar enlaces repetidos
-    // -------------------------------------------------
-
-    const enlacesUnicos =
-        [
-            ...new Set(
-                enlaces
-            )
-        ];
-
-    // -------------------------------------------------
-    // 3. Buscar específicamente q=nombre
-    // -------------------------------------------------
-
-    const nombreNormalizado =
-        normalizarNombre(
-            nombre
-        );
-
-    for (
-        const enlace
-        of enlacesUnicos
-    ) {
-
-        try {
-
-            const url =
-                new URL(
-                    enlace
-                );
-
-            const q =
-                url.searchParams.get(
-                    "q"
-                );
-
-            if (
-                normalizarNombre(q) ===
-                nombreNormalizado
-            ) {
-
-                console.log(
-                    `[STEAMID.COM] ✅ Name Search encontrado: ${enlace}`
-                );
-
-                return enlace;
-            }
-
-        } catch {
-
-            // Continuar con el siguiente
-        }
-    }
-
-    // -------------------------------------------------
-    // 4. Si BattleMetrics lo tiene pero el q cambia
-    // -------------------------------------------------
-
-    if (
-        enlacesUnicos.length
-    ) {
-
-        console.log(
-            `[STEAMID.COM] ⚠️ No coincidió exactamente el parámetro q. Usando: ${enlacesUnicos[0]}`
-        );
-
-        return enlacesUnicos[0];
-    }
-
-    console.log(
-        "[STEAMID.COM] ❌ No se encontró el enlace Name Search."
-    );
-
-    return null;
-}
-
-// =====================================================
 // OBTENER ENLACE NAME SEARCH
+// =====================================================
+// BattleMetrics muestra en el perfil un enlace:
+//
+// https://www.steamid.com/search?q=NOMBRE
+//
+// No necesitamos abrir el HTML de BattleMetrics.
+// Esto evita el 403 de Cloudflare.
 // =====================================================
 
 async function obtenerEnlaceNameSearch(
@@ -489,22 +255,14 @@ async function obtenerEnlaceNameSearch(
     nombre
 ) {
 
-    const html =
-        await obtenerPerfilHTMLBattleMetrics(
-            playerId
-        );
+    const searchURL =
+        `${STEAMID_BASE}/search?q=${encodeURIComponent(nombre)}`;
 
-    if (
-        !html
-    ) {
-
-        return null;
-    }
-
-    return extraerEnlaceSteamIDDesdeBattleMetrics(
-        html,
-        nombre
+    console.log(
+        `[STEAMID.COM] Name Search generado desde BattleMetrics: ${searchURL}`
     );
+
+    return searchURL;
 }
 
 // =====================================================
@@ -642,9 +400,7 @@ async function buscarEnSteamIDCom(
 
         const response =
             await axios.get(
-
                 searchURL,
-
                 {
 
                     headers: {
@@ -762,9 +518,7 @@ async function obtenerPerfilSteamWebAPI(
 
         const response =
             await axios.get(
-
                 `${STEAMWEBAPI_API}/steam/api/profile`,
-
                 {
 
                     params: {
@@ -828,8 +582,11 @@ async function obtenerPerfilSteamWebAPI(
                 return perfil;
             }
 
+            // -------------------------------------------------
             // Algunos formatos pueden venir dentro
-            // de data/profile/response
+            // de data/profile/response/result
+            // -------------------------------------------------
+
             const posibles = [
 
                 data.data,
@@ -1269,44 +1026,30 @@ function crearEmbedPerfil(
 ) {
 
     const nombreSteam =
-
         perfil?.personaname ||
-
         perfil?.displayname ||
-
         perfil?.accountname ||
-
         jugador.name;
 
     const avatar =
-
         perfil?.avatarfull ||
-
         perfil?.avatarmedium ||
-
         perfil?.avatar ||
-
         null;
 
     const profileURL =
-
         perfil?.profileurl ||
-
         perfil?.profilesteamurl ||
-
         `https://steamcommunity.com/profiles/${steamID64}`;
 
     const embed =
         new EmbedBuilder()
-
             .setColor(
                 0x1b2838
             )
-
             .setTitle(
                 `🎮 ${nombreSteam}`
             )
-
             .setURL(
                 profileURL
             );
@@ -1323,7 +1066,6 @@ function crearEmbedPerfil(
     embed.addFields(
 
         {
-
             name:
                 "🆔 SteamID64",
 
@@ -1335,7 +1077,6 @@ function crearEmbedPerfil(
         },
 
         {
-
             name:
                 "👤 Nombre Steam",
 
@@ -1351,7 +1092,6 @@ function crearEmbedPerfil(
         },
 
         {
-
             name:
                 "🏷️ Account Name",
 
@@ -1365,7 +1105,6 @@ function crearEmbedPerfil(
         },
 
         {
-
             name:
                 "⭐ Nivel",
 
@@ -1379,7 +1118,6 @@ function crearEmbedPerfil(
         },
 
         {
-
             name:
                 "💰 Worth",
 
@@ -1393,7 +1131,6 @@ function crearEmbedPerfil(
         },
 
         {
-
             name:
                 "🛡️ VAC",
 
@@ -1407,7 +1144,6 @@ function crearEmbedPerfil(
         },
 
         {
-
             name:
                 "📅 Cuenta creada",
 
@@ -1421,7 +1157,6 @@ function crearEmbedPerfil(
         },
 
         {
-
             name:
                 "🌎 País",
 
@@ -1435,7 +1170,6 @@ function crearEmbedPerfil(
         },
 
         {
-
             name:
                 "👤 BattleMetrics",
 
@@ -1484,7 +1218,9 @@ module.exports = {
 
         new SlashCommandBuilder()
 
-            .setName("steam")
+            .setName(
+                "steam"
+            )
 
             .setDescription(
                 "Busca un jugador de Rust en BattleMetrics y obtiene sus perfiles de Steam"
@@ -1492,16 +1228,16 @@ module.exports = {
 
             .addStringOption(
                 option =>
-
                     option
-
-                        .setName("nombre")
-
+                        .setName(
+                            "nombre"
+                        )
                         .setDescription(
                             "Nombre exacto del jugador"
                         )
-
-                        .setRequired(true)
+                        .setRequired(
+                            true
+                        )
             ),
 
     async execute(
@@ -1564,13 +1300,11 @@ module.exports = {
                 embeds: [
                     embed
                 ]
-
             });
         }
 
         // =================================================
-        // 2. OBTENER EL LINK NAME SEARCH
-        // DESDE EL PERFIL DE BATTLEMETRICS
+        // 2. GENERAR LINK NAME SEARCH
         // =================================================
 
         const searchURL =
@@ -1595,7 +1329,7 @@ module.exports = {
                     )
 
                     .setDescription(
-                        `Encontré a **${jugador.name}** en BattleMetrics, pero no encontré el enlace **SteamID.com → Name Search** dentro de su perfil.`
+                        `Encontré a **${jugador.name}** en BattleMetrics, pero no pude generar el enlace **SteamID.com → Name Search**.`
                     )
 
                     .addFields({
@@ -1615,7 +1349,6 @@ module.exports = {
                 embeds: [
                     embed
                 ]
-
             });
         }
 
@@ -1704,7 +1437,6 @@ module.exports = {
                 embeds: [
                     embed
                 ]
-
             });
         }
 
