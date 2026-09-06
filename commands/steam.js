@@ -19,9 +19,6 @@ const BATTLEMETRICS_API =
 const STEAMWEBAPI_API =
     "https://www.steamwebapi.com";
 
-const STEAM_API =
-    "https://api.steampowered.com";
-
 const BATTLEMETRICS_SERVER_ID =
     "11378166";
 
@@ -36,7 +33,6 @@ const STEAMID64_MAX =
 // =====================================================
 
 function esSteamID64(valor) {
-
     if (valor === null || valor === undefined) {
         return false;
     }
@@ -48,16 +44,13 @@ function esSteamID64(valor) {
     }
 
     try {
-
         const numero = BigInt(texto);
 
         return (
             numero >= STEAMID64_MIN &&
             numero <= STEAMID64_MAX
         );
-
     } catch {
-
         return false;
     }
 }
@@ -67,12 +60,10 @@ function esSteamID64(valor) {
 // =====================================================
 
 function normalizarNombre(nombre) {
-
     return String(nombre || "")
         .trim()
         .normalize("NFKC")
         .toLowerCase();
-
 }
 
 // =====================================================
@@ -80,153 +71,128 @@ function normalizarNombre(nombre) {
 // =====================================================
 
 function getBattleMetricsHeaders() {
-
-    const token =
-        process.env.BATTLEMETRICS_TOKEN;
+    const token = process.env.BATTLEMETRICS_TOKEN;
 
     const headers = {
-        Accept:
-            "application/vnd.api+json"
+        Accept: "application/vnd.api+json"
     };
 
     if (token) {
-
-        headers.Authorization =
-            `Bearer ${token}`;
+        headers.Authorization = `Bearer ${token}`;
     }
 
     return headers;
 }
 
 // =====================================================
-// BUSCAR PLAYER EN BATTLEMETRICS
+// BUSCAR JUGADOR EN BATTLEMETRICS
 // =====================================================
 
 async function buscarJugadorBattleMetrics(nombre) {
-
     console.log(
         `[STEAM] Buscando "${nombre}" en BattleMetrics...`
     );
 
     try {
-
         const url =
             `${BATTLEMETRICS_API}/servers/${BATTLEMETRICS_SERVER_ID}`;
 
-        const response =
-            await axios.get(url, {
-
-                params: {
-                    include: "player,identifier"
-                },
-
-                headers:
-                    getBattleMetricsHeaders(),
-
-                timeout: 30000
-            });
-
-        const data =
-            response.data;
+        const response = await axios.get(url, {
+            params: {
+                include: "player,identifier"
+            },
+            headers: getBattleMetricsHeaders(),
+            timeout: 30000
+        });
 
         const resources =
-            Array.isArray(data?.included)
-                ? data.included
+            Array.isArray(response.data?.included)
+                ? response.data.included
                 : [];
 
         console.log(
             `[BATTLEMETRICS] Recursos recibidos: ${resources.length}`
         );
 
-        const players =
-            resources.filter(
-                resource =>
-                    resource.type === "player"
-            );
+        const players = resources.filter(
+            resource => resource.type === "player"
+        );
 
         console.log(
             `[BATTLEMETRICS] Players encontrados: ${players.length}`
         );
 
-        const buscado =
-            normalizarNombre(nombre);
+        const buscado = normalizarNombre(nombre);
 
-        const coincidencias =
-            players.filter(player => {
+        const coincidencias = players.filter(player => {
+            const playerName =
+                player?.attributes?.name;
 
-                const playerName =
-                    player?.attributes?.name;
-
-                return (
-                    normalizarNombre(playerName) ===
-                    buscado
-                );
-            });
+            return (
+                normalizarNombre(playerName) ===
+                buscado
+            );
+        });
 
         console.log(
             `[BATTLEMETRICS] Coincidencias exactas: ${coincidencias.length}`
         );
 
         if (!coincidencias.length) {
-
             return null;
         }
 
-        const player =
-            coincidencias[0];
+        const player = coincidencias[0];
 
         console.log(
             `[BATTLEMETRICS] MATCH: ${player.id} | ${player.attributes?.name}`
         );
 
         return {
-
             id: String(player.id),
-
             name:
                 player.attributes?.name ||
                 nombre
         };
 
     } catch (error) {
-
         console.error(
             "[BATTLEMETRICS] Error:",
             error.response?.status ||
             error.message
         );
 
+        if (error.response?.data) {
+            console.error(
+                "[BATTLEMETRICS] Respuesta:",
+                JSON.stringify(error.response.data)
+            );
+        }
+
         return null;
     }
 }
 
 // =====================================================
-// OBTENER IDENTIFICADORES DEL PLAYER
+// OBTENER IDENTIFICADORES DE BATTLEMETRICS
 // =====================================================
 
 async function obtenerIdentificadoresBattleMetrics(playerId) {
-
     console.log(
         `[BATTLEMETRICS] Obteniendo identifiers de ${playerId}...`
     );
 
     try {
-
         const url =
             `${BATTLEMETRICS_API}/players/${playerId}`;
 
-        const response =
-            await axios.get(url, {
-
-                params: {
-                    include: "identifier"
-                },
-
-                headers:
-                    getBattleMetricsHeaders(),
-
-                timeout: 30000
-            });
+        const response = await axios.get(url, {
+            params: {
+                include: "identifier"
+            },
+            headers: getBattleMetricsHeaders(),
+            timeout: 30000
+        });
 
         const resources =
             Array.isArray(response.data?.included)
@@ -240,7 +206,6 @@ async function obtenerIdentificadoresBattleMetrics(playerId) {
         return resources;
 
     } catch (error) {
-
         console.error(
             "[BATTLEMETRICS] Error obteniendo identifiers:",
             error.response?.status ||
@@ -256,36 +221,23 @@ async function obtenerIdentificadoresBattleMetrics(playerId) {
 // =====================================================
 
 function extraerSteamID64DeBattleMetrics(identifiers) {
-
     for (const identifier of identifiers) {
-
         const attributes =
             identifier?.attributes || {};
 
         const posibles = [
-
             attributes.value,
-
             attributes.identifier,
-
             attributes.name,
-
             attributes.steamID,
-
             attributes.steamId,
-
             attributes.steamid,
-
             attributes.steam64,
-
             attributes.steamid64
-
         ];
 
         for (const valor of posibles) {
-
             if (esSteamID64(valor)) {
-
                 console.log(
                     `[BATTLEMETRICS] SteamID64 encontrado directamente: ${valor}`
                 );
@@ -303,44 +255,33 @@ function extraerSteamID64DeBattleMetrics(identifiers) {
 }
 
 // =====================================================
-// RECORRER RESPUESTA STEAMWEBAPI
+// OBTENER TODAS LAS ESTRUCTURAS DE UNA RESPUESTA
 // =====================================================
 
 function recorrerObjetos(objeto, resultado = []) {
-
     if (!objeto) {
         return resultado;
     }
 
     if (Array.isArray(objeto)) {
-
         for (const item of objeto) {
-
-            recorrerObjetos(
-                item,
-                resultado
-            );
+            recorrerObjetos(item, resultado);
         }
 
         return resultado;
     }
 
-    if (
-        typeof objeto !== "object"
-    ) {
-
+    if (typeof objeto !== "object") {
         return resultado;
     }
 
     resultado.push(objeto);
 
     for (const valor of Object.values(objeto)) {
-
         if (
             valor &&
             typeof valor === "object"
         ) {
-
             recorrerObjetos(
                 valor,
                 resultado
@@ -352,39 +293,23 @@ function recorrerObjetos(objeto, resultado = []) {
 }
 
 // =====================================================
-// EXTRAER STEAMID64 DE UN PERFIL STEAMWEBAPI
+// EXTRAER STEAMID64 DE STEAMWEBAPI
 // =====================================================
 
-function extraerSteamID64PerfilSteamWebAPI(perfil) {
-
+function extraerSteamID64Perfil(perfil) {
     const posibles = [
-
         perfil.steamid,
-
         perfil.steamId,
-
         perfil.steamID,
-
         perfil.steamid64,
-
         perfil.steamId64,
-
         perfil.steamID64,
-
         perfil.steam_id,
-
-        perfil.steam_id64,
-
-        perfil.id,
-
-        perfil.accountid
-
+        perfil.steam_id64
     ];
 
     for (const valor of posibles) {
-
         if (esSteamID64(valor)) {
-
             return String(valor);
         }
     }
@@ -393,151 +318,91 @@ function extraerSteamID64PerfilSteamWebAPI(perfil) {
 }
 
 // =====================================================
-// OBTENER NOMBRE DE UN PERFIL STEAMWEBAPI
+// NOMBRES POSIBLES DEL PERFIL
 // =====================================================
 
-function obtenerNombrePerfilSteamWebAPI(perfil) {
-
-    const posibles = [
-
+function obtenerNombresPerfil(perfil) {
+    return [
         perfil.personaname,
-
-        perfil.personaName,
-
-        perfil.persona_name,
-
         perfil.accountname,
-
-        perfil.accountName,
-
-        perfil.displayname,
-
-        perfil.displayName,
-
-        perfil.name,
-
-        perfil.username,
-
-        perfil.userName
-
-    ];
-
-    for (const valor of posibles) {
-
-        if (
-            valor !== null &&
-            valor !== undefined &&
-            String(valor).trim()
-        ) {
-
-            return String(valor).trim();
-        }
-    }
-
-    return null;
+        perfil.displayname
+    ]
+        .filter(
+            valor =>
+                valor !== null &&
+                valor !== undefined &&
+                String(valor).trim()
+        )
+        .map(valor => String(valor).trim());
 }
 
 // =====================================================
-// BUSCAR STEAMID64 POR NOMBRE
-// STEAMWEBAPI /explore/api/profile
+// BUSCAR PERFIL EN STEAMWEBAPI
 // =====================================================
 
 async function buscarSteamWebAPI(nombre) {
-
     const apiKey =
         process.env.STEAMWEBAPI_KEY;
 
     if (!apiKey) {
-
         console.error(
-            "[STEAMWEBAPI] ❌ Falta STEAMWEBAPI_KEY en las variables de entorno."
+            "[STEAMWEBAPI] ❌ Falta STEAMWEBAPI_KEY."
         );
 
         return null;
     }
 
     console.log(
-        `[STEAMWEBAPI] Buscando perfil por nombre: "${nombre}"`
+        `[STEAMWEBAPI] Buscando "${nombre}"...`
     );
 
     try {
+        const response = await axios.get(
+            `${STEAMWEBAPI_API}/explore/api/profile`,
+            {
+                params: {
+                    search: nombre,
+                    limit: 100,
+                    page: 1,
+                    order_by: "personanameASC"
+                },
 
-        const response =
-            await axios.get(
-                `${STEAMWEBAPI_API}/explore/api/profile`,
-                {
+                headers: {
+                    "X-Api-Key": apiKey,
+                    Accept: "application/json"
+                },
 
-                    params: {
-
-                        search:
-                            nombre,
-
-                        limit:
-                            100,
-
-                        page:
-                            1,
-
-                        order_by:
-                            "personanameASC"
-                    },
-
-                    headers: {
-
-                        "X-Api-Key":
-                            apiKey,
-
-                        Accept:
-                            "application/json"
-                    },
-
-                    timeout: 30000
-                }
-            );
+                timeout: 30000
+            }
+        );
 
         console.log(
             `[STEAMWEBAPI] HTTP: ${response.status}`
         );
 
-        const data =
-            response.data;
-
-        // =================================================
-        // LA API DOCUMENTA UN ARRAY DE PERFILES,
-        // PERO DEJAMOS EL PARSER ROBUSTO POR SI CAMBIA
-        // LA ESTRUCTURA.
-        // =================================================
-
         const objetos =
-            recorrerObjetos(data);
+            recorrerObjetos(response.data);
 
         const perfiles = [];
-
-        const vistos =
-            new Set();
+        const vistos = new Set();
 
         for (const objeto of objetos) {
-
             const steamid =
-                extraerSteamID64PerfilSteamWebAPI(
-                    objeto
-                );
+                extraerSteamID64Perfil(objeto);
 
             if (!steamid) {
                 continue;
             }
 
-            const nombrePerfil =
-                obtenerNombrePerfilSteamWebAPI(
-                    objeto
-                );
+            const nombres =
+                obtenerNombresPerfil(objeto);
 
-            if (!nombrePerfil) {
+            if (!nombres.length) {
                 continue;
             }
 
             const key =
-                `${steamid}|${normalizarNombre(nombrePerfil)}`;
+                `${steamid}|${normalizarNombre(nombres[0])}`;
 
             if (vistos.has(key)) {
                 continue;
@@ -546,37 +411,100 @@ async function buscarSteamWebAPI(nombre) {
             vistos.add(key);
 
             perfiles.push({
-
                 steamid,
 
-                name:
-                    nombrePerfil,
+                personaname:
+                    objeto.personaname ||
+                    null,
+
+                accountname:
+                    objeto.accountname ||
+                    null,
+
+                displayname:
+                    objeto.displayname ||
+                    null,
 
                 avatar:
-                    objeto.avatarfull ||
-                    objeto.avatarFull ||
                     objeto.avatar ||
-                    objeto.avatarfullurl ||
                     null,
 
-                avatarMedium:
+                avatarmedium:
                     objeto.avatarmedium ||
-                    objeto.avatarMedium ||
                     null,
 
-                avatarSmall:
-                    objeto.avatarsmall ||
-                    objeto.avatarSmall ||
+                avatarfull:
+                    objeto.avatarfull ||
                     null,
 
                 profileurl:
                     objeto.profileurl ||
                     objeto.profileUrl ||
-                    objeto.profile_url ||
                     null,
 
-                raw:
-                    objeto
+                profiletype:
+                    objeto.profiletype ||
+                    null,
+
+                realname:
+                    objeto.realname ||
+                    null,
+
+                loccountrycode:
+                    objeto.loccountrycode ||
+                    null,
+
+                description:
+                    objeto.description ||
+                    null,
+
+                fame:
+                    objeto.fame ??
+                    null,
+
+                vac:
+                    objeto.vac ??
+                    null,
+
+                islimited:
+                    objeto.islimited ??
+                    null,
+
+                level:
+                    objeto.level ??
+                    null,
+
+                worth:
+                    objeto.worth ??
+                    null,
+
+                worthsteam:
+                    objeto.worthsteam ??
+                    null,
+
+                size:
+                    objeto.size ??
+                    null,
+
+                totalplaytime:
+                    objeto.totalplaytime ??
+                    null,
+
+                playtimerecent:
+                    objeto.playtimerecent ??
+                    null,
+
+                timecreated:
+                    objeto.timecreated ??
+                    null,
+
+                updatedat:
+                    objeto.updatedat ??
+                    null,
+
+                inventoryupdatedat:
+                    objeto.inventoryupdatedat ??
+                    null
             });
         }
 
@@ -584,20 +512,27 @@ async function buscarSteamWebAPI(nombre) {
             `[STEAMWEBAPI] Perfiles candidatos: ${perfiles.length}`
         );
 
+        const buscado =
+            normalizarNombre(nombre);
+
         // =================================================
         // COINCIDENCIA EXACTA
         // =================================================
 
-        const buscado =
-            normalizarNombre(nombre);
-
         const coincidencias =
             perfiles.filter(perfil => {
 
-                return (
-                    normalizarNombre(
-                        perfil.name
-                    ) === buscado
+                const nombres = [
+                    perfil.personaname,
+                    perfil.accountname,
+                    perfil.displayname
+                ];
+
+                return nombres.some(
+                    nombrePerfil =>
+                        normalizarNombre(
+                            nombrePerfil
+                        ) === buscado
                 );
             });
 
@@ -608,22 +543,20 @@ async function buscarSteamWebAPI(nombre) {
         if (!coincidencias.length) {
 
             console.log(
-                "[STEAMWEBAPI] ❌ No se encontró una coincidencia exacta."
+                "[STEAMWEBAPI] ❌ No se encontró coincidencia exacta."
             );
 
             if (perfiles.length) {
-
                 console.log(
-                    "[STEAMWEBAPI] Primeros candidatos:"
+                    "[STEAMWEBAPI] Candidatos:"
                 );
 
                 for (
                     const perfil
                     of perfiles.slice(0, 10)
                 ) {
-
                     console.log(
-                        ` - ${perfil.name} | ${perfil.steamid}`
+                        ` - ${perfil.personaname || perfil.displayname || perfil.accountname} | ${perfil.steamid}`
                     );
                 }
             }
@@ -635,7 +568,7 @@ async function buscarSteamWebAPI(nombre) {
             coincidencias[0];
 
         console.log(
-            `[STEAMWEBAPI] ✅ MATCH: ${perfil.name} | ${perfil.steamid}`
+            `[STEAMWEBAPI] ✅ MATCH: ${perfil.personaname || perfil.displayname || perfil.accountname} | ${perfil.steamid}`
         );
 
         return perfil;
@@ -649,7 +582,6 @@ async function buscarSteamWebAPI(nombre) {
         );
 
         if (error.response?.data) {
-
             console.error(
                 "[STEAMWEBAPI] Respuesta:",
                 JSON.stringify(
@@ -663,122 +595,26 @@ async function buscarSteamWebAPI(nombre) {
 }
 
 // =====================================================
-// OBTENER PERFIL STEAM
+// FORMATEAR VALOR
 // =====================================================
 
-async function obtenerDatosSteam(steamID64) {
-
-    const apiKey =
-        process.env.STEAM_API_KEY;
-
-    if (!apiKey) {
-
-        console.error(
-            "[STEAM] ❌ Falta STEAM_API_KEY."
-        );
-
-        return null;
-    }
-
-    console.log(
-        `[STEAM] Obteniendo perfil ${steamID64}...`
-    );
-
-    try {
-
-        const response =
-            await axios.get(
-                `${STEAM_API}/ISteamUser/GetPlayerSummaries/v2/`,
-                {
-
-                    params: {
-
-                        key:
-                            apiKey,
-
-                        steamids:
-                            steamID64
-                    },
-
-                    timeout: 30000
-                }
-            );
-
-        const players =
-            response.data?.response?.players;
-
-        if (
-            !Array.isArray(players) ||
-            !players.length
-        ) {
-
-            console.log(
-                "[STEAM] ❌ Steam no devolvió el perfil."
-            );
-
-            return null;
-        }
-
-        return players[0];
-
-    } catch (error) {
-
-        console.error(
-            "[STEAM] Error obteniendo perfil:",
-            error.response?.status ||
-            error.message
-        );
-
-        return null;
-    }
-}
-
-// =====================================================
-// ESTADO STEAM
-// =====================================================
-
-function obtenerEstadoSteam(player) {
-
-    if (!player) {
-        return "Desconocido";
-    }
-
-    switch (
-        Number(player.personastate)
+function mostrarValor(valor, defecto = "N/A") {
+    if (
+        valor === null ||
+        valor === undefined ||
+        valor === ""
     ) {
-
-        case 0:
-            return "⚫ Offline";
-
-        case 1:
-            return "🟢 Online";
-
-        case 2:
-            return "🔴 Busy";
-
-        case 3:
-            return "🟡 Away";
-
-        case 4:
-            return "🟠 Snooze";
-
-        case 5:
-            return "🟣 Looking to trade";
-
-        case 6:
-            return "🔵 Looking to play";
-
-        default:
-            return "⚫ Offline";
+        return defecto;
     }
+
+    return String(valor);
 }
 
 // =====================================================
-// FECHA
+// FORMATEAR FECHA
 // =====================================================
 
 function formatearFechaUnix(timestamp) {
-
     if (!timestamp) {
         return "Desconocida";
     }
@@ -793,13 +629,35 @@ function formatearFechaUnix(timestamp) {
             fecha.getTime()
         )
     ) {
-
         return "Desconocida";
     }
 
     return `<t:${Math.floor(
         Number(timestamp)
     )}:D>`;
+}
+
+// =====================================================
+// ESTADO VAC
+// =====================================================
+
+function obtenerEstadoVAC(valor) {
+    if (
+        valor === null ||
+        valor === undefined
+    ) {
+        return "N/A";
+    }
+
+    if (
+        valor === true ||
+        valor === 1 ||
+        valor === "1"
+    ) {
+        return "🔴 Sí";
+    }
+
+    return "🟢 No";
 }
 
 // =====================================================
@@ -835,7 +693,7 @@ module.exports = {
         );
 
         console.log(
-            `[STEAM] Ejecutando /steam`
+            "[STEAM] Ejecutando /steam"
         );
 
         console.log(
@@ -849,7 +707,7 @@ module.exports = {
         await interaction.deferReply();
 
         // =================================================
-        // 1. BATTLEMETRICS
+        // 1. BUSCAR EN BATTLEMETRICS
         // =================================================
 
         const jugador =
@@ -875,7 +733,7 @@ module.exports = {
         }
 
         // =================================================
-        // 2. IDENTIFIERS BM
+        // 2. OBTENER IDENTIFIERS
         // =================================================
 
         const identifiers =
@@ -892,11 +750,11 @@ module.exports = {
                 identifiers
             );
 
-        let steamWebProfile =
+        let steamProfile =
             null;
 
         // =================================================
-        // 4. SI BM NO LO TIENE,
+        // 4. SI BM NO TIENE STEAMID64,
         //    BUSCAR POR NOMBRE EN STEAMWEBAPI
         // =================================================
 
@@ -906,22 +764,20 @@ module.exports = {
                 "[STEAM] BattleMetrics no proporcionó SteamID64."
             );
 
-            steamWebProfile =
+            steamProfile =
                 await buscarSteamWebAPI(
                     jugador.name
                 );
 
-            if (
-                steamWebProfile?.steamid
-            ) {
+            if (steamProfile?.steamid) {
 
                 steamID64 =
-                    steamWebProfile.steamid;
+                    steamProfile.steamid;
             }
         }
 
         // =================================================
-        // 5. NO ENCONTRADO
+        // 5. SI NO SE ENCONTRÓ
         // =================================================
 
         if (!steamID64) {
@@ -933,18 +789,13 @@ module.exports = {
                         "⚠️ SteamID64 no encontrado"
                     )
                     .setDescription(
-                        `Encontré a **${jugador.name}** en BattleMetrics, pero no pude resolver su SteamID64 mediante las fuentes disponibles.`
+                        `Encontré a **${jugador.name}** en BattleMetrics, pero SteamWebAPI no devolvió una coincidencia exacta con SteamID64.`
                     )
                     .addFields({
-
-                        name:
-                            "BattleMetrics",
-
+                        name: "BattleMetrics",
                         value:
                             `[${jugador.name}](https://www.battlemetrics.com/players/${jugador.id})`,
-
-                        inline:
-                            false
+                        inline: false
                     });
 
             return interaction.editReply({
@@ -957,45 +808,27 @@ module.exports = {
         );
 
         // =================================================
-        // 6. OBTENER PERFIL STEAM
-        // =================================================
-
-        const steamProfile =
-            await obtenerDatosSteam(
-                steamID64
-            );
-
-        // =================================================
-        // 7. DATOS FINALES
+        // 6. DATOS DEL PERFIL
         // =================================================
 
         const nombreSteam =
             steamProfile?.personaname ||
-            steamWebProfile?.name ||
+            steamProfile?.displayname ||
+            steamProfile?.accountname ||
             jugador.name;
 
         const avatar =
             steamProfile?.avatarfull ||
-            steamWebProfile?.avatar ||
-            "https://avatars.steamstatic.com/";
+            steamProfile?.avatarmedium ||
+            steamProfile?.avatar ||
+            null;
 
         const profileURL =
             steamProfile?.profileurl ||
-            steamWebProfile?.profileurl ||
             `https://steamcommunity.com/profiles/${steamID64}`;
 
-        const estado =
-            obtenerEstadoSteam(
-                steamProfile
-            );
-
-        const fechaCreacion =
-            formatearFechaUnix(
-                steamProfile?.timecreated
-            );
-
         // =================================================
-        // 8. EMBED
+        // 7. EMBED
         // =================================================
 
         const embed =
@@ -1006,62 +839,101 @@ module.exports = {
                 )
                 .setURL(
                     profileURL
-                )
-                .setThumbnail(
-                    avatar
-                )
-                .addFields(
+                );
 
-                    {
-                        name:
-                            "🆔 SteamID64",
+        if (avatar) {
+            embed.setThumbnail(avatar);
+        }
 
-                        value:
-                            `\`${steamID64}\``,
+        embed.addFields(
 
-                        inline:
-                            false
-                    },
+            {
+                name: "🆔 SteamID64",
+                value: `\`${steamID64}\``,
+                inline: false
+            },
 
-                    {
-                        name:
-                            "📊 Estado",
+            {
+                name: "👤 Nombre Steam",
+                value:
+                    mostrarValor(
+                        steamProfile?.personaname ||
+                        steamProfile?.displayname ||
+                        steamProfile?.accountname
+                    ),
+                inline: true
+            },
 
-                        value:
-                            estado,
+            {
+                name: "🏷️ Account Name",
+                value:
+                    mostrarValor(
+                        steamProfile?.accountname
+                    ),
+                inline: true
+            },
 
-                        inline:
-                            true
-                    },
+            {
+                name: "⭐ Nivel",
+                value:
+                    mostrarValor(
+                        steamProfile?.level
+                    ),
+                inline: true
+            },
 
-                    {
-                        name:
-                            "📅 Cuenta creada",
+            {
+                name: "💰 Worth",
+                value:
+                    mostrarValor(
+                        steamProfile?.worth
+                    ),
+                inline: true
+            },
 
-                        value:
-                            fechaCreacion,
+            {
+                name: "🛡️ VAC",
+                value:
+                    obtenerEstadoVAC(
+                        steamProfile?.vac
+                    ),
+                inline: true
+            },
 
-                        inline:
-                            true
-                    },
+            {
+                name: "📅 Cuenta creada",
+                value:
+                    formatearFechaUnix(
+                        steamProfile?.timecreated
+                    ),
+                inline: true
+            },
 
-                    {
-                        name:
-                            "👤 BattleMetrics",
+            {
+                name: "🌎 País",
+                value:
+                    mostrarValor(
+                        steamProfile?.loccountrycode
+                    ),
+                inline: true
+            },
 
-                        value:
-                            `[${jugador.name}](https://www.battlemetrics.com/players/${jugador.id})`,
+            {
+                name: "👤 BattleMetrics",
+                value:
+                    `[${jugador.name}](https://www.battlemetrics.com/players/${jugador.id})`,
+                inline: false
+            }
+        );
 
-                        inline:
-                            false
-                    }
-                )
-                .setFooter({
+        embed.setFooter({
+            text:
+                "RustLogix • BattleMetrics + SteamWebAPI"
+        });
 
-                    text:
-                        "RustLogix • BattleMetrics + SteamWebAPI"
-
-                });
+        // =================================================
+        // 8. BOTONES
+        // =================================================
 
         const row =
             new ActionRowBuilder()
@@ -1089,6 +961,10 @@ module.exports = {
                             `https://www.battlemetrics.com/players/${jugador.id}`
                         )
                 );
+
+        // =================================================
+        // 9. RESPONDER
+        // =================================================
 
         return interaction.editReply({
 
