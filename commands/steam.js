@@ -345,21 +345,12 @@ function obtenerArrayPerfilesSteamWebAPI(
     respuesta
 ) {
 
-    // -------------------------------------------------
-    // La documentación indica que 200 devuelve
-    // directamente un array.
-    // -------------------------------------------------
-
     if (
         Array.isArray(respuesta)
     ) {
 
         return respuesta;
     }
-
-    // -------------------------------------------------
-    // Compatibilidad con posibles wrappers
-    // -------------------------------------------------
 
     if (
         Array.isArray(
@@ -453,27 +444,303 @@ function extraerSteamID64Perfil(
 }
 
 // =====================================================
-// BUSCAR PERFIL EN STEAMWEBAPI
+// CONVERTIR PERFIL STEAMWEBAPI
 // =====================================================
 
-async function buscarSteamWebAPI(
-    nombre
+function convertirPerfilSteamWebAPI(
+    objeto
 ) {
 
-    const apiKey =
-        process.env.STEAMWEBAPI_KEY;
-
-    if (!apiKey) {
-
-        console.error(
-            "[STEAMWEBAPI] ❌ Falta STEAMWEBAPI_KEY."
-        );
+    if (
+        !objeto ||
+        typeof objeto !== "object"
+    ) {
 
         return null;
     }
 
+    const steamid =
+        extraerSteamID64Perfil(
+            objeto
+        );
+
+    if (!steamid) {
+
+        return null;
+    }
+
+    return {
+
+        steamid,
+
+        personaname:
+            objeto.personaname ||
+            null,
+
+        accountname:
+            objeto.accountname ||
+            null,
+
+        displayname:
+            objeto.displayname ||
+            null,
+
+        profiletype:
+            objeto.profiletype ||
+            null,
+
+        realname:
+            objeto.realname ||
+            null,
+
+        loccountrycode:
+            objeto.loccountrycode ||
+            null,
+
+        description:
+            objeto.description ||
+            null,
+
+        fame:
+            objeto.fame ??
+            null,
+
+        vac:
+            objeto.vac ??
+            null,
+
+        islimited:
+            objeto.islimited ??
+            null,
+
+        level:
+            objeto.level ??
+            null,
+
+        worth:
+            objeto.worth ??
+            null,
+
+        worthsteam:
+            objeto.worthsteam ??
+            null,
+
+        size:
+            objeto.size ??
+            null,
+
+        peritem:
+            objeto.peritem ??
+            null,
+
+        totalplaytime:
+            objeto.totalplaytime ??
+            null,
+
+        playtimerecent:
+            objeto.playtimerecent ??
+            null,
+
+        timecreated:
+            objeto.timecreated ??
+            null,
+
+        updatedat:
+            objeto.updatedat ??
+            null,
+
+        inventoryupdatedat:
+            objeto.inventoryupdatedat ??
+            null,
+
+        avatar:
+            objeto.avatar ||
+            null,
+
+        avatarmedium:
+            objeto.avatarmedium ||
+            null,
+
+        avatarfull:
+            objeto.avatarfull ||
+            null,
+
+        profileurl:
+            objeto.profileurl ||
+            null,
+
+        profilesteamurl:
+            objeto.profilesteamurl ||
+            null,
+
+        onlinestate:
+            objeto.onlinestate ??
+            null,
+
+        ingameinfo:
+            objeto.ingameinfo ??
+            null
+    };
+}
+
+// =====================================================
+// RESOLVER DIRECTO POR NOMBRE
+// =====================================================
+
+async function resolverSteamWebAPIDirecto(
+    nombre,
+    apiKey
+) {
+
     console.log(
-        `[STEAMWEBAPI] Buscando "${nombre}"...`
+        `[STEAMWEBAPI] Intentando resolver directamente "${nombre}"...`
+    );
+
+    try {
+
+        const response =
+            await axios.get(
+
+                `${STEAMWEBAPI_API}/steam/api/profile`,
+
+                {
+
+                    params: {
+
+                        id:
+                            nombre,
+
+                        key:
+                            apiKey,
+
+                        no_cache:
+                            1,
+
+                        production:
+                            1,
+
+                        format:
+                            "json"
+                    },
+
+                    headers: {
+
+                        "X-Api-Key":
+                            apiKey,
+
+                        Accept:
+                            "application/json"
+                    },
+
+                    timeout:
+                        30000
+                }
+            );
+
+        console.log(
+            `[STEAMWEBAPI] Resolver directo HTTP: ${response.status}`
+        );
+
+        console.log(
+            "[STEAMWEBAPI] Respuesta resolver directo:",
+            JSON.stringify(
+                response.data,
+                null,
+                2
+            )
+        );
+
+        const perfiles =
+            obtenerArrayPerfilesSteamWebAPI(
+                response.data
+            );
+
+        if (
+            perfiles.length
+        ) {
+
+            for (
+                const objeto
+                of perfiles
+            ) {
+
+                const perfil =
+                    convertirPerfilSteamWebAPI(
+                        objeto
+                    );
+
+                if (
+                    perfil
+                ) {
+
+                    console.log(
+                        `[STEAMWEBAPI] ✅ Resolver directo encontró SteamID64: ${perfil.steamid}`
+                    );
+
+                    return perfil;
+                }
+            }
+        }
+
+        const perfilDirecto =
+            convertirPerfilSteamWebAPI(
+                response.data
+            );
+
+        if (
+            perfilDirecto
+        ) {
+
+            console.log(
+                `[STEAMWEBAPI] ✅ Resolver directo encontró SteamID64: ${perfilDirecto.steamid}`
+            );
+
+            return perfilDirecto;
+        }
+
+        console.log(
+            "[STEAMWEBAPI] Resolver directo no devolvió un perfil válido."
+        );
+
+        return null;
+
+    } catch (error) {
+
+        console.error(
+            "[STEAMWEBAPI] Resolver directo:",
+            error.response?.status ||
+            error.message
+        );
+
+        if (
+            error.response?.data
+        ) {
+
+            console.error(
+                "[STEAMWEBAPI] Respuesta resolver directo:",
+                JSON.stringify(
+                    error.response.data,
+                    null,
+                    2
+                )
+            );
+        }
+
+        return null;
+    }
+}
+
+// =====================================================
+// BUSCAR EN EXPLORE
+// =====================================================
+
+async function buscarSteamWebAPIExplore(
+    nombre,
+    apiKey
+) {
+
+    console.log(
+        `[STEAMWEBAPI] Buscando "${nombre}" mediante Explore...`
     );
 
     try {
@@ -524,12 +791,8 @@ async function buscarSteamWebAPI(
             );
 
         console.log(
-            `[STEAMWEBAPI] HTTP: ${response.status}`
+            `[STEAMWEBAPI] Explore HTTP: ${response.status}`
         );
-
-        // =================================================
-        // MOSTRAR ESTRUCTURA REAL
-        // =================================================
 
         console.log(
             "[STEAMWEBAPI] Tipo de respuesta:",
@@ -540,24 +803,6 @@ async function buscarSteamWebAPI(
                 : typeof response.data
         );
 
-        if (
-            response.data &&
-            typeof response.data === "object" &&
-            !Array.isArray(response.data)
-        ) {
-
-            console.log(
-                "[STEAMWEBAPI] Keys:",
-                Object.keys(
-                    response.data
-                )
-            );
-        }
-
-        // =================================================
-        // OBTENER PERFILES
-        // =================================================
-
         const perfilesAPI =
             obtenerArrayPerfilesSteamWebAPI(
                 response.data
@@ -567,32 +812,12 @@ async function buscarSteamWebAPI(
             `[STEAMWEBAPI] Perfiles recibidos: ${perfilesAPI.length}`
         );
 
-        // =================================================
-        // DEBUG DE PRIMEROS RESULTADOS
-        // =================================================
-
         if (
-            perfilesAPI.length > 0
+            perfilesAPI.length === 0
         ) {
 
             console.log(
-                "[STEAMWEBAPI] Primeros resultados:"
-            );
-
-            for (
-                const perfil
-                of perfilesAPI.slice(0, 10)
-            ) {
-
-                console.log(
-                    ` - steamid=${perfil?.steamid} | personaname=${perfil?.personaname} | accountname=${perfil?.accountname} | displayname=${perfil?.displayname}`
-                );
-            }
-
-        } else {
-
-            console.log(
-                "[STEAMWEBAPI] ⚠️ La API devolvió 0 perfiles."
+                "[STEAMWEBAPI] ⚠️ Explore devolvió 0 perfiles."
             );
 
             console.log(
@@ -603,202 +828,36 @@ async function buscarSteamWebAPI(
                     2
                 )
             );
-        }
 
-        // =================================================
-        // CONVERTIR A ESTRUCTURA INTERNA
-        // =================================================
+            return null;
+        }
 
         const perfiles =
             [];
-
-        const vistos =
-            new Set();
 
         for (
             const objeto
             of perfilesAPI
         ) {
 
-            if (
-                !objeto ||
-                typeof objeto !== "object"
-            ) {
-
-                continue;
-            }
-
-            const steamid =
-                extraerSteamID64Perfil(
+            const perfil =
+                convertirPerfilSteamWebAPI(
                     objeto
                 );
 
-            if (!steamid) {
-
-                continue;
-            }
-
-            const personaname =
-                objeto.personaname ||
-                null;
-
-            const accountname =
-                objeto.accountname ||
-                null;
-
-            const displayname =
-                objeto.displayname ||
-                null;
-
-            const nombres = [
-
-                personaname,
-
-                accountname,
-
-                displayname
-
-            ].filter(
-                valor =>
-                    valor !== null &&
-                    valor !== undefined &&
-                    String(valor).trim()
-            );
-
             if (
-                !nombres.length
+                perfil
             ) {
 
-                continue;
+                perfiles.push(
+                    perfil
+                );
             }
-
-            const key =
-                `${steamid}|${normalizarNombre(nombres[0])}`;
-
-            if (
-                vistos.has(key)
-            ) {
-
-                continue;
-            }
-
-            vistos.add(key);
-
-            perfiles.push({
-
-                steamid,
-
-                personaname,
-
-                accountname,
-
-                displayname,
-
-                profiletype:
-                    objeto.profiletype ||
-                    null,
-
-                realname:
-                    objeto.realname ||
-                    null,
-
-                loccountrycode:
-                    objeto.loccountrycode ||
-                    null,
-
-                description:
-                    objeto.description ||
-                    null,
-
-                fame:
-                    objeto.fame ??
-                    null,
-
-                vac:
-                    objeto.vac ??
-                    null,
-
-                islimited:
-                    objeto.islimited ??
-                    null,
-
-                level:
-                    objeto.level ??
-                    null,
-
-                worth:
-                    objeto.worth ??
-                    null,
-
-                worthsteam:
-                    objeto.worthsteam ??
-                    null,
-
-                size:
-                    objeto.size ??
-                    null,
-
-                peritem:
-                    objeto.peritem ??
-                    null,
-
-                totalplaytime:
-                    objeto.totalplaytime ??
-                    null,
-
-                playtimerecent:
-                    objeto.playtimerecent ??
-                    null,
-
-                timecreated:
-                    objeto.timecreated ??
-                    null,
-
-                updatedat:
-                    objeto.updatedat ??
-                    null,
-
-                inventoryupdatedat:
-                    objeto.inventoryupdatedat ??
-                    null,
-
-                avatar:
-                    objeto.avatar ||
-                    null,
-
-                avatarmedium:
-                    objeto.avatarmedium ||
-                    null,
-
-                avatarfull:
-                    objeto.avatarfull ||
-                    null,
-
-                profileurl:
-                    objeto.profileurl ||
-                    null,
-
-                profilesteamurl:
-                    objeto.profilesteamurl ||
-                    null,
-
-                onlinestate:
-                    objeto.onlinestate ??
-                    null,
-
-                ingameinfo:
-                    objeto.ingameinfo ??
-                    null
-            });
         }
 
         console.log(
             `[STEAMWEBAPI] Perfiles válidos: ${perfiles.length}`
         );
-
-        // =================================================
-        // BUSCAR COINCIDENCIA EXACTA
-        // =================================================
 
         const buscado =
             normalizarNombre(nombre);
@@ -831,69 +890,32 @@ async function buscarSteamWebAPI(
             `[STEAMWEBAPI] Coincidencias exactas: ${coincidencias.length}`
         );
 
-        // =================================================
-        // NO ENCONTRADO
-        // =================================================
-
         if (
             !coincidencias.length
         ) {
 
             console.log(
-                "[STEAMWEBAPI] ❌ No se encontró coincidencia exacta."
+                "[STEAMWEBAPI] ❌ Explore no encontró coincidencia exacta."
             );
 
-            if (
-                perfiles.length
+            for (
+                const perfil
+                of perfiles.slice(0, 20)
             ) {
 
                 console.log(
-                    "[STEAMWEBAPI] Candidatos:"
+                    ` - ${perfil.personaname || "N/A"} | ${perfil.accountname || "N/A"} | ${perfil.displayname || "N/A"} | ${perfil.steamid}`
                 );
-
-                for (
-                    const perfil
-                    of perfiles.slice(0, 20)
-                ) {
-
-                    console.log(
-                        ` - ${perfil.personaname || "N/A"} | ${perfil.accountname || "N/A"} | ${perfil.displayname || "N/A"} | ${perfil.steamid}`
-                    );
-                }
             }
 
             return null;
         }
 
-        // =================================================
-        // MATCH
-        // =================================================
-
         const perfil =
             coincidencias[0];
 
         console.log(
-            `[STEAMWEBAPI] ✅ MATCH`
-        );
-
-        console.log(
-            `[STEAMWEBAPI] personaname: ${perfil.personaname}`
-        );
-
-        console.log(
-            `[STEAMWEBAPI] accountname: ${perfil.accountname}`
-        );
-
-        console.log(
-            `[STEAMWEBAPI] displayname: ${perfil.displayname}`
-        );
-
-        console.log(
-            `[STEAMWEBAPI] SteamID64: ${perfil.steamid}`
-        );
-
-        console.log(
-            `[STEAMWEBAPI] Avatar: ${perfil.avatarfull || perfil.avatar || "N/A"}`
+            `[STEAMWEBAPI] ✅ MATCH Explore: ${perfil.steamid}`
         );
 
         return perfil;
@@ -901,7 +923,7 @@ async function buscarSteamWebAPI(
     } catch (error) {
 
         console.error(
-            "[STEAMWEBAPI] Error:",
+            "[STEAMWEBAPI] Explore:",
             error.response?.status ||
             error.message
         );
@@ -911,7 +933,7 @@ async function buscarSteamWebAPI(
         ) {
 
             console.error(
-                "[STEAMWEBAPI] Respuesta de error:",
+                "[STEAMWEBAPI] Respuesta Explore:",
                 JSON.stringify(
                     error.response.data,
                     null,
@@ -922,6 +944,89 @@ async function buscarSteamWebAPI(
 
         return null;
     }
+}
+
+// =====================================================
+// BUSCAR PERFIL COMPLETO EN STEAMWEBAPI
+// =====================================================
+
+async function buscarSteamWebAPI(
+    nombre
+) {
+
+    const apiKey =
+        process.env.STEAMWEBAPI_KEY;
+
+    if (!apiKey) {
+
+        console.error(
+            "[STEAMWEBAPI] ❌ Falta STEAMWEBAPI_KEY."
+        );
+
+        return null;
+    }
+
+    console.log(
+        "========================================"
+    );
+
+    console.log(
+        `[STEAMWEBAPI] Resolviendo "${nombre}"`
+    );
+
+    console.log(
+        "========================================"
+    );
+
+    // =================================================
+    // MÉTODO 1
+    // RESOLVER DIRECTAMENTE POR NOMBRE
+    // =================================================
+
+    const perfilDirecto =
+        await resolverSteamWebAPIDirecto(
+            nombre,
+            apiKey
+        );
+
+    if (
+        perfilDirecto
+    ) {
+
+        return perfilDirecto;
+    }
+
+    // =================================================
+    // MÉTODO 2
+    // EXPLORE
+    // =================================================
+
+    console.log(
+        "[STEAMWEBAPI] Resolver directo no encontró el perfil."
+    );
+
+    console.log(
+        "[STEAMWEBAPI] Intentando búsqueda Explore..."
+    );
+
+    const perfilExplore =
+        await buscarSteamWebAPIExplore(
+            nombre,
+            apiKey
+        );
+
+    if (
+        perfilExplore
+    ) {
+
+        return perfilExplore;
+    }
+
+    console.log(
+        "[STEAMWEBAPI] ❌ No se pudo resolver el perfil."
+    );
+
+    return null;
 }
 
 // =====================================================
@@ -1164,7 +1269,7 @@ module.exports = {
                     )
 
                     .setDescription(
-                        `Encontré a **${jugador.name}** en BattleMetrics, pero SteamWebAPI no devolvió una coincidencia exacta con SteamID64.`
+                        `Encontré a **${jugador.name}** en BattleMetrics, pero no pude resolver su SteamID64 mediante SteamWebAPI.`
                     )
 
                     .addFields({
