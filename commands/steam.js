@@ -166,10 +166,15 @@ async function buscarJugadoresBattleMetrics(nombre, serverId) {
 
 async function obtenerIdentifiersBattleMetrics(playerId) {
     console.log("[BM] ----------------------------------------");
+
     console.log(
         `[BM] PROCESANDO PLAYER ${playerId}`
     );
-    console.log("[BM] OBTENIENDO IDENTIFIERS DEL PLAYER");
+
+    console.log(
+        "[BM] OBTENIENDO IDENTIFIERS DEL PLAYER"
+    );
+
     console.log(
         `[BM] URL: /players/${playerId}?include=identifier`
     );
@@ -239,20 +244,46 @@ function encontrarSteamID64EnIdentifiers(identifiers) {
 }
 
 // =====================================================
+// OBTENER RUTA DE CHROME DE PUPPETEER
+// =====================================================
+
+function obtenerRutaChrome() {
+    try {
+        const ruta = puppeteer.executablePath();
+
+        console.log(
+            `[STEAMID.COM] Puppeteer executablePath: ${ruta}`
+        );
+
+        return ruta;
+    } catch (error) {
+        console.log(
+            `[STEAMID.COM] No se pudo obtener executablePath: ${error.message}`
+        );
+
+        return null;
+    }
+}
+
+// =====================================================
 // STEAMID.COM CON PUPPETEER
 // =====================================================
 
 async function buscarSteamIDCom(nombre) {
     console.log("");
+
     console.log(
         "[STEAMID.COM] ========================================"
     );
+
     console.log(
         `[STEAMID.COM] BUSCANDO: ${nombre}`
     );
+
     console.log(
         "[STEAMID.COM] MÉTODO: PUPPETEER"
     );
+
     console.log(
         "[STEAMID.COM] ========================================"
     );
@@ -264,24 +295,46 @@ async function buscarSteamIDCom(nombre) {
             "[STEAMID.COM] Iniciando navegador..."
         );
 
+        const executablePath = obtenerRutaChrome();
+
+        if (!executablePath) {
+            throw new Error(
+                "No se pudo determinar la ruta del ejecutable de Chrome."
+            );
+        }
+
+        console.log(
+            `[STEAMID.COM] Usando Chrome: ${executablePath}`
+        );
+
         browser = await puppeteer.launch({
             headless: true,
+
+            executablePath,
+
             defaultViewport: {
                 width: 1366,
                 height: 900
             },
+
             args: [
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled"
+                "--disable-blink-features=AutomationControlled",
+                "--no-first-run",
+                "--no-zygote"
             ]
         });
+
+        console.log(
+            "[STEAMID.COM] Chrome iniciado correctamente."
+        );
 
         const page = await browser.newPage();
 
         // -------------------------------------------------
-        // USER AGENT REALISTA
+        // USER AGENT
         // -------------------------------------------------
 
         await page.setUserAgent(
@@ -295,7 +348,7 @@ async function buscarSteamIDCom(nombre) {
         });
 
         // -------------------------------------------------
-        // OCULTAR ALGUNAS SEÑALES BÁSICAS DE AUTOMATIZACIÓN
+        // OCULTAR SEÑALES BÁSICAS DE AUTOMATIZACIÓN
         // -------------------------------------------------
 
         await page.evaluateOnNewDocument(() => {
@@ -338,7 +391,7 @@ async function buscarSteamIDCom(nombre) {
         }
 
         // -------------------------------------------------
-        // ESPERAR A QUE APAREZCAN LOS RESULTADOS
+        // ESPERAR RESULTADOS
         // -------------------------------------------------
 
         try {
@@ -359,7 +412,7 @@ async function buscarSteamIDCom(nombre) {
         }
 
         // -------------------------------------------------
-        // PEQUEÑA ESPERA PARA JS
+        // ESPERA PARA JS
         // -------------------------------------------------
 
         await new Promise(resolve =>
@@ -383,15 +436,9 @@ async function buscarSteamIDCom(nombre) {
         const htmlLower = html.toLowerCase();
 
         if (
-            htmlLower.includes(
-                "just a moment"
-            ) ||
-            htmlLower.includes(
-                "checking your browser"
-            ) ||
-            htmlLower.includes(
-                "cf-chl"
-            )
+            htmlLower.includes("just a moment") ||
+            htmlLower.includes("checking your browser") ||
+            htmlLower.includes("cf-chl")
         ) {
             console.log(
                 "[STEAMID.COM] Parece haber una protección/bloqueo de Cloudflare."
@@ -433,8 +480,7 @@ async function buscarSteamIDCom(nombre) {
 
                         if (heading) {
                             nombre =
-                                heading.textContent
-                                    .trim();
+                                heading.textContent.trim();
                         }
 
                         let avatar = null;
@@ -446,9 +492,7 @@ async function buscarSteamIDCom(nombre) {
 
                         if (img) {
                             avatar =
-                                img.getAttribute(
-                                    "src"
-                                );
+                                img.getAttribute("src");
                         }
 
                         return {
@@ -491,8 +535,10 @@ async function buscarSteamIDCom(nombre) {
             resultados.push({
                 steamId64:
                     perfil.steamId64,
+
                 nombre:
                     perfil.nombre || null,
+
                 avatar:
                     perfil.avatar || null
             });
@@ -509,12 +555,14 @@ async function buscarSteamIDCom(nombre) {
         }
 
         return resultados;
+
     } catch (error) {
         console.log(
             `[STEAMID.COM] ERROR: ${error.message}`
         );
 
         return [];
+
     } finally {
         if (browser) {
             try {
@@ -523,6 +571,7 @@ async function buscarSteamIDCom(nombre) {
                 console.log(
                     "[STEAMID.COM] Navegador cerrado."
                 );
+
             } catch (error) {
                 console.log(
                     `[STEAMID.COM] Error cerrando navegador: ${error.message}`
@@ -556,6 +605,7 @@ async function obtenerDatosSteam(steamId64) {
                     key: apiKey,
                     steamids: steamId64
                 },
+
                 timeout: 15000
             }
         );
@@ -575,6 +625,7 @@ async function obtenerDatosSteam(steamId64) {
         }
 
         return players[0];
+
     } catch (error) {
         console.log(
             `[STEAM API] Error: ${error.message}`
@@ -754,6 +805,7 @@ function crearBotonPerfil(steamId64) {
 // =====================================================
 
 module.exports = {
+
     data: new SlashCommandBuilder()
         .setName("steam")
         .setDescription(
@@ -769,6 +821,7 @@ module.exports = {
         ),
 
     async execute(interaction) {
+
         console.log("");
         console.log(
             "🎯 Ejecutando /steam"
@@ -794,6 +847,7 @@ module.exports = {
         await interaction.deferReply();
 
         try {
+
             // =========================================
             // BATTLEMETRICS SERVER
             // =========================================
@@ -844,10 +898,12 @@ module.exports = {
             for (
                 const jugador of jugadores
             ) {
+
                 const playerId =
                     jugador.id;
 
                 console.log("");
+
                 console.log(
                     `[BM] PROCESANDO PLAYER ${playerId}`
                 );
@@ -860,6 +916,7 @@ module.exports = {
                 // -------------------------------------
 
                 try {
+
                     const identifiers =
                         await obtenerIdentifiersBattleMetrics(
                             playerId
@@ -869,7 +926,9 @@ module.exports = {
                         encontrarSteamID64EnIdentifiers(
                             identifiers
                         );
+
                 } catch (error) {
+
                     console.log(
                         `[BM] Error obteniendo identifiers: ${error.message}`
                     );
@@ -880,6 +939,7 @@ module.exports = {
                 // -------------------------------------
 
                 if (!steamId64) {
+
                     console.log(
                         "[STEAMID.COM] BM no entregó SteamID64."
                     );
@@ -892,6 +952,7 @@ module.exports = {
                     if (
                         resultadosSteamID.length > 0
                     ) {
+
                         const nombreLower =
                             nombre
                                 .trim()
@@ -920,6 +981,7 @@ module.exports = {
                 // -------------------------------------
 
                 if (!steamId64) {
+
                     console.log(
                         `[STEAM] No se pudo obtener SteamID64 para ${jugador.attributes.name}`
                     );
@@ -979,9 +1041,11 @@ module.exports = {
                         RESULTADOS_POR_PAGINA
                     )
                     .map(resultado => {
+
                         if (
                             !resultado.steamId64
                         ) {
+
                             return new EmbedBuilder()
                                 .setTitle(
                                     `🎮 ${resultado.nombre}`
@@ -1038,7 +1102,9 @@ module.exports = {
             console.log(
                 "✅ /steam terminado"
             );
+
         } catch (error) {
+
             console.error(
                 "[STEAM] ERROR:",
                 error
@@ -1052,9 +1118,11 @@ module.exports = {
                 "Error desconocido.";
 
             try {
+
                 await interaction.editReply(
                     `❌ Ocurrió un error al buscar el jugador.\n\`${mensaje}\``
                 );
+
             } catch {
                 // Discord ya respondió.
             }
