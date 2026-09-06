@@ -41,7 +41,7 @@ function getBattleMetricsHeaders() {
 }
 
 // =====================================================
-// COMPROBAR SI ES UN STEAMID64 VÁLIDO
+// COMPROBAR STEAMID64
 // =====================================================
 
 function esSteamID64(valor) {
@@ -68,6 +68,60 @@ function esSteamID64(valor) {
 }
 
 // =====================================================
+// BUSCAR STEAMID64 RECURSIVAMENTE
+// =====================================================
+
+function buscarSteamID64Recursivo(objeto, ruta = "root", encontrados = []) {
+    if (
+        objeto === null ||
+        objeto === undefined
+    ) {
+        return encontrados;
+    }
+
+    if (
+        typeof objeto === "string" ||
+        typeof objeto === "number" ||
+        typeof objeto === "bigint"
+    ) {
+        const valor = String(objeto).trim();
+
+        if (esSteamID64(valor)) {
+            encontrados.push({
+                valor,
+                ruta
+            });
+        }
+
+        return encontrados;
+    }
+
+    if (Array.isArray(objeto)) {
+        for (let i = 0; i < objeto.length; i++) {
+            buscarSteamID64Recursivo(
+                objeto[i],
+                `${ruta}[${i}]`,
+                encontrados
+            );
+        }
+
+        return encontrados;
+    }
+
+    if (typeof objeto === "object") {
+        for (const [clave, valor] of Object.entries(objeto)) {
+            buscarSteamID64Recursivo(
+                valor,
+                `${ruta}.${clave}`,
+                encontrados
+            );
+        }
+    }
+
+    return encontrados;
+}
+
+// =====================================================
 // OBTENER STEAMID64 DESDE BATTLEMETRICS
 // =====================================================
 
@@ -88,9 +142,11 @@ async function obtenerSteamID64(playerId) {
             }
         );
 
+        const data = response.data || {};
+
         const included =
-            Array.isArray(response.data?.included)
-                ? response.data.included
+            Array.isArray(data.included)
+                ? data.included
                 : [];
 
         console.log(
@@ -98,7 +154,114 @@ async function obtenerSteamID64(playerId) {
         );
 
         // =================================================
-        // MOSTRAR TODOS LOS IDENTIFICADORES
+        // MOSTRAR OBJETO PRINCIPAL DEL PLAYER
+        // =================================================
+
+        console.log(
+            "[BATTLEMETRICS] ========================================"
+        );
+
+        console.log(
+            "[BATTLEMETRICS] OBJETO PRINCIPAL DEL PLAYER"
+        );
+
+        console.log(
+            JSON.stringify(
+                data.data || null,
+                null,
+                2
+            )
+        );
+
+        console.log(
+            "[BATTLEMETRICS] ========================================"
+        );
+
+        // =================================================
+        // BUSCAR DIRECTAMENTE EN TODO EL OBJETO
+        // =================================================
+
+        console.log(
+            "[BATTLEMETRICS] Buscando SteamID64 en toda la respuesta..."
+        );
+
+        const encontrados =
+            buscarSteamID64Recursivo(
+                data
+            );
+
+        if (encontrados.length > 0) {
+            console.log(
+                `[BATTLEMETRICS] SteamID64 candidatos encontrados: ${encontrados.length}`
+            );
+
+            for (const candidato of encontrados) {
+                console.log(
+                    `[BATTLEMETRICS] 🔎 Candidato: ${candidato.valor} | Ruta: ${candidato.ruta}`
+                );
+            }
+
+            // =================================================
+            // DEVOLVER EL PRIMER STEAMID64 VÁLIDO
+            // =================================================
+
+            const steamId64 =
+                encontrados[0].valor;
+
+            console.log(
+                `[BATTLEMETRICS] ✅ SteamID64 encontrado: ${steamId64}`
+            );
+
+            return steamId64;
+        }
+
+        // =================================================
+        // MOSTRAR ATRIBUTOS DEL PLAYER
+        // =================================================
+
+        const playerData =
+            data.data || null;
+
+        if (playerData) {
+            console.log(
+                "[BATTLEMETRICS] ========================================"
+            );
+
+            console.log(
+                "[BATTLEMETRICS] ATRIBUTOS DEL PLAYER"
+            );
+
+            console.log(
+                JSON.stringify(
+                    playerData.attributes || {},
+                    null,
+                    2
+                )
+            );
+
+            console.log(
+                "[BATTLEMETRICS] ========================================"
+            );
+
+            console.log(
+                "[BATTLEMETRICS] RELATIONSHIPS DEL PLAYER"
+            );
+
+            console.log(
+                JSON.stringify(
+                    playerData.relationships || {},
+                    null,
+                    2
+                )
+            );
+
+            console.log(
+                "[BATTLEMETRICS] ========================================"
+            );
+        }
+
+        // =================================================
+        // MOSTRAR IDENTIFICADORES
         // =================================================
 
         console.log(
@@ -117,8 +280,13 @@ async function obtenerSteamID64(playerId) {
             "[BATTLEMETRICS] ========================================"
         );
 
-        for (let i = 0; i < included.length; i++) {
-            const item = included[i];
+        for (
+            let i = 0;
+            i < included.length;
+            i++
+        ) {
+            const item =
+                included[i];
 
             console.log(
                 `[BATTLEMETRICS] IDENTIFICADOR #${i + 1}`
@@ -143,7 +311,7 @@ async function obtenerSteamID64(playerId) {
         );
 
         // =================================================
-        // BUSCAR IDENTIFICADOR STEAM
+        // ANALIZAR IDENTIFICADORES
         // =================================================
 
         for (const item of included) {
@@ -167,11 +335,6 @@ async function obtenerSteamID64(playerId) {
             console.log(
                 `[BATTLEMETRICS] Analizando identifier: "${valor}" | tipo BM: "${item.attributes?.type || "desconocido"}"`
             );
-
-            // ---------------------------------------------
-            // NO IMPORTA SI BM LO MARCA COMO "name"
-            // LO IMPORTANTE ES QUE SEA UN STEAMID64 REAL
-            // ---------------------------------------------
 
             if (esSteamID64(valor)) {
                 console.log(
@@ -303,10 +466,6 @@ async function buscarJugadoresBattleMetrics(
             return [];
         }
 
-        // =================================================
-        // NOMBRES DUPLICADOS
-        // =================================================
-
         if (
             resultado.duplicate &&
             Array.isArray(
@@ -367,20 +526,12 @@ async function prepararResultados(
             `[BATTLEMETRICS] Procesando: ${nombreBM} (${playerId})`
         );
 
-        // =================================================
-        // STEAMID64
-        // =================================================
-
         const steamId64 =
             await obtenerSteamID64(
                 playerId
             );
 
         let steam = null;
-
-        // =================================================
-        // PERFIL STEAM
-        // =================================================
 
         if (steamId64) {
             console.log(
@@ -520,10 +671,6 @@ function crearEmbed(
         });
     }
 
-    // =================================================
-    // AVATAR DEL PRIMER RESULTADO
-    // =================================================
-
     const primerResultado =
         paginaResultados[0];
 
@@ -650,10 +797,6 @@ module.exports = {
             `[STEAM] Entrada recibida: "${nombre}"`
         );
 
-        // =================================================
-        // CONFIGURACIÓN DEL SERVIDOR
-        // =================================================
-
         let config;
 
         try {
@@ -696,10 +839,6 @@ module.exports = {
             `[CONFIG] BattleMetrics Server ID: ${battleMetricsServerId}`
         );
 
-        // =================================================
-        // TOKEN
-        // =================================================
-
         if (
             !BATTLEMETRICS_TOKEN
         ) {
@@ -717,10 +856,6 @@ module.exports = {
         await interaction.deferReply();
 
         try {
-            // =================================================
-            // BUSCAR EN BATTLEMETRICS
-            // =================================================
-
             const jugadores =
                 await buscarJugadoresBattleMetrics(
                     nombre,
@@ -740,10 +875,6 @@ module.exports = {
                 `[BATTLEMETRICS] Procesando ${jugadores.length} jugador(es)...`
             );
 
-            // =================================================
-            // OBTENER STEAMID + PERFIL
-            // =================================================
-
             const resultados =
                 await prepararResultados(
                     jugadores
@@ -757,10 +888,6 @@ module.exports = {
                         "❌ BattleMetrics encontró jugadores, pero no se pudieron procesar."
                 });
             }
-
-            // =================================================
-            // PAGINACIÓN
-            // =================================================
 
             let pagina = 0;
 
@@ -786,10 +913,6 @@ module.exports = {
                         botones
                     ]
                 });
-
-            // =================================================
-            // COLLECTOR
-            // =================================================
 
             const collector =
                 mensaje.createMessageComponentCollector({
