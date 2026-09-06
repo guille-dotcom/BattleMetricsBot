@@ -28,9 +28,8 @@ const USER_AGENT =
 // OCR
 // =====================================================
 
-// IMPORTANTE:
-// No mezclamos 15+ idiomas en un solo worker.
-// Si un idioma falla, se ignora y el OCR continúa.
+// Grupos separados para que si un idioma falla,
+// no se caiga todo el OCR.
 
 const OCR_GRUPOS = [
     {
@@ -78,7 +77,7 @@ function normalizarComparacion(nombre) {
 function limpiarOCR(texto) {
     if (!texto) return "";
 
-    let textoLimpio = String(texto)
+    return String(texto)
         .normalize("NFKC")
         .replace(/\r/g, "")
         .replace(/[“”„‟]/gu, '"')
@@ -88,8 +87,6 @@ function limpiarOCR(texto) {
         .replace(/[ \t]+/gu, " ")
         .replace(/\n{3,}/gu, "\n\n")
         .trim();
-
-    return textoLimpio;
 }
 
 // =====================================================
@@ -100,10 +97,13 @@ async function obtenerImagen(url) {
     const response = await axios.get(url, {
         responseType: "arraybuffer",
         timeout: 30000,
+
         headers: {
             "User-Agent": USER_AGENT,
-            Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+            Accept:
+                "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         },
+
         maxContentLength: 15 * 1024 * 1024,
         maxBodyLength: 15 * 1024 * 1024
     });
@@ -122,17 +122,15 @@ async function prepararImagenes(buffer) {
         const metadata = await sharp(buffer).metadata();
 
         const anchoOriginal = metadata.width || 1000;
-        const altoOriginal = metadata.height || 700;
 
-        // Evitamos hacer imágenes absurdamente grandes.
         const anchoObjetivo = Math.min(
             Math.max(anchoOriginal * 2, 1600),
             3000
         );
 
-        // -------------------------------------------------
-        // 1. ORIGINAL AMPLIADA
-        // -------------------------------------------------
+        // =================================================
+        // 1. NORMAL
+        // =================================================
 
         try {
             const normal = await sharp(buffer)
@@ -158,9 +156,9 @@ async function prepararImagenes(buffer) {
             );
         }
 
-        // -------------------------------------------------
-        // 2. ESCALA DE GRISES
-        // -------------------------------------------------
+        // =================================================
+        // 2. GRIS
+        // =================================================
 
         try {
             const gris = await sharp(buffer)
@@ -188,9 +186,9 @@ async function prepararImagenes(buffer) {
             );
         }
 
-        // -------------------------------------------------
+        // =================================================
         // 3. CONTRASTE
-        // -------------------------------------------------
+        // =================================================
 
         try {
             const contraste = await sharp(buffer)
@@ -213,14 +211,14 @@ async function prepararImagenes(buffer) {
             });
         } catch (error) {
             console.error(
-                "⚠️ Error preparando imagen contraste:",
+                "⚠️ Error preparando contraste:",
                 error.message
             );
         }
 
-        // -------------------------------------------------
+        // =================================================
         // 4. ALTO CONTRASTE
-        // -------------------------------------------------
+        // =================================================
 
         try {
             const altoContraste = await sharp(buffer)
@@ -279,6 +277,10 @@ async function crearWorkerSeguro(idiomas, grupo) {
 
         worker = await createWorker(idiomas);
 
+        console.log(
+            `✅ OCR cargado [${grupo}]`
+        );
+
         return worker;
     } catch (error) {
         console.error(
@@ -305,7 +307,8 @@ async function ejecutarOCR(buffer) {
         "🔎 Iniciando OCR multidioma avanzado..."
     );
 
-    const imagenes = await prepararImagenes(buffer);
+    const imagenes =
+        await prepararImagenes(buffer);
 
     if (!imagenes.length) {
         throw new Error(
@@ -315,9 +318,9 @@ async function ejecutarOCR(buffer) {
 
     const resultados = [];
 
-    // -------------------------------------------------
-    // CADA GRUPO SE PROCESA INDEPENDIENTEMENTE
-    // -------------------------------------------------
+    // =================================================
+    // PROCESAR GRUPOS
+    // =================================================
 
     for (const grupo of OCR_GRUPOS) {
         let worker = null;
@@ -328,7 +331,9 @@ async function ejecutarOCR(buffer) {
                 grupo.nombre
             );
 
-            // Si este grupo falla, CONTINUAMOS.
+            // Si falla un grupo, continuamos
+            // con los demás.
+
             if (!worker) {
                 console.warn(
                     `⚠️ Saltando grupo OCR [${grupo.nombre}]`
@@ -337,11 +342,11 @@ async function ejecutarOCR(buffer) {
                 continue;
             }
 
-            // -------------------------------------------------
-            // DISTINTOS PSM
-            // -------------------------------------------------
-
             const modosPSM = [6, 7, 11, 12];
+
+            // =================================================
+            // IMÁGENES
+            // =================================================
 
             for (const imagen of imagenes) {
                 for (const psm of modosPSM) {
@@ -370,13 +375,10 @@ async function ejecutarOCR(buffer) {
                     } catch (error) {
                         console.error(
                             `⚠️ OCR falló [${grupo.nombre}] ` +
-                            `[${imagen.nombre}] [PSM ${psm}]:`,
+                            `[${imagen.nombre}] ` +
+                            `[PSM ${psm}]:`,
                             error.message
                         );
-
-                        // IMPORTANTE:
-                        // No hacemos throw.
-                        // Continuamos con el siguiente intento.
                     }
                 }
             }
@@ -409,7 +411,10 @@ async function ejecutarOCR(buffer) {
         `🧠 OCR completado: ${resultados.length} resultados`
     );
 
-    // Mostrar algunos resultados para depuración
+    // =================================================
+    // DEBUG
+    // =================================================
+
     for (const resultado of resultados.slice(0, 20)) {
         console.log(
             `📝 OCR [${resultado.grupo}] ` +
@@ -440,17 +445,20 @@ function extraerCandidatos(resultados) {
         for (const lineaOriginal of lineas) {
             let linea = lineaOriginal.trim();
 
-            // -------------------------------------------------
-            // QUITAR TEXTOS MUY LARGOS
-            // -------------------------------------------------
+            // =================================================
+            // LONGITUD
+            // =================================================
 
-            if (linea.length < 2 || linea.length > 64) {
+            if (
+                linea.length < 2 ||
+                linea.length > 64
+            ) {
                 continue;
             }
 
-            // -------------------------------------------------
-            // ELIMINAR TEXTO OBVIAMENTE NO ÚTIL
-            // -------------------------------------------------
+            // =================================================
+            // TEXTO NO ÚTIL
+            // =================================================
 
             if (
                 /^(online|offline|players?|server|steam|rust|health|ping|fps|connect|disconnect)$/iu.test(
@@ -460,9 +468,9 @@ function extraerCandidatos(resultados) {
                 continue;
             }
 
-            // -------------------------------------------------
-            // LIMPIAR SOLO BASURA DE LOS EXTREMOS
-            // -------------------------------------------------
+            // =================================================
+            // BASURA DE EXTREMOS
+            // =================================================
 
             linea = linea
                 .replace(/^[|:;,./\\]+/u, "")
@@ -473,25 +481,27 @@ function extraerCandidatos(resultados) {
                 continue;
             }
 
-            // -------------------------------------------------
-            // DEBE HABER AL MENOS UNA LETRA O NÚMERO UNICODE
-            // -------------------------------------------------
+            // =================================================
+            // LETRAS / NÚMEROS UNICODE
+            // =================================================
 
             if (!/[\p{L}\p{N}]/u.test(linea)) {
                 continue;
             }
 
-            // -------------------------------------------------
-            // EVITAR PÁRRAFOS ENTEROS
-            // -------------------------------------------------
+            // =================================================
+            // EVITAR PÁRRAFOS
+            // =================================================
 
-            const palabras = linea.split(/\s+/u);
+            const palabras =
+                linea.split(/\s+/u);
 
             if (palabras.length > 8) {
                 continue;
             }
 
-            const clave = normalizarComparacion(linea);
+            const clave =
+                normalizarComparacion(linea);
 
             if (!clave) {
                 continue;
@@ -501,12 +511,12 @@ function extraerCandidatos(resultados) {
                 candidatos.set(clave, {
                     nombre: linea,
                     apariciones: 0,
-                    fuentes: [],
-                    scoreBase: 0
+                    fuentes: []
                 });
             }
 
-            const candidato = candidatos.get(clave);
+            const candidato =
+                candidatos.get(clave);
 
             candidato.apariciones++;
 
@@ -530,38 +540,44 @@ function puntuarCandidato(candidato) {
 
     let score = 0;
 
-    // -------------------------------------------------
+    // =================================================
     // APARICIONES
-    // -------------------------------------------------
+    // =================================================
 
     score += Math.min(
         candidato.apariciones * 15,
         90
     );
 
-    // -------------------------------------------------
-    // LONGITUD RAZONABLE
-    // -------------------------------------------------
+    // =================================================
+    // LONGITUD
+    // =================================================
 
-    if (nombre.length >= 3 && nombre.length <= 32) {
+    if (
+        nombre.length >= 3 &&
+        nombre.length <= 32
+    ) {
         score += 20;
     }
 
-    if (nombre.length >= 5 && nombre.length <= 24) {
+    if (
+        nombre.length >= 5 &&
+        nombre.length <= 24
+    ) {
         score += 10;
     }
 
-    // -------------------------------------------------
+    // =================================================
     // ESPACIOS
-    // -------------------------------------------------
+    // =================================================
 
     if (/\s/u.test(nombre)) {
         score += 5;
     }
 
-    // -------------------------------------------------
-    // SÍMBOLOS TÍPICOS DE NOMBRES
-    // -------------------------------------------------
+    // =================================================
+    // SÍMBOLOS DE NOMBRES
+    // =================================================
 
     if (/[|_^™]/u.test(nombre)) {
         score += 15;
@@ -571,112 +587,102 @@ function puntuarCandidato(candidato) {
         score += 5;
     }
 
-    // -------------------------------------------------
+    // =================================================
     // LETRAS UNICODE
-    // -------------------------------------------------
+    // =================================================
 
     if (/\p{L}/u.test(nombre)) {
         score += 10;
     }
 
-    // -------------------------------------------------
+    // =================================================
     // NÚMEROS
-    // -------------------------------------------------
+    // =================================================
 
     if (/\p{N}/u.test(nombre)) {
         score += 3;
     }
 
-    // -------------------------------------------------
+    // =================================================
     // CIRÍLICO
-    // -------------------------------------------------
+    // =================================================
 
     if (/[\u0400-\u04FF]/u.test(nombre)) {
         score += 30;
     }
 
-    // -------------------------------------------------
+    // =================================================
     // GRIEGO
-    // -------------------------------------------------
+    // =================================================
 
     if (/[\u0370-\u03FF]/u.test(nombre)) {
         score += 25;
     }
 
-    // -------------------------------------------------
+    // =================================================
     // CHINO
-    // -------------------------------------------------
+    // =================================================
 
-    if (/[\u3400-\u4DBF\u4E00-\u9FFF]/u.test(nombre)) {
+    if (
+        /[\u3400-\u4DBF\u4E00-\u9FFF]/u.test(
+            nombre
+        )
+    ) {
         score += 35;
     }
 
-    // -------------------------------------------------
+    // =================================================
     // JAPONÉS
-    // -------------------------------------------------
+    // =================================================
 
-    if (/[\u3040-\u30FF]/u.test(nombre)) {
+    if (
+        /[\u3040-\u30FF]/u.test(nombre)
+    ) {
         score += 35;
     }
 
-    // -------------------------------------------------
+    // =================================================
     // COREANO
-    // -------------------------------------------------
+    // =================================================
 
-    if (/[\uAC00-\uD7AF]/u.test(nombre)) {
+    if (
+        /[\uAC00-\uD7AF]/u.test(nombre)
+    ) {
         score += 35;
     }
 
-    // -------------------------------------------------
-    // LETRAS LATINAS EXTENDIDAS
-    // -------------------------------------------------
+    // =================================================
+    // LATÍN EXTENDIDO
+    // =================================================
 
-    if (/[\u00C0-\u024F]/u.test(nombre)) {
+    if (
+        /[\u00C0-\u024F]/u.test(nombre)
+    ) {
         score += 15;
     }
 
-    // -------------------------------------------------
-    // CASTIGO POR EXCESO DE SÍMBOLOS
-    // -------------------------------------------------
+    // =================================================
+    // EXCESO DE SÍMBOLOS
+    // =================================================
 
     const caracteresEspeciales =
-        nombre.replace(/[\p{L}\p{N}\s]/gu, "").length;
+        nombre.replace(
+            /[\p{L}\p{N}\s]/gu,
+            ""
+        ).length;
 
     if (caracteresEspeciales > 8) {
         score -= 20;
     }
 
-    // -------------------------------------------------
-    // CASTIGO POR SER SOLO NÚMEROS
-    // -------------------------------------------------
-
-    if (/^[\p{N}\s]+$/u.test(nombre)) {
-        score -= 30;
-    }
-
-    // -------------------------------------------------
-    // CASTIGO POR TEXTO TÍPICO DE UI
-    // -------------------------------------------------
+    // =================================================
+    // SOLO NÚMEROS
+    // =================================================
 
     if (
-        /\b(
-            settings|
-            menu|
-            server|
-            players?|
-            online|
-            offline|
-            health|
-            inventory|
-            item|
-            craft|
-            building|
-            map|
-            connect|
-            disconnect
-        )\b/iu.test(nombre)
+        /^[\p{N}\s]+$/u.test(nombre)
     ) {
-        score -= 50;
+        score -= 30;
     }
 
     return score;
@@ -687,27 +693,29 @@ function puntuarCandidato(candidato) {
 // =====================================================
 
 function seleccionarMejorCandidato(resultados) {
-    const candidatos = extraerCandidatos(
-        resultados
-    );
+    const candidatos =
+        extraerCandidatos(resultados);
 
     if (!candidatos.length) {
         return null;
     }
 
     for (const candidato of candidatos) {
-        candidato.score = puntuarCandidato(
-            candidato
-        );
+        candidato.score =
+            puntuarCandidato(candidato);
     }
 
     candidatos.sort(
         (a, b) => b.score - a.score
     );
 
-    console.log("🏆 Ranking OCR:");
+    console.log(
+        "🏆 Ranking OCR:"
+    );
 
-    for (const candidato of candidatos.slice(0, 15)) {
+    for (
+        const candidato of candidatos.slice(0, 15)
+    ) {
         console.log(
             `   ${candidato.score} pts | ` +
             `${JSON.stringify(candidato.nombre)} | ` +
@@ -719,13 +727,12 @@ function seleccionarMejorCandidato(resultados) {
 }
 
 // =====================================================
-// DETECTAR NOMBRE
+// DETECTAR NOMBRE OCR
 // =====================================================
 
 async function detectarNombreOCR(buffer) {
-    const resultados = await ejecutarOCR(
-        buffer
-    );
+    const resultados =
+        await ejecutarOCR(buffer);
 
     const mejor =
         seleccionarMejorCandidato(resultados);
@@ -771,10 +778,12 @@ async function buscarEnBattleMetrics(nombre) {
                     "page[size]": 100,
                     include: "player,identifier"
                 },
+
                 headers: {
                     "User-Agent": USER_AGENT,
                     Accept: "application/json"
                 },
+
                 timeout: 30000
             }
         );
@@ -786,9 +795,11 @@ async function buscarEnBattleMetrics(nombre) {
                 ? data.included
                 : [];
 
-        const players = included.filter(
-            (item) => item.type === "player"
-        );
+        const players =
+            included.filter(
+                (item) =>
+                    item.type === "player"
+            );
 
         for (const player of players) {
             const nombreJugador =
@@ -806,7 +817,8 @@ async function buscarEnBattleMetrics(nombre) {
                 encontrados.push({
                     id: player.id,
                     nombre: nombreJugador,
-                    atributos: player.attributes || {}
+                    atributos:
+                        player.attributes || {}
                 });
             }
         }
@@ -822,7 +834,7 @@ async function buscarEnBattleMetrics(nombre) {
 }
 
 // =====================================================
-// BUSCAR SERVIDORES DEL PLAYER
+// OBTENER DATOS PLAYER
 // =====================================================
 
 async function obtenerDatosPlayer(playerId) {
@@ -831,12 +843,15 @@ async function obtenerDatosPlayer(playerId) {
             `${BM_API}/players/${playerId}`,
             {
                 params: {
-                    include: "server,identifier"
+                    include:
+                        "server,identifier"
                 },
+
                 headers: {
                     "User-Agent": USER_AGENT,
                     Accept: "application/json"
                 },
+
                 timeout: 30000
             }
         );
@@ -854,7 +869,7 @@ async function obtenerDatosPlayer(playerId) {
 }
 
 // =====================================================
-// EMBED
+// CREAR EMBED
 // =====================================================
 
 function crearEmbed(
@@ -862,13 +877,16 @@ function crearEmbed(
     resultados,
     nombreOCR = null
 ) {
-    const embed = new EmbedBuilder()
-        .setTitle("🎯 Resultado de búsqueda Steam")
-        .setDescription(
-            `**Nombre buscado:** ${nombreBuscado}`
-        )
-        .setColor(0x5865f2)
-        .setTimestamp();
+    const embed =
+        new EmbedBuilder()
+            .setTitle(
+                "🎯 Resultado de búsqueda Steam"
+            )
+            .setDescription(
+                `**Nombre buscado:** ${nombreBuscado}`
+            )
+            .setColor(0x5865f2)
+            .setTimestamp();
 
     if (nombreOCR) {
         embed.addFields({
@@ -898,13 +916,19 @@ function crearEmbed(
         return embed;
     }
 
-    for (const resultado of resultados.slice(0, 10)) {
-        const playerId = resultado.id;
+    for (
+        const resultado of resultados.slice(0, 10)
+    ) {
+        const playerId =
+            resultado.id;
+
         const nombre =
-            resultado.nombre || nombreBuscado;
+            resultado.nombre ||
+            nombreBuscado;
 
         embed.addFields({
             name: `👤 ${nombre}`,
+
             value:
                 `**BattleMetrics:** ` +
                 `[Abrir jugador](https://www.battlemetrics.com/players/${playerId})\n` +
@@ -912,6 +936,7 @@ function crearEmbed(
                 `[Buscar nombre](https://www.steamid.com/search?q=${encodeURIComponent(
                     nombre
                 )})`,
+
             inline: false
         });
     }
@@ -928,7 +953,8 @@ async function ejecutarBusqueda(
     nombre,
     nombreOCR = null
 ) {
-    nombre = normalizarNombre(nombre);
+    nombre =
+        normalizarNombre(nombre);
 
     if (!nombre) {
         throw new Error(
@@ -937,13 +963,16 @@ async function ejecutarBusqueda(
     }
 
     const resultados =
-        await buscarEnBattleMetrics(nombre);
+        await buscarEnBattleMetrics(
+            nombre
+        );
 
-    const embed = crearEmbed(
-        nombre,
-        resultados,
-        nombreOCR
-    );
+    const embed =
+        crearEmbed(
+            nombre,
+            resultados,
+            nombreOCR
+        );
 
     return {
         resultados,
@@ -956,31 +985,40 @@ async function ejecutarBusqueda(
 // =====================================================
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName("steam")
-        .setDescription(
-            "Busca un jugador de Rust en BattleMetrics"
-        )
-        .addStringOption((option) =>
-            option
-                .setName("nombre")
-                .setDescription(
-                    "Nombre exacto del jugador"
-                )
-                .setRequired(false)
-        )
-        .addAttachmentOption((option) =>
-            option
-                .setName("captura")
-                .setDescription(
-                    "Captura donde aparece el nombre del jugador"
-                )
-                .setRequired(false)
-        ),
+    data:
+        new SlashCommandBuilder()
+            .setName("steam")
+            .setDescription(
+                "Busca un jugador de Rust en BattleMetrics"
+            )
+
+            .addStringOption(
+                (option) =>
+                    option
+                        .setName("nombre")
+                        .setDescription(
+                            "Nombre exacto del jugador"
+                        )
+                        .setRequired(false)
+            )
+
+            .addAttachmentOption(
+                (option) =>
+                    option
+                        .setName("captura")
+                        .setDescription(
+                            "Captura donde aparece el nombre del jugador"
+                        )
+                        .setRequired(false)
+            ),
+
+    // =================================================
+    // EXECUTE
+    // =================================================
 
     async execute(interaction) {
         console.log(
-            `🎯 Ejecutando /steam`
+            "🎯 Ejecutando /steam"
         );
 
         const nombre =
@@ -1087,17 +1125,26 @@ module.exports = {
                 const nombreDetectado =
                     resultadoOCR.nombre;
 
-                // Guardamos temporalmente
+                // =================================================
+                // GUARDAR ESTADO
+                // =================================================
+
                 estadosOCR.set(
                     interaction.user.id,
                     {
-                        nombre: nombreDetectado,
-                        score: resultadoOCR.score,
-                        timestamp: Date.now()
+                        nombre:
+                            nombreDetectado,
+                        score:
+                            resultadoOCR.score,
+                        timestamp:
+                            Date.now()
                     }
                 );
 
-                // Limpieza automática
+                // =================================================
+                // EXPIRACIÓN
+                // =================================================
+
                 setTimeout(() => {
                     const estado =
                         estadosOCR.get(
@@ -1116,27 +1163,41 @@ module.exports = {
                     }
                 }, 10 * 60 * 1000);
 
+                // =================================================
+                // EMBED OCR
+                // =================================================
+
                 const embed =
                     new EmbedBuilder()
                         .setTitle(
                             "📸 Nombre detectado"
                         )
+
                         .setDescription(
                             `Encontré este nombre en la captura:\n\n` +
                             `# \`${nombreDetectado}\``
                         )
+
                         .addFields({
-                            name: "🎯 Confianza interna",
+                            name:
+                                "🎯 Confianza interna",
                             value:
                                 `${resultadoOCR.score} puntos`,
                             inline: true
                         })
+
                         .setColor(0x57f287)
+
                         .setFooter({
                             text:
                                 "Comprueba que el nombre sea correcto antes de buscar."
                         })
+
                         .setTimestamp();
+
+                // =================================================
+                // BOTONES
+                // =================================================
 
                 const botones =
                     new ActionRowBuilder()
@@ -1339,9 +1400,8 @@ module.exports = {
                     );
 
             modal.addComponents(
-                new ActionRowBuilder().addComponents(
-                    input
-                )
+                new ActionRowBuilder()
+                    .addComponents(input)
             );
 
             modalesOCR.set(
@@ -1407,9 +1467,7 @@ module.exports = {
             }
 
             try {
-                await interaction.deferReply({
-                    ephemeral: false
-                });
+                await interaction.deferReply();
 
                 const resultado =
                     await ejecutarBusqueda(
