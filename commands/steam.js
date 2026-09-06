@@ -98,6 +98,51 @@ async function obtenerSteamID64(playerId) {
         );
 
         // =================================================
+        // MOSTRAR TODOS LOS IDENTIFICADORES
+        // =================================================
+
+        console.log(
+            "[BATTLEMETRICS] ========================================"
+        );
+
+        console.log(
+            "[BATTLEMETRICS] IDENTIFICADORES RECIBIDOS"
+        );
+
+        console.log(
+            `[BATTLEMETRICS] Player ID: ${playerId}`
+        );
+
+        console.log(
+            "[BATTLEMETRICS] ========================================"
+        );
+
+        for (let i = 0; i < included.length; i++) {
+            const item = included[i];
+
+            console.log(
+                `[BATTLEMETRICS] IDENTIFICADOR #${i + 1}`
+            );
+
+            console.log(
+                JSON.stringify(
+                    {
+                        id: item?.id ?? null,
+                        type: item?.type ?? null,
+                        attributes: item?.attributes ?? null,
+                        relationships: item?.relationships ?? null
+                    },
+                    null,
+                    2
+                )
+            );
+        }
+
+        console.log(
+            "[BATTLEMETRICS] ========================================"
+        );
+
+        // =================================================
         // BUSCAR IDENTIFICADOR STEAM
         // =================================================
 
@@ -118,6 +163,10 @@ async function obtenerSteamID64(playerId) {
 
             const valor =
                 String(identifier).trim();
+
+            console.log(
+                `[BATTLEMETRICS] Analizando identifier: "${valor}" | tipo BM: "${item.attributes?.type || "desconocido"}"`
+            );
 
             // ---------------------------------------------
             // NO IMPORTA SI BM LO MARCA COMO "name"
