@@ -44,7 +44,8 @@ function getBattleMetricsHeaders() {
 
 function getSteamIDHeaders() {
     return {
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
@@ -121,22 +122,39 @@ async function buscarJugadoresBattleMetrics(nombre, serverId) {
 
     const data = response.data;
 
-    const jugadores = Array.isArray(data.data)
-        ? data.data
+    // BattleMetrics devuelve el servidor en data
+    // y los players/identifiers dentro de included.
+    const included = Array.isArray(data.included)
+        ? data.included
         : [];
 
-    console.log("[BM] Players recibidos:", jugadores.length);
+    const jugadores = included.filter(resource => {
+        return (
+            resource &&
+            resource.type === "player" &&
+            resource.attributes
+        );
+    });
 
-    const nombreBuscado = nombre.trim().toLowerCase();
+    console.log(
+        "[BM] Resources incluidos:",
+        included.length
+    );
+
+    console.log(
+        "[BM] Players recibidos:",
+        jugadores.length
+    );
+
+    const nombreBuscado =
+        nombre.trim().toLowerCase();
 
     const coincidencias = jugadores.filter(player => {
-        if (!player || !player.attributes) {
-            return false;
-        }
-
         const nombrePlayer = String(
             player.attributes.name || ""
-        ).trim().toLowerCase();
+        )
+            .trim()
+            .toLowerCase();
 
         return nombrePlayer === nombreBuscado;
     });
@@ -145,6 +163,12 @@ async function buscarJugadoresBattleMetrics(nombre, serverId) {
         "[BM] Coincidencias exactas:",
         coincidencias.length
     );
+
+    for (const player of coincidencias) {
+        console.log(
+            `[BM] MATCH: ${player.id} | ${player.attributes.name}`
+        );
+    }
 
     return coincidencias;
 }
@@ -215,7 +239,7 @@ function encontrarSteamID64EnIdentifiers(identifiers) {
 
         if (esSteamID64(valor)) {
             console.log(
-                "[BM] ✅ STEAMID64 ENCONTRADO:",
+                "[BM] STEAMID64 ENCONTRADO:",
                 valor
             );
 
@@ -224,7 +248,7 @@ function encontrarSteamID64EnIdentifiers(identifiers) {
     }
 
     console.log(
-        "[BM] ❌ Ningún identifier contiene un SteamID64 válido."
+        "[BM] Ningún identifier contiene un SteamID64 válido."
     );
 
     return null;
@@ -252,9 +276,6 @@ async function buscarSteamIDCom(nombre) {
             },
             headers: getSteamIDHeaders(),
             timeout: 30000,
-
-            // SteamID.com puede devolver HTML aunque
-            // Cloudflare esté presente.
             validateStatus: status =>
                 status >= 200 && status < 500
         }
@@ -267,7 +288,7 @@ async function buscarSteamIDCom(nombre) {
 
     if (response.status !== 200) {
         console.log(
-            "[STEAMID.COM] ❌ Respuesta HTTP:",
+            "[STEAMID.COM] Respuesta HTTP:",
             response.status
         );
 
@@ -287,7 +308,7 @@ async function buscarSteamIDCom(nombre) {
     // =================================================
     // BUSCAR:
     //
-    // <a href="/profiles/76561198360243959">
+    // /profiles/76561198360243959
     //
     // =================================================
 
@@ -315,14 +336,14 @@ async function buscarSteamIDCom(nombre) {
 
     if (steamIds.length === 0) {
         console.log(
-            "[STEAMID.COM] ❌ No se encontró SteamID64."
+            "[STEAMID.COM] No se encontró SteamID64."
         );
 
         return null;
     }
 
     // =================================================
-    // EXTRAER RESULTADOS CON NOMBRE + AVATAR
+    // EXTRAER RESULTADOS
     // =================================================
 
     const resultados = [];
@@ -349,7 +370,10 @@ async function buscarSteamIDCom(nombre) {
             }
         }
 
-        // Buscar avatar asociado al mismo bloque
+        // =================================================
+        // AVATAR
+        // =================================================
+
         const avatarRegex = new RegExp(
             `<a\\s+href=["']\\/profiles\\/${steamId}["'][\\s\\S]*?<img[^>]+src=["']([^"']+)["']`,
             "i"
@@ -388,7 +412,7 @@ async function obtenerDatosSteam(steamId64) {
 
     if (!apiKey) {
         console.log(
-            "[STEAM API] ❌ Falta STEAM_API_KEY"
+            "[STEAM API] Falta STEAM_API_KEY"
         );
 
         return null;
@@ -419,7 +443,7 @@ async function obtenerDatosSteam(steamId64) {
             players.length === 0
         ) {
             console.log(
-                "[STEAM API] ❌ No devolvió perfil."
+                "[STEAM API] No devolvió perfil."
             );
 
             return null;
@@ -428,14 +452,14 @@ async function obtenerDatosSteam(steamId64) {
         const player = players[0];
 
         console.log(
-            "[STEAM API] ✅ Perfil obtenido:",
+            "[STEAM API] Perfil obtenido:",
             player.personaname
         );
 
         return player;
     } catch (error) {
         console.log(
-            "[STEAM API] ❌ Error:",
+            "[STEAM API] Error:",
             error.response?.status ||
             error.message
         );
@@ -462,17 +486,19 @@ function crearEmbed(resultado, pagina, total) {
         .setDescription(
             `**SteamID64:** \`${steamId64}\``
         )
-        .addFields(
-            {
-                name: "🔗 Perfil de Steam",
-                value:
-                    `[Abrir perfil](https://steamcommunity.com/profiles/${steamId64})`
-            }
-        )
+        .addFields({
+            name: "🔗 Perfil de Steam",
+            value:
+                `[Abrir perfil](https://steamcommunity.com/profiles/${steamId64})`
+        })
         .setFooter({
             text:
                 `Resultado ${pagina + 1} de ${total}`
         });
+
+    // =================================================
+    // DATOS DE STEAM
+    // =================================================
 
     if (steam) {
         if (steam.personaname) {
@@ -489,7 +515,9 @@ function crearEmbed(resultado, pagina, total) {
             });
         }
 
-        if (steam.personastate !== undefined) {
+        if (
+            steam.personastate !== undefined
+        ) {
             const estados = {
                 0: "🔴 Offline",
                 1: "🟢 Online",
@@ -510,17 +538,17 @@ function crearEmbed(resultado, pagina, total) {
         }
 
         if (steam.timecreated) {
-            const fecha =
-                `<t:${steam.timecreated}:D>`;
-
             embed.addFields({
                 name: "📅 Cuenta creada",
-                value: fecha,
+                value:
+                    `<t:${steam.timecreated}:D>`,
                 inline: true
             });
         }
 
-        if (steam.communityvisibilitystate) {
+        if (
+            steam.communityvisibilitystate
+        ) {
             const privacidad =
                 steam.communityvisibilitystate === 3
                     ? "🌐 Pública"
@@ -551,7 +579,11 @@ function crearEmbed(resultado, pagina, total) {
 // BOTONES DE PAGINACIÓN
 // =====================================================
 
-function crearBotones(pagina, totalPaginas, userId) {
+function crearBotones(
+    pagina,
+    totalPaginas,
+    userId
+) {
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(
@@ -559,7 +591,9 @@ function crearBotones(pagina, totalPaginas, userId) {
             )
             .setLabel("Anterior")
             .setEmoji("◀️")
-            .setStyle(ButtonStyle.Secondary)
+            .setStyle(
+                ButtonStyle.Secondary
+            )
             .setDisabled(pagina <= 0),
 
         new ButtonBuilder()
@@ -568,7 +602,9 @@ function crearBotones(pagina, totalPaginas, userId) {
             )
             .setLabel("Siguiente")
             .setEmoji("▶️")
-            .setStyle(ButtonStyle.Secondary)
+            .setStyle(
+                ButtonStyle.Secondary
+            )
             .setDisabled(
                 pagina >= totalPaginas - 1
             )
@@ -609,7 +645,7 @@ module.exports = {
         );
 
         // =================================================
-        // COMPROBAR SERVIDOR CONFIGURADO
+        // OBTENER SERVIDOR CONFIGURADO
         // =================================================
 
         let serverId;
@@ -661,7 +697,7 @@ module.exports = {
                 );
         } catch (error) {
             console.error(
-                "[BM] ❌ Error:",
+                "[BM] Error:",
                 error.response?.status ||
                 error.message
             );
@@ -712,16 +748,12 @@ module.exports = {
                 nombre;
 
             let steamId64 = null;
-
-            let steamIdComResult = null;
-
             let steamData = null;
-
             let avatar = null;
 
-            // ---------------------------------------------
-            // 1. INTENTAR SACAR STEAMID64 DESDE BM
-            // ---------------------------------------------
+            // =================================================
+            // 1. INTENTAR OBTENER STEAMID64 DE BATTLEMETRICS
+            // =================================================
 
             try {
                 const identifiers =
@@ -735,16 +767,15 @@ module.exports = {
                     );
             } catch (error) {
                 console.log(
-                    "[BM] ❌ Error obteniendo identifiers:",
+                    "[BM] Error obteniendo identifiers:",
                     error.response?.status ||
                     error.message
                 );
             }
 
-            // ---------------------------------------------
-            // 2. SI BM NO LO DEVUELVE,
-            //    BUSCAR EL NOMBRE EN STEAMID.COM
-            // ---------------------------------------------
+            // =================================================
+            // 2. SI BM NO LO DA -> STEAMID.COM
+            // =================================================
 
             if (!steamId64) {
                 console.log(
@@ -752,18 +783,18 @@ module.exports = {
                 );
 
                 try {
-                    steamIdComResult =
+                    const resultadosSteamID =
                         await buscarSteamIDCom(
                             nombreBM
                         );
 
                     if (
-                        steamIdComResult &&
-                        steamIdComResult.length > 0
+                        resultadosSteamID &&
+                        resultadosSteamID.length > 0
                     ) {
-                        // Preferir coincidencia exacta
+                        // Buscar primero coincidencia exacta
                         const exacto =
-                            steamIdComResult.find(
+                            resultadosSteamID.find(
                                 resultado =>
                                     String(
                                         resultado.nombre
@@ -777,7 +808,7 @@ module.exports = {
 
                         const elegido =
                             exacto ||
-                            steamIdComResult[0];
+                            resultadosSteamID[0];
 
                         steamId64 =
                             elegido.steamId64;
@@ -786,23 +817,22 @@ module.exports = {
                             elegido.avatar;
 
                         console.log(
-                            "[STEAMID.COM] ✅ SteamID64:",
+                            "[STEAMID.COM] SteamID64:",
                             steamId64
                         );
                     }
                 } catch (error) {
                     console.log(
-                        "[STEAMID.COM] ❌ Error:",
+                        "[STEAMID.COM] Error:",
                         error.response?.status ||
                         error.message
                     );
                 }
             }
 
-            // ---------------------------------------------
-            // 3. SI TENEMOS STEAMID64,
-            //    OBTENER DATOS DEL PERFIL
-            // ---------------------------------------------
+            // =================================================
+            // 3. OBTENER DATOS DEL PERFIL DE STEAM
+            // =================================================
 
             if (steamId64) {
                 steamData =
@@ -818,9 +848,9 @@ module.exports = {
                 }
             }
 
-            // ---------------------------------------------
+            // =================================================
             // 4. GUARDAR RESULTADO
-            // ---------------------------------------------
+            // =================================================
 
             resultados.push({
                 battleMetricsId: playerId,
@@ -835,11 +865,10 @@ module.exports = {
         }
 
         // =================================================
-        // ELIMINAR DUPLICADOS POR STEAMID64
+        // ELIMINAR DUPLICADOS
         // =================================================
 
         const resultadosUnicos = [];
-
         const idsVistos = new Set();
 
         for (const resultado of resultados) {
@@ -861,7 +890,7 @@ module.exports = {
         );
 
         // =================================================
-        // SI NO SE ENCONTRÓ NINGÚN STEAMID
+        // SOLO RESULTADOS CON STEAMID64
         // =================================================
 
         const encontradosSteam =
@@ -944,7 +973,7 @@ module.exports = {
         );
 
         // =================================================
-        // COLLECTOR DE BOTONES
+        // SI NO HAY PAGINACIÓN
         // =================================================
 
         if (totalPaginas <= 1) {
@@ -954,6 +983,10 @@ module.exports = {
 
             return;
         }
+
+        // =================================================
+        // COLLECTOR
+        // =================================================
 
         const mensaje =
             await interaction.fetchReply();
