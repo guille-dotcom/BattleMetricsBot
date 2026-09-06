@@ -23,6 +23,13 @@ const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN;
 const RESULTADOS_POR_PAGINA = 10;
 
 // =====================================================
+// RANGO VÁLIDO DE STEAMID64
+// =====================================================
+
+const STEAMID64_MIN = 76561197960265728n;
+const STEAMID64_MAX = 76561202255233023n;
+
+// =====================================================
 // HEADERS BATTLEMETRICS
 // =====================================================
 
@@ -34,13 +41,40 @@ function getBattleMetricsHeaders() {
 }
 
 // =====================================================
+// COMPROBAR SI ES UN STEAMID64 VÁLIDO
+// =====================================================
+
+function esSteamID64(valor) {
+    if (valor === null || valor === undefined) {
+        return false;
+    }
+
+    const texto = String(valor).trim();
+
+    if (!/^\d{17}$/.test(texto)) {
+        return false;
+    }
+
+    try {
+        const numero = BigInt(texto);
+
+        return (
+            numero >= STEAMID64_MIN &&
+            numero <= STEAMID64_MAX
+        );
+    } catch {
+        return false;
+    }
+}
+
+// =====================================================
 // OBTENER STEAMID64 DESDE BATTLEMETRICS
 // =====================================================
 
 async function obtenerSteamID64(playerId) {
     try {
         console.log(
-            `[BATTLEMETRICS] Obteniendo identificadores del player ${playerId}...`
+            `[BATTLEMETRICS] Buscando SteamID64 del player ${playerId}...`
         );
 
         const response = await axios.get(
@@ -54,192 +88,60 @@ async function obtenerSteamID64(playerId) {
             }
         );
 
-        const data = response.data;
-
-        // =================================================
-        // DEBUG
-        // =================================================
-
-        console.log(
-            "[BATTLEMETRICS] Player response recibida."
-        );
-
-        // =================================================
-        // REVISAR INCLUDED
-        // =================================================
-
         const included =
-            Array.isArray(data?.included)
-                ? data.included
+            Array.isArray(response.data?.included)
+                ? response.data.included
                 : [];
 
         console.log(
-            `[BATTLEMETRICS] Included encontrados: ${included.length}`
+            `[BATTLEMETRICS] Identificadores recibidos: ${included.length}`
         );
+
+        // =================================================
+        // BUSCAR IDENTIFICADOR STEAM
+        // =================================================
 
         for (const item of included) {
-            if (!item || typeof item !== "object") {
+            if (
+                !item ||
+                item.type !== "identifier"
+            ) {
                 continue;
             }
-
-            console.log(
-                "[BATTLEMETRICS] Included:",
-                JSON.stringify(item, null, 2)
-            );
-
-            // ---------------------------------------------
-            // SOLO IDENTIFICADORES
-            // ---------------------------------------------
-
-            if (item.type !== "identifier") {
-                continue;
-            }
-
-            const attributes =
-                item.attributes || {};
-
-            const tipo =
-                String(
-                    attributes.type ||
-                    attributes.identifierType ||
-                    ""
-                ).trim();
 
             const identifier =
-                String(
-                    attributes.identifier ||
-                    ""
-                ).trim();
+                item.attributes?.identifier;
 
-            console.log(
-                `[BATTLEMETRICS] Identifier type="${tipo}" value="${identifier}"`
-            );
-
-            // ---------------------------------------------
-            // IMPORTANTE:
-            // SOLO ACEPTAR IDENTIFICADOR MARCADO COMO STEAM
-            // ---------------------------------------------
-
-            const tipoLower =
-                tipo.toLowerCase();
-
-            const esSteam =
-                tipoLower === "steam" ||
-                tipoLower === "steamid" ||
-                tipoLower === "steamid64" ||
-                tipoLower === "steamid64id";
-
-            if (!esSteam) {
+            if (!identifier) {
                 continue;
             }
 
+            const valor =
+                String(identifier).trim();
+
             // ---------------------------------------------
-            // VALIDAR FORMATO STEAMID64
+            // NO IMPORTA SI BM LO MARCA COMO "name"
+            // LO IMPORTANTE ES QUE SEA UN STEAMID64 REAL
             // ---------------------------------------------
 
-            if (
-                !/^\d{17}$/.test(identifier)
-            ) {
+            if (esSteamID64(valor)) {
                 console.log(
-                    `[BATTLEMETRICS] Identificador Steam inválido: ${identifier}`
+                    `[BATTLEMETRICS] ✅ SteamID64 encontrado: ${valor}`
                 );
 
-                continue;
-            }
-
-            console.log(
-                `[BATTLEMETRICS] ✅ SteamID64 real encontrado: ${identifier}`
-            );
-
-            return identifier;
-        }
-
-        // =================================================
-        // REVISAR RELATIONSHIPS
-        // =================================================
-
-        const relationships =
-            data?.data?.relationships || {};
-
-        console.log(
-            "[BATTLEMETRICS] Revisando relationships..."
-        );
-
-        console.log(
-            JSON.stringify(
-                relationships,
-                null,
-                2
-            )
-        );
-
-        // =================================================
-        // SI EXISTE IDENTIFIER EN RELATIONSHIPS
-        // =================================================
-
-        const identifierRelationship =
-            relationships.identifier;
-
-        if (
-            identifierRelationship?.data
-        ) {
-            const identifierData =
-                Array.isArray(
-                    identifierRelationship.data
-                )
-                    ? identifierRelationship.data
-                    : [
-                        identifierRelationship.data
-                    ];
-
-            for (
-                const identifier
-                of identifierData
-            ) {
-                if (!identifier) {
-                    continue;
-                }
-
-                console.log(
-                    "[BATTLEMETRICS] Relationship identifier:",
-                    JSON.stringify(
-                        identifier,
-                        null,
-                        2
-                    )
-                );
-
-                const identifierId =
-                    String(
-                        identifier.id || ""
-                    ).trim();
-
-                if (
-                    /^\d{17}$/.test(
-                        identifierId
-                    )
-                ) {
-                    console.log(
-                        `[BATTLEMETRICS] ✅ SteamID64 encontrado en relationship: ${identifierId}`
-                    );
-
-                    return identifierId;
-                }
+                return valor;
             }
         }
 
         console.log(
-            `[BATTLEMETRICS] ❌ No se encontró un identificador Steam válido para ${playerId}`
+            `[BATTLEMETRICS] ❌ No se encontró SteamID64 para ${playerId}`
         );
 
         return null;
 
     } catch (error) {
         console.error(
-            "[BATTLEMETRICS] Error obteniendo SteamID64:"
-        );
-
-        console.error(
+            "[BATTLEMETRICS] Error obteniendo SteamID64:",
             error.response?.data ||
             error.message
         );
@@ -249,7 +151,7 @@ async function obtenerSteamID64(playerId) {
 }
 
 // =====================================================
-// OBTENER PERFIL STEAM
+// OBTENER PERFIL DE STEAM
 // =====================================================
 
 async function obtenerDatosSteam(steamId64) {
@@ -282,16 +184,19 @@ async function obtenerDatosSteam(steamId64) {
         );
 
         const players =
-            response.data?.response?.players ||
-            [];
+            response.data?.response?.players || [];
 
         if (!players.length) {
             console.log(
-                `[STEAM] Steam no devolvió perfil para ${steamId64}`
+                `[STEAM] No se encontró perfil para ${steamId64}`
             );
 
             return null;
         }
+
+        console.log(
+            `[STEAM] Perfil encontrado: ${players[0].personaname}`
+        );
 
         return players[0];
 
@@ -425,7 +330,7 @@ async function prepararResultados(
         let steam = null;
 
         // =================================================
-        // STEAM PROFILE
+        // PERFIL STEAM
         // =================================================
 
         if (steamId64) {
@@ -743,7 +648,7 @@ module.exports = {
         );
 
         // =================================================
-        // TOKEN BM
+        // TOKEN
         // =================================================
 
         if (
@@ -941,7 +846,7 @@ module.exports = {
                         });
 
                     } catch {
-                        // El mensaje pudo haber sido eliminado.
+                        // Mensaje eliminado.
                     }
                 }
             );
