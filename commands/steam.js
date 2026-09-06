@@ -9,6 +9,8 @@ const {
 const axios = require("axios");
 const puppeteer = require("puppeteer");
 const ServerConfig = require("../models/ServerConfig");
+const fs = require("fs");
+const path = require("path");
 
 // =====================================================
 // CONFIG
@@ -20,7 +22,6 @@ const STEAM_API = "https://api.steampowered.com";
 
 const RESULTADOS_POR_PAGINA = 10;
 
-// Rango válido de SteamID64
 const STEAMID64_MIN = 76561197960265728n;
 const STEAMID64_MAX = 76561202255233023n;
 
@@ -244,29 +245,184 @@ function encontrarSteamID64EnIdentifiers(identifiers) {
 }
 
 // =====================================================
-// OBTENER RUTA DE CHROME DE PUPPETEER
+// BUSCAR CHROME INSTALADO EN CACHE
 // =====================================================
 
-function obtenerRutaChrome() {
+function buscarChromeEnCache() {
+    const posiblesCaches = [
+        process.env.PUPPETEER_CACHE_DIR,
+
+        process.platform === "linux"
+            ? path.join(
+                process.env.HOME || "/opt/render",
+                ".cache",
+                "puppeteer"
+            )
+            : null,
+
+        "/opt/render/.cache/puppeteer",
+
+        process.platform === "win32"
+            ? path.join(
+                process.env.LOCALAPPDATA || "",
+                "puppeteer"
+            )
+            : null
+    ].filter(Boolean);
+
+    const cachesUnicos = [
+        ...new Set(posiblesCaches)
+    ];
+
+    console.log(
+        "[STEAMID.COM] Buscando Chrome en cache..."
+    );
+
+    for (const cacheDir of cachesUnicos) {
+        const chromeDir = path.join(
+            cacheDir,
+            "chrome"
+        );
+
+        if (!fs.existsSync(chromeDir)) {
+            continue;
+        }
+
+        try {
+            const versiones =
+                fs.readdirSync(
+                    chromeDir,
+                    {
+                        withFileTypes: true
+                    }
+                )
+                .filter(item =>
+                    item.isDirectory()
+                )
+                .sort((a, b) =>
+                    b.name.localeCompare(
+                        a.name,
+                        undefined,
+                        {
+                            numeric: true
+                        }
+                    )
+                );
+
+            for (const version of versiones) {
+                let rutaChrome;
+
+                if (process.platform === "win32") {
+                    rutaChrome = path.join(
+                        chromeDir,
+                        version.name,
+                        "chrome-win64",
+                        "chrome.exe"
+                    );
+                } else {
+                    rutaChrome = path.join(
+                        chromeDir,
+                        version.name,
+                        "chrome-linux64",
+                        "chrome"
+                    );
+                }
+
+                if (fs.existsSync(rutaChrome)) {
+                    console.log(
+                        `[STEAMID.COM] Chrome encontrado en: ${rutaChrome}`
+                    );
+
+                    return rutaChrome;
+                }
+            }
+        } catch (error) {
+            console.log(
+                `[STEAMID.COM] Error revisando ${chromeDir}: ${error.message}`
+            );
+        }
+    }
+
+    return null;
+}
+
+// =====================================================
+// OBTENER RUTA DE CHROME
+// IMPORTANTE: executablePath() ES ASÍNCRONO
+// =====================================================
+
+async function obtenerRutaChrome() {
+    // -----------------------------------------------
+    // 1. VARIABLE DE ENTORNO
+    // -----------------------------------------------
+
+    if (
+        process.env.PUPPETEER_EXECUTABLE_PATH &&
+        fs.existsSync(
+            process.env.PUPPETEER_EXECUTABLE_PATH
+        )
+    ) {
+        console.log(
+            `[STEAMID.COM] Usando PUPPETEER_EXECUTABLE_PATH: ${process.env.PUPPETEER_EXECUTABLE_PATH}`
+        );
+
+        return process.env.PUPPETEER_EXECUTABLE_PATH;
+    }
+
+    // -----------------------------------------------
+    // 2. PUPPETEER EXECUTABLE PATH
+    // IMPORTANTE: await
+    // -----------------------------------------------
+
     try {
-        const ruta = puppeteer.executablePath();
+        const ruta = await puppeteer.executablePath();
 
         console.log(
             `[STEAMID.COM] Puppeteer executablePath: ${ruta}`
         );
 
-        return ruta;
-    } catch (error) {
+        if (
+            ruta &&
+            typeof ruta === "string" &&
+            fs.existsSync(ruta)
+        ) {
+            return ruta;
+        }
+
         console.log(
-            `[STEAMID.COM] No se pudo obtener executablePath: ${error.message}`
+            "[STEAMID.COM] executablePath no existe físicamente. Buscando en cache..."
         );
 
-        return null;
+    } catch (error) {
+        console.log(
+            `[STEAMID.COM] Error obteniendo executablePath: ${error.message}`
+        );
     }
+
+    // -----------------------------------------------
+    // 3. BUSCAR DIRECTAMENTE EN CACHE
+    // -----------------------------------------------
+
+    const rutaCache =
+        buscarChromeEnCache();
+
+    if (rutaCache) {
+        return rutaCache;
+    }
+
+    // -----------------------------------------------
+    // 4. NO ENCONTRADO
+    // -----------------------------------------------
+
+    console.log(
+        "[STEAMID.COM] ❌ No se encontró Chrome instalado."
+    );
+
+    return null;
 }
 
 // =====================================================
-// STEAMID.COM CON PUPPETEER
+// BUSCAR EN STEAMID.COM
 // =====================================================
 
 async function buscarSteamIDCom(nombre) {
@@ -295,11 +451,12 @@ async function buscarSteamIDCom(nombre) {
             "[STEAMID.COM] Iniciando navegador..."
         );
 
-        const executablePath = obtenerRutaChrome();
+        const executablePath =
+            await obtenerRutaChrome();
 
         if (!executablePath) {
             throw new Error(
-                "No se pudo determinar la ruta del ejecutable de Chrome."
+                "No se encontró el ejecutable de Chrome."
             );
         }
 
@@ -331,11 +488,12 @@ async function buscarSteamIDCom(nombre) {
             "[STEAMID.COM] Chrome iniciado correctamente."
         );
 
-        const page = await browser.newPage();
+        const page =
+            await browser.newPage();
 
-        // -------------------------------------------------
+        // -----------------------------------------------
         // USER AGENT
-        // -------------------------------------------------
+        // -----------------------------------------------
 
         await page.setUserAgent(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
@@ -344,12 +502,13 @@ async function buscarSteamIDCom(nombre) {
         );
 
         await page.setExtraHTTPHeaders({
-            "Accept-Language": "en-US,en;q=0.9,es;q=0.8"
+            "Accept-Language":
+                "en-US,en;q=0.9,es;q=0.8"
         });
 
-        // -------------------------------------------------
-        // OCULTAR SEÑALES BÁSICAS DE AUTOMATIZACIÓN
-        // -------------------------------------------------
+        // -----------------------------------------------
+        // OCULTAR AUTOMATIZACIÓN
+        // -----------------------------------------------
 
         await page.evaluateOnNewDocument(() => {
             Object.defineProperty(
@@ -361,9 +520,9 @@ async function buscarSteamIDCom(nombre) {
             );
         });
 
-        // -------------------------------------------------
+        // -----------------------------------------------
         // URL
-        // -------------------------------------------------
+        // -----------------------------------------------
 
         const url =
             `${STEAMID_SEARCH_URL}?q=${encodeURIComponent(nombre)}`;
@@ -372,17 +531,19 @@ async function buscarSteamIDCom(nombre) {
             `[STEAMID.COM] Abriendo: ${url}`
         );
 
-        // -------------------------------------------------
+        // -----------------------------------------------
         // CARGAR PÁGINA
-        // -------------------------------------------------
+        // -----------------------------------------------
 
-        const response = await page.goto(
-            url,
-            {
-                waitUntil: "domcontentloaded",
-                timeout: 60000
-            }
-        );
+        const response =
+            await page.goto(
+                url,
+                {
+                    waitUntil:
+                        "domcontentloaded",
+                    timeout: 60000
+                }
+            );
 
         if (response) {
             console.log(
@@ -390,9 +551,9 @@ async function buscarSteamIDCom(nombre) {
             );
         }
 
-        // -------------------------------------------------
+        // -----------------------------------------------
         // ESPERAR RESULTADOS
-        // -------------------------------------------------
+        // -----------------------------------------------
 
         try {
             await page.waitForSelector(
@@ -411,51 +572,59 @@ async function buscarSteamIDCom(nombre) {
             );
         }
 
-        // -------------------------------------------------
-        // ESPERA PARA JS
-        // -------------------------------------------------
+        // -----------------------------------------------
+        // ESPERAR JS
+        // -----------------------------------------------
 
         await new Promise(resolve =>
             setTimeout(resolve, 1500)
         );
 
-        // -------------------------------------------------
-        // OBTENER HTML
-        // -------------------------------------------------
+        // -----------------------------------------------
+        // HTML
+        // -----------------------------------------------
 
-        const html = await page.content();
+        const html =
+            await page.content();
 
         console.log(
             `[STEAMID.COM] HTML recibido: ${html.length} bytes`
         );
 
-        // -------------------------------------------------
-        // DETECTAR BLOQUEO
-        // -------------------------------------------------
+        const htmlLower =
+            html.toLowerCase();
 
-        const htmlLower = html.toLowerCase();
+        // -----------------------------------------------
+        // CLOUDFLARE
+        // -----------------------------------------------
 
         if (
             htmlLower.includes("just a moment") ||
-            htmlLower.includes("checking your browser") ||
+            htmlLower.includes(
+                "checking your browser"
+            ) ||
             htmlLower.includes("cf-chl")
         ) {
             console.log(
-                "[STEAMID.COM] Parece haber una protección/bloqueo de Cloudflare."
+                "[STEAMID.COM] ⚠️ Parece haber una protección de Cloudflare."
             );
         }
 
-        // -------------------------------------------------
+        // -----------------------------------------------
         // EXTRAER PERFILES
-        // -------------------------------------------------
+        // -----------------------------------------------
 
         const perfiles =
             await page.$$eval(
                 'a[href*="/profiles/"]',
                 enlaces => {
+
                     return enlaces.map(enlace => {
+
                         const href =
-                            enlace.getAttribute("href") || "";
+                            enlace.getAttribute(
+                                "href"
+                            ) || "";
 
                         const match =
                             href.match(
@@ -480,7 +649,8 @@ async function buscarSteamIDCom(nombre) {
 
                         if (heading) {
                             nombre =
-                                heading.textContent.trim();
+                                heading.textContent
+                                    .trim();
                         }
 
                         let avatar = null;
@@ -492,12 +662,17 @@ async function buscarSteamIDCom(nombre) {
 
                         if (img) {
                             avatar =
-                                img.getAttribute("src");
+                                img.getAttribute(
+                                    "src"
+                                );
                         }
 
                         return {
-                            steamId64: match[1],
+                            steamId64:
+                                match[1],
+
                             nombre,
+
                             avatar
                         };
                     });
@@ -557,6 +732,7 @@ async function buscarSteamIDCom(nombre) {
         return resultados;
 
     } catch (error) {
+
         console.log(
             `[STEAMID.COM] ERROR: ${error.message}`
         );
@@ -564,6 +740,7 @@ async function buscarSteamIDCom(nombre) {
         return [];
 
     } finally {
+
         if (browser) {
             try {
                 await browser.close();
@@ -598,17 +775,18 @@ async function obtenerDatosSteam(steamId64) {
     }
 
     try {
-        const response = await axios.get(
-            `${STEAM_API}/ISteamUser/GetPlayerSummaries/v2/`,
-            {
-                params: {
-                    key: apiKey,
-                    steamids: steamId64
-                },
+        const response =
+            await axios.get(
+                `${STEAM_API}/ISteamUser/GetPlayerSummaries/v2/`,
+                {
+                    params: {
+                        key: apiKey,
+                        steamids: steamId64
+                    },
 
-                timeout: 15000
-            }
-        );
+                    timeout: 15000
+                }
+            );
 
         const players =
             response.data?.response?.players;
@@ -627,6 +805,7 @@ async function obtenerDatosSteam(steamId64) {
         return players[0];
 
     } catch (error) {
+
         console.log(
             `[STEAM API] Error: ${error.message}`
         );
@@ -636,7 +815,7 @@ async function obtenerDatosSteam(steamId64) {
 }
 
 // =====================================================
-// FECHA
+// FORMATEAR FECHA
 // =====================================================
 
 function formatearFechaUnix(timestamp) {
@@ -644,11 +823,16 @@ function formatearFechaUnix(timestamp) {
         return "Desconocida";
     }
 
-    const fecha = new Date(
-        Number(timestamp) * 1000
-    );
+    const fecha =
+        new Date(
+            Number(timestamp) * 1000
+        );
 
-    if (Number.isNaN(fecha.getTime())) {
+    if (
+        Number.isNaN(
+            fecha.getTime()
+        )
+    ) {
         return "Desconocida";
     }
 
@@ -672,6 +856,7 @@ function obtenerEstadoSteam(persona) {
     }
 
     switch (persona.personastate) {
+
         case 0:
             return "⚫ Offline";
 
@@ -699,7 +884,7 @@ function obtenerEstadoSteam(persona) {
 }
 
 // =====================================================
-// EMBED
+// CREAR EMBED
 // =====================================================
 
 function crearEmbedResultado(resultado) {
@@ -726,33 +911,39 @@ function crearEmbedResultado(resultado) {
     const estado =
         obtenerEstadoSteam(persona);
 
-    const embed = new EmbedBuilder()
-        .setTitle(`🎮 ${nombre}`)
-        .setURL(perfil)
-        .setDescription(
-            `**SteamID64:** \`${steamId64}\``
-        )
-        .addFields(
-            {
-                name: "Estado",
-                value: estado,
-                inline: true
-            },
-            {
-                name: "Perfil",
-                value:
-                    `[Abrir perfil](${perfil})`,
-                inline: true
-            }
-        )
-        .setFooter({
-            text:
-                "BattleMetrics + SteamID.com"
-        });
+    const embed =
+        new EmbedBuilder()
+            .setTitle(
+                `🎮 ${nombre}`
+            )
+            .setURL(
+                perfil
+            )
+            .setDescription(
+                `**SteamID64:** \`${steamId64}\``
+            )
+            .addFields(
+                {
+                    name: "Estado",
+                    value: estado,
+                    inline: true
+                },
+                {
+                    name: "Perfil",
+                    value:
+                        `[Abrir perfil](${perfil})`,
+                    inline: true
+                }
+            )
+            .setFooter({
+                text:
+                    "BattleMetrics + SteamID.com"
+            });
 
     if (persona?.timecreated) {
         embed.addFields({
-            name: "Cuenta creada",
+            name:
+                "Cuenta creada",
             value:
                 formatearFechaUnix(
                     persona.timecreated
@@ -765,39 +956,45 @@ function crearEmbedResultado(resultado) {
         persona?.communityvisibilitystate
     ) {
         embed.addFields({
-            name: "Visibilidad",
+            name:
+                "Visibilidad",
+
             value:
                 persona.communityvisibilitystate === 3
                     ? "Pública"
                     : "Privada",
+
             inline: true
         });
     }
 
     if (avatar) {
-        embed.setThumbnail(avatar);
+        embed.setThumbnail(
+            avatar
+        );
     }
 
     return embed;
 }
 
 // =====================================================
-// BOTÓN
+// BOTÓN PERFIL
 // =====================================================
 
 function crearBotonPerfil(steamId64) {
-    return new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setLabel(
-                "Ver perfil de Steam"
-            )
-            .setStyle(
-                ButtonStyle.Link
-            )
-            .setURL(
-                `https://steamcommunity.com/profiles/${steamId64}`
-            )
-    );
+    return new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setLabel(
+                    "Ver perfil de Steam"
+                )
+                .setStyle(
+                    ButtonStyle.Link
+                )
+                .setURL(
+                    `https://steamcommunity.com/profiles/${steamId64}`
+                )
+        );
 }
 
 // =====================================================
@@ -806,19 +1003,20 @@ function crearBotonPerfil(steamId64) {
 
 module.exports = {
 
-    data: new SlashCommandBuilder()
-        .setName("steam")
-        .setDescription(
-            "Busca un jugador de Steam mediante BattleMetrics"
-        )
-        .addStringOption(option =>
-            option
-                .setName("nombre")
-                .setDescription(
-                    "Nombre exacto del jugador"
-                )
-                .setRequired(true)
-        ),
+    data:
+        new SlashCommandBuilder()
+            .setName("steam")
+            .setDescription(
+                "Busca un jugador de Steam mediante BattleMetrics"
+            )
+            .addStringOption(option =>
+                option
+                    .setName("nombre")
+                    .setDescription(
+                        "Nombre exacto del jugador"
+                    )
+                    .setRequired(true)
+            ),
 
     async execute(interaction) {
 
@@ -859,7 +1057,7 @@ module.exports = {
 
             if (!serverId) {
                 return interaction.editReply(
-                    "❌ Este servidor de Discord no tiene un servidor de BattleMetrics configurado. Usa `/configurar-servidor` primero."
+                    "❌ Este servidor de Discord no tiene un servidor de BattleMetrics configurado."
                 );
             }
 
@@ -890,7 +1088,7 @@ module.exports = {
             }
 
             // =========================================
-            // PROCESAR
+            // PROCESAR JUGADORES
             // =========================================
 
             const resultados = [];
@@ -1013,12 +1211,16 @@ module.exports = {
 
                 resultados.push({
                     player: jugador,
+
                     steamId64,
+
                     persona,
+
                     nombre:
                         persona?.personaname ||
                         resultadoSteamID?.nombre ||
                         jugador.attributes.name,
+
                     avatar:
                         persona?.avatarfull ||
                         resultadoSteamID?.avatar ||
@@ -1056,8 +1258,10 @@ module.exports = {
                                 .addFields({
                                     name:
                                         "BattleMetrics Player ID",
+
                                     value:
                                         `\`${resultado.player.id}\``,
+
                                     inline: true
                                 })
                                 .setFooter({
@@ -1078,7 +1282,7 @@ module.exports = {
             const primerResultado =
                 resultados[0];
 
-            let components = [];
+            const components = [];
 
             if (
                 primerResultado?.steamId64
@@ -1111,9 +1315,11 @@ module.exports = {
             );
 
             const mensaje =
-                error.response?.data?.errors?.[0]
+                error.response?.data
+                    ?.errors?.[0]
                     ?.detail ||
-                error.response?.data?.message ||
+                error.response?.data
+                    ?.message ||
                 error.message ||
                 "Error desconocido.";
 
