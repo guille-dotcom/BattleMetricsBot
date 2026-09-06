@@ -19,7 +19,6 @@ const USER_AGENT =
 
 const MAX_PAGINAS = 10;
 const POR_PAGINA = 10;
-
 const ESPERA_ENTRE_PAGINAS = 1500;
 const ESPERA_429 = 10000;
 const MAX_REINTENTOS_429 = 1;
@@ -54,7 +53,7 @@ module.exports = {
             let nombreBuscado = entrada;
 
             // =====================================================
-            // SI ES UN LINK DE BATTLEMETRICS
+            // BATTLEMETRICS
             // =====================================================
 
             if (entrada.includes("battlemetrics.com/players/")) {
@@ -75,7 +74,9 @@ module.exports = {
                     });
                 }
 
-                console.log(`[STEAM] Nombre obtenido de BattleMetrics: "${nombreBuscado}"`);
+                console.log(
+                    `[STEAM] Nombre obtenido de BattleMetrics: "${nombreBuscado}"`
+                );
             }
 
             // =====================================================
@@ -147,7 +148,13 @@ module.exports = {
                     // AVATAR INDIVIDUAL
                     // =================================================
 
-                    if (perfil.avatar) {
+                    if (
+                        perfil.avatar &&
+                        (
+                            perfil.avatar.includes("avatars.steamstatic.com") ||
+                            perfil.avatar.includes("avatars.akamaihd.net")
+                        )
+                    ) {
                         embed.setThumbnail(perfil.avatar);
                     }
 
@@ -166,7 +173,9 @@ module.exports = {
                         .setLabel("Anterior")
                         .setEmoji("⬅️")
                         .setStyle(ButtonStyle.Secondary)
-                        .setDisabled(disabled || pagina === 0),
+                        .setDisabled(
+                            disabled || pagina === 0
+                        ),
 
                     new ButtonBuilder()
                         .setCustomId("steam_siguiente")
@@ -181,7 +190,7 @@ module.exports = {
             }
 
             // =====================================================
-            // RESPUESTA INICIAL
+            // RESPUESTA
             // =====================================================
 
             await interaction.editReply({
@@ -191,10 +200,6 @@ module.exports = {
                         ? [crearBotones()]
                         : []
             });
-
-            // =====================================================
-            // SI SOLO HAY UNA PÁGINA
-            // =====================================================
 
             if (totalPaginas <= 1) {
                 return;
@@ -211,28 +216,30 @@ module.exports = {
             });
 
             collector.on("collect", async buttonInteraction => {
-                if (buttonInteraction.user.id !== interaction.user.id) {
+                if (
+                    buttonInteraction.user.id !==
+                    interaction.user.id
+                ) {
                     return await buttonInteraction.reply({
-                        content: "❌ Solo la persona que ejecutó este comando puede usar estos botones.",
+                        content:
+                            "❌ Solo la persona que ejecutó este comando puede usar estos botones.",
                         ephemeral: true
                     });
                 }
 
-                // =============================================
-                // ANTERIOR
-                // =============================================
-
-                if (buttonInteraction.customId === "steam_anterior") {
+                if (
+                    buttonInteraction.customId ===
+                    "steam_anterior"
+                ) {
                     if (pagina > 0) {
                         pagina--;
                     }
                 }
 
-                // =============================================
-                // SIGUIENTE
-                // =============================================
-
-                if (buttonInteraction.customId === "steam_siguiente") {
+                if (
+                    buttonInteraction.customId ===
+                    "steam_siguiente"
+                ) {
                     if (pagina < totalPaginas - 1) {
                         pagina++;
                     }
@@ -245,7 +252,7 @@ module.exports = {
             });
 
             // =====================================================
-            // FINALIZAR COLLECTOR
+            // FINALIZAR
             // =====================================================
 
             collector.on("end", async () => {
@@ -255,7 +262,9 @@ module.exports = {
                         components: [crearBotones(true)]
                     });
                 } catch (error) {
-                    console.log("[STEAM] No se pudieron desactivar los botones.");
+                    console.log(
+                        "[STEAM] No se pudieron desactivar los botones."
+                    );
                 }
             });
 
@@ -278,7 +287,9 @@ module.exports = {
                     components: []
                 });
             } catch (editError) {
-                console.error("[STEAM] No se pudo editar la respuesta.");
+                console.error(
+                    "[STEAM] No se pudo editar la respuesta."
+                );
             }
         }
     }
@@ -295,8 +306,10 @@ async function obtenerNombreBattleMetrics(url) {
         const response = await axios.get(url, {
             headers: {
                 "User-Agent": USER_AGENT,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "es-ES,es;q=0.9,en;q=0.8"
+                "Accept":
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language":
+                    "es-ES,es;q=0.9,en;q=0.8"
             },
             timeout: 20000,
             maxRedirects: 5
@@ -331,7 +344,10 @@ async function obtenerNombreBattleMetrics(url) {
                     .trim();
 
                 if (nombre) {
-                    console.log(`[STEAM] Nombre encontrado: "${nombre}"`);
+                    console.log(
+                        `[STEAM] Nombre encontrado: "${nombre}"`
+                    );
+
                     return nombre;
                 }
             }
@@ -376,7 +392,7 @@ async function buscarPerfilesSteam(nombreBuscado) {
     });
 
     // =====================================================
-    // OBTENER COOKIES / SESSIONID
+    // OBTENER SESSIONID
     // =====================================================
 
     let cookies = "";
@@ -396,7 +412,9 @@ async function buscarPerfilesSteam(nombreBuscado) {
         }
 
         const sessionMatch =
-            cookies.match(/(?:^|;\s*)sessionid=([^;]+)/i);
+            cookies.match(
+                /(?:^|;\s*)sessionid=([^;]+)/i
+            );
 
         if (sessionMatch) {
             sessionid = sessionMatch[1];
@@ -406,7 +424,9 @@ async function buscarPerfilesSteam(nombreBuscado) {
             const html = inicio.data || "";
 
             const htmlSession =
-                html.match(/g_sessionID\s*=\s*["']([^"']+)["']/i);
+                html.match(
+                    /g_sessionID\s*=\s*["']([^"']+)["']/i
+                );
 
             if (htmlSession) {
                 sessionid = htmlSession[1];
@@ -425,7 +445,7 @@ async function buscarPerfilesSteam(nombreBuscado) {
     }
 
     // =====================================================
-    // BUSCAR HASTA 10 PÁGINAS
+    // BUSCAR PÁGINAS
     // =====================================================
 
     while (paginaSteam <= MAX_PAGINAS) {
@@ -449,7 +469,8 @@ async function buscarPerfilesSteam(nombreBuscado) {
                         Cookie: cookies,
                         Referer:
                             `${STEAM_BASE}/search/users/?text=${encodeURIComponent(nombreBuscado)}&filter=users`,
-                        "X-Requested-With": "XMLHttpRequest"
+                        "X-Requested-With":
+                            "XMLHttpRequest"
                     }
                 }
             );
@@ -472,6 +493,7 @@ async function buscarPerfilesSteam(nombreBuscado) {
                 console.log(
                     `[STEAM] Página ${paginaSteam} no devolvió resultados.`
                 );
+
                 break;
             }
 
@@ -509,27 +531,31 @@ async function buscarPerfilesSteam(nombreBuscado) {
                 console.log(
                     `[STEAM] Perfil exacto encontrado: ${perfil.nombre}`
                 );
-                console.log(`[STEAM] URL: ${perfil.url}`);
+                console.log(
+                    `[STEAM] URL: ${perfil.url}`
+                );
 
                 // =================================================
-                // OBTENER AVATAR REAL DEL PERFIL
+                // AVATAR REAL
                 // =================================================
 
                 perfil.avatar =
-                    await obtenerAvatarPerfilSteam(perfil.url);
+                    await obtenerAvatarPerfilSteam(
+                        perfil.url
+                    );
 
                 if (perfil.avatar) {
                     console.log(
-                        `[STEAM] Avatar encontrado: ${perfil.avatar}`
+                        `[STEAM] Avatar REAL encontrado: ${perfil.avatar}`
                     );
                 } else {
                     console.log(
-                        "[STEAM] No se pudo obtener avatar."
+                        "[STEAM] No se encontró avatar real."
                     );
                 }
 
                 // =================================================
-                // COMPROBAR RUST
+                // RUST
                 // =================================================
 
                 await comprobarRustSteam(perfil);
@@ -537,17 +563,21 @@ async function buscarPerfilesSteam(nombreBuscado) {
                 perfiles.push(perfil);
 
                 console.log(
-                    `[STEAM] Rust: ${perfil.tieneRust ? "SI" : "NO CONFIRMADO"}`
+                    `[STEAM] Rust: ${
+                        perfil.tieneRust
+                            ? "SI"
+                            : "NO CONFIRMADO"
+                    }`
                 );
 
                 console.log(
-                    `[STEAM] Inventario Rust: ${perfil.inventarioRust ? "SI" : "NO CONFIRMADO"}`
+                    `[STEAM] Inventario Rust: ${
+                        perfil.inventarioRust
+                            ? "SI"
+                            : "NO CONFIRMADO"
+                    }`
                 );
             }
-
-            // =================================================
-            // SI NO HUBO EXACTOS, CONTINUAR
-            // =================================================
 
             if (exactosEnPagina === 0) {
                 console.log(
@@ -558,22 +588,28 @@ async function buscarPerfilesSteam(nombreBuscado) {
             paginaSteam++;
 
             if (paginaSteam <= MAX_PAGINAS) {
-                await esperar(ESPERA_ENTRE_PAGINAS);
+                await esperar(
+                    ESPERA_ENTRE_PAGINAS
+                );
             }
 
         } catch (error) {
-
             // =================================================
-            // RATE LIMIT 429
+            // 429
             // =================================================
 
             if (
                 error.response &&
                 error.response.status === 429
             ) {
-                console.log("[STEAM] ⚠️ Steam respondió 429.");
+                console.log(
+                    "[STEAM] ⚠️ Steam respondió 429."
+                );
 
-                if (reintentos429 < MAX_REINTENTOS_429) {
+                if (
+                    reintentos429 <
+                    MAX_REINTENTOS_429
+                ) {
                     reintentos429++;
 
                     console.log(
@@ -627,7 +663,7 @@ async function buscarPerfilesSteam(nombreBuscado) {
 }
 
 // =====================================================
-// EXTRAER PERFILES DEL HTML
+// EXTRAER PERFILES
 // =====================================================
 
 function extraerPerfilesDesdeHTML(html) {
@@ -643,12 +679,16 @@ function extraerPerfilesDesdeHTML(html) {
 
     let match;
 
-    while ((match = regexPrincipal.exec(html)) !== null) {
+    while (
+        (match = regexPrincipal.exec(html)) !== null
+    ) {
         encontrados.push(match);
     }
 
     if (!encontrados.length) {
-        while ((match = regexAlternativo.exec(html)) !== null) {
+        while (
+            (match = regexAlternativo.exec(html)) !== null
+        ) {
             encontrados.push(match);
         }
     }
@@ -672,7 +712,9 @@ function extraerPerfilesDesdeHTML(html) {
             url.match(/\/profiles\/(\d+)/i);
 
         const steamid =
-            steamidMatch ? steamidMatch[1] : null;
+            steamidMatch
+                ? steamidMatch[1]
+                : null;
 
         perfiles.push({
             nombre,
@@ -688,47 +730,70 @@ function extraerPerfilesDesdeHTML(html) {
 }
 
 // =====================================================
-// OBTENER AVATAR INDIVIDUAL DEL PERFIL
+// OBTENER AVATAR REAL DEL PERFIL
 // =====================================================
 
 async function obtenerAvatarPerfilSteam(url) {
     try {
         console.log(
-            `[STEAM] Obteniendo avatar de: ${url}`
+            `[STEAM] Buscando avatar REAL en: ${url}`
         );
 
-        const response = await axios.get(url, {
-            headers: {
-                "User-Agent": USER_AGENT,
-                "Accept":
-                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-                "Accept-Language":
-                    "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7"
-            },
-            timeout: 15000,
-            maxRedirects: 5
-        });
+        const response = await axios.get(
+            url,
+            {
+                headers: {
+                    "User-Agent": USER_AGENT,
+                    "Accept":
+                        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                    "Accept-Language":
+                        "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7"
+                },
+                timeout: 15000,
+                maxRedirects: 5
+            }
+        );
 
         const html = response.data || "";
 
+        // =================================================
+        // IMPORTANTE:
+        // NO USAMOS og:image
+        // porque Steam puede devolver steam_share_image.jpg
+        // =================================================
+
         const patrones = [
-            // Steam g_rgProfileData
+
+            // g_rgProfileData de Steam
             /"avatarfull"\s*:\s*"([^"]+)"/i,
 
+            /"avatarmedium"\s*:\s*"([^"]+)"/i,
+
+            /"avatar"\s*:\s*"([^"]+)"/i,
+
+            // Variantes de nombres
             /"avatarFull"\s*:\s*"([^"]+)"/i,
 
-            // Data attribute
+            /"avatarMedium"\s*:\s*"([^"]+)"/i,
+
+            // Atributos directos
             /data-avatarfull=["']([^"']+)["']/i,
 
-            // OpenGraph
-            /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+            /data-avatarmedium=["']([^"']+)["']/i,
 
-            /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
+            // Imagen de avatar del perfil
+            /<img[^>]+class=["'][^"']*playerAvatarAutoSize[^"']*["'][^>]+src=["']([^"']+)["']/i,
 
-            // Avatar clásico de Steam
-            /<img[^>]+class=["'][^"']*playerAvatar[^"']*["'][^>]+(?:src|data-src)=["']([^"']+)["']/i,
+            /<img[^>]+class=["'][^"']*playerAvatar[^"']*["'][^>]+src=["']([^"']+)["']/i,
 
-            /<img[^>]+(?:src|data-src)=["']([^"']*(?:avatars\.steamstatic\.com|avatars\.akamaihd\.net)[^"']*)["']/i
+            /<img[^>]+src=["']([^"']*avatars\.steamstatic\.com[^"']+)["']/i,
+
+            /<img[^>]+src=["']([^"']*avatars\.akamaihd\.net[^"']+)["']/i,
+
+            // data-src
+            /<img[^>]+data-src=["']([^"']*avatars\.steamstatic\.com[^"']+)["']/i,
+
+            /<img[^>]+data-src=["']([^"']*avatars\.akamaihd\.net[^"']+)["']/i
         ];
 
         for (const patron of patrones) {
@@ -746,13 +811,39 @@ async function obtenerAvatarPerfilSteam(url) {
                 .replace(/&amp;/g, "&")
                 .trim();
 
+            // =================================================
+            // DESCARTAR IMÁGENES GENÉRICAS
+            // =================================================
+
             if (
-                avatar.startsWith("http://") ||
-                avatar.startsWith("https://")
+                avatar.includes("steam_share_image") ||
+                avatar.includes("steam_share") ||
+                avatar.includes("default_avatar")
+            ) {
+                console.log(
+                    `[STEAM] Avatar descartado por ser genérico: ${avatar}`
+                );
+
+                continue;
+            }
+
+            // =================================================
+            // SOLO ACEPTAR CDN DE AVATARES
+            // =================================================
+
+            if (
+                avatar.startsWith("https://avatars.steamstatic.com/") ||
+                avatar.startsWith("http://avatars.steamstatic.com/") ||
+                avatar.startsWith("https://avatars.akamaihd.net/") ||
+                avatar.startsWith("http://avatars.akamaihd.net/")
             ) {
                 return avatar;
             }
         }
+
+        console.log(
+            "[STEAM] No se encontró un avatar real en el perfil."
+        );
 
         return "";
 
@@ -777,7 +868,10 @@ async function comprobarRustSteam(perfil) {
         // OBTENER STEAMID DESDE /id/
         // =================================================
 
-        if (!steamid && perfil.url.includes("/id/")) {
+        if (
+            !steamid &&
+            perfil.url.includes("/id/")
+        ) {
             try {
                 const response = await axios.get(
                     perfil.url,
@@ -803,9 +897,13 @@ async function comprobarRustSteam(perfil) {
                 ];
 
                 for (const patron of patronesSteamID) {
-                    const match = html.match(patron);
+                    const match =
+                        html.match(patron);
 
-                    if (match && match[1]) {
+                    if (
+                        match &&
+                        match[1]
+                    ) {
                         steamid = match[1];
                         break;
                     }
@@ -832,17 +930,20 @@ async function comprobarRustSteam(perfil) {
             `${STEAM_BASE}/profiles/${steamid}`;
 
         try {
-            const response = await axios.get(
-                profileURL,
-                {
-                    headers: {
-                        "User-Agent": USER_AGENT
-                    },
-                    timeout: 15000
-                }
-            );
+            const response =
+                await axios.get(
+                    profileURL,
+                    {
+                        headers: {
+                            "User-Agent":
+                                USER_AGENT
+                        },
+                        timeout: 15000
+                    }
+                );
 
-            const html = response.data || "";
+            const html =
+                response.data || "";
 
             const patronesRust = [
                 /#252490_/i,
@@ -854,7 +955,9 @@ async function comprobarRustSteam(perfil) {
                 /\bRust\b/i
             ];
 
-            for (const patron of patronesRust) {
+            for (
+                const patron of patronesRust
+            ) {
                 if (patron.test(html)) {
                     perfil.tieneRust = true;
                     break;
@@ -875,17 +978,20 @@ async function comprobarRustSteam(perfil) {
             const gamesURL =
                 `${STEAM_BASE}/profiles/${steamid}/games/?tab=all`;
 
-            const response = await axios.get(
-                gamesURL,
-                {
-                    headers: {
-                        "User-Agent": USER_AGENT
-                    },
-                    timeout: 15000
-                }
-            );
+            const response =
+                await axios.get(
+                    gamesURL,
+                    {
+                        headers: {
+                            "User-Agent":
+                                USER_AGENT
+                        },
+                        timeout: 15000
+                    }
+                );
 
-            const html = response.data || "";
+            const html =
+                response.data || "";
 
             if (
                 /252490/i.test(html) ||
@@ -908,16 +1014,19 @@ async function comprobarRustSteam(perfil) {
             const inventoryURL =
                 `${STEAM_BASE}/inventory/${steamid}/252490/2?l=english&count=1`;
 
-            const response = await axios.get(
-                inventoryURL,
-                {
-                    headers: {
-                        "User-Agent": USER_AGENT,
-                        "Accept": "application/json,text/plain,*/*"
-                    },
-                    timeout: 15000
-                }
-            );
+            const response =
+                await axios.get(
+                    inventoryURL,
+                    {
+                        headers: {
+                            "User-Agent":
+                                USER_AGENT,
+                            "Accept":
+                                "application/json,text/plain,*/*"
+                        },
+                        timeout: 15000
+                    }
+                );
 
             if (
                 response.data &&
@@ -975,19 +1084,6 @@ function limpiarHTML(texto) {
         .replace(/&#x27;/gi, "'")
         .replace(/&#x2F;/gi, "/")
         .trim();
-}
-
-// =====================================================
-// ESCAPAR MARKDOWN
-// =====================================================
-
-function escaparMarkdown(texto) {
-    return String(texto || "")
-        .replace(/\\/g, "\\\\")
-        .replace(/\*/g, "\\*")
-        .replace(/_/g, "\\_")
-        .replace(/`/g, "\\`")
-        .replace(/~/g, "\\~");
 }
 
 // =====================================================
