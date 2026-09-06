@@ -14,6 +14,7 @@ const {
 } = require("../services/battlemetricsHours");
 
 const STEAM_API = "https://api.steampowered.com";
+const BATTLEMETRICS_API = "https://api.battlemetrics.com";
 
 const STEAM_API_KEY = process.env.STEAM_API_KEY;
 const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN;
@@ -25,12 +26,6 @@ const RESULTADOS_POR_PAGINA = 10;
 // =====================================================
 
 function getBattleMetricsHeaders() {
-    if (!BATTLEMETRICS_TOKEN) {
-        return {
-            "Content-Type": "application/json"
-        };
-    }
-
     return {
         Authorization: `Bearer ${BATTLEMETRICS_TOKEN}`,
         "Content-Type": "application/json"
@@ -38,44 +33,94 @@ function getBattleMetricsHeaders() {
 }
 
 // =====================================================
-// OBTENER STEAMID64 DESDE BATTLEMETRICS
+// BUSCAR UN STEAMID64 DENTRO DE CUALQUIER RESPUESTA BM
 // =====================================================
 
-async function obtenerSteamID64(playerId) {
+function buscarSteamID64EnObjeto(objeto) {
+    const encontrados = new Set();
+
+    function recorrer(valor) {
+        if (valor === null || valor === undefined) {
+            return;
+        }
+
+        if (
+            typeof valor === "string" ||
+            typeof valor === "number"
+        ) {
+            const texto = String(valor).trim();
+
+            // SteamID64 normalmente son 17 dígitos
+            if (/^\d{17}$/.test(texto)) {
+                encontrados.add(texto);
+            }
+
+            return;
+        }
+
+        if (Array.isArray(valor)) {
+            for (const elemento of valor) {
+                recorrer(elemento);
+            }
+
+            return;
+        }
+
+        if (typeof valor === "object") {
+            for (const [clave, contenido] of Object.entries(valor)) {
+                const claveLower =
+                    String(clave).toLowerCase();
+
+                // Si la clave indica claramente Steam
+                if (
+                    claveLower.includes("steam") ||
+                    claveLower.includes("steamid")
+                ) {
+                    if (
+                        typeof contenido === "string" ||
+                        typeof contenido === "number"
+                    ) {
+                        const texto =
+                            String(contenido).trim();
+
+                        if (/^\d{17}$/.test(texto)) {
+                            encontrados.add(texto);
+                        }
+                    }
+                }
+
+                recorrer(contenido);
+            }
+        }
+    }
+
+    recorrer(objeto);
+
+    return [...encontrados][0] || null;
+}
+
+// =====================================================
+// OBTENER INFORMACIÓN COMPLETA DEL PLAYER BM
+// =====================================================
+
+async function obtenerDatosBattleMetricsPlayer(playerId) {
     try {
         const response = await axios.get(
-            `https://api.battlemetrics.com/players/${playerId}/relationships/identifiers`,
+            `${BATTLEMETRICS_API}/players/${playerId}`,
             {
                 headers: getBattleMetricsHeaders(),
                 params: {
-                    "page[size]": 100
+                    include: "server"
                 },
                 timeout: 10000
             }
         );
 
-        const identifiers = response.data?.data || [];
-
-        for (const item of identifiers) {
-            const identifier =
-                item?.attributes?.identifier ||
-                item?.attributes?.value ||
-                item?.id ||
-                "";
-
-            const valor = String(identifier).trim();
-
-            // SteamID64 = 17 dígitos
-            if (/^\d{17}$/.test(valor)) {
-                return valor;
-            }
-        }
-
-        return null;
+        return response.data || null;
 
     } catch (error) {
         console.error(
-            "[BATTLEMETRICS] Error obteniendo SteamID64:",
+            "[BATTLEMETRICS] Error obteniendo player:",
             error.response?.data || error.message
         );
 
@@ -84,8 +129,59 @@ async function obtenerSteamID64(playerId) {
 }
 
 // =====================================================
-// OBTENER DATOS DE STEAM
-// SOLO SE USA EL STEAMID, NO SE HACE SEARCH POR NOMBRE
+// OBTENER STEAMID64
+// =====================================================
+
+async function obtenerSteamID64(playerId, playerOriginal) {
+    // -------------------------------------------------
+    // PRIMERO: buscarlo directamente en el resultado
+    // original de BattleMetrics
+    // -------------------------------------------------
+
+    let steamId64 =
+        buscarSteamID64EnObjeto(playerOriginal);
+
+    if (steamId64) {
+        console.log(
+            `[BATTLEMETRICS] SteamID64 encontrado en resultado: ${steamId64}`
+        );
+
+        return steamId64;
+    }
+
+    // -------------------------------------------------
+    // SEGUNDO: consultar el recurso del jugador
+    // -------------------------------------------------
+
+    const datosPlayer =
+        await obtenerDatosBattleMetricsPlayer(
+            playerId
+        );
+
+    if (!datosPlayer) {
+        return null;
+    }
+
+    steamId64 =
+        buscarSteamID64EnObjeto(datosPlayer);
+
+    if (steamId64) {
+        console.log(
+            `[BATTLEMETRICS] SteamID64 encontrado en player: ${steamId64}`
+        );
+
+        return steamId64;
+    }
+
+    console.log(
+        `[BATTLEMETRICS] No se encontró SteamID64 para BM ${playerId}`
+    );
+
+    return null;
+}
+
+// =====================================================
+// OBTENER PERFIL STEAM
 // =====================================================
 
 async function obtenerDatosSteam(steamId64) {
@@ -94,7 +190,10 @@ async function obtenerDatosSteam(steamId64) {
     }
 
     if (!STEAM_API_KEY) {
-        console.log("[STEAM] STEAM_API_KEY no configurada.");
+        console.log(
+            "[STEAM] STEAM_API_KEY no configurada."
+        );
+
         return null;
     }
 
@@ -126,33 +225,52 @@ async function obtenerDatosSteam(steamId64) {
 }
 
 // =====================================================
-// BUSCAR JUGADORES EN BATTLEMETRICS
+// BUSCAR JUGADOR EN BATTLEMETRICS
 // =====================================================
 
-async function buscarJugadoresBattleMetrics(nombre, serverId) {
-    console.log("[BATTLEMETRICS] ========================================");
-    console.log("[BATTLEMETRICS] NAME SEARCH API");
-    console.log(`[BATTLEMETRICS] Nombre: "${nombre}"`);
-    console.log(`[BATTLEMETRICS] Servidor: ${serverId}`);
-    console.log("[BATTLEMETRICS] ========================================");
+async function buscarJugadoresBattleMetrics(
+    nombre,
+    serverId
+) {
+    console.log(
+        "[BATTLEMETRICS] ========================================"
+    );
+
+    console.log(
+        "[BATTLEMETRICS] NAME SEARCH API"
+    );
+
+    console.log(
+        `[BATTLEMETRICS] Nombre: "${nombre}"`
+    );
+
+    console.log(
+        `[BATTLEMETRICS] Servidor: ${serverId}`
+    );
+
+    console.log(
+        "[BATTLEMETRICS] ========================================"
+    );
 
     try {
-        const resultado = await searchBattleMetricsPlayer(
-            nombre,
-            serverId
-        );
+        const resultado =
+            await searchBattleMetricsPlayer(
+                nombre,
+                serverId
+            );
 
         if (!resultado) {
-            console.log("[BATTLEMETRICS] No se encontraron jugadores.");
+            console.log(
+                "[BATTLEMETRICS] No se encontraron jugadores."
+            );
+
             return [];
         }
 
-        // Cuando hay nombres duplicados, el servicio devuelve:
-        // {
-        //     duplicate: true,
-        //     players: [...]
-        // }
-        if (resultado.duplicate && Array.isArray(resultado.players)) {
+        if (
+            resultado.duplicate &&
+            Array.isArray(resultado.players)
+        ) {
             console.log(
                 `[BATTLEMETRICS] Jugadores encontrados: ${resultado.players.length}`
             );
@@ -160,7 +278,9 @@ async function buscarJugadoresBattleMetrics(nombre, serverId) {
             return resultado.players;
         }
 
-        console.log("[BATTLEMETRICS] Jugador encontrado: 1");
+        console.log(
+            "[BATTLEMETRICS] Jugador encontrado: 1"
+        );
 
         return [resultado];
 
@@ -175,14 +295,15 @@ async function buscarJugadoresBattleMetrics(nombre, serverId) {
 }
 
 // =====================================================
-// CREAR DATOS DE RESULTADOS
+// PREPARAR RESULTADOS
 // =====================================================
 
 async function prepararResultados(jugadores) {
     const resultados = [];
 
     for (const player of jugadores) {
-        const playerId = String(player?.id || "");
+        const playerId =
+            String(player?.id || "").trim();
 
         if (!playerId) {
             continue;
@@ -196,17 +317,31 @@ async function prepararResultados(jugadores) {
             `[BATTLEMETRICS] Procesando: ${nombreBM} (${playerId})`
         );
 
+        // ---------------------------------------------
+        // OBTENER STEAMID64
+        // ---------------------------------------------
+
         const steamId64 =
-            await obtenerSteamID64(playerId);
+            await obtenerSteamID64(
+                playerId,
+                player
+            );
 
         let steam = null;
+
+        // ---------------------------------------------
+        // SOLO SI TENEMOS STEAMID
+        // ---------------------------------------------
 
         if (steamId64) {
             console.log(
                 `[STEAM] SteamID64 encontrado: ${steamId64}`
             );
 
-            steam = await obtenerDatosSteam(steamId64);
+            steam =
+                await obtenerDatosSteam(
+                    steamId64
+                );
         } else {
             console.log(
                 `[STEAM] No se encontró SteamID64 para ${nombreBM}`
@@ -225,34 +360,46 @@ async function prepararResultados(jugadores) {
 }
 
 // =====================================================
-// EMBED
+// CREAR EMBED
 // =====================================================
 
-function crearEmbed(resultados, pagina, nombreBuscado) {
-    const inicio = pagina * RESULTADOS_POR_PAGINA;
-    const fin = inicio + RESULTADOS_POR_PAGINA;
+function crearEmbed(
+    resultados,
+    pagina,
+    nombreBuscado
+) {
+    const inicio =
+        pagina * RESULTADOS_POR_PAGINA;
+
+    const fin =
+        inicio + RESULTADOS_POR_PAGINA;
 
     const paginaResultados =
         resultados.slice(inicio, fin);
 
-    const totalPaginas = Math.max(
-        1,
-        Math.ceil(
-            resultados.length / RESULTADOS_POR_PAGINA
-        )
-    );
+    const totalPaginas =
+        Math.max(
+            1,
+            Math.ceil(
+                resultados.length /
+                RESULTADOS_POR_PAGINA
+            )
+        );
 
-    const embed = new EmbedBuilder()
-        .setTitle("🔎 Resultados de Steam")
-        .setDescription(
-            `Resultados de BattleMetrics para **${nombreBuscado}**`
-        )
-        .setColor(0x5865f2)
-        .setFooter({
-            text: `Página ${pagina + 1}/${totalPaginas} • ${resultados.length} resultado(s)`
-        });
+    const embed =
+        new EmbedBuilder()
+            .setTitle("🔎 Resultados de Steam")
+            .setDescription(
+                `Resultados encontrados para **${nombreBuscado}**`
+            )
+            .setColor(0x5865f2)
+            .setFooter({
+                text:
+                    `Página ${pagina + 1}/${totalPaginas} • ` +
+                    `${resultados.length} resultado(s)`
+            });
 
-    if (paginaResultados.length === 0) {
+    if (!paginaResultados.length) {
         embed.setDescription(
             `No hay resultados para **${nombreBuscado}**.`
         );
@@ -260,8 +407,13 @@ function crearEmbed(resultados, pagina, nombreBuscado) {
         return embed;
     }
 
-    for (let i = 0; i < paginaResultados.length; i++) {
-        const jugador = paginaResultados[i];
+    for (
+        let i = 0;
+        i < paginaResultados.length;
+        i++
+    ) {
+        const jugador =
+            paginaResultados[i];
 
         const numero =
             inicio + i + 1;
@@ -277,26 +429,46 @@ function crearEmbed(resultados, pagina, nombreBuscado) {
 
         let estado = "🔴 Offline";
 
-        if (jugador.steam?.personastate > 0) {
+        if (
+            jugador.steam &&
+            jugador.steam.personastate > 0
+        ) {
             estado = "🟢 Online";
         }
 
         let contenido =
             `**${numero}. ${nombre}**\n` +
             `${estado}\n` +
-            `🎮 SteamID64: \`${steamId}\`\n` +
-            `🔗 [Perfil de Steam](https://steamcommunity.com/profiles/${steamId})\n` +
-            `🆔 BM: \`${jugador.battleMetricsId}\``;
+            `🎮 SteamID64: \`${steamId}\`\n`;
 
-        if (steam?.profileurl) {
-            contenido += `\n`;
+        if (jugador.steamId64) {
+            contenido +=
+                `🔗 [Perfil de Steam](https://steamcommunity.com/profiles/${jugador.steamId64})\n`;
         }
+
+        contenido +=
+            `🆔 BM: \`${jugador.battleMetricsId}\``;
 
         embed.addFields({
             name: "\u200B",
             value: contenido,
             inline: false
         });
+    }
+
+    // ---------------------------------------------
+    // AVATAR DEL PRIMER RESULTADO
+    // ---------------------------------------------
+
+    const primerResultado =
+        paginaResultados[0];
+
+    if (
+        primerResultado?.steam?.avatarfull
+    ) {
+        embed.setThumbnail(
+            primerResultado.steam.avatarfull
+        );
     }
 
     return embed;
@@ -306,39 +478,65 @@ function crearEmbed(resultados, pagina, nombreBuscado) {
 // BOTONES
 // =====================================================
 
-function crearBotones(pagina, totalResultados) {
-    const totalPaginas = Math.max(
-        1,
-        Math.ceil(
-            totalResultados / RESULTADOS_POR_PAGINA
-        )
-    );
-
-    const anterior = new ButtonBuilder()
-        .setCustomId("steam_anterior")
-        .setLabel("◀️ Anterior")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(pagina <= 0);
-
-    const paginaBtn = new ButtonBuilder()
-        .setCustomId("steam_pagina")
-        .setLabel(`${pagina + 1}/${totalPaginas}`)
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(true);
-
-    const siguiente = new ButtonBuilder()
-        .setCustomId("steam_siguiente")
-        .setLabel("Siguiente ▶️")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(
-            pagina >= totalPaginas - 1
+function crearBotones(
+    pagina,
+    totalResultados
+) {
+    const totalPaginas =
+        Math.max(
+            1,
+            Math.ceil(
+                totalResultados /
+                RESULTADOS_POR_PAGINA
+            )
         );
 
-    return new ActionRowBuilder().addComponents(
-        anterior,
-        paginaBtn,
-        siguiente
-    );
+    const anterior =
+        new ButtonBuilder()
+            .setCustomId(
+                "steam_anterior"
+            )
+            .setLabel("◀️ Anterior")
+            .setStyle(
+                ButtonStyle.Secondary
+            )
+            .setDisabled(
+                pagina <= 0
+            );
+
+    const paginaBtn =
+        new ButtonBuilder()
+            .setCustomId(
+                "steam_pagina"
+            )
+            .setLabel(
+                `${pagina + 1}/${totalPaginas}`
+            )
+            .setStyle(
+                ButtonStyle.Secondary
+            )
+            .setDisabled(true);
+
+    const siguiente =
+        new ButtonBuilder()
+            .setCustomId(
+                "steam_siguiente"
+            )
+            .setLabel("Siguiente ▶️")
+            .setStyle(
+                ButtonStyle.Secondary
+            )
+            .setDisabled(
+                pagina >=
+                totalPaginas - 1
+            );
+
+    return new ActionRowBuilder()
+        .addComponents(
+            anterior,
+            paginaBtn,
+            siguiente
+        );
 }
 
 // =====================================================
@@ -351,17 +549,20 @@ module.exports = {
         .setDescription(
             "Busca jugadores por nombre en el servidor configurado de BattleMetrics"
         )
-        .addStringOption(option =>
-            option
-                .setName("nombre")
-                .setDescription(
-                    "Nombre exacto del jugador"
-                )
-                .setRequired(true)
+        .addStringOption(
+            option =>
+                option
+                    .setName("nombre")
+                    .setDescription(
+                        "Nombre exacto del jugador"
+                    )
+                    .setRequired(true)
         ),
 
     async execute(interaction) {
-        console.log("🎯 Ejecutando /steam");
+        console.log(
+            "🎯 Ejecutando /steam"
+        );
 
         const nombre =
             interaction.options
@@ -373,15 +574,17 @@ module.exports = {
         );
 
         // =================================================
-        // COMPROBAR CONFIGURACIÓN DEL SERVIDOR
+        // CONFIGURACIÓN BM
         // =================================================
 
         let config;
 
         try {
-            config = await ServerConfig.findOne({
-                guildId: interaction.guild.id
-            });
+            config =
+                await ServerConfig.findOne({
+                    guildId:
+                        interaction.guild.id
+                });
         } catch (error) {
             console.error(
                 "[CONFIG] Error consultando MongoDB:",
@@ -395,7 +598,9 @@ module.exports = {
             });
         }
 
-        if (!config?.battleMetricsServerId) {
+        if (
+            !config?.battleMetricsServerId
+        ) {
             return interaction.reply({
                 content:
                     "❌ Este servidor de Discord no tiene configurado un servidor de BattleMetrics.\n\n" +
@@ -414,7 +619,7 @@ module.exports = {
         );
 
         // =================================================
-        // COMPROBAR TOKEN
+        // TOKEN
         // =================================================
 
         if (!BATTLEMETRICS_TOKEN) {
@@ -433,7 +638,7 @@ module.exports = {
 
         try {
             // =============================================
-            // BUSCAR EN BATTLEMETRICS
+            // BUSCAR EN BM
             // =============================================
 
             const jugadores =
@@ -443,31 +648,29 @@ module.exports = {
                 );
 
             if (!jugadores.length) {
-                console.log(
-                    "No encontré jugadores con el nombre exacto..."
-                );
-
                 return interaction.editReply({
                     content:
                         `❌ No encontré jugadores con el nombre exacto **${nombre}** en el servidor configurado de BattleMetrics.`
                 });
             }
 
-            // =============================================
-            // OBTENER STEAMID + DATOS STEAM
-            // =============================================
-
             console.log(
                 `[BATTLEMETRICS] Procesando ${jugadores.length} jugador(es)...`
             );
 
+            // =============================================
+            // PREPARAR
+            // =============================================
+
             const resultados =
-                await prepararResultados(jugadores);
+                await prepararResultados(
+                    jugadores
+                );
 
             if (!resultados.length) {
                 return interaction.editReply({
                     content:
-                        `❌ Encontré jugadores en BattleMetrics, pero no pude obtener sus datos.`
+                        "❌ BattleMetrics encontró jugadores, pero no se pudieron procesar."
                 });
             }
 
@@ -566,27 +769,34 @@ module.exports = {
                 }
             );
 
-            collector.on("end", async () => {
-                try {
-                    const botonesFinales =
-                        crearBotones(
-                            pagina,
-                            resultados.length
+            collector.on(
+                "end",
+                async () => {
+                    try {
+                        const botonesFinales =
+                            crearBotones(
+                                pagina,
+                                resultados.length
+                            );
+
+                        botonesFinales.components.forEach(
+                            button => {
+                                button.setDisabled(
+                                    true
+                                );
+                            }
                         );
 
-                    botonesFinales.components.forEach(
-                        button => {
-                            button.setDisabled(true);
-                        }
-                    );
-
-                    await mensaje.edit({
-                        components: [botonesFinales]
-                    });
-                } catch (error) {
-                    // El mensaje puede haber sido eliminado.
+                        await mensaje.edit({
+                            components: [
+                                botonesFinales
+                            ]
+                        });
+                    } catch {
+                        // Mensaje eliminado.
+                    }
                 }
-            });
+            );
 
         } catch (error) {
             console.error(
@@ -607,7 +817,9 @@ module.exports = {
                 ephemeral: true
             });
         } finally {
-            console.log("✅ /steam terminado");
+            console.log(
+                "✅ /steam terminado"
+            );
         }
     }
 };
