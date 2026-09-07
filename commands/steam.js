@@ -19,6 +19,11 @@ const ServerConfig = require("../models/ServerConfig");
 const BM_API = "https://api.battlemetrics.com";
 const BM_TOKEN = process.env.BATTLEMETRICS_TOKEN;
 
+// Máximo de páginas que utilizaremos para reconstruir
+// candidatos directamente desde el servidor.
+// Cada página son hasta 100 jugadores.
+const MAX_PAGINAS_SERVIDOR = 20;
+
 // =====================================================
 // CARACTERES DECORATIVOS
 // =====================================================
@@ -726,10 +731,7 @@ function generarConsultas(
         }
 
         // ---------------------------------------------
-        // PARTES DE 3+ CARACTERES
-        //
-        // Sirve para conseguir candidatos
-        // aunque el OCR completo tenga errores.
+        // PARTES DE 3 CARACTERES
         // ---------------------------------------------
 
         const compactoBase =
@@ -755,6 +757,61 @@ function generarConsultas(
                 agregar(
                     parte,
                     35
+                );
+            }
+        }
+
+        // ---------------------------------------------
+        // PARTES DE 4 CARACTERES
+        // ---------------------------------------------
+        // Estas consultas son mucho más útiles que
+        // "ox", "ox1", etc. para encontrar jugadores
+        // con nombres completos.
+
+        if (
+            compactoBase.length >= 5
+        ) {
+            for (
+                let i = 0;
+                i <=
+                    compactoBase.length - 4;
+                i++
+            ) {
+                const parte =
+                    compactoBase.slice(
+                        i,
+                        i + 4
+                    );
+
+                agregar(
+                    parte,
+                    55
+                );
+            }
+        }
+
+        // ---------------------------------------------
+        // PARTES DE 5 CARACTERES
+        // ---------------------------------------------
+
+        if (
+            compactoBase.length >= 6
+        ) {
+            for (
+                let i = 0;
+                i <=
+                    compactoBase.length - 5;
+                i++
+            ) {
+                const parte =
+                    compactoBase.slice(
+                        i,
+                        i + 5
+                    );
+
+                agregar(
+                    parte,
+                    65
                 );
             }
         }
@@ -832,7 +889,7 @@ async function ejecutarOCR(
 }
 
 // =====================================================
-// BATTLEMETRICS
+// BATTLEMETRICS - BÚSQUEDA
 // =====================================================
 
 async function consultarBattleMetrics(
@@ -855,8 +912,7 @@ async function consultarBattleMetrics(
         "filter[search]":
             consulta,
 
-        // MUY IMPORTANTE:
-        // SOLO EL SERVIDOR CONFIGURADO
+        // SIEMPRE limitado al servidor
         "filter[servers]":
             String(serverId),
 
@@ -887,6 +943,154 @@ async function consultarBattleMetrics(
     )
         ? response.data.data
         : [];
+}
+
+// =====================================================
+// BATTLEMETRICS - JUGADORES DEL SERVIDOR
+// =====================================================
+//
+// ESTE ES EL CAMBIO IMPORTANTE.
+//
+// Si OCR devuelve algo demasiado corto como:
+//
+// "Ох;"
+//
+// no podemos buscar solamente "ox" porque eso puede
+// devolver "Ox", "Fox", "Box", etc.
+//
+// En ese caso obtenemos jugadores directamente del
+// servidor configurado y hacemos la comparación local.
+//
+// IMPORTANTE:
+// NUNCA quitamos filter[servers].
+//
+// =====================================================
+
+async function consultarJugadoresServidor(
+    serverId
+) {
+    if (!serverId) {
+        throw new Error(
+            "No hay serverId configurado."
+        );
+    }
+
+    if (!BM_TOKEN) {
+        throw new Error(
+            "Falta BATTLEMETRICS_TOKEN."
+        );
+    }
+
+    const jugadores =
+        new Map();
+
+    console.log(
+        `[BM] RECONSTRUCCIÓN DEL SERVIDOR ${serverId}`
+    );
+
+    for (
+        let pagina = 1;
+        pagina <= MAX_PAGINAS_SERVIDOR;
+        pagina++
+    ) {
+        try {
+            const params = {
+                "filter[servers]":
+                    String(serverId),
+
+                "page[size]": 100,
+
+                "page[number]":
+                    pagina
+            };
+
+            console.log(
+                `[BM] Servidor ${serverId} -> página ${pagina}`
+            );
+
+            const response =
+                await axios.get(
+                    `${BM_API}/players`,
+                    {
+                        params,
+                        headers: {
+                            Authorization:
+                                `Bearer ${BM_TOKEN}`,
+                            Accept:
+                                "application/vnd.api+json"
+                        },
+                        timeout: 20000
+                    }
+                );
+
+            const resultados =
+                Array.isArray(
+                    response.data?.data
+                )
+                    ? response.data.data
+                    : [];
+
+            console.log(
+                `[BM] Página ${pagina}: ${resultados.length} jugadores`
+            );
+
+            if (!resultados.length) {
+                break;
+            }
+
+            for (
+                const jugador of resultados
+            ) {
+                const id =
+                    obtenerIdBM(
+                        jugador
+                    );
+
+                const nombre =
+                    obtenerNombreBM(
+                        jugador
+                    );
+
+                if (
+                    !id ||
+                    !nombre
+                ) {
+                    continue;
+                }
+
+                jugadores.set(
+                    id,
+                    jugador
+                );
+            }
+
+            // Si llegaron menos de 100,
+            // probablemente ya no hay más páginas.
+            if (
+                resultados.length < 100
+            ) {
+                break;
+            }
+
+        } catch (error) {
+            console.error(
+                `[BM] Error obteniendo página ${pagina} del servidor:`,
+                error?.response?.status ||
+                error?.message ||
+                error
+            );
+
+            break;
+        }
+    }
+
+    console.log(
+        `[BM] Jugadores recuperados del servidor ${serverId}: ${jugadores.size}`
+    );
+
+    return Array.from(
+        jugadores.values()
+    );
 }
 
 // =====================================================
@@ -927,7 +1131,9 @@ function puntuarNombre(
     if (!nombreJugador) {
         return {
             score: 0,
-            motivo: "sin nombre"
+            motivo: "sin nombre",
+            evidencia: 0,
+            consulta: ""
         };
     }
 
@@ -941,23 +1147,25 @@ function puntuarNombre(
             nombreJugador
         );
 
-    // ---------------------------------------------
-    // Nombres demasiado cortos NO son candidatos
-    // ---------------------------------------------
-
+    // Nunca aceptar nombres de 1-3 caracteres.
     if (
         jugador.length < 4
     ) {
         return {
             score: 0,
             motivo:
-                "nombre demasiado corto"
+                "nombre demasiado corto",
+            evidencia: 0,
+            consulta: ""
         };
     }
 
     let mejorScore = 0;
     let mejorMotivo =
         "sin coincidencia";
+
+    let mejorEvidencia = 0;
+    let mejorConsulta = "";
 
     for (
         const consultaInfo of consultas
@@ -976,8 +1184,18 @@ function puntuarNombre(
                 consulta
             );
 
+        // =================================================
+        // MUY IMPORTANTE
+        // =================================================
+        // Consultas de 1-3 caracteres sirven para
+        // descubrir resultados, pero JAMÁS pueden ser
+        // la evidencia principal de un candidato.
+        //
+        // Así "ox" nunca convierte a "Ox" en candidato.
+        // =================================================
+
         if (
-            q.length < 3
+            q.length < 4
         ) {
             continue;
         }
@@ -987,26 +1205,24 @@ function puntuarNombre(
                 consulta
             );
 
+        let scoreActual = 0;
+        let motivoActual =
+            "sin coincidencia";
+
         // =============================================
         // EXACTO
         // =============================================
 
         if (
-            jugador === q &&
-            q.length >= 4
+            jugador === q
         ) {
-            const score =
+            scoreActual =
                 tipo === "manual"
                     ? 5000
                     : 4700;
 
-            if (
-                score > mejorScore
-            ) {
-                mejorScore = score;
-                mejorMotivo =
-                    "coincidencia exacta";
-            }
+            motivoActual =
+                "coincidencia exacta";
         }
 
         // =============================================
@@ -1029,12 +1245,13 @@ function puntuarNombre(
                 );
 
             if (
-                score > mejorScore
+                score >
+                scoreActual
             ) {
-                mejorScore =
+                scoreActual =
                     score;
 
-                mejorMotivo =
+                motivoActual =
                     "núcleo exacto";
             }
         }
@@ -1069,12 +1286,13 @@ function puntuarNombre(
                         );
 
                     if (
-                        score > mejorScore
+                        score >
+                        scoreActual
                     ) {
-                        mejorScore =
+                        scoreActual =
                             score;
 
-                        mejorMotivo =
+                        motivoActual =
                             "nombre contiene OCR";
                     }
                 }
@@ -1098,12 +1316,13 @@ function puntuarNombre(
                         );
 
                     if (
-                        score > mejorScore
+                        score >
+                        scoreActual
                     ) {
-                        mejorScore =
+                        scoreActual =
                             score;
 
-                        mejorMotivo =
+                        motivoActual =
                             "OCR contiene nombre";
                     }
                 }
@@ -1139,12 +1358,13 @@ function puntuarNombre(
                         );
 
                     if (
-                        score > mejorScore
+                        score >
+                        scoreActual
                     ) {
-                        mejorScore =
+                        scoreActual =
                             score;
 
-                        mejorMotivo =
+                        motivoActual =
                             "núcleo encontrado en OCR";
                     }
                 }
@@ -1168,12 +1388,13 @@ function puntuarNombre(
                             30;
 
                     if (
-                        score > mejorScore
+                        score >
+                        scoreActual
                     ) {
-                        mejorScore =
+                        scoreActual =
                             score;
 
-                        mejorMotivo =
+                        motivoActual =
                             "núcleo con prefijo";
                     }
                 }
@@ -1195,7 +1416,7 @@ function puntuarNombre(
                 );
 
             if (
-                sim >= 0.80
+                sim >= 0.55
             ) {
                 const score =
                     2500 +
@@ -1204,12 +1425,13 @@ function puntuarNombre(
                     );
 
                 if (
-                    score > mejorScore
+                    score >
+                    scoreActual
                 ) {
-                    mejorScore =
+                    scoreActual =
                         score;
 
-                    mejorMotivo =
+                    motivoActual =
                         `similitud ${Math.round(sim * 100)}%`;
                 }
             }
@@ -1238,7 +1460,7 @@ function puntuarNombre(
 
             if (
                 sub >= 4 &&
-                porcentaje >= 0.55
+                porcentaje >= 0.45
             ) {
                 const score =
                     2200 +
@@ -1248,22 +1470,92 @@ function puntuarNombre(
                     );
 
                 if (
-                    score > mejorScore
+                    score >
+                    scoreActual
                 ) {
-                    mejorScore =
+                    scoreActual =
                         score;
 
-                    mejorMotivo =
+                    motivoActual =
                         `secuencia OCR ${sub}`;
                 }
             }
         }
+
+        // =============================================
+        // REGISTRAR MEJOR EVIDENCIA
+        // =============================================
+
+        if (
+            scoreActual >
+            mejorScore
+        ) {
+            mejorScore =
+                scoreActual;
+
+            mejorMotivo =
+                motivoActual;
+
+            mejorEvidencia =
+                q.length;
+
+            mejorConsulta =
+                consulta;
+        }
     }
 
     return {
-        score: mejorScore,
-        motivo: mejorMotivo
+        score:
+            mejorScore,
+
+        motivo:
+            mejorMotivo,
+
+        evidencia:
+            mejorEvidencia,
+
+        consulta:
+            mejorConsulta
     };
+}
+
+// =====================================================
+// AÑADIR JUGADORES A MAPA
+// =====================================================
+
+function agregarJugadoresMapa(
+    mapa,
+    resultados
+) {
+    for (
+        const jugador of resultados || []
+    ) {
+        const id =
+            obtenerIdBM(
+                jugador
+            );
+
+        const nombre =
+            obtenerNombreBM(
+                jugador
+            );
+
+        if (
+            !id ||
+            !nombre
+        ) {
+            continue;
+        }
+
+        if (
+            !mapa.has(id)
+        ) {
+            mapa.set(
+                id,
+                jugador
+            );
+        }
+    }
 }
 
 // =====================================================
@@ -1277,17 +1569,27 @@ async function buscarJugadores({
     const jugadores =
         new Map();
 
+    // =================================================
+    // PRIMERA FASE
+    // =================================================
+    // Búsquedas normales de BattleMetrics.
+    // TODAS filtradas por serverId.
+    // =================================================
+
     for (
         const consultaInfo of consultas
     ) {
         const consulta =
             consultaInfo.texto;
 
-        // NO hacemos consultas de 1-2 caracteres
-        if (
+        const compacto =
             compactarNombre(
                 consulta
-            ).length < 3
+            );
+
+        // Consultas de 1-2 caracteres no tienen sentido.
+        if (
+            compacto.length < 3
         ) {
             continue;
         }
@@ -1303,42 +1605,10 @@ async function buscarJugadores({
                 `[BM] "${consulta}" -> ${resultados.length} resultados`
             );
 
-            for (
-                const jugador of resultados
-            ) {
-                const id =
-                    obtenerIdBM(
-                        jugador
-                    );
-
-                const nombre =
-                    obtenerNombreBM(
-                        jugador
-                    );
-
-                if (
-                    !id ||
-                    !nombre
-                ) {
-                    continue;
-                }
-
-                // -----------------------------------------
-                // SEGURIDAD EXTRA
-                // -----------------------------------------
-                // Aunque la API ya está filtrada por servidor,
-                // solo aceptamos jugadores que llegaron de
-                // esta búsqueda filtrada.
-
-                if (
-                    !jugadores.has(id)
-                ) {
-                    jugadores.set(
-                        id,
-                        jugador
-                    );
-                }
-            }
+            agregarJugadoresMapa(
+                jugadores,
+                resultados
+            );
 
         } catch (error) {
             console.error(
@@ -1350,53 +1620,84 @@ async function buscarJugadores({
         }
     }
 
-    const candidatos = [];
+    // =================================================
+    // PRIMERA EVALUACIÓN
+    // =================================================
 
-    for (
-        const jugador of jugadores.values()
+    let candidatos =
+        construirCandidatos(
+            jugadores,
+            consultas
+        );
+
+    // =================================================
+    // FALLBACK IMPORTANTE
+    // =================================================
+    //
+    // Si:
+    //
+    // OCR = "Ох;"
+    //
+    // entonces no tenemos suficiente información
+    // para confiar en filter[search]="ox".
+    //
+    // Recuperamos jugadores DEL SERVIDOR y
+    // comparamos localmente.
+    //
+    // Nunca se hace una búsqueda global.
+    // =================================================
+
+    const tienePocosCandidatos =
+        candidatos.length < 3;
+
+    const consultasUtiles =
+        consultas.filter(
+            consulta =>
+                compactarNombre(
+                    consulta.texto
+                ).length >= 4
+        );
+
+    const tieneOCRMuyCorto =
+        consultasUtiles.length === 0;
+
+    if (
+        tienePocosCandidatos ||
+        tieneOCRMuyCorto
     ) {
-        const nombre =
-            obtenerNombreBM(
-                jugador
+        console.log(
+            "[BM] No hay suficiente evidencia. Activando búsqueda completa del servidor..."
+        );
+
+        try {
+            const jugadoresServidor =
+                await consultarJugadoresServidor(
+                    serverId
+                );
+
+            agregarJugadoresMapa(
+                jugadores,
+                jugadoresServidor
             );
 
-        if (!nombre) {
-            continue;
-        }
+            candidatos =
+                construirCandidatos(
+                    jugadores,
+                    consultas
+                );
 
-        const compacto =
-            compactarNombre(
-                nombre
+        } catch (error) {
+            console.error(
+                "[BM] Error en fallback del servidor:",
+                error?.message ||
+                error
             );
-
-        // Nunca mostrar nombres de 1-3 caracteres
-        if (
-            compacto.length < 4
-        ) {
-            continue;
         }
-
-        const resultado =
-            puntuarNombre(
-                nombre,
-                consultas
-            );
-
-        if (
-            resultado.score < 2000
-        ) {
-            continue;
-        }
-
-        candidatos.push({
-            jugador,
-            nombre,
-            score:
-                resultado.score,
-            motivo:
-                resultado.motivo
-        });
     }
+
+    // =================================================
+    // ORDENAR
+    // =================================================
 
     candidatos.sort(
         (a, b) => {
@@ -1421,7 +1722,10 @@ async function buscarJugadores({
         }
     );
 
-    // Eliminar duplicados por nombre normalizado
+    // =================================================
+    // ELIMINAR DUPLICADOS
+    // =================================================
+
     const vistos =
         new Set();
 
@@ -1464,12 +1768,104 @@ async function buscarJugadores({
                 `${index + 1}. ${candidato.nombre} | ` +
                 `ID ${obtenerIdBM(candidato.jugador)} | ` +
                 `Score ${candidato.score} | ` +
+                `Evidencia ${candidato.evidencia} | ` +
                 candidato.motivo
             );
         }
     );
 
     return finales;
+}
+
+// =====================================================
+// CONSTRUIR CANDIDATOS
+// =====================================================
+
+function construirCandidatos(
+    jugadores,
+    consultas
+) {
+    const candidatos = [];
+
+    for (
+        const jugador of jugadores.values()
+    ) {
+        const nombre =
+            obtenerNombreBM(
+                jugador
+            );
+
+        if (!nombre) {
+            continue;
+        }
+
+        const compacto =
+            compactarNombre(
+                nombre
+            );
+
+        // Nunca mostrar nombres de 1-3 caracteres.
+        if (
+            compacto.length < 4
+        ) {
+            continue;
+        }
+
+        const resultado =
+            puntuarNombre(
+                nombre,
+                consultas
+            );
+
+        // =================================================
+        // REQUISITO FUNDAMENTAL
+        // =================================================
+        //
+        // Tiene que existir evidencia de al menos
+        // 4 caracteres.
+        //
+        // Por eso:
+        //
+        // OCR = "ox"
+        // Jugador = "Ox"
+        //
+        // NO entra.
+        //
+        // Pero:
+        //
+        // OCR = "fox1c"
+        // Jugador = "ᶰʳF0x1C"
+        //
+        // sí puede entrar.
+        // =================================================
+
+        if (
+            resultado.evidencia < 4
+        ) {
+            continue;
+        }
+
+        if (
+            resultado.score < 2000
+        ) {
+            continue;
+        }
+
+        candidatos.push({
+            jugador,
+            nombre,
+            score:
+                resultado.score,
+            motivo:
+                resultado.motivo,
+            evidencia:
+                resultado.evidencia,
+            consulta:
+                resultado.consulta
+        });
+    }
+
+    return candidatos;
 }
 
 // =====================================================
@@ -1813,7 +2209,7 @@ module.exports = {
             consultasFinales.forEach(
                 consulta => {
                     console.log(
-                        `[${consulta.tipo}] ${consulta.texto}`
+                        `[${consulta.tipo}] ${consulta.texto} | prioridad ${consulta.prioridad}`
                     );
                 }
             );
@@ -1867,6 +2263,12 @@ module.exports = {
                             },
                             {
                                 name:
+                                    "🔎 Búsqueda normalizada",
+                                value:
+                                    `\`${compactarNombre(textoOCR) || "No disponible"}\``
+                            },
+                            {
+                                name:
                                     "🖥️ Servidor",
                                 value:
                                     `\`${serverId}\``
@@ -1874,7 +2276,8 @@ module.exports = {
                         );
 
                 return interaction.editReply({
-                    embeds: [embed]
+                    embeds: [embed],
+                    components: []
                 });
             }
 
@@ -1894,8 +2297,11 @@ module.exports = {
                         segundo.score
                     : 9999;
 
-            // Si el primero es claramente superior,
-            // lo mostramos directamente.
+            // Si tenemos una coincidencia muy clara,
+            // podemos mostrarla directamente.
+            //
+            // Si hay varios candidatos cercanos,
+            // dejamos elegir al usuario.
             if (
                 primero.score >= 4300 &&
                 diferencia >= 500
@@ -1925,7 +2331,7 @@ module.exports = {
                         "🎯 Coincidencias encontradas"
                     )
                     .setDescription(
-                        "Encontré varios jugadores parecidos dentro del servidor configurado. Selecciona el correcto:"
+                        "Encontré varios jugadores parecidos dentro del servidor configurado. Selecciona cuál es el correcto:"
                     )
                     .addFields(
                         {
@@ -1948,7 +2354,7 @@ module.exports = {
                         name:
                             `${index + 1}️⃣ ${candidato.nombre}`,
                         value:
-                            `Coincidencia: ${candidato.score}`
+                            `Coincidencia: ${candidato.score} • ${candidato.motivo}`
                     });
                 }
             );
@@ -1962,11 +2368,6 @@ module.exports = {
 
             candidatos.forEach(
                 (candidato, index) => {
-                    const id =
-                        obtenerIdBM(
-                            candidato.jugador
-                        );
-
                     row.addComponents(
                         new ButtonBuilder()
                             .setCustomId(
