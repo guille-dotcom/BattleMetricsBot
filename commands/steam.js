@@ -3,8 +3,7 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
-    ButtonStyle,
-    AttachmentBuilder
+    ButtonStyle
 } = require("discord.js");
 
 const axios = require("axios");
@@ -21,92 +20,390 @@ const BM_API = "https://api.battlemetrics.com";
 const BM_TOKEN = process.env.BATTLEMETRICS_TOKEN;
 
 // =====================================================
-// NORMALIZACIÓN
+// CARACTERES / SÍMBOLOS UNICODE
+// =====================================================
+
+// Caracteres decorativos que pueden aparecer alrededor
+// del nombre. NO se eliminan del nombre original.
+// Solamente se ignoran durante la comparación.
+
+const SIMBOLOS_DECORATIVOS = new Set([
+    "★", "☆", "✦", "✧", "✪", "✫", "✬", "✭", "✮", "✯",
+    "✰", "✵", "✶", "✷", "✸", "✹", "✺", "✻", "✼", "✽",
+    "✾", "✿", "❀", "❁", "❂", "❃", "❄", "❅", "❆",
+    "❇", "❈", "❉", "❊", "❋",
+
+    "ツ", "シ", "ッ", "ソ", "ン", "ジ", "ヅ", "ヮ",
+    "ヾ", "ゞ",
+
+    "么", "乂", "メ", "彡", "刃", "丂", "乙", "ム",
+    "气", "氷", "火", "水", "雷", "風",
+
+    "꧁", "꧂", "༺", "༻", "༼", "༽",
+    "『", "』", "「", "」", "【", "】",
+    "《", "》", "〈", "〉", "〔", "〕",
+    "〖", "〗", "〘", "〙", "〚", "〛",
+    "⟦", "⟧", "⟨", "⟩", "⟪", "⟫",
+
+    "「", "」", "『", "』", "﹃", "﹄",
+    "‹", "›", "«", "»",
+
+    "◥", "◤", "◢", "◣",
+    "◀", "▶", "◁", "▷",
+    "▲", "▼", "△", "▽",
+    "◆", "◇", "■", "□",
+    "●", "○", "◉", "◎",
+    "☀", "☁", "☂", "☃",
+    "☠", "☢", "☣", "⚡",
+    "⚔", "⚒", "⚙",
+
+    "乛", "乚", "乄", "々", "〆",
+    "〄", "〠", "〃", "〒",
+
+    "†", "‡", "※", "⁂",
+    "•", "·", "∙", "⋆",
+    "⋇", "⋈", "⋉", "⋊",
+
+    "♡", "♥", "♦", "♣", "♠",
+    "❤", "💀", "💎", "🔥",
+    "⚡", "☠",
+
+    "|", "│", "┃", "¦",
+    "_", "-", "=", "+",
+    "~", "^", "`",
+    ".", ",", ":", ";",
+    "'", "\"",
+    "(", ")", "[", "]",
+    "{", "}", "<", ">",
+    "/", "\\",
+    "!", "¡", "?", "¿",
+    "#", "$", "%", "&",
+    "*", "@"
+]);
+
+// =====================================================
+// EQUIVALENCIAS VISUALES
+// =====================================================
+
+const MAPA_VISUAL = {
+    // Cirílico
+    "а": "a",
+    "А": "a",
+    "б": "b",
+    "Б": "b",
+    "в": "b",
+    "В": "b",
+    "г": "g",
+    "Г": "g",
+    "д": "d",
+    "Д": "d",
+    "е": "e",
+    "Е": "e",
+    "ё": "e",
+    "Ё": "e",
+    "ж": "zh",
+    "Ж": "zh",
+    "з": "z",
+    "З": "z",
+    "и": "i",
+    "И": "i",
+    "й": "i",
+    "Й": "i",
+    "к": "k",
+    "К": "k",
+    "л": "l",
+    "Л": "l",
+    "м": "m",
+    "М": "m",
+    "н": "h",
+    "Н": "h",
+    "о": "o",
+    "О": "o",
+    "п": "p",
+    "П": "p",
+    "р": "p",
+    "Р": "p",
+    "с": "c",
+    "С": "c",
+    "т": "t",
+    "Т": "t",
+    "у": "y",
+    "У": "y",
+    "ф": "f",
+    "Ф": "f",
+    "х": "x",
+    "Х": "x",
+    "ц": "c",
+    "Ц": "c",
+    "ч": "ch",
+    "Ч": "ch",
+    "ш": "sh",
+    "Ш": "sh",
+    "щ": "sh",
+    "Щ": "sh",
+    "ы": "y",
+    "Ы": "y",
+    "э": "e",
+    "Э": "e",
+    "ю": "yu",
+    "Ю": "yu",
+    "я": "ya",
+    "Я": "ya",
+
+    "і": "i",
+    "І": "i",
+    "ї": "i",
+    "Ї": "i",
+    "ј": "j",
+    "Ј": "j",
+    "қ": "q",
+    "Қ": "q",
+    "ғ": "g",
+    "Ғ": "g",
+    "ү": "y",
+    "Ү": "y",
+    "һ": "h",
+    "Һ": "h",
+    "ӏ": "l",
+    "Ӏ": "l",
+
+    // Leetspeak / OCR
+    "0": "o",
+    "1": "i",
+    "2": "z",
+    "3": "e",
+    "4": "a",
+    "5": "s",
+    "6": "g",
+    "7": "t",
+    "8": "b",
+    "9": "g"
+};
+
+// =====================================================
+// LETRAS UNICODE ESTILIZADAS
+// =====================================================
+
+// Superíndices / modificadores frecuentes
+const MAPA_ESTILIZADO = {
+    "ᵃ": "a",
+    "ᵇ": "b",
+    "ᶜ": "c",
+    "ᵈ": "d",
+    "ᵉ": "e",
+    "ᶠ": "f",
+    "ᵍ": "g",
+    "ʰ": "h",
+    "ⁱ": "i",
+    "ʲ": "j",
+    "ᵏ": "k",
+    "ˡ": "l",
+    "ᵐ": "m",
+    "ⁿ": "n",
+    "ᵒ": "o",
+    "ᵖ": "p",
+    "ʳ": "r",
+    "ˢ": "s",
+    "ᵗ": "t",
+    "ᵘ": "u",
+    "ᵛ": "v",
+    "ʷ": "w",
+    "ˣ": "x",
+    "ʸ": "y",
+    "ᶻ": "z",
+
+    "ᴬ": "a",
+    "ᴮ": "b",
+    "ᴰ": "d",
+    "ᴱ": "e",
+    "ᴳ": "g",
+    "ᴴ": "h",
+    "ᴵ": "i",
+    "ᴶ": "j",
+    "ᴷ": "k",
+    "ᴸ": "l",
+    "ᴹ": "m",
+    "ᴺ": "n",
+    "ᴼ": "o",
+    "ᴾ": "p",
+    "ᴿ": "r",
+    "ᵀ": "t",
+    "ᵁ": "u",
+    "ⱽ": "v",
+    "ᵂ": "w",
+
+    // Small caps
+    "ᴀ": "a",
+    "ʙ": "b",
+    "ᴄ": "c",
+    "ᴅ": "d",
+    "ᴇ": "e",
+    "ꜰ": "f",
+    "ɢ": "g",
+    "ʜ": "h",
+    "ɪ": "i",
+    "ᴊ": "j",
+    "ᴋ": "k",
+    "ʟ": "l",
+    "ᴍ": "m",
+    "ɴ": "n",
+    "ᴏ": "o",
+    "ᴘ": "p",
+    "ʀ": "r",
+    "s": "s",
+    "ᴛ": "t",
+    "ᴜ": "u",
+    "ᴠ": "v",
+    "ᴡ": "w",
+    "x": "x",
+    "ʏ": "y",
+    "ᴢ": "z",
+
+    // IPA / variantes visuales
+    "ɐ": "a",
+    "ɑ": "a",
+    "ɒ": "a",
+    "ɓ": "b",
+    "ƈ": "c",
+    "ɗ": "d",
+    "ɛ": "e",
+    "ƒ": "f",
+    "ɠ": "g",
+    "ɦ": "h",
+    "ɨ": "i",
+    "ʝ": "j",
+    "ƙ": "k",
+    "ɭ": "l",
+    "ɱ": "m",
+    "ŋ": "n",
+    "ɵ": "o",
+    "ƥ": "p",
+    "ɍ": "r",
+    "ʂ": "s",
+    "ŧ": "t",
+    "ʉ": "u",
+    "ʋ": "v",
+    "ɯ": "w",
+    "ẋ": "x",
+    "ƴ": "y",
+    "ȥ": "z"
+};
+
+// =====================================================
+// LIMPIEZA OCR
 // =====================================================
 
 function limpiarOCR(texto) {
     if (!texto) return "";
 
     return String(texto)
-        .replace(/^[|│┃!¡:;.,'"`]+/u, "")
-        .replace(/[|│┃]+$/u, "")
+        .replace(/[\r\n]+/gu, " ")
         .replace(/\s+/gu, " ")
         .trim();
 }
 
-function quitarSimbolosDecorativos(texto) {
+// =====================================================
+// NORMALIZADOR VISUAL
+// =====================================================
+
+function normalizarVisual(texto) {
     if (!texto) return "";
 
-    return String(texto)
-        .normalize("NFKC")
-        .replace(/[^\p{L}\p{N}]+/gu, " ")
-        .replace(/\s+/gu, " ")
-        .trim();
-}
+    let resultado = String(texto)
+        .normalize("NFKC");
 
-function compactarNombre(texto) {
-    if (!texto) return "";
+    let salida = "";
 
-    return quitarSimbolosDecorativos(texto)
+    for (const caracter of resultado) {
+        if (MAPA_ESTILIZADO[caracter]) {
+            salida += MAPA_ESTILIZADO[caracter];
+            continue;
+        }
+
+        if (MAPA_VISUAL[caracter]) {
+            salida += MAPA_VISUAL[caracter];
+            continue;
+        }
+
+        // Separadores/símbolos decorativos
+        if (SIMBOLOS_DECORATIVOS.has(caracter)) {
+            continue;
+        }
+
+        salida += caracter;
+    }
+
+    return salida
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/gu, "")
         .toLocaleLowerCase()
         .replace(/[^\p{L}\p{N}]/gu, "");
 }
 
-// Convierte caracteres visualmente parecidos.
-// Esto ayuda con nombres rusos/cirílicos y OCR.
-function normalizarVisual(texto) {
+// =====================================================
+// NORMALIZACIÓN MÁS AGRESIVA PARA OCR
+// =====================================================
+
+function normalizarOCR(texto) {
     if (!texto) return "";
 
-    let valor = String(texto)
-        .normalize("NFKC")
-        .toLocaleLowerCase();
+    let valor = normalizarVisual(texto);
 
-    const mapa = {
-        "а": "a",
-        "е": "e",
-        "ё": "e",
-        "о": "o",
-        "р": "p",
-        "с": "c",
-        "у": "y",
-        "х": "x",
-        "і": "i",
-        "ј": "j",
-        "қ": "q",
-        "ғ": "g",
-        "ү": "y",
-        "һ": "h",
-        "ӏ": "l",
+    // Errores frecuentes de OCR
+    valor = valor
+        .replace(/rn/g, "m")
+        .replace(/vv/g, "w")
+        .replace(/cl/g, "d")
+        .replace(/ii/g, "n");
 
-        "0": "o",
-        "1": "i",
-        "2": "z",
-        "3": "e",
-        "4": "a",
-        "5": "s",
-        "6": "g",
-        "7": "t",
-        "8": "b",
-        "9": "g"
-    };
-
-    valor = [...valor]
-        .map(c => mapa[c] || c)
-        .join("");
-
-    return valor
-        .normalize("NFKD")
-        .replace(/[\u0300-\u036f]/gu, "")
-        .replace(/[^\p{L}\p{N}]/gu, "");
+    return valor;
 }
+
+// =====================================================
+// QUITAR DECORACIÓN
+// =====================================================
+
+function quitarDecoracion(texto) {
+    if (!texto) return "";
+
+    let resultado = "";
+
+    for (const caracter of String(texto).normalize("NFKC")) {
+        if (SIMBOLOS_DECORATIVOS.has(caracter)) {
+            continue;
+        }
+
+        resultado += caracter;
+    }
+
+    return resultado
+        .replace(/\s+/gu, " ")
+        .trim();
+}
+
+// =====================================================
+// COMPACTAR
+// =====================================================
+
+function compactarNombre(texto) {
+    return normalizarVisual(texto);
+}
+
+// =====================================================
+// TOKENS
+// =====================================================
 
 function obtenerTokens(texto) {
     if (!texto) return [];
 
-    return quitarSimbolosDecorativos(texto)
+    return quitarDecoracion(texto)
         .split(/\s+/u)
         .filter(Boolean);
 }
+
+// =====================================================
+// PARTE PRINCIPAL
+// =====================================================
 
 function obtenerPartePrincipal(texto) {
     const tokens = obtenerTokens(texto);
@@ -115,9 +412,13 @@ function obtenerPartePrincipal(texto) {
         return "";
     }
 
-    return tokens
-        .filter(token => token.length >= 2)
-        .sort((a, b) => b.length - a.length)[0] || tokens[0];
+    const ordenados = [...tokens]
+        .sort((a, b) => {
+            return compactarNombre(b).length -
+                compactarNombre(a).length;
+        });
+
+    return ordenados[0] || "";
 }
 
 // =====================================================
@@ -129,6 +430,7 @@ function levenshtein(a, b) {
     b = String(b || "");
 
     if (a === b) return 0;
+
     if (!a.length) return b.length;
     if (!b.length) return a.length;
 
@@ -144,8 +446,9 @@ function levenshtein(a, b) {
 
     for (let i = 1; i <= b.length; i++) {
         for (let j = 1; j <= a.length; j++) {
-            if (b.charAt(i - 1) === a.charAt(j - 1)) {
-                matriz[i][j] = matriz[i - 1][j - 1];
+            if (b[i - 1] === a[j - 1]) {
+                matriz[i][j] =
+                    matriz[i - 1][j - 1];
             } else {
                 matriz[i][j] = Math.min(
                     matriz[i - 1][j] + 1,
@@ -160,22 +463,26 @@ function levenshtein(a, b) {
 }
 
 function similarity(a, b) {
-    a = String(a || "");
-    b = String(b || "");
-
     if (!a || !b) return 0;
 
     if (a === b) return 1;
 
-    const distancia = levenshtein(a, b);
-    const max = Math.max(a.length, b.length);
+    const distancia =
+        levenshtein(a, b);
 
-    if (!max) return 1;
+    const maximo =
+        Math.max(a.length, b.length);
 
-    return 1 - distancia / max;
+    if (!maximo) return 1;
+
+    return 1 - distancia / maximo;
 }
 
-function longitudCoincidenciaConsecutiva(a, b) {
+// =====================================================
+// LONGITUD DE COINCIDENCIA
+// =====================================================
+
+function coincidenciaConsecutiva(a, b) {
     if (!a || !b) return 0;
 
     let maximo = 0;
@@ -187,14 +494,17 @@ function longitudCoincidenciaConsecutiva(a, b) {
             while (
                 i + contador < a.length &&
                 j + contador < b.length &&
-                a[i + contador] === b[j + contador]
+                a[i + contador] ===
+                    b[j + contador]
             ) {
                 contador++;
             }
 
-            if (contador > maximo) {
-                maximo = contador;
-            }
+            maximo =
+                Math.max(
+                    maximo,
+                    contador
+                );
         }
     }
 
@@ -202,81 +512,353 @@ function longitudCoincidenciaConsecutiva(a, b) {
 }
 
 // =====================================================
-// PREPROCESAMIENTO OCR
+// COMPARAR NOMBRE
+// =====================================================
+
+function puntuarNombre(nombreJugador, consultas) {
+    if (!nombreJugador) {
+        return {
+            score: 0,
+            motivo: "sin nombre"
+        };
+    }
+
+    const original =
+        String(nombreJugador);
+
+    const limpio =
+        quitarDecoracion(original);
+
+    const visual =
+        normalizarVisual(original);
+
+    const ocrJugador =
+        normalizarOCR(original);
+
+    const compacto =
+        compactarNombre(original);
+
+    let mejorScore = 0;
+    let mejorMotivo = "sin coincidencia";
+
+    for (const consultaOriginal of consultas) {
+        if (!consultaOriginal) continue;
+
+        const consulta =
+            String(consultaOriginal);
+
+        const consultaLimpia =
+            quitarDecoracion(consulta);
+
+        const consultaVisual =
+            normalizarVisual(consulta);
+
+        const consultaOCR =
+            normalizarOCR(consulta);
+
+        const consultaCompacta =
+            compactarNombre(consulta);
+
+        // ---------------------------------------------
+        // EXACTO ORIGINAL
+        // ---------------------------------------------
+
+        if (
+            original.toLocaleLowerCase() ===
+            consulta.toLocaleLowerCase()
+        ) {
+            if (3500 > mejorScore) {
+                mejorScore = 3500;
+                mejorMotivo = "nombre exacto";
+            }
+        }
+
+        // ---------------------------------------------
+        // EXACTO SIN DECORACIÓN
+        // ---------------------------------------------
+
+        if (
+            limpio.toLocaleLowerCase() ===
+            consultaLimpia.toLocaleLowerCase() &&
+            consultaLimpia.length >= 3
+        ) {
+            if (3300 > mejorScore) {
+                mejorScore = 3300;
+                mejorMotivo =
+                    "exacto sin decoración";
+            }
+        }
+
+        // ---------------------------------------------
+        // EXACTO VISUAL
+        // ---------------------------------------------
+
+        if (
+            visual === consultaVisual &&
+            consultaVisual.length >= 3
+        ) {
+            if (3200 > mejorScore) {
+                mejorScore = 3200;
+                mejorMotivo =
+                    "coincidencia visual exacta";
+            }
+        }
+
+        // ---------------------------------------------
+        // EXACTO OCR
+        // ---------------------------------------------
+
+        if (
+            ocrJugador === consultaOCR &&
+            consultaOCR.length >= 3
+        ) {
+            if (3100 > mejorScore) {
+                mejorScore = 3100;
+                mejorMotivo =
+                    "coincidencia OCR exacta";
+            }
+        }
+
+        // ---------------------------------------------
+        // SIMILITUD VISUAL
+        // ---------------------------------------------
+
+        if (
+            consultaVisual.length >= 4 &&
+            visual.length >= 4
+        ) {
+            const sim =
+                similarity(
+                    consultaVisual,
+                    visual
+                );
+
+            if (sim >= 0.70) {
+                let score =
+                    Math.round(
+                        2500 * sim
+                    );
+
+                // Bonus para nombres de longitud similar
+                const diferencia =
+                    Math.abs(
+                        consultaVisual.length -
+                        visual.length
+                    );
+
+                if (diferencia <= 1) {
+                    score += 250;
+                } else if (diferencia <= 2) {
+                    score += 100;
+                }
+
+                if (score > mejorScore) {
+                    mejorScore = score;
+                    mejorMotivo =
+                        `similitud visual ${(sim * 100).toFixed(1)}%`;
+                }
+            }
+        }
+
+        // ---------------------------------------------
+        // SIMILITUD OCR
+        // ---------------------------------------------
+
+        if (
+            consultaOCR.length >= 4 &&
+            ocrJugador.length >= 4
+        ) {
+            const sim =
+                similarity(
+                    consultaOCR,
+                    ocrJugador
+                );
+
+            if (sim >= 0.70) {
+                let score =
+                    Math.round(
+                        2350 * sim
+                    );
+
+                const diferencia =
+                    Math.abs(
+                        consultaOCR.length -
+                        ocrJugador.length
+                    );
+
+                if (diferencia <= 1) {
+                    score += 200;
+                }
+
+                if (score > mejorScore) {
+                    mejorScore = score;
+                    mejorMotivo =
+                        `similitud OCR ${(sim * 100).toFixed(1)}%`;
+                }
+            }
+        }
+
+        // ---------------------------------------------
+        // COINCIDENCIA DE SECUENCIA
+        // ---------------------------------------------
+
+        if (
+            consultaVisual.length >= 5 &&
+            visual.length >= 5
+        ) {
+            const coincidencia =
+                coincidenciaConsecutiva(
+                    consultaVisual,
+                    visual
+                );
+
+            if (coincidencia >= 4) {
+                const proporcion =
+                    coincidencia /
+                    Math.max(
+                        consultaVisual.length,
+                        visual.length
+                    );
+
+                if (proporcion >= 0.55) {
+                    const score =
+                        1000 +
+                        coincidencia * 120;
+
+                    if (score > mejorScore) {
+                        mejorScore = score;
+                        mejorMotivo =
+                            `secuencia ${coincidencia} caracteres`;
+                    }
+                }
+            }
+        }
+
+        // ---------------------------------------------
+        // SUBCADENA
+        // ---------------------------------------------
+
+        if (
+            consultaCompacta.length >= 5 &&
+            compacto.length >= 5
+        ) {
+            if (
+                compacto.includes(
+                    consultaCompacta
+                ) ||
+                consultaCompacta.includes(
+                    compacto
+                )
+            ) {
+                const menor =
+                    Math.min(
+                        consultaCompacta.length,
+                        compacto.length
+                    );
+
+                const score =
+                    900 +
+                    menor * 50;
+
+                if (score > mejorScore) {
+                    mejorScore = score;
+                    mejorMotivo =
+                        "coincidencia parcial";
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------
+    // PENALIZAR NOMBRES MUY CORTOS
+    // ---------------------------------------------
+
+    if (
+        compacto.length <= 2 &&
+        mejorScore < 3000
+    ) {
+        mejorScore = 100;
+        mejorMotivo =
+            "nombre demasiado corto";
+    }
+
+    return {
+        score: mejorScore,
+        motivo: mejorMotivo
+    };
+}
+
+// =====================================================
+// PREPROCESAMIENTOS OCR
 // =====================================================
 
 async function crearPreprocesamientos(buffer) {
-    const resultados = [];
+    const imagenes = [];
 
-    // Original
-    resultados.push(buffer);
+    imagenes.push(buffer);
 
-    // Escalado + grayscale + contraste
     try {
-        const imagen = await sharp(buffer)
-            .resize({
-                width: 1800,
-                withoutEnlargement: false
-            })
-            .grayscale()
-            .normalize()
-            .sharpen()
-            .png()
-            .toBuffer();
-
-        resultados.push(imagen);
+        imagenes.push(
+            await sharp(buffer)
+                .resize({
+                    width: 1800,
+                    withoutEnlargement: false
+                })
+                .grayscale()
+                .normalize()
+                .sharpen()
+                .png()
+                .toBuffer()
+        );
     } catch {}
 
-    // Threshold suave
     try {
-        const imagen = await sharp(buffer)
-            .resize({
-                width: 1800,
-                withoutEnlargement: false
-            })
-            .grayscale()
-            .normalize()
-            .threshold(150)
-            .png()
-            .toBuffer();
-
-        resultados.push(imagen);
+        imagenes.push(
+            await sharp(buffer)
+                .resize({
+                    width: 1800,
+                    withoutEnlargement: false
+                })
+                .grayscale()
+                .normalize()
+                .threshold(150)
+                .png()
+                .toBuffer()
+        );
     } catch {}
 
-    // Threshold alto
     try {
-        const imagen = await sharp(buffer)
-            .resize({
-                width: 2000,
-                withoutEnlargement: false
-            })
-            .grayscale()
-            .normalize()
-            .threshold(190)
-            .png()
-            .toBuffer();
-
-        resultados.push(imagen);
+        imagenes.push(
+            await sharp(buffer)
+                .resize({
+                    width: 2000,
+                    withoutEnlargement: false
+                })
+                .grayscale()
+                .normalize()
+                .threshold(190)
+                .png()
+                .toBuffer()
+        );
     } catch {}
 
-    // Más nitidez
     try {
-        const imagen = await sharp(buffer)
-            .resize({
-                width: 2000,
-                withoutEnlargement: false
-            })
-            .sharpen({
-                sigma: 2
-            })
-            .normalize()
-            .png()
-            .toBuffer();
-
-        resultados.push(imagen);
+        imagenes.push(
+            await sharp(buffer)
+                .resize({
+                    width: 2000,
+                    withoutEnlargement: false
+                })
+                .normalize()
+                .sharpen({
+                    sigma: 2
+                })
+                .png()
+                .toBuffer()
+        );
     } catch {}
 
-    return resultados;
+    return imagenes;
 }
 
 // =====================================================
@@ -284,23 +866,36 @@ async function crearPreprocesamientos(buffer) {
 // =====================================================
 
 async function ejecutarOCR(buffer) {
-    const worker = await createWorker("eng+rus");
+    const worker =
+        await createWorker("eng+rus");
 
-    const resultados = [];
+    const textos = [];
 
     try {
-        const imagenes = await crearPreprocesamientos(buffer);
+        const imagenes =
+            await crearPreprocesamientos(
+                buffer
+            );
 
-        for (let i = 0; i < imagenes.length; i++) {
+        for (
+            let i = 0;
+            i < imagenes.length;
+            i++
+        ) {
             try {
-                const resultado = await worker.recognize(imagenes[i]);
+                const resultado =
+                    await worker.recognize(
+                        imagenes[i]
+                    );
 
-                const texto = limpiarOCR(
-                    resultado?.data?.text || ""
-                );
+                const texto =
+                    limpiarOCR(
+                        resultado?.data?.text ||
+                        ""
+                    );
 
                 if (texto) {
-                    resultados.push(texto);
+                    textos.push(texto);
 
                     console.log(
                         `[OCR] Procesamiento ${i + 1}: "${texto}"`
@@ -317,73 +912,104 @@ async function ejecutarOCR(buffer) {
         await worker.terminate();
     }
 
-    return resultados;
+    return textos;
 }
 
 // =====================================================
 // GENERAR CONSULTAS
 // =====================================================
 
-function generarConsultasOCR(textos) {
-    const consultas = new Set();
+function generarConsultas(textos) {
+    const consultas =
+        new Set();
 
-    for (const textoOriginal of textos) {
-        const texto = limpiarOCR(textoOriginal);
-
+    for (const texto of textos) {
         if (!texto) continue;
 
-        consultas.add(texto);
+        const limpio =
+            limpiarOCR(texto);
 
-        const decoradoQuitado = quitarSimbolosDecorativos(texto);
+        consultas.add(limpio);
 
-        if (decoradoQuitado) {
-            consultas.add(decoradoQuitado);
+        const sinDecoracion =
+            quitarDecoracion(limpio);
+
+        if (sinDecoracion) {
+            consultas.add(
+                sinDecoracion
+            );
         }
 
-        const compacto = compactarNombre(texto);
-
-        if (compacto) {
-            consultas.add(compacto);
-        }
-
-        const visual = normalizarVisual(texto);
+        const visual =
+            normalizarVisual(limpio);
 
         if (visual) {
             consultas.add(visual);
         }
 
-        const principal = obtenerPartePrincipal(texto);
+        const ocr =
+            normalizarOCR(limpio);
+
+        if (ocr) {
+            consultas.add(ocr);
+        }
+
+        const compacto =
+            compactarNombre(limpio);
+
+        if (compacto) {
+            consultas.add(compacto);
+        }
+
+        const principal =
+            obtenerPartePrincipal(
+                limpio
+            );
 
         if (principal) {
             consultas.add(principal);
 
-            const principalVisual = normalizarVisual(principal);
+            const principalVisual =
+                normalizarVisual(
+                    principal
+                );
 
             if (principalVisual) {
-                consultas.add(principalVisual);
+                consultas.add(
+                    principalVisual
+                );
             }
         }
     }
 
-    return [...consultas]
-        .filter(x => x && x.length >= 2)
-        .slice(0, 12);
+    return [
+        ...consultas
+    ]
+        .filter(
+            x =>
+                x &&
+                x.length >= 2
+        )
+        .slice(0, 15);
 }
 
 // =====================================================
-// BATTLEMETRICS API
+// BATTLEMETRICS
 // =====================================================
 
-async function consultarBattleMetrics(consulta, serverId) {
+async function consultarBattleMetrics(
+    consulta,
+    serverId
+) {
     if (!BM_TOKEN) {
         throw new Error(
-            "Falta BATTLEMETRICS_TOKEN en las variables de entorno."
+            "Falta BATTLEMETRICS_TOKEN."
         );
     }
 
     if (!serverId) {
         throw new Error(
-            "No hay un servidor BattleMetrics configurado."
+            "No hay servidor configurado."
         );
     }
 
@@ -393,354 +1019,102 @@ async function consultarBattleMetrics(consulta, serverId) {
 
     const params = {
         "filter[search]": consulta,
+
+        // MUY IMPORTANTE:
+        // TODA búsqueda está limitada al servidor.
         "filter[servers]": String(serverId),
+
         "page[size]": 100
     };
 
-    const response = await axios.get(
-        `${BM_API}/players`,
-        {
-            params,
-            headers: {
-                Authorization: `Bearer ${BM_TOKEN}`,
-                Accept: "application/vnd.api+json"
-            },
-            timeout: 20000
-        }
-    );
+    const response =
+        await axios.get(
+            `${BM_API}/players`,
+            {
+                params,
+                headers: {
+                    Authorization:
+                        `Bearer ${BM_TOKEN}`,
+                    Accept:
+                        "application/vnd.api+json"
+                },
+                timeout: 20000
+            }
+        );
 
-    return Array.isArray(response.data?.data)
+    return Array.isArray(
+        response.data?.data
+    )
         ? response.data.data
         : [];
 }
 
 // =====================================================
-// SCORE DE CANDIDATOS
+// BUSCAR JUGADOR
 // =====================================================
 
-function puntuarCandidato(nombreJugador, consultas) {
-    if (!nombreJugador) {
-        return {
-            score: 0,
-            motivo: "sin nombre"
-        };
-    }
-
-    const nombreOriginal = String(nombreJugador);
-
-    const nombreLower = nombreOriginal.toLocaleLowerCase();
-
-    const nombreDecorado = quitarSimbolosDecorativos(
-        nombreOriginal
-    ).toLocaleLowerCase();
-
-    const nombreCompacto = compactarNombre(
-        nombreOriginal
-    );
-
-    const nombreVisual = normalizarVisual(
-        nombreOriginal
-    );
-
-    const parteJugador = obtenerPartePrincipal(
-        nombreOriginal
-    );
-
-    const parteJugadorCompacta = compactarNombre(
-        parteJugador
-    );
-
-    const parteJugadorVisual = normalizarVisual(
-        parteJugador
-    );
-
-    let mejorScore = 0;
-    let mejorMotivo = "sin coincidencia";
-
-    for (const consultaOriginal of consultas) {
-        if (!consultaOriginal) continue;
-
-        const consulta = String(consultaOriginal);
-
-        const consultaLower = consulta.toLocaleLowerCase();
-
-        const consultaDecorada = quitarSimbolosDecorativos(
-            consulta
-        ).toLocaleLowerCase();
-
-        const consultaCompacta = compactarNombre(
-            consulta
-        );
-
-        const consultaVisual = normalizarVisual(
-            consulta
-        );
-
-        const parteConsulta = obtenerPartePrincipal(
-            consulta
-        );
-
-        const parteConsultaCompacta = compactarNombre(
-            parteConsulta
-        );
-
-        const parteConsultaVisual = normalizarVisual(
-            parteConsulta
-        );
-
-        // =================================================
-        // COINCIDENCIA EXACTA DEL NOMBRE
-        // =================================================
-
-        if (
-            nombreLower === consultaLower &&
-            consultaLower.length >= 2
-        ) {
-            if (3200 > mejorScore) {
-                mejorScore = 3200;
-                mejorMotivo = "nombre exacto";
-            }
-        }
-
-        // =================================================
-        // EXACTO IGNORANDO DECORACIÓN
-        // =================================================
-
-        if (
-            nombreDecorado === consultaDecorada &&
-            consultaDecorada.length >= 2
-        ) {
-            if (3000 > mejorScore) {
-                mejorScore = 3000;
-                mejorMotivo = "coincidencia exacta sin decoración";
-            }
-        }
-
-        // =================================================
-        // EXACTO VISUAL
-        // =================================================
-
-        if (
-            nombreVisual === consultaVisual &&
-            consultaVisual.length >= 2
-        ) {
-            if (2900 > mejorScore) {
-                mejorScore = 2900;
-                mejorMotivo = "coincidencia visual exacta";
-            }
-        }
-
-        // =================================================
-        // EXACTO COMPACTO
-        // =================================================
-
-        if (
-            nombreCompacto === consultaCompacta &&
-            consultaCompacta.length >= 3
-        ) {
-            if (2800 > mejorScore) {
-                mejorScore = 2800;
-                mejorMotivo = "coincidencia compacta exacta";
-            }
-        }
-
-        // =================================================
-        // PARTE PRINCIPAL EXACTA
-        // =================================================
-
-        if (
-            parteJugadorCompacta &&
-            parteConsultaCompacta &&
-            parteJugadorCompacta === parteConsultaCompacta &&
-            parteConsultaCompacta.length >= 4
-        ) {
-            if (2300 > mejorScore) {
-                mejorScore = 2300;
-                mejorMotivo = "parte principal exacta";
-            }
-        }
-
-        // =================================================
-        // PARTE PRINCIPAL VISUAL
-        // =================================================
-
-        if (
-            parteJugadorVisual &&
-            parteConsultaVisual &&
-            parteJugadorVisual === parteConsultaVisual &&
-            parteConsultaVisual.length >= 4
-        ) {
-            if (2200 > mejorScore) {
-                mejorScore = 2200;
-                mejorMotivo = "parte principal visual";
-            }
-        }
-
-        // =================================================
-        // SIMILITUD COMPLETA
-        // =================================================
-
-        if (
-            consultaCompacta.length >= 4 &&
-            nombreCompacto.length >= 3
-        ) {
-            const sim = similarity(
-                consultaCompacta,
-                nombreCompacto
-            );
-
-            if (sim >= 0.90) {
-                const score = Math.round(1900 * sim);
-
-                if (score > mejorScore) {
-                    mejorScore = score;
-                    mejorMotivo = `similitud ${(sim * 100).toFixed(1)}%`;
-                }
-            }
-        }
-
-        // =================================================
-        // SIMILITUD VISUAL
-        // =================================================
-
-        if (
-            consultaVisual.length >= 4 &&
-            nombreVisual.length >= 3
-        ) {
-            const sim = similarity(
-                consultaVisual,
-                nombreVisual
-            );
-
-            if (sim >= 0.86) {
-                const score = Math.round(1750 * sim);
-
-                if (score > mejorScore) {
-                    mejorScore = score;
-                    mejorMotivo =
-                        `similitud visual ${(sim * 100).toFixed(1)}%`;
-                }
-            }
-        }
-
-        // =================================================
-        // COINCIDENCIA DE SUBCADENA
-        // SOLO PARA CADENAS SUFICIENTEMENTE LARGAS
-        // =================================================
-
-        if (
-            consultaCompacta.length >= 5 &&
-            nombreCompacto.length >= 5
-        ) {
-            if (
-                nombreCompacto.includes(consultaCompacta) ||
-                consultaCompacta.includes(nombreCompacto)
-            ) {
-                const menor = Math.min(
-                    consultaCompacta.length,
-                    nombreCompacto.length
-                );
-
-                const score = 1000 + menor * 35;
-
-                if (score > mejorScore) {
-                    mejorScore = score;
-                    mejorMotivo = "subcadena";
-                }
-            }
-
-            const coincidencia = longitudCoincidenciaConsecutiva(
-                consultaVisual,
-                nombreVisual
-            );
-
-            const minimo = Math.min(
-                consultaVisual.length,
-                nombreVisual.length
-            );
-
-            if (
-                coincidencia >= 5 &&
-                minimo > 0 &&
-                coincidencia / minimo >= 0.55
-            ) {
-                const score = 850 + coincidencia * 40;
-
-                if (score > mejorScore) {
-                    mejorScore = score;
-                    mejorMotivo =
-                        `coincidencia visual parcial (${coincidencia})`;
-                }
-            }
-        }
-    }
-
-    // Nombres extremadamente cortos:
-    // no queremos que "W" gane contra un nombre OCR largo.
-    if (nombreCompacto.length <= 2 && mejorScore < 2800) {
-        mejorScore = Math.min(mejorScore, 250);
-        mejorMotivo = "nombre demasiado corto";
-    }
-
-    return {
-        score: mejorScore,
-        motivo: mejorMotivo
-    };
-}
-
-// =====================================================
-// BUSCAR Y RANKEAR
-// =====================================================
-
-async function buscarJugadorBattleMetrics(
+async function buscarJugador(
     consultas,
     serverId
 ) {
-    const jugadores = new Map();
+    const jugadores =
+        new Map();
 
     for (const consulta of consultas) {
         try {
-            const resultados = await consultarBattleMetrics(
-                consulta,
-                serverId
-            );
+            const resultados =
+                await consultarBattleMetrics(
+                    consulta,
+                    serverId
+                );
 
             console.log(
                 `[BM] "${consulta}" -> ${resultados.length} resultados`
             );
 
             for (const jugador of resultados) {
-                if (!jugador?.id) continue;
+                if (!jugador?.id) {
+                    continue;
+                }
 
-                if (!jugadores.has(String(jugador.id))) {
+                const id =
+                    String(jugador.id);
+
+                if (!jugadores.has(id)) {
                     jugadores.set(
-                        String(jugador.id),
+                        id,
                         jugador
                     );
                 }
             }
         } catch (error) {
             console.log(
-                `[BM] Error buscando "${consulta}":`,
-                error.response?.status || error.message
+                `[BM] Error "${consulta}":`,
+                error.response?.status ||
+                error.message
             );
         }
     }
 
     const candidatos = [];
 
-    for (const jugador of jugadores.values()) {
+    for (
+        const jugador of jugadores.values()
+    ) {
         const nombre =
             jugador.attributes?.name ||
             jugador.attributes?.displayName ||
             "";
 
-        if (!nombre) continue;
+        if (!nombre) {
+            continue;
+        }
 
-        const puntuacion = puntuarCandidato(
-            nombre,
-            consultas
-        );
+        const puntuacion =
+            puntuarNombre(
+                nombre,
+                consultas
+            );
 
         candidatos.push({
             jugador,
@@ -750,22 +1124,38 @@ async function buscarJugadorBattleMetrics(
         });
     }
 
-    candidatos.sort((a, b) => {
-        if (b.score !== a.score) {
-            return b.score - a.score;
+    candidatos.sort(
+        (a, b) => {
+            if (
+                b.score !== a.score
+            ) {
+                return b.score -
+                    a.score;
+            }
+
+            return (
+                b.nombre.length -
+                a.nombre.length
+            );
         }
+    );
 
-        // En empate, preferimos el nombre más largo.
-        // Esto ayuda a que "DareN ^_^" gane a "daren"
-        // cuando la coincidencia es equivalente.
-        return b.nombre.length - a.nombre.length;
-    });
+    console.log(
+        "\n[BM] ================================"
+    );
 
-    console.log("\n[BM] ================================");
-    console.log("[BM] CANDIDATOS DEL SERVIDOR");
-    console.log("[BM] ================================");
+    console.log(
+        "[BM] CANDIDATOS DEL SERVIDOR"
+    );
 
-    for (const candidato of candidatos.slice(0, 15)) {
+    console.log(
+        "[BM] ================================"
+    );
+
+    for (
+        const candidato of
+        candidatos.slice(0, 20)
+    ) {
         console.log(
             `[BM] ${candidato.nombre} | ` +
             `ID: ${candidato.jugador.id} | ` +
@@ -774,18 +1164,24 @@ async function buscarJugadorBattleMetrics(
         );
     }
 
-    console.log("[BM] ================================\n");
+    console.log(
+        "[BM] ================================\n"
+    );
 
     if (!candidatos.length) {
         return null;
     }
 
-    const mejor = candidatos[0];
+    const mejor =
+        candidatos[0];
 
-    // Umbral para evitar falsos positivos.
-    if (mejor.score < 850) {
+    // Umbral alto para evitar
+    // falsos positivos.
+    if (
+        mejor.score < 850
+    ) {
         console.log(
-            `[BM] ❌ Ninguna coincidencia suficientemente fuerte. Mejor: ${mejor.nombre} (${mejor.score})`
+            `[BM] ❌ Sin coincidencia fuerte. Mejor: ${mejor.nombre} (${mejor.score})`
         );
 
         return null;
@@ -799,45 +1195,60 @@ async function buscarJugadorBattleMetrics(
 }
 
 // =====================================================
-// COMANDO
+// COMANDO /STEAM
 // =====================================================
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName("steam")
-        .setDescription("Busca un jugador de Rust en BattleMetrics")
-        .addStringOption(option =>
-            option
-                .setName("nombre")
-                .setDescription("Nombre del jugador")
-                .setRequired(false)
-        )
-        .addAttachmentOption(option =>
-            option
-                .setName("imagen")
-                .setDescription("Captura donde aparece el nombre")
-                .setRequired(false)
-        ),
+    data:
+        new SlashCommandBuilder()
+            .setName("steam")
+            .setDescription(
+                "Busca un jugador de Rust en BattleMetrics"
+            )
+
+            .addStringOption(
+                option =>
+                    option
+                        .setName("nombre")
+                        .setDescription(
+                            "Nombre del jugador"
+                        )
+                        .setRequired(false)
+            )
+
+            .addAttachmentOption(
+                option =>
+                    option
+                        .setName("imagen")
+                        .setDescription(
+                            "Captura donde aparece el nombre"
+                        )
+                        .setRequired(false)
+            ),
 
     async execute(interaction) {
-        // IMPORTANTE:
-        // Evita Unknown interaction / 10062
         await interaction.deferReply();
 
         try {
             const nombreIngresado =
-                interaction.options.getString("nombre");
+                interaction.options.getString(
+                    "nombre"
+                );
 
             const imagen =
-                interaction.options.getAttachment("imagen");
+                interaction.options.getAttachment(
+                    "imagen"
+                );
 
-            // =================================================
-            // OBTENER SERVIDOR CONFIGURADO
-            // =================================================
+            // =============================================
+            // SERVIDOR CONFIGURADO
+            // =============================================
 
-            const config = await ServerConfig.findOne({
-                guildId: interaction.guildId
-            });
+            const config =
+                await ServerConfig.findOne({
+                    guildId:
+                        interaction.guildId
+                });
 
             const serverId =
                 config?.battleMetricsServerId;
@@ -845,7 +1256,7 @@ module.exports = {
             if (!serverId) {
                 return interaction.editReply({
                     content:
-                        "❌ No hay un servidor de BattleMetrics configurado para este servidor de Discord."
+                        "❌ No hay un servidor de BattleMetrics configurado."
                 });
             }
 
@@ -853,11 +1264,12 @@ module.exports = {
                 `[STEAM] Servidor configurado: ${serverId}`
             );
 
-            // =================================================
-            // DETERMINAR NOMBRE / OCR
-            // =================================================
+            // =============================================
+            // OCR
+            // =============================================
 
             let textoOCR = "";
+
             let consultas = [];
 
             if (imagen) {
@@ -866,36 +1278,49 @@ module.exports = {
                 );
 
                 try {
-                    const response = await axios.get(
-                        imagen.url,
-                        {
-                            responseType: "arraybuffer",
-                            timeout: 30000
-                        }
-                    );
+                    const response =
+                        await axios.get(
+                            imagen.url,
+                            {
+                                responseType:
+                                    "arraybuffer",
+                                timeout:
+                                    30000
+                            }
+                        );
 
-                    const buffer = Buffer.from(
-                        response.data
-                    );
+                    const buffer =
+                        Buffer.from(
+                            response.data
+                        );
 
                     const textosOCR =
-                        await ejecutarOCR(buffer);
+                        await ejecutarOCR(
+                            buffer
+                        );
 
-                    if (textosOCR.length) {
-                        // Elegimos el texto más útil.
+                    if (
+                        textosOCR.length
+                    ) {
+                        // Preferimos el texto
+                        // más informativo.
                         textosOCR.sort(
-                            (a, b) => b.length - a.length
+                            (a, b) =>
+                                b.length -
+                                a.length
                         );
 
-                        textoOCR = limpiarOCR(
-                            textosOCR[0]
-                        );
+                        textoOCR =
+                            limpiarOCR(
+                                textosOCR[0]
+                            );
                     }
 
                     consultas =
-                        generarConsultasOCR(
+                        generarConsultas(
                             textosOCR
                         );
+
                 } catch (error) {
                     console.error(
                         "[OCR] Error:",
@@ -904,93 +1329,104 @@ module.exports = {
                 }
             }
 
-            // Si el usuario escribió nombre manualmente,
-            // también se agrega como consulta.
-            if (nombreIngresado) {
-                const nombreLimpio =
-                    limpiarOCR(nombreIngresado);
+            // =============================================
+            // NOMBRE MANUAL
+            // =============================================
 
-                if (nombreLimpio) {
-                    consultas.unshift(
-                        nombreLimpio
-                    );
-                }
+            if (nombreIngresado) {
+                consultas.unshift(
+                    limpiarOCR(
+                        nombreIngresado
+                    )
+                );
             }
 
             consultas = [
                 ...new Set(
-                    consultas
-                        .map(x => limpiarOCR(x))
-                        .filter(Boolean)
+                    consultas.filter(
+                        Boolean
+                    )
                 )
-            ].slice(0, 12);
-
-            if (!consultas.length) {
-                return interaction.editReply({
-                    content:
-                        "❌ No pude detectar ningún nombre. Prueba con una captura más clara o escribe el nombre manualmente."
-                });
-            }
+            ].slice(0, 15);
 
             console.log(
                 "[STEAM] Consultas:",
                 consultas
             );
 
-            // =================================================
+            if (!consultas.length) {
+                return interaction.editReply({
+                    content:
+                        "❌ No pude detectar ningún nombre."
+                });
+            }
+
+            // =============================================
             // BUSCAR EXCLUSIVAMENTE EN EL SERVIDOR
-            // =================================================
+            // =============================================
 
             const resultado =
-                await buscarJugadorBattleMetrics(
+                await buscarJugador(
                     consultas,
                     serverId
                 );
 
-            // =================================================
-            // SIN COINCIDENCIA
-            // =================================================
+            // =============================================
+            // SIN RESULTADO
+            // =============================================
 
             if (!resultado) {
-                const embed = new EmbedBuilder()
-                    .setTitle("🎯 Resultado de búsqueda Steam")
-                    .setDescription(
-                        "Revisa el nombre detectado antes de buscarlo en BattleMetrics."
-                    )
-                    .addFields(
-                        {
-                            name: "📸 OCR detectado",
-                            value:
-                                `\`${textoOCR || "No detectado"}\``
-                        },
-                        {
-                            name: "🔎 Nombre buscado",
-                            value:
-                                `\`${nombreIngresado || textoOCR || consultas[0]}\``
-                        },
-                        {
-                            name: "🛡️ Servidor",
-                            value:
-                                `\`${serverId}\``
-                        },
-                        {
-                            name: "❌ Resultado",
-                            value:
-                                "No encontré una coincidencia suficientemente fuerte **dentro del servidor configurado**."
-                        }
-                    )
-                    .setColor(0xff0000);
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle(
+                            "🎯 Resultado de búsqueda Steam"
+                        )
+                        .setDescription(
+                            "Revisa el nombre detectado antes de buscarlo en BattleMetrics."
+                        )
+                        .addFields(
+                            {
+                                name:
+                                    "📸 OCR detectado",
+                                value:
+                                    `\`${textoOCR || "No detectado"}\``
+                            },
+                            {
+                                name:
+                                    "🔎 Nombre buscado",
+                                value:
+                                    `\`${nombreIngresado || textoOCR || consultas[0]}\``
+                            },
+                            {
+                                name:
+                                    "🛡️ Servidor",
+                                value:
+                                    `\`${serverId}\``
+                            },
+                            {
+                                name:
+                                    "❌ Resultado",
+                                value:
+                                    "No encontré una coincidencia suficientemente fuerte **dentro del servidor configurado**."
+                            }
+                        )
+                        .setColor(
+                            0xff0000
+                        );
 
                 return interaction.editReply({
-                    embeds: [embed]
+                    embeds: [
+                        embed
+                    ]
                 });
             }
 
-            // =================================================
+            // =============================================
             // RESULTADO
-            // =================================================
+            // =============================================
 
-            const jugador = resultado.jugador;
+            const jugador =
+                resultado.jugador;
 
             const nombreJugador =
                 jugador.attributes?.name ||
@@ -1011,64 +1447,91 @@ module.exports = {
                     nombreJugador
                 )}`;
 
-            // =================================================
+            // =============================================
             // EMBED
-            // =================================================
+            // =============================================
 
-            const embed = new EmbedBuilder()
-                .setTitle("🎯 Resultado de búsqueda Steam")
-                .setDescription(
-                    "Coincidencia encontrada dentro del servidor configurado."
-                )
-                .addFields(
-                    {
-                        name: "📸 OCR detectado",
-                        value:
-                            `\`${textoOCR || "No usado"}\``
-                    },
-                    {
-                        name: "🔎 Nombre buscado",
-                        value:
-                            `\`${nombreIngresado || textoOCR || consultas[0]}\``
-                    },
-                    {
-                        name: "👤 Jugador encontrado",
-                        value:
-                            `**${nombreJugador}**`
-                    },
-                    {
-                        name: "🆔 BattleMetrics ID",
-                        value:
-                            `\`${playerId}\``
-                    },
-                    {
-                        name: "🛡️ Servidor configurado",
-                        value:
-                            `[Abrir servidor](${serverUrl})`
-                    }
-                )
-                .setColor(0x5865f2);
+            const embed =
+                new EmbedBuilder()
+                    .setTitle(
+                        "🎯 Resultado de búsqueda Steam"
+                    )
+                    .setDescription(
+                        "Coincidencia encontrada dentro del servidor configurado."
+                    )
+                    .addFields(
+                        {
+                            name:
+                                "📸 OCR detectado",
+                            value:
+                                `\`${textoOCR || "No usado"}\``
+                        },
+                        {
+                            name:
+                                "🔎 Nombre buscado",
+                            value:
+                                `\`${nombreIngresado || textoOCR || consultas[0]}\``
+                        },
+                        {
+                            name:
+                                "👤 Jugador encontrado",
+                            value:
+                                `**${nombreJugador}**`
+                        },
+                        {
+                            name:
+                                "🆔 BattleMetrics ID",
+                            value:
+                                `\`${playerId}\``
+                        },
+                        {
+                            name:
+                                "🛡️ Servidor configurado",
+                            value:
+                                `[Abrir servidor](${serverUrl})`
+                        }
+                    )
+                    .setColor(
+                        0x5865f2
+                    );
 
-            // =================================================
+            // =============================================
             // BOTONES
-            // =================================================
+            // =============================================
 
-            const row = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setLabel("BattleMetrics")
-                        .setStyle(ButtonStyle.Link)
-                        .setURL(battleMetricsUrl),
+            const row =
+                new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setLabel(
+                                "BattleMetrics"
+                            )
+                            .setStyle(
+                                ButtonStyle.Link
+                            )
+                            .setURL(
+                                battleMetricsUrl
+                            ),
 
-                    new ButtonBuilder()
-                        .setLabel("Name Search")
-                        .setStyle(ButtonStyle.Link)
-                        .setURL(steamSearchUrl)
-                );
+                        new ButtonBuilder()
+                            .setLabel(
+                                "Name Search"
+                            )
+                            .setStyle(
+                                ButtonStyle.Link
+                            )
+                            .setURL(
+                                steamSearchUrl
+                            )
+                    );
 
             await interaction.editReply({
-                embeds: [embed],
-                components: [row]
+                embeds: [
+                    embed
+                ],
+                components: [
+                    row
+                ]
             });
 
         } catch (error) {
@@ -1078,13 +1541,15 @@ module.exports = {
             );
 
             const mensaje =
-                error?.response?.status === 429
+                error?.response?.status ===
+                429
                     ? "⚠️ BattleMetrics está limitando temporalmente las solicitudes."
                     : "❌ Ocurrió un error al realizar la búsqueda.";
 
             try {
                 await interaction.editReply({
-                    content: mensaje,
+                    content:
+                        mensaje,
                     embeds: [],
                     components: []
                 });
