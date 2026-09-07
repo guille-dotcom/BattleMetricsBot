@@ -27,7 +27,7 @@ const USER_AGENT =
     "Chrome/131.0.0.0 Safari/537.36";
 
 // =====================================================
-// CONFIGURACIÓN OCR
+// OCR
 // =====================================================
 
 const OCR_GRUPOS = [
@@ -46,7 +46,7 @@ const OCR_GRUPOS = [
 ];
 
 // =====================================================
-// ESTADO TEMPORAL OCR
+// ESTADO TEMPORAL
 // =====================================================
 
 const estadosOCR = new Map();
@@ -75,7 +75,104 @@ function normalizarComparacion(texto) {
 }
 
 // =====================================================
-// LIMPIEZA OCR
+// QUITAR SÍMBOLOS DECORATIVOS
+// =====================================================
+
+function quitarSimbolosDecorativos(texto) {
+    if (!texto) return "";
+
+    return String(texto)
+        .normalize("NFKC")
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .replace(/\s+/gu, " ")
+        .trim();
+}
+
+// =====================================================
+// EXTRAER PARTES ÚTILES DE UN OCR MALO
+// =====================================================
+
+function extraerPartesUtilesOCR(texto) {
+    if (!texto) return [];
+
+    const originales = [
+        normalizarNombre(texto),
+        quitarSimbolosDecorativos(texto)
+    ];
+
+    const candidatos = [];
+
+    for (const original of originales) {
+        if (!original) continue;
+
+        candidatos.push(original);
+
+        const tokens = original
+            .split(/\s+/u)
+            .filter(Boolean);
+
+        for (const token of tokens) {
+            if (token.length >= 2) {
+                candidatos.push(token);
+            }
+        }
+
+        // Buscar secuencias alfanuméricas
+        const alfanumericos =
+            original.match(/[\p{L}\p{N}]{2,}/gu);
+
+        if (alfanumericos) {
+            for (const parte of alfanumericos) {
+                candidatos.push(parte);
+            }
+        }
+    }
+
+    // =================================================
+    // CORRECCIONES COMUNES DE OCR
+    // =================================================
+
+    const extras = [];
+
+    for (const candidato of candidatos) {
+        const lower =
+            candidato.toLocaleLowerCase();
+
+        // Tesseract suele confundir:
+        // R -> Я / P
+        // 3 -> З
+        // N -> И / П
+        // 0 -> О / O
+
+        let posible = lower
+            .replace(/[я]/gu, "r")
+            .replace(/[з]/gu, "3")
+            .replace(/[о]/gu, "0");
+
+        if (posible !== lower) {
+            extras.push(posible);
+        }
+
+        // Caso especial para nombres tipo R3N0
+        const compacto = candidato
+            .replace(/[^\p{L}\p{N}]/gu, "");
+
+        if (compacto.length >= 3) {
+            extras.push(compacto);
+        }
+    }
+
+    return [
+        ...new Set(
+            [...candidatos, ...extras]
+                .map((x) => normalizarNombre(x))
+                .filter((x) => x.length >= 2)
+        )
+    ];
+}
+
+// =====================================================
+// LIMPIAR OCR
 // =====================================================
 
 function limpiarOCR(texto) {
@@ -90,7 +187,7 @@ function limpiarOCR(texto) {
 
     const lineas = limpio
         .split("\n")
-        .map((linea) => linea.trim())
+        .map((linea) => normalizarNombre(linea))
         .filter(Boolean);
 
     return lineas.join("\n").trim();
@@ -113,13 +210,12 @@ async function obtenerImagen(url) {
 }
 
 // =====================================================
-// PREPARAR IMÁGENES PARA OCR
+// PREPARAR IMÁGENES
 // =====================================================
 
 async function prepararImagenes(buffer) {
     const imagenes = [];
 
-    // Imagen original procesada
     try {
         const original = await sharp(buffer)
             .rotate()
@@ -135,10 +231,12 @@ async function prepararImagenes(buffer) {
 
         imagenes.push(original);
     } catch (error) {
-        console.error("[OCR] Error preparando imagen original:", error.message);
+        console.error(
+            "[OCR] Error imagen original:",
+            error.message
+        );
     }
 
-    // Imagen con más contraste
     try {
         const contraste = await sharp(buffer)
             .rotate()
@@ -156,10 +254,12 @@ async function prepararImagenes(buffer) {
 
         imagenes.push(contraste);
     } catch (error) {
-        console.error("[OCR] Error preparando imagen de contraste:", error.message);
+        console.error(
+            "[OCR] Error contraste:",
+            error.message
+        );
     }
 
-    // Imagen binarizada
     try {
         const binaria = await sharp(buffer)
             .rotate()
@@ -175,20 +275,21 @@ async function prepararImagenes(buffer) {
 
         imagenes.push(binaria);
     } catch (error) {
-        console.error("[OCR] Error preparando imagen binaria:", error.message);
+        console.error(
+            "[OCR] Error binaria:",
+            error.message
+        );
     }
 
     return imagenes;
 }
 
 // =====================================================
-// CREAR WORKER OCR
+// CREAR WORKER
 // =====================================================
 
 async function crearWorkerSeguro(idiomas) {
-    const worker = await createWorker(idiomas);
-
-    return worker;
+    return await createWorker(idiomas);
 }
 
 // =====================================================
@@ -201,12 +302,13 @@ async function ejecutarOCR(buffer, idiomas) {
     try {
         worker = await crearWorkerSeguro(idiomas);
 
-        const resultado = await worker.recognize(buffer);
+        const resultado =
+            await worker.recognize(buffer);
 
         return resultado?.data?.text || "";
     } catch (error) {
         console.error(
-            `[OCR] Error con idiomas ${idiomas}:`,
+            `[OCR] Error ${idiomas}:`,
             error.message
         );
 
@@ -221,7 +323,7 @@ async function ejecutarOCR(buffer, idiomas) {
 }
 
 // =====================================================
-// EXTRAER CANDIDATOS DEL OCR
+// EXTRAER CANDIDATOS
 // =====================================================
 
 function extraerCandidatos(texto) {
@@ -239,10 +341,17 @@ function extraerCandidatos(texto) {
     for (const linea of lineas) {
         if (!linea) continue;
 
-        const lower = linea.toLocaleLowerCase();
+        if (linea.length < 2) continue;
+        if (linea.length > 80) continue;
 
-        // Ignorar textos típicos de interfaz
-        const palabrasIgnoradas = [
+        if (!/[\p{L}\p{N}]/u.test(linea)) {
+            continue;
+        }
+
+        const lower =
+            linea.toLocaleLowerCase();
+
+        const ignoradas = [
             "rust",
             "steam",
             "battlemetrics",
@@ -268,23 +377,23 @@ function extraerCandidatos(texto) {
         ];
 
         if (
-            palabrasIgnoradas.some((palabra) =>
-                lower === palabra
-            )
+            ignoradas.includes(lower)
         ) {
             continue;
         }
 
-        if (linea.length < 2) continue;
-        if (linea.length > 80) continue;
-
-        // Debe contener al menos una letra o número
-        if (!/[\p{L}\p{N}]/u.test(linea)) continue;
-
         candidatos.push(linea);
+
+        const partes =
+            extraerPartesUtilesOCR(linea);
+
+        for (const parte of partes) {
+            if (!candidatos.includes(parte)) {
+                candidatos.push(parte);
+            }
+        }
     }
 
-    // Eliminar duplicados
     return [...new Set(candidatos)];
 }
 
@@ -295,16 +404,15 @@ function extraerCandidatos(texto) {
 function puntuarCandidato(texto) {
     if (!texto) return 0;
 
+    const limpio =
+        normalizarNombre(texto);
+
     let puntos = 0;
 
-    const limpio = normalizarNombre(texto);
-
-    // Nombres con espacios suelen ser nombres de jugador
     if (/\s/u.test(limpio)) {
         puntos += 10;
     }
 
-    // Unicode / cirílico / asiático
     if (/[\u0400-\u04FF]/u.test(limpio)) {
         puntos += 30;
     }
@@ -321,51 +429,51 @@ function puntuarCandidato(texto) {
         puntos += 30;
     }
 
-    // Longitud razonable
-    if (limpio.length >= 3 && limpio.length <= 30) {
+    if (
+        limpio.length >= 3 &&
+        limpio.length <= 30
+    ) {
         puntos += 15;
     }
 
-    // No parece una URL
-    if (!/https?:\/\//i.test(limpio)) {
-        puntos += 5;
-    }
-
-    // No parece un número puro
-    if (!/^\d+$/u.test(limpio)) {
-        puntos += 5;
+    if (/[\p{L}\p{N}]/u.test(limpio)) {
+        puntos += 10;
     }
 
     return puntos;
 }
 
 // =====================================================
-// SELECCIONAR MEJOR CANDIDATO
+// SELECCIONAR MEJOR OCR
 // =====================================================
 
 function seleccionarMejorCandidato(candidatos) {
-    if (!candidatos?.length) return null;
+    if (!candidatos?.length) {
+        return null;
+    }
 
-    const ordenados = candidatos
+    return candidatos
         .map((texto) => ({
             texto,
             puntos: puntuarCandidato(texto)
         }))
-        .sort((a, b) => b.puntos - a.puntos);
-
-    return ordenados[0]?.texto || null;
+        .sort(
+            (a, b) => b.puntos - a.puntos
+        )[0]?.texto || null;
 }
 
 // =====================================================
-// DETECTAR NOMBRE POR OCR
+// DETECTAR NOMBRE
 // =====================================================
 
 async function detectarNombreOCR(buffer) {
-    const imagenes = await prepararImagenes(buffer);
+    const imagenes =
+        await prepararImagenes(buffer);
 
     if (!imagenes.length) {
         return {
             nombre: null,
+            candidatos: [],
             textoCompleto: ""
         };
     }
@@ -375,26 +483,31 @@ async function detectarNombreOCR(buffer) {
 
     for (const grupo of OCR_GRUPOS) {
         console.log(
-            `[OCR] Ejecutando grupo: ${grupo.nombre} (${grupo.idiomas})`
+            `[OCR] Ejecutando ${grupo.nombre}: ${grupo.idiomas}`
         );
 
         for (const imagen of imagenes) {
-            const texto = await ejecutarOCR(
-                imagen,
-                grupo.idiomas
-            );
+            const texto =
+                await ejecutarOCR(
+                    imagen,
+                    grupo.idiomas
+                );
 
             if (!texto) continue;
 
-            textoCompleto += "\n" + texto;
+            textoCompleto +=
+                "\n" + texto;
 
-            const candidatos = extraerCandidatos(texto);
+            const candidatos =
+                extraerCandidatos(texto);
 
             for (const candidato of candidatos) {
                 resultados.push({
                     candidato,
-                    puntos: puntuarCandidato(candidato),
-                    grupo: grupo.nombre
+                    puntos:
+                        puntuarCandidato(
+                            candidato
+                        )
                 });
             }
         }
@@ -403,68 +516,94 @@ async function detectarNombreOCR(buffer) {
     if (!resultados.length) {
         return {
             nombre: null,
-            textoCompleto: limpiarOCR(textoCompleto)
+            candidatos: [],
+            textoCompleto:
+                limpiarOCR(textoCompleto)
         };
     }
 
-    // Agrupar candidatos iguales
     const mapa = new Map();
 
     for (const resultado of resultados) {
-        const clave = normalizarComparacion(
-            resultado.candidato
-        );
+        const clave =
+            normalizarComparacion(
+                resultado.candidato
+            );
 
         if (!clave) continue;
 
         if (!mapa.has(clave)) {
             mapa.set(clave, {
-                nombre: resultado.candidato,
+                nombre:
+                    resultado.candidato,
                 puntos: 0,
                 veces: 0
             });
         }
 
-        const actual = mapa.get(clave);
+        const actual =
+            mapa.get(clave);
 
-        actual.puntos += resultado.puntos;
-        actual.veces += 1;
+        actual.puntos +=
+            resultado.puntos;
+
+        actual.veces++;
     }
 
-    const candidatosFinales = [...mapa.values()]
-        .map((item) => ({
-            ...item,
-            total: item.puntos + item.veces * 20
-        }))
-        .sort((a, b) => b.total - a.total);
+    const candidatosFinales =
+        [...mapa.values()]
+            .map((item) => ({
+                ...item,
+                total:
+                    item.puntos +
+                    item.veces * 20
+            }))
+            .sort(
+                (a, b) =>
+                    b.total - a.total
+            );
 
-    const mejor = candidatosFinales[0];
+    const mejor =
+        candidatosFinales[0];
 
     return {
-        nombre: mejor?.nombre || null,
-        textoCompleto: limpiarOCR(textoCompleto)
+        nombre:
+            mejor?.nombre || null,
+
+        candidatos:
+            candidatosFinales
+                .slice(0, 20)
+                .map((x) => x.nombre),
+
+        textoCompleto:
+            limpiarOCR(textoCompleto)
     };
 }
 
 // =====================================================
-// OBTENER SERVIDOR CONFIGURADO
+// OBTENER SERVIDOR
 // =====================================================
 
 async function obtenerServidorConfigurado(guildId) {
     try {
-        const config = await ServerConfig
-            .findOne({ guildId })
-            .lean();
+        const config =
+            await ServerConfig
+                .findOne({ guildId })
+                .lean();
 
-        if (!config?.battleMetricsServerId) {
+        if (
+            !config?.battleMetricsServerId
+        ) {
             return null;
         }
 
-        return String(config.battleMetricsServerId);
+        return String(
+            config.battleMetricsServerId
+        );
     } catch (error) {
         console.error(
-            "[BM] Error obteniendo configuración:",
-            error
+            "[BM] Error Mongo:",
+            error.message
         );
 
         return null;
@@ -472,31 +611,209 @@ async function obtenerServidorConfigurado(guildId) {
 }
 
 // =====================================================
-// BUSCAR EN BATTLEMETRICS
+// COMPROBAR SI UN NOMBRE CONTIENE UNA PARTE
 // =====================================================
 
-async function buscarEnBattleMetrics(nombre, guildId) {
-    const nombreBuscado = normalizarComparacion(nombre);
+function nombreContieneParte(
+    nombreJugador,
+    consulta
+) {
+    const jugador =
+        normalizarComparacion(
+            nombreJugador
+        );
 
-    const serverId = await obtenerServidorConfigurado(
-        guildId
+    const buscado =
+        normalizarComparacion(
+            consulta
+        );
+
+    if (!jugador || !buscado) {
+        return false;
+    }
+
+    if (jugador === buscado) {
+        return true;
+    }
+
+    // Comparación quitando símbolos
+    const jugadorLimpio =
+        quitarSimbolosDecorativos(
+            jugador
+        )
+            .toLocaleLowerCase()
+            .replace(/\s+/gu, "");
+
+    const buscadoLimpio =
+        quitarSimbolosDecorativos(
+            buscado
+        )
+            .toLocaleLowerCase()
+            .replace(/\s+/gu, "");
+
+    if (
+        buscadoLimpio.length >= 2 &&
+        jugadorLimpio.includes(
+            buscadoLimpio
+        )
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
+// =====================================================
+// EXTRAER CONSULTAS DE BÚSQUEDA
+// =====================================================
+
+function generarConsultasBusqueda(
+    nombre,
+    candidatosOCR = []
+) {
+    const consultas = [];
+
+    const agregar = (valor) => {
+        if (!valor) return;
+
+        const limpio =
+            normalizarNombre(valor);
+
+        if (limpio.length < 2) {
+            return;
+        }
+
+        if (
+            !consultas.some(
+                (x) =>
+                    normalizarComparacion(
+                        x
+                    ) ===
+                    normalizarComparacion(
+                        limpio
+                    )
+            )
+        ) {
+            consultas.push(limpio);
+        }
+    };
+
+    // Nombre original
+    agregar(nombre);
+
+    // Sin símbolos
+    agregar(
+        quitarSimbolosDecorativos(
+            nombre
+        )
     );
 
+    // Candidatos OCR
+    for (const candidato of candidatosOCR) {
+        agregar(candidato);
+
+        agregar(
+            quitarSimbolosDecorativos(
+                candidato
+            )
+        );
+
+        const partes =
+            extraerPartesUtilesOCR(
+                candidato
+            );
+
+        for (const parte of partes) {
+            agregar(parte);
+        }
+    }
+
+    return consultas
+        .filter(Boolean)
+        .slice(0, 10);
+}
+
+// =====================================================
+// CONSULTA BATTLEMETRICS
+// =====================================================
+
+async function consultarBattleMetrics(
+    consulta,
+    serverId
+) {
     console.log(
-        `[BM] 🎯 Servidor configurado: ${serverId || "NINGUNO"}`
+        `[BM] 🔎 Consulta: "${consulta}"`
+    );
+
+    const response =
+        await axios.get(
+            `${BM_API}/players`,
+            {
+                params: {
+                    "filter[search]":
+                        consulta,
+
+                    "filter[servers]":
+                        serverId,
+
+                    "page[size]": 100,
+
+                    include:
+                        "server,identifier"
+                },
+
+                headers: {
+                    Authorization:
+                        `Bearer ${BM_TOKEN}`,
+
+                    "User-Agent":
+                        USER_AGENT,
+
+                    Accept:
+                        "application/json"
+                },
+
+                timeout: 30000
+            }
+        );
+
+    return Array.isArray(
+        response.data?.data
+    )
+        ? response.data.data
+        : [];
+}
+
+// =====================================================
+// BUSCAR BATTLEMETRICS
+// =====================================================
+
+async function buscarEnBattleMetrics(
+    nombre,
+    guildId,
+    candidatosOCR = []
+) {
+    const serverId =
+        await obtenerServidorConfigurado(
+            guildId
+        );
+
+    console.log(
+        `[BM] 🎯 Servidor: ${serverId || "NINGUNO"}`
     );
 
     if (!serverId) {
         return {
             encontrados: [],
-            error: "NO_SERVER_CONFIGURED",
+            error:
+                "NO_SERVER_CONFIGURED",
             serverId: null
         };
     }
 
     if (!BM_TOKEN) {
         console.error(
-            "[BM] ❌ No existe BATTLEMETRICS_TOKEN en las variables de entorno."
+            "[BM] ❌ Falta BATTLEMETRICS_TOKEN"
         );
 
         return {
@@ -506,131 +823,197 @@ async function buscarEnBattleMetrics(nombre, guildId) {
         };
     }
 
-    console.log(
-        `[BM] 🔎 Buscando: "${nombre}"`
-    );
+    const consultas =
+        generarConsultasBusqueda(
+            nombre,
+            candidatosOCR
+        );
 
     console.log(
-        `[BM] 🔎 Buscando SOLO en servidor: ${serverId}`
+        "[BM] 🔎 Consultas:",
+        consultas
     );
+
+    const todosLosJugadores =
+        new Map();
 
     try {
-        const response = await axios.get(
-            `${BM_API}/players`,
-            {
-                params: {
-                    "filter[search]": nombre,
-                    "filter[servers]": serverId,
-                    "page[size]": 100,
-                    include: "server,identifier"
-                },
+        for (
+            const consulta
+            of consultas
+        ) {
+            let players = [];
 
-                headers: {
-                    Authorization: `Bearer ${BM_TOKEN}`,
-                    "User-Agent": USER_AGENT,
-                    Accept: "application/json"
-                },
+            try {
+                players =
+                    await consultarBattleMetrics(
+                        consulta,
+                        serverId
+                    );
+            } catch (error) {
+                const status =
+                    error.response?.status;
 
-                timeout: 30000
+                console.error(
+                    `[BM] ❌ Error buscando "${consulta}":`,
+                    status,
+                    error.response?.data ||
+                        error.message
+                );
+
+                if (status === 403) {
+                    return {
+                        encontrados: [],
+                        error: "BM_403",
+                        serverId
+                    };
+                }
+
+                if (status === 401) {
+                    return {
+                        encontrados: [],
+                        error: "BM_401",
+                        serverId
+                    };
+                }
+
+                continue;
             }
-        );
-
-        const players = Array.isArray(
-            response.data?.data
-        )
-            ? response.data.data
-            : [];
-
-        console.log(
-            `[BM] 👥 BattleMetrics devolvió ${players.length} jugadores`
-        );
-
-        const encontrados = [];
-
-        // =================================================
-        // COMPARACIÓN EXACTA
-        // =================================================
-
-        for (const player of players) {
-            const nombreJugador =
-                player?.attributes?.name;
-
-            if (!nombreJugador) continue;
 
             console.log(
-                `[BM] 👤 Player: ${player.id} | "${nombreJugador}"`
+                `[BM] 👥 "${consulta}" → ${players.length} resultados`
             );
 
-            if (
-                normalizarComparacion(nombreJugador) ===
-                nombreBuscado
-            ) {
-                encontrados.push({
-                    id: String(player.id),
-                    nombre: nombreJugador,
-                    atributos: player.attributes || {}
-                });
+            for (const player of players) {
+                if (!player?.id) {
+                    continue;
+                }
+
+                todosLosJugadores.set(
+                    String(player.id),
+                    player
+                );
             }
-        }
 
-        // =================================================
-        // COMPARACIÓN SIN ESPACIOS
-        // =================================================
-
-        if (!encontrados.length) {
-            const sinEspacios =
-                nombreBuscado.replace(/\s+/gu, "");
-
+            // Si ya tenemos resultados,
+            // podemos intentar compararlos.
             for (const player of players) {
                 const nombreJugador =
                     player?.attributes?.name;
 
-                if (!nombreJugador) continue;
+                if (!nombreJugador) {
+                    continue;
+                }
 
-                const jugadorSinEspacios =
-                    normalizarComparacion(
-                        nombreJugador
-                    ).replace(/\s+/gu, "");
+                console.log(
+                    `[BM] 👤 ${player.id} | "${nombreJugador}"`
+                );
 
                 if (
-                    jugadorSinEspacios ===
-                    sinEspacios
+                    nombreContieneParte(
+                        nombreJugador,
+                        consulta
+                    )
                 ) {
-                    encontrados.push({
-                        id: String(player.id),
-                        nombre: nombreJugador,
-                        atributos: player.attributes || {}
-                    });
+                    console.log(
+                        `[BM] ✅ Coincidencia: ${player.id} | ${nombreJugador}`
+                    );
 
-                    break;
+                    return {
+                        encontrados: [
+                            {
+                                id: String(
+                                    player.id
+                                ),
+
+                                nombre:
+                                    nombreJugador,
+
+                                atributos:
+                                    player.attributes ||
+                                    {}
+                            }
+                        ],
+
+                        error: null,
+                        serverId
+                    };
                 }
             }
         }
 
-        if (encontrados.length) {
-            console.log(
-                `[BM] ✅ Jugador encontrado: ${encontrados[0].id} ${encontrados[0].nombre}`
-            );
-        } else {
-            console.log(
-                `[BM] ❌ No se encontró "${nombre}" dentro del servidor ${serverId}`
-            );
+        // =================================================
+        // SEGUNDO PASO:
+        // COMPARAR TODOS LOS RESULTADOS
+        // =================================================
+
+        const jugadores =
+            [...todosLosJugadores.values()];
+
+        for (const player of jugadores) {
+            const nombreJugador =
+                player?.attributes?.name;
+
+            if (!nombreJugador) {
+                continue;
+            }
+
+            for (
+                const consulta
+                of consultas
+            ) {
+                if (
+                    nombreContieneParte(
+                        nombreJugador,
+                        consulta
+                    )
+                ) {
+                    console.log(
+                        `[BM] ✅ Coincidencia final: ${player.id} | ${nombreJugador}`
+                    );
+
+                    return {
+                        encontrados: [
+                            {
+                                id: String(
+                                    player.id
+                                ),
+
+                                nombre:
+                                    nombreJugador,
+
+                                atributos:
+                                    player.attributes ||
+                                    {}
+                            }
+                        ],
+
+                        error: null,
+                        serverId
+                    };
+                }
+            }
         }
 
+        console.log(
+            `[BM] ❌ No se encontró "${nombre}" en ${serverId}`
+        );
+
         return {
-            encontrados,
+            encontrados: [],
             error: null,
             serverId
         };
 
     } catch (error) {
         const status =
-            error.response?.status || null;
+            error.response?.status;
 
         console.error(
-            "[BM] ❌ Error consultando BattleMetrics:",
+            "[BM] ❌ Error general:",
             status,
-            error.response?.data || error.message
+            error.response?.data ||
+                error.message
         );
 
         if (status === 403) {
@@ -658,7 +1041,7 @@ async function buscarEnBattleMetrics(nombre, guildId) {
 }
 
 // =====================================================
-// CREAR EMBED DE RESULTADO
+// EMBED RESULTADO
 // =====================================================
 
 function crearEmbedResultado({
@@ -666,65 +1049,109 @@ function crearEmbedResultado({
     nombreOCR,
     resultado
 }) {
-    const embed = new EmbedBuilder()
-        .setTitle("🎯 Resultado de búsqueda Steam")
-        .setDescription(
-            `**Nombre buscado:** ${nombreBuscado}`
-        );
+    const embed =
+        new EmbedBuilder()
+            .setTitle(
+                "🎯 Resultado de búsqueda Steam"
+            )
+            .setDescription(
+                `**Nombre buscado:** ${nombreBuscado}`
+            );
 
     if (nombreOCR) {
         embed.addFields({
             name: "📸 OCR detectado",
-            value: `\`${nombreOCR}\``
+            value:
+                `\`${nombreOCR}\``
         });
     }
 
-    if (resultado.error === "NO_SERVER_CONFIGURED") {
+    if (
+        resultado.error ===
+        "NO_SERVER_CONFIGURED"
+    ) {
         embed.addFields({
-            name: "⚠️ Servidor no configurado",
+            name:
+                "⚠️ Servidor no configurado",
+
             value:
                 "No hay un servidor de BattleMetrics configurado para este servidor de Discord."
         });
-    } else if (resultado.error === "NO_TOKEN") {
+    }
+
+    else if (
+        resultado.error ===
+        "NO_TOKEN"
+    ) {
         embed.addFields({
-            name: "⚠️ Token de BattleMetrics",
+            name:
+                "⚠️ Token de BattleMetrics",
+
             value:
                 "No se encontró `BATTLEMETRICS_TOKEN` en las variables de entorno."
         });
-    } else if (resultado.error === "BM_403") {
+    }
+
+    else if (
+        resultado.error ===
+        "BM_403"
+    ) {
         embed.addFields({
-            name: "⚠️ BattleMetrics rechazó la consulta",
+            name:
+                "⚠️ BattleMetrics rechazó la consulta",
+
             value:
                 "BattleMetrics devolvió HTTP 403 al consultar la API de jugadores."
         });
-    } else if (resultado.error === "BM_401") {
+    }
+
+    else if (
+        resultado.error ===
+        "BM_401"
+    ) {
         embed.addFields({
-            name: "⚠️ Token rechazado",
+            name:
+                "⚠️ Token rechazado",
+
             value:
-                "BattleMetrics devolvió HTTP 401. El token no fue aceptado o está expirado."
+                "BattleMetrics devolvió HTTP 401. Revisa `BATTLEMETRICS_TOKEN`."
         });
-    } else if (resultado.error === "BM_ERROR") {
+    }
+
+    else if (
+        resultado.error ===
+        "BM_ERROR"
+    ) {
         embed.addFields({
-            name: "⚠️ Error de BattleMetrics",
+            name:
+                "⚠️ Error de BattleMetrics",
+
             value:
                 "Ocurrió un error al consultar la API de BattleMetrics."
         });
-    } else if (
-        resultado.encontrados &&
-        resultado.encontrados.length
+    }
+
+    else if (
+        resultado.encontrados?.length
     ) {
         const jugador =
             resultado.encontrados[0];
 
         embed.addFields({
-            name: "✅ Jugador encontrado",
+            name:
+                "✅ Jugador encontrado",
+
             value:
                 `**Nombre:** ${jugador.nombre}\n` +
                 `**BattleMetrics ID:** \`${jugador.id}\``
         });
-    } else {
+    }
+
+    else {
         embed.addFields({
-            name: "❌ Resultado",
+            name:
+                "❌ Resultado",
+
             value:
                 `No se encontró **${nombreBuscado}** dentro del servidor de BattleMetrics configurado.`
         });
@@ -732,12 +1159,11 @@ function crearEmbedResultado({
 
     if (resultado.serverId) {
         embed.addFields({
-            name: "🎯 Servidor consultado",
+            name:
+                "🎯 Servidor consultado",
+
             value:
-                `[Abrir servidor en BattleMetrics](${BM_API.replace(
-                    "api.",
-                    ""
-                )}/servers/rust/${resultado.serverId})`
+                `[Abrir servidor en BattleMetrics](https://www.battlemetrics.com/servers/rust/${resultado.serverId})`
         });
     }
 
@@ -749,59 +1175,82 @@ function crearEmbedResultado({
 // =====================================================
 
 function crearBotonesOCR() {
-    return new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId("steam_ocr_buscar")
-            .setLabel("Buscar")
-            .setEmoji("🔎")
-            .setStyle(ButtonStyle.Primary),
+    return new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId(
+                    "steam_ocr_buscar"
+                )
+                .setLabel("Buscar")
+                .setEmoji("🔎")
+                .setStyle(
+                    ButtonStyle.Primary
+                ),
 
-        new ButtonBuilder()
-            .setCustomId("steam_ocr_corregir")
-            .setLabel("Corregir")
-            .setEmoji("✏️")
-            .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId(
+                    "steam_ocr_corregir"
+                )
+                .setLabel("Corregir")
+                .setEmoji("✏️")
+                .setStyle(
+                    ButtonStyle.Secondary
+                ),
 
-        new ButtonBuilder()
-            .setCustomId("steam_ocr_cancelar")
-            .setLabel("Cancelar")
-            .setEmoji("❌")
-            .setStyle(ButtonStyle.Danger)
-    );
+            new ButtonBuilder()
+                .setCustomId(
+                    "steam_ocr_cancelar"
+                )
+                .setLabel("Cancelar")
+                .setEmoji("❌")
+                .setStyle(
+                    ButtonStyle.Danger
+                )
+        );
 }
 
 // =====================================================
-// REALIZAR BÚSQUEDA
+// EJECUTAR BÚSQUEDA
 // =====================================================
 
 async function ejecutarBusqueda(
     interaction,
     nombre,
-    nombreOCR = null
+    nombreOCR = null,
+    candidatosOCR = []
 ) {
     const resultado =
         await buscarEnBattleMetrics(
             nombre,
-            interaction.guild.id
+            interaction.guild.id,
+            candidatosOCR
         );
 
     const embed =
         crearEmbedResultado({
-            nombreBuscado: nombre,
+            nombreBuscado:
+                nombre,
+
             nombreOCR,
+
             resultado
         });
 
     const jugador =
         resultado.encontrados?.[0];
 
-    const row = new ActionRowBuilder();
+    const row =
+        new ActionRowBuilder();
 
     if (jugador) {
         row.addComponents(
             new ButtonBuilder()
-                .setLabel("Abrir BattleMetrics")
-                .setStyle(ButtonStyle.Link)
+                .setLabel(
+                    "Abrir BattleMetrics"
+                )
+                .setStyle(
+                    ButtonStyle.Link
+                )
                 .setURL(
                     `https://www.battlemetrics.com/players/${jugador.id}`
                 )
@@ -810,8 +1259,12 @@ async function ejecutarBusqueda(
 
     row.addComponents(
         new ButtonBuilder()
-            .setLabel("Buscar en SteamID.com")
-            .setStyle(ButtonStyle.Link)
+            .setLabel(
+                "Buscar en SteamID.com"
+            )
+            .setStyle(
+                ButtonStyle.Link
+            )
             .setURL(
                 `https://www.steamid.com/search?q=${encodeURIComponent(
                     nombre
@@ -826,30 +1279,34 @@ async function ejecutarBusqueda(
 }
 
 // =====================================================
-// COMANDO
+// COMANDO /STEAM
 // =====================================================
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("steam")
         .setDescription(
-            "Busca un jugador de Rust por nombre o captura de pantalla"
+            "Busca un jugador de Rust por nombre o captura"
         )
-        .addStringOption((option) =>
-            option
-                .setName("nombre")
-                .setDescription(
-                    "Nombre del jugador"
-                )
-                .setRequired(false)
+
+        .addStringOption(
+            (option) =>
+                option
+                    .setName("nombre")
+                    .setDescription(
+                        "Nombre del jugador"
+                    )
+                    .setRequired(false)
         )
-        .addAttachmentOption((option) =>
-            option
-                .setName("captura")
-                .setDescription(
-                    "Captura donde aparezca el nombre del jugador"
-                )
-                .setRequired(false)
+
+        .addAttachmentOption(
+            (option) =>
+                option
+                    .setName("captura")
+                    .setDescription(
+                        "Captura donde aparezca el nombre"
+                    )
+                    .setRequired(false)
         ),
 
     async execute(interaction) {
@@ -864,45 +1321,50 @@ module.exports = {
             );
 
         // =================================================
-        // BÚSQUEDA DIRECTA POR NOMBRE
+        // NOMBRE DIRECTO
         // =================================================
 
         if (nombre && !captura) {
             await interaction.deferReply();
 
+            const nombreLimpio =
+                normalizarNombre(nombre);
+
             console.log(
-                `[STEAM] 🎯 Búsqueda directa: "${nombre}"`
+                `[STEAM] 🎯 Búsqueda directa: "${nombreLimpio}"`
             );
 
             await ejecutarBusqueda(
                 interaction,
-                normalizarNombre(nombre)
+                nombreLimpio,
+                null,
+                [nombreLimpio]
             );
 
             return;
         }
 
         // =================================================
-        // SIN NOMBRE NI CAPTURA
+        // SIN DATOS
         // =================================================
 
         if (!nombre && !captura) {
             return interaction.reply({
                 content:
-                    "❌ Debes introducir un nombre o adjuntar una captura de pantalla.",
+                    "❌ Debes introducir un nombre o adjuntar una captura.",
                 ephemeral: true
             });
         }
 
         // =================================================
-        // CAPTURA OCR
+        // OCR
         // =================================================
 
         await interaction.deferReply();
 
         try {
             console.log(
-                "[STEAM] 📸 Descargando captura para OCR..."
+                "[STEAM] 📸 Descargando captura..."
             );
 
             const buffer =
@@ -923,7 +1385,12 @@ module.exports = {
                 ocr.nombre;
 
             console.log(
-                `[STEAM] 📸 OCR detectado: "${nombreDetectado || "NADA"}"`
+                `[STEAM] 📸 OCR principal: "${nombreDetectado || "NADA"}"`
+            );
+
+            console.log(
+                "[STEAM] 📋 Candidatos OCR:",
+                ocr.candidatos
             );
 
             if (!nombreDetectado) {
@@ -933,28 +1400,36 @@ module.exports = {
                             "🎯 Resultado de búsqueda Steam"
                         )
                         .addFields({
-                            name: "📸 OCR",
+                            name:
+                                "📸 OCR",
+
                             value:
-                                "❌ No pude detectar un nombre de jugador en la captura."
+                                "❌ No pude detectar un nombre de jugador."
                         })
                         .setFooter({
                             text:
-                                "Puedes probar con una captura más clara o introducir el nombre manualmente."
+                                "Prueba con una captura más clara."
                         });
 
                 await interaction.editReply({
-                    embeds: [embed]
+                    embeds: [embed],
+                    components: []
                 });
 
                 return;
             }
 
-            // Guardamos temporalmente el OCR
             estadosOCR.set(
                 interaction.user.id,
                 {
-                    nombre: nombreDetectado,
-                    creado: Date.now()
+                    nombre:
+                        nombreDetectado,
+
+                    candidatos:
+                        ocr.candidatos,
+
+                    creado:
+                        Date.now()
                 }
             );
 
@@ -963,17 +1438,20 @@ module.exports = {
                     .setTitle(
                         "🎯 Resultado de búsqueda Steam"
                     )
-                    .addFields({
-                        name: "📸 OCR detectado",
-                        value:
-                            `\`${nombreDetectado}\``
-                    })
                     .setDescription(
                         "Revisa el nombre detectado antes de buscarlo en BattleMetrics."
-                    );
+                    )
+                    .addFields({
+                        name:
+                            "📸 OCR detectado",
+
+                        value:
+                            `\`${nombreDetectado}\``
+                    });
 
             await interaction.editReply({
                 embeds: [embed],
+
                 components: [
                     crearBotonesOCR()
                 ]
@@ -981,24 +1459,26 @@ module.exports = {
 
         } catch (error) {
             console.error(
-                "[STEAM] ❌ Error procesando OCR:",
+                "[STEAM] ❌ Error OCR:",
                 error
             );
 
             await interaction.editReply({
                 content:
-                    "❌ Ocurrió un error procesando la captura."
+                    "❌ Ocurrió un error procesando la captura.",
+                components: []
             });
         }
     },
 
     // ===================================================
-    // MANEJO DE BOTONES Y MODAL
+    // BOTONES / MODAL
     // ===================================================
 
     async handleInteraction(interaction) {
+
         // =================================================
-        // BOTÓN BUSCAR
+        // BUSCAR OCR
         // =================================================
 
         if (
@@ -1014,7 +1494,7 @@ module.exports = {
             if (!estado) {
                 return interaction.reply({
                     content:
-                        "❌ La sesión de OCR expiró. Vuelve a ejecutar `/steam`.",
+                        "❌ La sesión de OCR expiró. Ejecuta `/steam` nuevamente.",
                     ephemeral: true
                 });
             }
@@ -1023,8 +1503,12 @@ module.exports = {
 
             await ejecutarBusqueda(
                 interaction,
+
                 estado.nombre,
-                estado.nombre
+
+                estado.nombre,
+
+                estado.candidatos || []
             );
 
             estadosOCR.delete(
@@ -1035,7 +1519,7 @@ module.exports = {
         }
 
         // =================================================
-        // BOTÓN CORREGIR
+        // CORREGIR OCR
         // =================================================
 
         if (
@@ -1051,7 +1535,7 @@ module.exports = {
             if (!estado) {
                 return interaction.reply({
                     content:
-                        "❌ La sesión de OCR expiró. Vuelve a ejecutar `/steam`.",
+                        "❌ La sesión de OCR expiró.",
                     ephemeral: true
                 });
             }
@@ -1083,9 +1567,10 @@ module.exports = {
                     .setMaxLength(100);
 
             modal.addComponents(
-                new ActionRowBuilder().addComponents(
-                    input
-                )
+                new ActionRowBuilder()
+                    .addComponents(
+                        input
+                    )
             );
 
             await interaction.showModal(
@@ -1096,7 +1581,7 @@ module.exports = {
         }
 
         // =================================================
-        // BOTÓN CANCELAR
+        // CANCELAR
         // =================================================
 
         if (
@@ -1111,7 +1596,9 @@ module.exports = {
             await interaction.update({
                 content:
                     "❌ Búsqueda cancelada.",
+
                 embeds: [],
+
                 components: []
             });
 
@@ -1119,7 +1606,7 @@ module.exports = {
         }
 
         // =================================================
-        // MODAL CORREGIR
+        // MODAL
         // =================================================
 
         if (
@@ -1128,12 +1615,15 @@ module.exports = {
                 "steam_ocr_modal"
         ) {
             const nombre =
-                interaction.fields.getTextInputValue(
-                    "steam_ocr_nombre"
-                );
+                interaction.fields
+                    .getTextInputValue(
+                        "steam_ocr_nombre"
+                    );
 
             const nombreLimpio =
-                normalizarNombre(nombre);
+                normalizarNombre(
+                    nombre
+                );
 
             if (!nombreLimpio) {
                 return interaction.reply({
@@ -1152,7 +1642,8 @@ module.exports = {
             await ejecutarBusqueda(
                 interaction,
                 nombreLimpio,
-                nombreLimpio
+                nombreLimpio,
+                [nombreLimpio]
             );
 
             return;
