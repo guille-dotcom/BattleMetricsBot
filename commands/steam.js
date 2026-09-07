@@ -3,11 +3,7 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
-    ButtonStyle,
-    ModalBuilder,
-    TextInputBuilder,
-    TextInputStyle,
-    MessageFlags
+    ButtonStyle
 } = require("discord.js");
 
 const axios = require("axios");
@@ -24,8 +20,18 @@ const BM_API = "https://api.battlemetrics.com";
 const BM_TOKEN = process.env.BATTLEMETRICS_TOKEN;
 
 // =====================================================
-// NORMALIZACIÓN DE NOMBRES
+// NORMALIZACIÓN
 // =====================================================
+
+function limpiarOCR(texto) {
+    if (!texto) return "";
+
+    return String(texto)
+        .replace(/^[|│┃!¡:;.,'"`]+/u, "")
+        .replace(/[|│┃]+$/u, "")
+        .replace(/\s+/gu, " ")
+        .trim();
+}
 
 function quitarSimbolosDecorativos(texto) {
     if (!texto) return "";
@@ -45,6 +51,10 @@ function compactarNombre(texto) {
         .replace(/[^\p{L}\p{N}]/gu, "");
 }
 
+// =====================================================
+// NORMALIZACIÓN VISUAL
+// =====================================================
+
 function normalizarVisual(texto) {
     if (!texto) return "";
 
@@ -53,22 +63,40 @@ function normalizarVisual(texto) {
         .toLocaleLowerCase();
 
     const mapa = {
+        // Cirílico / caracteres parecidos
         "а": "a",
+        "А": "a",
         "е": "e",
+        "Е": "e",
         "ё": "e",
+        "Ё": "e",
         "о": "o",
+        "О": "o",
         "р": "p",
+        "Р": "p",
         "с": "c",
+        "С": "c",
         "у": "y",
+        "У": "y",
         "х": "x",
+        "Х": "x",
         "і": "i",
+        "І": "i",
         "ј": "j",
+        "Ј": "j",
         "қ": "q",
+        "Қ": "q",
         "ғ": "g",
+        "Ғ": "g",
         "ү": "y",
+        "Ү": "y",
         "һ": "h",
+        "Һ": "h",
         "ӏ": "l",
+        "Л": "l",
+        "л": "l",
 
+        // Leetspeak
         "0": "o",
         "1": "i",
         "3": "e",
@@ -90,7 +118,41 @@ function normalizarVisual(texto) {
 }
 
 // =====================================================
-// LEVENSHTEIN
+// TOKENIZAR NOMBRE
+// =====================================================
+
+function obtenerTokens(texto) {
+    if (!texto) return [];
+
+    return String(texto)
+        .normalize("NFKC")
+        .toLocaleLowerCase()
+        .split(/[^\p{L}\p{N}]+/gu)
+        .map(x => x.trim())
+        .filter(x => x.length > 0);
+}
+
+// =====================================================
+// QUITAR CARACTERES DECORATIVOS
+// =====================================================
+
+function obtenerPartePrincipal(texto) {
+    if (!texto) return "";
+
+    const limpio = quitarSimbolosDecorativos(texto);
+
+    const tokens = obtenerTokens(limpio);
+
+    if (!tokens.length) {
+        return "";
+    }
+
+    return tokens
+        .sort((a, b) => b.length - a.length)[0];
+}
+
+// =====================================================
+// DISTANCIA LEVENSHTEIN
 // =====================================================
 
 function distanciaLevenshtein(a, b) {
@@ -115,12 +177,11 @@ function distanciaLevenshtein(a, b) {
             if (b[i - 1] === a[j - 1]) {
                 matriz[i][j] = matriz[i - 1][j - 1];
             } else {
-                matriz[i][j] =
-                    Math.min(
-                        matriz[i - 1][j] + 1,
-                        matriz[i][j - 1] + 1,
-                        matriz[i - 1][j - 1] + 1
-                    );
+                matriz[i][j] = Math.min(
+                    matriz[i - 1][j] + 1,
+                    matriz[i][j - 1] + 1,
+                    matriz[i - 1][j - 1] + 1
+                );
             }
         }
     }
@@ -139,6 +200,36 @@ function similitud(a, b) {
     if (!max) return 1;
 
     return 1 - distanciaLevenshtein(a, b) / max;
+}
+
+// =====================================================
+// PREFIJO / SUFIJO COMÚN
+// =====================================================
+
+function longitudCoincidenciaConsecutiva(a, b) {
+    if (!a || !b) return 0;
+
+    let mejor = 0;
+
+    for (let i = 0; i < a.length; i++) {
+        for (let j = 0; j < b.length; j++) {
+            let k = 0;
+
+            while (
+                i + k < a.length &&
+                j + k < b.length &&
+                a[i + k] === b[j + k]
+            ) {
+                k++;
+            }
+
+            if (k > mejor) {
+                mejor = k;
+            }
+        }
+    }
+
+    return mejor;
 }
 
 // =====================================================
@@ -208,44 +299,59 @@ async function procesarImagen(buffer) {
 }
 
 async function ejecutarOCR(buffer) {
-    let worker;
+    let worker = null;
 
     try {
+        console.log("[OCR] Iniciando...");
+
         worker = await createWorker("eng+rus");
 
-        const variantes = await procesarImagen(buffer);
+        const variantes =
+            await procesarImagen(buffer);
 
         const resultados = [];
 
         for (const imagen of variantes) {
             try {
-                const resultado = await worker.recognize(imagen);
+                const resultado =
+                    await worker.recognize(imagen);
 
-                if (resultado?.data?.text) {
-                    resultados.push(resultado.data.text);
+                const texto =
+                    resultado?.data?.text || "";
+
+                if (texto.trim()) {
+                    resultados.push(texto);
                 }
             } catch (error) {
-                console.log("[OCR] Error:", error.message);
+                console.log(
+                    "[OCR] Error variante:",
+                    error.message
+                );
             }
         }
 
         await worker.terminate();
+        worker = null;
 
         return resultados;
     } catch (error) {
+        console.error(
+            "[OCR] Error:",
+            error
+        );
+
         if (worker) {
             try {
                 await worker.terminate();
             } catch {}
         }
 
-        console.error("[OCR] Error general:", error);
         return [];
     }
 }
 
 // =====================================================
-// EXTRAER POSIBLES NOMBRES DEL OCR
+// EXTRAER CANDIDATOS OCR
 // =====================================================
 
 function extraerCandidatosOCR(textos) {
@@ -256,37 +362,34 @@ function extraerCandidatosOCR(textos) {
 
         const lineas = String(texto)
             .split(/\r?\n/)
-            .map(x => x.trim())
+            .map(x => limpiarOCR(x))
             .filter(Boolean);
 
         for (const linea of lineas) {
-            const limpia = linea
-                .replace(/\s+/gu, " ")
-                .trim();
+            if (linea.length < 2) continue;
+            if (linea.length > 50) continue;
 
-            if (!limpia) continue;
+            candidatos.push(linea);
 
-            if (limpia.length < 2) continue;
-            if (limpia.length > 40) continue;
-
-            candidatos.push(limpia);
-
-            const sinDecoracion = quitarSimbolosDecorativos(limpia);
+            const limpio =
+                quitarSimbolosDecorativos(linea);
 
             if (
-                sinDecoracion &&
-                sinDecoracion !== limpia
+                limpio &&
+                limpio !== linea
             ) {
-                candidatos.push(sinDecoracion);
+                candidatos.push(limpio);
             }
         }
     }
 
-    return [...new Set(candidatos)];
+    return [
+        ...new Set(candidatos)
+    ];
 }
 
 // =====================================================
-// GENERAR CONSULTAS
+// CONSULTAS
 // =====================================================
 
 function generarConsultasBusqueda(nombre) {
@@ -295,19 +398,24 @@ function generarConsultasBusqueda(nombre) {
     function agregar(valor) {
         if (!valor) return;
 
-        const limpio = String(valor).trim();
+        valor = limpiarOCR(valor);
 
-        if (!limpio) return;
+        if (!valor) return;
 
-        if (limpio.length < 2) return;
+        if (valor.length < 2) return;
 
-        consultas.add(limpio);
+        consultas.add(valor);
     }
 
     agregar(nombre);
     agregar(quitarSimbolosDecorativos(nombre));
     agregar(compactarNombre(nombre));
     agregar(normalizarVisual(nombre));
+
+    const principal =
+        obtenerPartePrincipal(nombre);
+
+    agregar(principal);
 
     return [...consultas].slice(0, 25);
 }
@@ -316,29 +424,41 @@ function generarConsultasBusqueda(nombre) {
 // PUNTUACIÓN
 // =====================================================
 
-function puntuarCoincidencia(nombreJugador, consultas) {
+function puntuarCoincidencia(
+    nombreJugador,
+    consultas
+) {
     if (!nombreJugador) return 0;
 
-    const rawJugador = String(nombreJugador).trim();
+    const rawJugador =
+        String(nombreJugador).trim();
 
-    const jugadorLower = rawJugador.toLocaleLowerCase();
+    const jugadorLower =
+        rawJugador.toLocaleLowerCase();
 
-    const jugadorLimpio = quitarSimbolosDecorativos(rawJugador);
-    const jugadorCompacto = compactarNombre(rawJugador);
-    const jugadorVisual = normalizarVisual(rawJugador);
+    const jugadorCompacto =
+        compactarNombre(rawJugador);
+
+    const jugadorVisual =
+        normalizarVisual(rawJugador);
+
+    const jugadorPrincipal =
+        normalizarVisual(
+            obtenerPartePrincipal(
+                rawJugador
+            )
+        );
 
     let mejor = 0;
 
     for (const consulta of consultas) {
         if (!consulta) continue;
 
-        const rawConsulta = String(consulta).trim();
+        const rawConsulta =
+            String(consulta).trim();
 
         const consultaLower =
             rawConsulta.toLocaleLowerCase();
-
-        const consultaLimpia =
-            quitarSimbolosDecorativos(rawConsulta);
 
         const consultaCompacta =
             compactarNombre(rawConsulta);
@@ -346,128 +466,243 @@ function puntuarCoincidencia(nombreJugador, consultas) {
         const consultaVisual =
             normalizarVisual(rawConsulta);
 
-        // ---------------------------------------------
-        // Coincidencia exacta del nombre original
-        // ---------------------------------------------
+        const consultaPrincipal =
+            normalizarVisual(
+                obtenerPartePrincipal(
+                    rawConsulta
+                )
+            );
 
-        if (jugadorLower === consultaLower) {
-            mejor = Math.max(mejor, 2000);
-        }
-
-        // ---------------------------------------------
-        // Mismo nombre ignorando decoración
-        // ---------------------------------------------
+        // =============================================
+        // EXACTO REAL
+        // =============================================
 
         if (
-            jugadorCompacto &&
-            consultaCompacta &&
-            jugadorCompacto === consultaCompacta
+            jugadorLower ===
+            consultaLower
         ) {
-            // Si el jugador tiene decoración adicional,
-            // preferimos ese perfil sobre uno totalmente plano.
-            const jugadorTieneDecoracion =
-                /[^\p{L}\p{N}]/u.test(rawJugador);
-
-            if (jugadorTieneDecoracion) {
-                mejor = Math.max(mejor, 1900);
-            } else {
-                mejor = Math.max(mejor, 1800);
-            }
+            mejor = Math.max(
+                mejor,
+                3000
+            );
         }
 
-        // ---------------------------------------------
-        // Coincidencia visual
-        // ---------------------------------------------
+        // =============================================
+        // EXACTO VISUAL
+        // =============================================
 
         if (
             jugadorVisual &&
             consultaVisual &&
             jugadorVisual === consultaVisual
         ) {
-            mejor = Math.max(mejor, 1750);
+            mejor = Math.max(
+                mejor,
+                2800
+            );
         }
 
-        // ---------------------------------------------
-        // Nombre limpio exacto
-        // ---------------------------------------------
+        // =============================================
+        // MISMO NOMBRE IGNORANDO DECORACIÓN
+        // =============================================
 
         if (
-            jugadorLimpio &&
-            consultaLimpia &&
-            jugadorLimpio.toLocaleLowerCase() ===
-                consultaLimpia.toLocaleLowerCase()
-        ) {
-            mejor = Math.max(mejor, 1700);
-        }
-
-        // ---------------------------------------------
-        // Contiene consulta
-        // ---------------------------------------------
-
-        if (
+            jugadorCompacto &&
             consultaCompacta &&
-            jugadorCompacto.includes(consultaCompacta)
+            jugadorCompacto === consultaCompacta
+        ) {
+            const tieneDecoracion =
+                /[^\p{L}\p{N}]/u.test(
+                    rawJugador
+                );
+
+            if (tieneDecoracion) {
+                mejor = Math.max(
+                    mejor,
+                    2700
+                );
+            } else {
+                mejor = Math.max(
+                    mejor,
+                    2500
+                );
+            }
+        }
+
+        // =============================================
+        // PARTE PRINCIPAL EXACTA
+        // =============================================
+
+        if (
+            jugadorPrincipal &&
+            consultaPrincipal &&
+            jugadorPrincipal ===
+                consultaPrincipal
+        ) {
+            mejor = Math.max(
+                mejor,
+                2400
+            );
+        }
+
+        // =============================================
+        // COINCIDENCIA VISUAL DE PARTE PRINCIPAL
+        // =============================================
+
+        if (
+            jugadorPrincipal &&
+            consultaVisual
+        ) {
+            const simPrincipal =
+                similitud(
+                    jugadorPrincipal,
+                    consultaVisual
+                );
+
+            if (simPrincipal >= 0.90) {
+                mejor = Math.max(
+                    mejor,
+                    2200 +
+                        Math.round(
+                            simPrincipal * 100
+                        )
+                );
+            }
+        }
+
+        // =============================================
+        // CONTIENE TODO EL NOMBRE
+        // =============================================
+
+        if (
+            consultaCompacta.length >= 4 &&
+            jugadorCompacto.includes(
+                consultaCompacta
+            )
         ) {
             const diferencia =
                 jugadorCompacto.length -
                 consultaCompacta.length;
 
-            let score = 1200;
+            let score = 0;
 
-            if (diferencia <= 2) score = 1350;
-            else if (diferencia <= 5) score = 1250;
+            if (diferencia === 0) {
+                score = 2400;
+            } else if (diferencia <= 2) {
+                score = 2100;
+            } else if (diferencia <= 4) {
+                score = 1800;
+            } else if (diferencia <= 7) {
+                score = 1400;
+            } else {
+                score = 900;
+            }
 
-            mejor = Math.max(mejor, score);
+            mejor = Math.max(
+                mejor,
+                score
+            );
         }
 
-        // ---------------------------------------------
-        // Consulta contiene jugador
-        // ---------------------------------------------
+        // =============================================
+        // COINCIDENCIA CONSECUTIVA
+        // =============================================
 
         if (
-            jugadorCompacto &&
-            consultaCompacta.includes(jugadorCompacto)
+            consultaCompacta.length >= 4 &&
+            jugadorCompacto.length >= 2
         ) {
-            mejor = Math.max(mejor, 1100);
+            const consecutiva =
+                longitudCoincidenciaConsecutiva(
+                    jugadorCompacto,
+                    consultaCompacta
+                );
+
+            if (
+                consecutiva >= 6
+            ) {
+                mejor = Math.max(
+                    mejor,
+                    1900
+                );
+            } else if (
+                consecutiva >= 5
+            ) {
+                mejor = Math.max(
+                    mejor,
+                    1600
+                );
+            } else if (
+                consecutiva >= 4
+            ) {
+                mejor = Math.max(
+                    mejor,
+                    1200
+                );
+            }
         }
 
-        // ---------------------------------------------
-        // Similitud
-        // ---------------------------------------------
+        // =============================================
+        // SIMILITUD GENERAL
+        // =============================================
 
         if (
             jugadorCompacto &&
             consultaCompacta
         ) {
-            const sim = similitud(
-                jugadorCompacto,
-                consultaCompacta
-            );
+            const sim =
+                similitud(
+                    jugadorCompacto,
+                    consultaCompacta
+                );
 
             if (sim >= 0.95) {
                 mejor = Math.max(
                     mejor,
-                    1500 + Math.round(sim * 100)
+                    1800 +
+                        Math.round(
+                            sim * 100
+                        )
                 );
             } else if (sim >= 0.85) {
                 mejor = Math.max(
                     mejor,
-                    1200 + Math.round(sim * 100)
+                    1400 +
+                        Math.round(
+                            sim * 100
+                        )
                 );
-            } else if (sim >= 0.70) {
+            } else if (sim >= 0.75) {
                 mejor = Math.max(
                     mejor,
-                    900 + Math.round(sim * 100)
+                    1000 +
+                        Math.round(
+                            sim * 100
+                        )
                 );
             }
         }
     }
 
-    return mejor;
+    // =================================================
+    // PENALIZAR NOMBRES DEMASIADO CORTOS
+    // =================================================
+
+    if (
+        jugadorCompacto.length <= 2 &&
+        mejor < 2800
+    ) {
+        mejor -= 800;
+    }
+
+    return Math.max(
+        0,
+        mejor
+    );
 }
 
 // =====================================================
-// BATTLEMETRICS API
+// BATTLEMETRICS
 // =====================================================
 
 async function consultarBattleMetrics(
@@ -477,7 +712,7 @@ async function consultarBattleMetrics(
 ) {
     if (!BM_TOKEN) {
         throw new Error(
-            "Falta BATTLEMETRICS_TOKEN en las variables de entorno."
+            "Falta BATTLEMETRICS_TOKEN."
         );
     }
 
@@ -486,23 +721,32 @@ async function consultarBattleMetrics(
         "page[size]": 100
     };
 
-    if (usarServidor && serverId) {
-        params["filter[servers]"] = serverId;
+    if (
+        usarServidor &&
+        serverId
+    ) {
+        params["filter[servers]"] =
+            serverId;
     }
 
-    const respuesta = await axios.get(
-        `${BM_API}/players`,
-        {
-            params,
-            headers: {
-                Authorization: `Bearer ${BM_TOKEN}`,
-                Accept: "application/vnd.api+json"
-            },
-            timeout: 20000
-        }
-    );
+    const respuesta =
+        await axios.get(
+            `${BM_API}/players`,
+            {
+                params,
+                headers: {
+                    Authorization:
+                        `Bearer ${BM_TOKEN}`,
+                    Accept:
+                        "application/vnd.api+json"
+                },
+                timeout: 20000
+            }
+        );
 
-    return Array.isArray(respuesta.data?.data)
+    return Array.isArray(
+        respuesta.data?.data
+    )
         ? respuesta.data.data
         : [];
 }
@@ -511,7 +755,10 @@ async function consultarBattleMetrics(
 // PUNTUAR JUGADORES
 // =====================================================
 
-function puntuarJugadores(jugadores, consultas) {
+function puntuarJugadores(
+    jugadores,
+    consultas
+) {
     return jugadores
         .map(player => {
             const nombre =
@@ -521,37 +768,76 @@ function puntuarJugadores(jugadores, consultas) {
             return {
                 player,
                 nombre,
-                score: puntuarCoincidencia(
-                    nombre,
-                    consultas
-                )
+                score:
+                    puntuarCoincidencia(
+                        nombre,
+                        consultas
+                    )
             };
         })
         .sort((a, b) => {
-            if (b.score !== a.score) {
-                return b.score - a.score;
+            if (
+                b.score !== a.score
+            ) {
+                return (
+                    b.score -
+                    a.score
+                );
             }
 
-            // Desempate:
-            // preferir nombres decorados cuando el nombre
-            // buscado es exactamente su versión limpia.
+            const aCompacto =
+                compactarNombre(
+                    a.nombre
+                );
 
-            const aDecorado =
-                /[^\p{L}\p{N}]/u.test(a.nombre);
+            const bCompacto =
+                compactarNombre(
+                    b.nombre
+                );
 
-            const bDecorado =
-                /[^\p{L}\p{N}]/u.test(b.nombre);
+            const aTieneDecoracion =
+                /[^\p{L}\p{N}]/u.test(
+                    a.nombre
+                );
 
-            if (aDecorado !== bDecorado) {
-                return aDecorado ? -1 : 1;
+            const bTieneDecoracion =
+                /[^\p{L}\p{N}]/u.test(
+                    b.nombre
+                );
+
+            // Si empatan, preferir nombre decorado.
+            if (
+                aTieneDecoracion !==
+                bTieneDecoracion
+            ) {
+                return aTieneDecoracion
+                    ? -1
+                    : 1;
             }
 
-            return a.nombre.length - b.nombre.length;
+            // Preferir nombre más largo
+            // cuando es una versión decorada.
+            if (
+                aTieneDecoracion &&
+                bTieneDecoracion
+            ) {
+                return (
+                    b.nombre.length -
+                    a.nombre.length
+                );
+            }
+
+            // Preferir mayor cantidad de caracteres
+            // coincidentes.
+            return (
+                bCompacto.length -
+                aCompacto.length
+            );
         });
 }
 
 // =====================================================
-// BUSCAR EN BATTLEMETRICS
+// BÚSQUEDA COMPLETA
 // =====================================================
 
 async function buscarEnBattleMetrics(
@@ -559,21 +845,26 @@ async function buscarEnBattleMetrics(
     serverId
 ) {
     const consultas =
-        generarConsultasBusqueda(nombre);
+        generarConsultasBusqueda(
+            nombre
+        );
 
     console.log(
         "[BM] Consultas:",
         consultas
     );
 
-    const jugadoresMap = new Map();
+    const jugadoresMap =
+        new Map();
 
     // =================================================
-    // PRIMERA BÚSQUEDA:
+    // PRIMERA PASADA:
     // CON SERVIDOR
     // =================================================
 
-    for (const consulta of consultas) {
+    for (
+        const consulta of consultas
+    ) {
         try {
             console.log(
                 `[BM] Buscando "${consulta}" con servidor...`
@@ -586,8 +877,12 @@ async function buscarEnBattleMetrics(
                     true
                 );
 
-            for (const player of resultados) {
-                if (!player?.id) continue;
+            for (
+                const player of resultados
+            ) {
+                if (!player?.id) {
+                    continue;
+                }
 
                 jugadoresMap.set(
                     String(player.id),
@@ -596,7 +891,7 @@ async function buscarEnBattleMetrics(
             }
         } catch (error) {
             console.log(
-                `[BM] Error buscando "${consulta}":`,
+                `[BM] Error "${consulta}":`,
                 error.response?.status ||
                     error.message
             );
@@ -610,44 +905,41 @@ async function buscarEnBattleMetrics(
         );
 
     console.log(
-        "[BM] Candidatos encontrados:",
-        puntuados.length
+        `[BM] ${puntuados.length} candidatos encontrados.`
     );
 
-    for (const item of puntuados.slice(0, 10)) {
+    for (
+        const item of puntuados.slice(
+            0,
+            15
+        )
+    ) {
         console.log(
             `[BM] ${item.player.id} | "${item.nombre}" | score=${item.score}`
         );
     }
 
     // =================================================
-    // SEGUNDA BÚSQUEDA:
-    // SIN SERVIDOR
-    //
-    // Esto permite encontrar perfiles como:
-    // "DareN ^_^"
-    // aunque BattleMetrics no los entregue
-    // usando directamente filter[servers].
+    // FALLBACK SIN SERVIDOR
     // =================================================
 
     if (
-        puntuados.length === 0 ||
-        puntuados[0].score < 1800
+        !puntuados.length ||
+        puntuados[0].score < 2200
     ) {
         console.log(
-            "[BM] Mejor coincidencia insuficiente."
-        );
-
-        console.log(
-            "[BM] Buscando también sin filtro de servidor..."
+            "[BM] Ejecutando búsqueda global..."
         );
 
         for (
-            const consulta of consultas.slice(0, 8)
+            const consulta of consultas.slice(
+                0,
+                10
+            )
         ) {
             try {
                 console.log(
-                    `[BM] Fallback "${consulta}" sin servidor...`
+                    `[BM] Global "${consulta}"...`
                 );
 
                 const resultados =
@@ -657,8 +949,12 @@ async function buscarEnBattleMetrics(
                         false
                     );
 
-                for (const player of resultados) {
-                    if (!player?.id) continue;
+                for (
+                    const player of resultados
+                ) {
+                    if (!player?.id) {
+                        continue;
+                    }
 
                     jugadoresMap.set(
                         String(player.id),
@@ -667,7 +963,7 @@ async function buscarEnBattleMetrics(
                 }
             } catch (error) {
                 console.log(
-                    `[BM] Error fallback "${consulta}":`,
+                    `[BM] Error global "${consulta}":`,
                     error.response?.status ||
                         error.message
                 );
@@ -682,15 +978,18 @@ async function buscarEnBattleMetrics(
     }
 
     // =================================================
-    // MOSTRAR TOP
+    // RESULTADOS FINALES
     // =================================================
 
     console.log(
-        "[BM] ===== MEJORES RESULTADOS ====="
+        "[BM] ===== RESULTADOS FINALES ====="
     );
 
     for (
-        const item of puntuados.slice(0, 10)
+        const item of puntuados.slice(
+            0,
+            15
+        )
     ) {
         console.log(
             `[BM] ${item.player.id} | "${item.nombre}" | score=${item.score}`
@@ -702,28 +1001,35 @@ async function buscarEnBattleMetrics(
     );
 
     if (!puntuados.length) {
+        console.log(
+            "[BM] ❌ No se encontraron jugadores."
+        );
+
         return null;
     }
 
-    const mejor = puntuados[0];
+    const mejor =
+        puntuados[0];
 
-    if (mejor.score < 650) {
+    if (
+        mejor.score < 800
+    ) {
         console.log(
-            "[BM] ❌ Ningún resultado suficientemente parecido."
+            `[BM] ❌ Mejor resultado demasiado débil: "${mejor.nombre}"`
         );
 
         return null;
     }
 
     console.log(
-        `[BM] ✅ MEJOR COINCIDENCIA: ${mejor.player.id} | "${mejor.nombre}" | score=${mejor.score}`
+        `[BM] ✅ MEJOR: ${mejor.player.id} | "${mejor.nombre}" | score=${mejor.score}`
     );
 
     return mejor.player;
 }
 
 // =====================================================
-// EMBED RESULTADO
+// EMBED
 // =====================================================
 
 function crearEmbedResultado({
@@ -734,19 +1040,23 @@ function crearEmbedResultado({
 }) {
     const embed =
         new EmbedBuilder()
-            .setTitle("🎯 Resultado de búsqueda Steam")
+            .setTitle(
+                "🎯 Resultado de búsqueda Steam"
+            )
             .setDescription(
                 "Revisa el nombre detectado antes de buscarlo en BattleMetrics."
             );
 
     embed.addFields({
         name: "📸 OCR detectado",
-        value: `\`${ocr || "No detectado"}\``
+        value:
+            `\`${ocr || "No detectado"}\``
     });
 
     embed.addFields({
         name: "🔎 Nombre buscado",
-        value: `\`${nombreBuscado || "No especificado"}\``
+        value:
+            `\`${nombreBuscado || "No especificado"}\``
     });
 
     if (jugador) {
@@ -757,13 +1067,13 @@ function crearEmbedResultado({
         embed.addFields({
             name: "✅ Jugador encontrado",
             value:
-                `**${nombre}**\n` +
-                `BattleMetrics ID: \`${jugador.id}\``
+                `**${nombre}** BattleMetrics ID: \`${jugador.id}\``
         });
     } else {
         embed.addFields({
-            name: "❌ Jugador",
-            value: "No se encontró una coincidencia."
+            name: "❌ Jugador encontrado",
+            value:
+                "No se encontró una coincidencia suficientemente fiable."
         });
     }
 
@@ -771,10 +1081,7 @@ function crearEmbedResultado({
         embed.addFields({
             name: "🎯 Servidor consultado",
             value:
-                `[Abrir servidor en BattleMetrics](${BM_API.replace(
-                    "/api",
-                    ""
-                )}/servers/${serverId})`
+                `[Abrir servidor en BattleMetrics](https://www.battlemetrics.com/servers/${serverId})`
         });
     }
 
@@ -782,17 +1089,24 @@ function crearEmbedResultado({
 }
 
 // =====================================================
-// BOTONES RESULTADO
+// BOTONES
 // =====================================================
 
-function crearBotonesResultado(jugador, nombre) {
+function crearBotonesResultado(
+    jugador,
+    nombre
+) {
     const botones = [];
 
     if (jugador?.id) {
         botones.push(
             new ButtonBuilder()
-                .setLabel("BattleMetrics")
-                .setStyle(ButtonStyle.Link)
+                .setLabel(
+                    "BattleMetrics"
+                )
+                .setStyle(
+                    ButtonStyle.Link
+                )
                 .setURL(
                     `https://www.battlemetrics.com/players/${jugador.id}`
                 )
@@ -802,8 +1116,12 @@ function crearBotonesResultado(jugador, nombre) {
     if (nombre) {
         botones.push(
             new ButtonBuilder()
-                .setLabel("Name Search")
-                .setStyle(ButtonStyle.Link)
+                .setLabel(
+                    "Name Search"
+                )
+                .setStyle(
+                    ButtonStyle.Link
+                )
                 .setURL(
                     `https://www.steamid.com/search?q=${encodeURIComponent(
                         nombre
@@ -812,206 +1130,270 @@ function crearBotonesResultado(jugador, nombre) {
         );
     }
 
-    return new ActionRowBuilder().addComponents(
-        botones
-    );
+    if (!botones.length) {
+        return null;
+    }
+
+    return new ActionRowBuilder()
+        .addComponents(
+            botones
+        );
 }
 
 // =====================================================
-// COMANDO
+// EXPORTAR COMANDO
 // =====================================================
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName("steam")
-        .setDescription(
-            "Busca un jugador de Steam/BattleMetrics"
-        )
-        .addStringOption(option =>
-            option
-                .setName("nombre")
-                .setDescription(
-                    "Nombre del jugador"
-                )
-                .setRequired(false)
-        )
-        .addAttachmentOption(option =>
-            option
-                .setName("imagen")
-                .setDescription(
-                    "Captura del nombre del jugador"
-                )
-                .setRequired(false)
-        ),
-
-    async execute(interaction) {
-        let nombre =
-            interaction.options.getString(
-                "nombre"
-            );
-
-        const imagen =
-            interaction.options.getAttachment(
-                "imagen"
-            );
-
-        let ocrDetectado = "";
-
-        // =================================================
-        // RESPONDER RÁPIDO PARA EVITAR UNKNOWN INTERACTION
-        // =================================================
-
-        await interaction.deferReply();
-
-        // =================================================
-        // OCR
-        // =================================================
-
-        if (imagen) {
-            try {
-                console.log(
-                    "[OCR] Descargando imagen..."
-                );
-
-                const respuesta =
-                    await axios.get(
-                        imagen.url,
-                        {
-                            responseType: "arraybuffer",
-                            timeout: 30000
-                        }
-                    );
-
-                console.log(
-                    "[OCR] Ejecutando OCR..."
-                );
-
-                const textos =
-                    await ejecutarOCR(
-                        Buffer.from(
-                            respuesta.data
+    data:
+        new SlashCommandBuilder()
+            .setName("steam")
+            .setDescription(
+                "Busca un jugador de Steam/BattleMetrics"
+            )
+            .addStringOption(
+                option =>
+                    option
+                        .setName(
+                            "nombre"
                         )
-                    );
+                        .setDescription(
+                            "Nombre del jugador"
+                        )
+                        .setRequired(
+                            false
+                        )
+            )
+            .addAttachmentOption(
+                option =>
+                    option
+                        .setName(
+                            "imagen"
+                        )
+                        .setDescription(
+                            "Captura del nombre del jugador"
+                        )
+                        .setRequired(
+                            false
+                        )
+            ),
 
-                const candidatos =
-                    extraerCandidatosOCR(
-                        textos
-                    );
-
-                console.log(
-                    "[OCR] Candidatos:",
-                    candidatos
+    async execute(
+        interaction
+    ) {
+        try {
+            const nombreInput =
+                interaction.options.getString(
+                    "nombre"
                 );
 
-                if (!nombre && candidatos.length) {
-                    nombre = candidatos[0];
-                }
+            const imagen =
+                interaction.options.getAttachment(
+                    "imagen"
+                );
 
-                ocrDetectado =
-                    candidatos[0] ||
-                    textos[0] ||
-                    "";
+            let nombre =
+                nombreInput
+                    ? limpiarOCR(
+                        nombreInput
+                    )
+                    : "";
+
+            let ocrDetectado = "";
+
+            // =============================================
+            // DEFER
+            // =============================================
+
+            await interaction.deferReply();
+
+            // =============================================
+            // OCR
+            // =============================================
+
+            if (imagen) {
+                try {
+                    console.log(
+                        "[OCR] Descargando imagen..."
+                    );
+
+                    const respuesta =
+                        await axios.get(
+                            imagen.url,
+                            {
+                                responseType:
+                                    "arraybuffer",
+                                timeout:
+                                    30000
+                            }
+                        );
+
+                    console.log(
+                        "[OCR] Procesando imagen..."
+                    );
+
+                    const textos =
+                        await ejecutarOCR(
+                            Buffer.from(
+                                respuesta.data
+                            )
+                        );
+
+                    const candidatos =
+                        extraerCandidatosOCR(
+                            textos
+                        );
+
+                    console.log(
+                        "[OCR] Candidatos:",
+                        candidatos
+                    );
+
+                    if (!nombre) {
+                        nombre =
+                            candidatos[0] ||
+                            "";
+                    }
+
+                    ocrDetectado =
+                        candidatos[0] ||
+                        "";
+                } catch (error) {
+                    console.error(
+                        "[OCR] Error:",
+                        error
+                    );
+                }
+            }
+
+            // =============================================
+            // VALIDAR NOMBRE
+            // =============================================
+
+            if (!nombre) {
+                return interaction.editReply({
+                    content:
+                        "❌ No pude detectar ningún nombre. Usa `/steam nombre:` o adjunta una captura."
+                });
+            }
+
+            nombre =
+                limpiarOCR(
+                    nombre
+                );
+
+            // =============================================
+            // CONFIGURACIÓN DEL SERVIDOR
+            // =============================================
+
+            let serverId = null;
+
+            try {
+                const config =
+                    await ServerConfig.findOne({
+                        guildId:
+                            interaction.guildId
+                    });
+
+                serverId =
+                    config?.battleMetricsServerId ||
+                    null;
             } catch (error) {
                 console.error(
-                    "[OCR] Error:",
+                    "[CONFIG] Error:",
                     error
                 );
             }
-        }
 
-        if (!nombre) {
-            return interaction.editReply({
-                content:
-                    "❌ Necesito un nombre o una imagen para buscar al jugador."
-            });
-        }
+            if (!serverId) {
+                return interaction.editReply({
+                    content:
+                        "❌ Este servidor no tiene configurado un BattleMetrics Server ID."
+                });
+            }
 
-        // =================================================
-        // CONFIGURACIÓN SERVIDOR
-        // =================================================
+            // =============================================
+            // BÚSQUEDA
+            // =============================================
 
-        let serverId = null;
+            console.log(
+                `[BM] Buscando: "${nombre}"`
+            );
 
-        try {
-            const config =
-                await ServerConfig.findOne({
-                    guildId:
-                        interaction.guildId
+            let jugador = null;
+
+            try {
+                jugador =
+                    await buscarEnBattleMetrics(
+                        nombre,
+                        serverId
+                    );
+            } catch (error) {
+                console.error(
+                    "[BM] Error general:",
+                    error
+                );
+
+                return interaction.editReply({
+                    content:
+                        "❌ Ocurrió un error al consultar BattleMetrics."
+                });
+            }
+
+            // =============================================
+            // EMBED
+            // =============================================
+
+            const embed =
+                crearEmbedResultado({
+                    nombreBuscado:
+                        nombre,
+                    ocr:
+                        ocrDetectado ||
+                        nombre,
+                    jugador,
+                    serverId
                 });
 
-            serverId =
-                config?.battleMetricsServerId ||
-                null;
-        } catch (error) {
-            console.error(
-                "[CONFIG] Error:",
-                error
-            );
-        }
-
-        if (!serverId) {
-            return interaction.editReply({
-                content:
-                    "❌ Este servidor no tiene configurado un BattleMetrics Server ID."
-            });
-        }
-
-        // =================================================
-        // BUSCAR
-        // =================================================
-
-        let jugador = null;
-
-        try {
-            console.log(
-                `[BM] Buscando jugador: "${nombre}"`
-            );
-
-            jugador =
-                await buscarEnBattleMetrics(
-                    nombre,
-                    serverId
+            const row =
+                crearBotonesResultado(
+                    jugador,
+                    nombre
                 );
+
+            return interaction.editReply({
+                embeds: [
+                    embed
+                ],
+                components:
+                    row
+                        ? [row]
+                        : []
+            });
         } catch (error) {
             console.error(
-                "[BM] Error general:",
+                "[STEAM] Error:",
                 error
             );
 
-            return interaction.editReply({
-                content:
-                    "❌ Ocurrió un error al consultar BattleMetrics."
-            });
+            try {
+                if (
+                    interaction.deferred ||
+                    interaction.replied
+                ) {
+                    return interaction.editReply({
+                        content:
+                            "❌ Ocurrió un error ejecutando `/steam`."
+                    });
+                }
+
+                return interaction.reply({
+                    content:
+                        "❌ Ocurrió un error ejecutando `/steam`.",
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+            } catch {}
         }
-
-        // =================================================
-        // EMBED
-        // =================================================
-
-        const embed =
-            crearEmbedResultado({
-                nombreBuscado: nombre,
-                ocr: ocrDetectado,
-                jugador,
-                serverId
-            });
-
-        const row =
-            crearBotonesResultado(
-                jugador,
-                nombre
-            );
-
-        // =================================================
-        // RESPUESTA
-        // =================================================
-
-        return interaction.editReply({
-            embeds: [embed],
-            components:
-                row.components.length
-                    ? [row]
-                    : []
-        });
     }
 };
