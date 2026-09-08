@@ -14,7 +14,6 @@ const ServerConfig = require("../models/ServerConfig");
 const BM_API = "https://api.battlemetrics.com";
 const REQUEST_TIMEOUT = 30000;
 
-// Mínimo de jugadores con el mismo tag
 const MIN_JUGADORES_CLAN = 6;
 
 // =====================================================
@@ -22,11 +21,13 @@ const MIN_JUGADORES_CLAN = 6;
 // =====================================================
 
 function getHeaders() {
-    const token = process.env.BATTLEMETRICS_TOKEN;
+
+    const token =
+        process.env.BATTLEMETRICS_TOKEN;
 
     if (!token) {
         throw new Error(
-            "BATTLEMETRICS_TOKEN no está configurado en las variables de entorno."
+            "BATTLEMETRICS_TOKEN no está configurado."
         );
     }
 
@@ -42,13 +43,17 @@ function getHeaders() {
 // =====================================================
 
 function normalizarNombre(nombre) {
+
     if (!nombre) {
         return "";
     }
 
     return String(nombre)
         .normalize("NFC")
-        .replace(/[\u200B\u200C\u200D\uFEFF]/g, "")
+        .replace(
+            /[\u200B\u200C\u200D\uFEFF]/g,
+            ""
+        )
         .trim();
 }
 
@@ -57,7 +62,9 @@ function normalizarNombre(nombre) {
 // =====================================================
 
 function obtenerTag(nombre) {
-    const limpio = normalizarNombre(nombre);
+
+    const limpio =
+        normalizarNombre(nombre);
 
     if (!limpio) {
         return null;
@@ -67,11 +74,15 @@ function obtenerTag(nombre) {
     // [F.O.L™] Daren
     // ================================================
 
-    const corchetes = limpio.match(
-        /^(\[[^\]]{2,30}\])(?:\s+|$)/
-    );
+    const corchetes =
+        limpio.match(
+            /^(\[[^\]]{2,30}\])(?:\s+|$)/
+        );
 
-    if (corchetes && corchetes[1]) {
+    if (
+        corchetes &&
+        corchetes[1]
+    ) {
         return corchetes[1].trim();
     }
 
@@ -79,11 +90,15 @@ function obtenerTag(nombre) {
     // (F.O.L™) Daren
     // ================================================
 
-    const parentesis = limpio.match(
-        /^(\([^) ]{2,30}\))(?:\s+|$)/
-    );
+    const parentesis =
+        limpio.match(
+            /^(\([^) ]{2,30}\))(?:\s+|$)/
+        );
 
-    if (parentesis && parentesis[1]) {
+    if (
+        parentesis &&
+        parentesis[1]
+    ) {
         return parentesis[1].trim();
     }
 
@@ -91,11 +106,15 @@ function obtenerTag(nombre) {
     // F.O.L™ Daren
     // ================================================
 
-    const tagConSimbolo = limpio.match(
-        /^(.{2,25}[™®©★☆✦✧✪✯✰♦♢✓✔☠☢☣⚔⚡]+)(?:\s+|$)/
-    );
+    const tagConSimbolo =
+        limpio.match(
+            /^(.{2,25}[™®©★☆✦✧✪✯✰♦♢✓✔☠☢☣⚔⚡]+)(?:\s+|$)/
+        );
 
-    if (tagConSimbolo && tagConSimbolo[1]) {
+    if (
+        tagConSimbolo &&
+        tagConSimbolo[1]
+    ) {
         return tagConSimbolo[1].trim();
     }
 
@@ -103,11 +122,15 @@ function obtenerTag(nombre) {
     // F.O.L Daren
     // ================================================
 
-    const tagConPuntos = limpio.match(
-        /^([A-Za-zÀ-ÿ0-9]{1,8}(?:\.[A-Za-zÀ-ÿ0-9]{1,8}){1,6})(?:\s+|$)/
-    );
+    const tagConPuntos =
+        limpio.match(
+            /^([A-Za-zÀ-ÿ0-9]{1,8}(?:\.[A-Za-zÀ-ÿ0-9]{1,8}){1,6})(?:\s+|$)/
+        );
 
-    if (tagConPuntos && tagConPuntos[1]) {
+    if (
+        tagConPuntos &&
+        tagConPuntos[1]
+    ) {
         return tagConPuntos[1].trim();
     }
 
@@ -115,10 +138,15 @@ function obtenerTag(nombre) {
     // TAG SIMPLE
     // ================================================
 
-    const partes = limpio.split(/\s+/);
+    const partes =
+        limpio.split(/\s+/);
 
-    if (partes.length >= 2) {
-        const primerBloque = partes[0].trim();
+    if (
+        partes.length >= 2
+    ) {
+
+        const primerBloque =
+            partes[0].trim();
 
         if (
             primerBloque.length >= 2 &&
@@ -132,17 +160,24 @@ function obtenerTag(nombre) {
 }
 
 // =====================================================
-// SESIÓN ACTIVA
+// COMPROBAR SESIÓN ACTIVA
 // =====================================================
 
 function sesionEstaActiva(session) {
-    if (!session || !session.attributes) {
+
+    if (
+        !session ||
+        !session.attributes
+    ) {
         return false;
     }
 
-    const attributes = session.attributes;
+    const attributes =
+        session.attributes;
 
-    if (attributes.online === true) {
+    if (
+        attributes.online === true
+    ) {
         return true;
     }
 
@@ -161,15 +196,26 @@ function sesionEstaActiva(session) {
 // OBTENER JUGADORES DEL SERVIDOR
 // =====================================================
 
-async function obtenerJugadoresDelServidor(serverId) {
+async function obtenerJugadoresDelServidor(
+    serverId
+) {
 
-    const jugadores = new Map();
+    const jugadores =
+        new Map();
+
+    let url =
+        `${BM_API}/sessions`;
+
+    let primeraPeticion = true;
 
     let pagina = 1;
 
-    const MAX_PAGINAS = 10;
+    const MAX_PAGINAS = 20;
 
-    while (pagina <= MAX_PAGINAS) {
+    while (
+        url &&
+        pagina <= MAX_PAGINAS
+    ) {
 
         console.log(
             `📡 BattleMetrics | Obteniendo jugadores | página ${pagina}`
@@ -177,29 +223,50 @@ async function obtenerJugadoresDelServidor(serverId) {
 
         try {
 
-            const response = await axios.get(
-                `${BM_API}/sessions`,
-                {
-                    params: {
-                        "filter[servers]": serverId,
-                        "page[size]": 100,
-                        "page[number]": pagina,
-                        include: "player"
-                    },
-                    headers: getHeaders(),
-                    timeout: REQUEST_TIMEOUT
-                }
-            );
+            const response =
+                await axios.get(
+                    url,
+                    {
+                        params:
+                            primeraPeticion
+                                ? {
+                                    "filter[servers]":
+                                        String(serverId),
 
-            const data = response.data || {};
+                                    "page[size]":
+                                        100,
 
-            const sesiones = Array.isArray(data.data)
-                ? data.data
-                : [];
+                                    include:
+                                        "player"
+                                }
+                                : undefined,
 
-            const incluidos = Array.isArray(data.included)
-                ? data.included
-                : [];
+                        headers:
+                            getHeaders(),
+
+                        timeout:
+                            REQUEST_TIMEOUT
+                    }
+                );
+
+            primeraPeticion = false;
+
+            const data =
+                response.data || {};
+
+            const sesiones =
+                Array.isArray(
+                    data.data
+                )
+                    ? data.data
+                    : [];
+
+            const incluidos =
+                Array.isArray(
+                    data.included
+                )
+                    ? data.included
+                    : [];
 
             console.log(
                 `📡 BattleMetrics | Sesiones recibidas: ${sesiones.length}`
@@ -209,37 +276,52 @@ async function obtenerJugadoresDelServidor(serverId) {
             // MAPA DE PLAYERS
             // ==========================================
 
-            const players = new Map();
+            const players =
+                new Map();
 
-            for (const player of incluidos) {
+            for (
+                const player
+                of incluidos
+            ) {
 
                 if (
                     player &&
                     player.type === "player" &&
                     player.id
                 ) {
+
                     players.set(
-                        String(player.id),
+                        String(
+                            player.id
+                        ),
                         player
                     );
                 }
             }
 
             // ==========================================
-            // PROCESAR SESIONES ACTIVAS
+            // PROCESAR SESIONES
             // ==========================================
 
-            for (const session of sesiones) {
+            for (
+                const session
+                of sesiones
+            ) {
 
-                if (!sesionEstaActiva(session)) {
+                if (
+                    !sesionEstaActiva(
+                        session
+                    )
+                ) {
                     continue;
                 }
 
-                let playerId = null;
+                let playerId =
+                    null;
 
-                // --------------------------------------
-                // relationships.player
-                // --------------------------------------
+                // ======================================
+                // RELATIONSHIPS PLAYER
+                // ======================================
 
                 if (
                     session.relationships &&
@@ -248,21 +330,31 @@ async function obtenerJugadoresDelServidor(serverId) {
                 ) {
 
                     const playerData =
-                        session.relationships.player.data;
+                        session
+                            .relationships
+                            .player
+                            .data;
 
-                    if (Array.isArray(playerData)) {
+                    if (
+                        Array.isArray(
+                            playerData
+                        )
+                    ) {
 
                         if (
                             playerData[0] &&
                             playerData[0].id
                         ) {
+
                             playerId =
                                 String(
                                     playerData[0].id
                                 );
                         }
 
-                    } else if (playerData.id) {
+                    } else if (
+                        playerData.id
+                    ) {
 
                         playerId =
                             String(
@@ -271,18 +363,21 @@ async function obtenerJugadoresDelServidor(serverId) {
                     }
                 }
 
-                // --------------------------------------
-                // playerId alternativo
-                // --------------------------------------
+                // ======================================
+                // PLAYER ID ALTERNATIVO
+                // ======================================
 
                 if (
                     !playerId &&
                     session.attributes &&
                     session.attributes.playerId
                 ) {
+
                     playerId =
                         String(
-                            session.attributes.playerId
+                            session
+                                .attributes
+                                .playerId
                         );
                 }
 
@@ -290,14 +385,17 @@ async function obtenerJugadoresDelServidor(serverId) {
                     continue;
                 }
 
-                // --------------------------------------
-                // PLAYER INCLUIDO
-                // --------------------------------------
+                // ======================================
+                // BUSCAR PLAYER
+                // ======================================
 
                 const player =
-                    players.get(playerId);
+                    players.get(
+                        playerId
+                    );
 
-                let nombre = null;
+                let nombre =
+                    null;
 
                 if (
                     player &&
@@ -305,52 +403,94 @@ async function obtenerJugadoresDelServidor(serverId) {
                 ) {
 
                     nombre =
-                        player.attributes.name ||
-                        player.attributes.username ||
-                        player.attributes.displayName ||
+                        player
+                            .attributes
+                            .name ||
+
+                        player
+                            .attributes
+                            .username ||
+
+                        player
+                            .attributes
+                            .displayName ||
+
                         null;
                 }
 
-                // --------------------------------------
+                // ======================================
                 // NOMBRE DESDE SESSION
-                // --------------------------------------
+                // ======================================
 
                 if (!nombre) {
 
                     nombre =
-                        session.attributes?.name ||
-                        session.attributes?.playerName ||
-                        session.attributes?.username ||
+                        session
+                            .attributes
+                            ?.name ||
+
+                        session
+                            .attributes
+                            ?.playerName ||
+
+                        session
+                            .attributes
+                            ?.username ||
+
                         null;
                 }
 
                 if (!nombre) {
-                    nombre = `Jugador ${playerId}`;
+
+                    nombre =
+                        `Jugador ${playerId}`;
                 }
 
                 nombre =
-                    normalizarNombre(nombre);
+                    normalizarNombre(
+                        nombre
+                    );
 
                 jugadores.set(
                     playerId,
                     {
-                        battlemetricsId: playerId,
-                        nombre
+                        battlemetricsId:
+                            playerId,
+
+                        nombre:
+                            nombre
                     }
                 );
             }
 
-            if (sesiones.length < 100) {
+            // ==========================================
+            // SIGUIENTE PÁGINA
+            // ==========================================
+
+            let siguiente =
+                null;
+
+            if (
+                data.links &&
+                data.links.next
+            ) {
+
+                siguiente =
+                    data.links.next;
+            }
+
+            if (
+                !siguiente
+            ) {
                 break;
             }
+
+            url =
+                siguiente;
 
             pagina++;
 
         } catch (error) {
-
-            // ==========================================
-            // ERROR BATTLEMETRICS
-            // ==========================================
 
             console.error(
                 "=============================================="
@@ -361,27 +501,36 @@ async function obtenerJugadoresDelServidor(serverId) {
             );
 
             console.error(
-                `❌ HTTP: ${error.response?.status || "desconocido"}`
+                `❌ HTTP: ${
+                    error.response?.status ||
+                    "desconocido"
+                }`
             );
 
             console.error(
-                `❌ STATUS: ${error.response?.statusText || "desconocido"}`
+                `❌ STATUS: ${
+                    error.response?.statusText ||
+                    "desconocido"
+                }`
             );
 
             console.error(
                 "❌ URL:",
-                error.config?.url || "desconocida"
+                error.config?.url ||
+                "desconocida"
             );
 
             console.error(
                 "❌ PARAMETROS:",
-                error.config?.params || {}
+                error.config?.params ||
+                {}
             );
 
             console.error(
                 "❌ RESPUESTA BM:",
                 JSON.stringify(
-                    error.response?.data || {},
+                    error.response?.data ||
+                    {},
                     null,
                     2
                 )
@@ -408,11 +557,17 @@ async function obtenerJugadoresDelServidor(serverId) {
 // DETECTAR CLANES
 // =====================================================
 
-function detectarClanes(jugadores) {
+function detectarClanes(
+    jugadores
+) {
 
-    const grupos = new Map();
+    const grupos =
+        new Map();
 
-    for (const jugador of jugadores) {
+    for (
+        const jugador
+        of jugadores
+    ) {
 
         if (
             !jugador ||
@@ -433,7 +588,11 @@ function detectarClanes(jugadores) {
         const clave =
             tag.toLocaleLowerCase();
 
-        if (!grupos.has(clave)) {
+        if (
+            !grupos.has(
+                clave
+            )
+        ) {
 
             grupos.set(
                 clave,
@@ -471,13 +630,16 @@ function detectarClanes(jugadores) {
 
 module.exports = {
 
-    data: new SlashCommandBuilder()
-        .setName("revisar")
-        .setDescription(
-            "Detecta clanes por tag en el servidor configurado"
-        ),
+    data:
+        new SlashCommandBuilder()
+            .setName("revisar")
+            .setDescription(
+                "Detecta clanes por tag en el servidor configurado"
+            ),
 
-    async execute(interaction) {
+    async execute(
+        interaction
+    ) {
 
         try {
 
@@ -492,7 +654,7 @@ module.exports = {
             );
 
             // ==========================================
-            // OBTENER CONFIGURACIÓN
+            // CONFIGURACIÓN
             // ==========================================
 
             const config =
@@ -510,8 +672,8 @@ module.exports = {
             }
 
             // ==========================================
-            // EXACTAMENTE IGUAL QUE
-            // configurar-servidor.js
+            // MISMO CAMPO QUE
+            // configurar-servidor
             // ==========================================
 
             const serverId =
@@ -530,18 +692,20 @@ module.exports = {
             );
 
             // ==========================================
-            // COMPROBAR API KEY
+            // API KEY
             // ==========================================
 
-            if (!process.env.BATTLEMETRICS_TOKEN) {
+            if (
+                !process.env.BATTLEMETRICS_TOKEN
+            ) {
 
                 console.error(
-                    "❌ Falta BATTLEMETRICS_TOKEN"
+                    "❌ BATTLEMETRICS_TOKEN no existe."
                 );
 
                 return await interaction.editReply({
                     content:
-                        "❌ No está configurada la API Key de BattleMetrics en las variables de entorno."
+                        "❌ La API Key de BattleMetrics no está configurada."
                 });
             }
 
@@ -550,7 +714,7 @@ module.exports = {
             );
 
             // ==========================================
-            // OBTENER JUGADORES ONLINE
+            // JUGADORES
             // ==========================================
 
             const jugadores =
@@ -563,7 +727,7 @@ module.exports = {
             );
 
             // ==========================================
-            // DETECTAR CLANES
+            // CLANES
             // ==========================================
 
             const clanes =
@@ -599,11 +763,14 @@ module.exports = {
             // SIN CLANES
             // ==========================================
 
-            if (clanes.length === 0) {
+            if (
+                clanes.length === 0
+            ) {
 
                 embed.addFields({
                     name:
                         "🔎 Resultado",
+
                     value:
                         `No se detectaron tags con **${MIN_JUGADORES_CLAN} o más jugadores**.`
                 });
@@ -614,7 +781,10 @@ module.exports = {
                 // CLANES
                 // ======================================
 
-                for (const clan of clanes) {
+                for (
+                    const clan
+                    of clanes
+                ) {
 
                     let lista =
                         clan.jugadores
@@ -624,7 +794,9 @@ module.exports = {
                             )
                             .join("\n");
 
-                    if (lista.length > 950) {
+                    if (
+                        lista.length > 950
+                    ) {
 
                         lista =
                             lista.substring(
@@ -659,7 +831,7 @@ module.exports = {
             });
 
             // ==========================================
-            // ENVIAR
+            // RESPUESTA
             // ==========================================
 
             await interaction.editReply({
@@ -680,28 +852,38 @@ module.exports = {
             let mensaje =
                 "❌ Ocurrió un error al consultar BattleMetrics.";
 
-            // ==========================================
-            // MOSTRAR ERROR REAL DE BM
-            // ==========================================
-
-            if (error.response) {
+            if (
+                error.response
+            ) {
 
                 const bmErrors =
-                    error.response.data?.errors;
+                    error
+                        .response
+                        .data
+                        ?.errors;
 
                 if (
-                    Array.isArray(bmErrors) &&
+                    Array.isArray(
+                        bmErrors
+                    ) &&
                     bmErrors.length > 0
                 ) {
 
                     const detalle =
                         bmErrors
                             .map(
-                                err =>
-                                    err.detail ||
-                                    err.title ||
-                                    err.code ||
-                                    "Error desconocido"
+                                err => {
+
+                                    return (
+                                        err.detail ||
+                                        err.message ||
+                                        err.title ||
+                                        err.code ||
+                                        JSON.stringify(
+                                            err
+                                        )
+                                    );
+                                }
                             )
                             .join("\n");
 
@@ -726,17 +908,24 @@ module.exports = {
             ) {
 
                 await interaction.editReply({
-                    content: mensaje,
+                    content:
+                        mensaje,
                     embeds: []
-                }).catch(() => {});
+                }).catch(
+                    () => {}
+                );
 
             } else {
 
                 await interaction.reply({
-                    content: mensaje,
+                    content:
+                        mensaje,
+
                     flags:
                         MessageFlags.Ephemeral
-                }).catch(() => {});
+                }).catch(
+                    () => {}
+                );
             }
         }
     }
