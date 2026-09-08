@@ -33,6 +33,14 @@ const {
 } = require("./services/rustStore");
 
 // ======================
+// PLANILLA AUTOMÁTICA
+// ======================
+
+const {
+    iniciarPlanillaAutomatica
+} = require("./services/planillaAutomatica");
+
+// ======================
 // PUERTO PARA RENDER
 // ======================
 
@@ -497,6 +505,33 @@ client.once(
 
         }
 
+        // ======================
+        // PLANILLA AUTOMÁTICA
+        // ======================
+
+        console.log(
+            "📋 Iniciando sistema automático de planilla..."
+        );
+
+        try {
+
+            iniciarPlanillaAutomatica(
+                client
+            );
+
+            console.log(
+                "📋 Sistema automático de planilla iniciado correctamente."
+            );
+
+        } catch (error) {
+
+            console.error(
+                "❌ Error iniciando planilla automática:",
+                error
+            );
+
+        }
+
     }
 );
 
@@ -572,6 +607,12 @@ Después podrás usar:
 
 🛒 **Tienda Rust**
 🛒 \`/configurar-tienda\`
+
+
+📊 **Planilla**
+📋 \`/planilla\`
+⚙️ \`/setcanalplanilla\`
+🔗 \`/verplanilla\`
 
 
 📚 Usa:

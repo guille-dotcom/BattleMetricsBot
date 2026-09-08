@@ -19,6 +19,17 @@ const serverConfigSchema = new mongoose.Schema({
     },
 
     // ==========================================
+    // CONFIGURACIÓN PLANILLA
+    // ==========================================
+
+    // Canal donde se enviarán las revisiones
+    // automáticas de la planilla cada 1 hora
+    planillaChannelId: {
+        type: String,
+        default: null
+    },
+
+    // ==========================================
     // CONFIGURACIÓN STEAMID.UK
     // ==========================================
 
