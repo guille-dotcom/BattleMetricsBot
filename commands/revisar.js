@@ -13,9 +13,7 @@ const ServerConfig = require("../models/ServerConfig");
 const BM_API = "https://api.battlemetrics.com";
 
 const MIN_JUGADORES_CLAN = 6;
-
 const REQUEST_TIMEOUT = 15000;
-
 const SESSION_CONCURRENCY = 5;
 
 // =====================================================
@@ -49,7 +47,21 @@ function normalizarNombre(nombre) {
 }
 
 // =====================================================
-// LIMPIAR POSIBLE TAG
+// NORMALIZAR TAG
+// =====================================================
+
+function normalizarTag(tag) {
+    if (!tag) {
+        return null;
+    }
+
+    return String(tag)
+        .trim()
+        .replace(/\s+/g, " ");
+}
+
+// =====================================================
+// LIMPIAR TAG
 // =====================================================
 
 function limpiarTag(tag) {
@@ -57,32 +69,160 @@ function limpiarTag(tag) {
         return null;
     }
 
-    return String(tag)
-        .trim()
+    let resultado = normalizarTag(tag);
+
+    resultado = resultado
         .replace(/^[|:;,._\-]+/u, "")
         .replace(/[|:;,._\-]+$/u, "")
         .trim();
+
+    return resultado || null;
+}
+
+// =====================================================
+// DELIMITADORES DE TAGS
+// =====================================================
+
+const DELIMITADORES_TAG = [
+    ["『", "』"],
+    ["【", "】"],
+    ["《", "》"],
+    ["〈", "〉"],
+    ["「", "」"],
+    ["[", "]"],
+    ["(", ")"],
+    ["{", "}"],
+    ["<", ">"]
+];
+
+// =====================================================
+// EXTRAER TAGS ENCERRADOS
+// =====================================================
+
+function extraerTagsEncerrados(texto) {
+    const encontrados = [];
+
+    for (const [inicio, fin] of DELIMITADORES_TAG) {
+        let posicion = 0;
+
+        while (posicion < texto.length) {
+            const inicioIndex = texto.indexOf(
+                inicio,
+                posicion
+            );
+
+            if (inicioIndex === -1) {
+                break;
+            }
+
+            const finIndex = texto.indexOf(
+                fin,
+                inicioIndex + inicio.length
+            );
+
+            if (finIndex === -1) {
+                break;
+            }
+
+            const contenido = texto
+                .slice(
+                    inicioIndex + inicio.length,
+                    finIndex
+                )
+                .trim();
+
+            if (
+                contenido &&
+                contenido.length <= 30
+            ) {
+                encontrados.push(
+                    `${inicio}${contenido}${fin}`
+                );
+            }
+
+            posicion =
+                finIndex + fin.length;
+        }
+    }
+
+    return encontrados;
+}
+
+// =====================================================
+// VALIDAR CONTENIDO DE TAG
+// =====================================================
+
+function contenidoEsPosibleTag(contenido) {
+    if (!contenido) {
+        return false;
+    }
+
+    const texto = contenido.trim();
+
+    if (!texto) {
+        return false;
+    }
+
+    if (texto.length > 25) {
+        return false;
+    }
+
+    // Una sola letra/número
+    if (
+        texto.length === 1 &&
+        /[\p{L}\p{N}]/u.test(texto)
+    ) {
+        return true;
+    }
+
+    // Letras
+    const letras = texto.replace(
+        /[^\p{L}]/gu,
+        ""
+    );
+
+    // TAGS MAYÚSCULOS
+    if (
+        letras.length >= 2 &&
+        letras.length <= 10 &&
+        letras === letras.toUpperCase()
+    ) {
+        return true;
+    }
+
+    // Tags con símbolos
+    if (
+        /[.™®©_\-]/u.test(texto) &&
+        texto.length >= 2
+    ) {
+        return true;
+    }
+
+    // Formatos tipo WW / 7K / ABC
+    if (
+        /^[\p{L}\p{N}™®©._\-]+$/u.test(
+            texto
+        ) &&
+        texto.length <= 12
+    ) {
+        if (
+            /^[A-ZÁÉÍÓÚÜÑ0-9]+$/u.test(
+                texto
+            )
+        ) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 // =====================================================
 // VALIDAR POSIBLE TAG
 // =====================================================
-//
-// Esta función intenta evitar palabras normales como
-// "Player", "The", "Hello", etc.
-//
-// Acepta:
-// F.O.L™
-// H.
-// FOL
-// ABC
-// H
-// [FOL]
-// (FOL)
-// =====================================================
 
 function esPosibleTag(tag) {
-    tag = limpiarTag(tag);
+    tag = normalizarTag(tag);
 
     if (!tag) {
         return false;
@@ -92,8 +232,26 @@ function esPosibleTag(tag) {
         return false;
     }
 
-    // Tag de una letra mayúscula.
-// Ej: H
+    // TAG ENCERRADO
+    for (const [inicio, fin] of DELIMITADORES_TAG) {
+        if (
+            tag.startsWith(inicio) &&
+            tag.endsWith(fin)
+        ) {
+            const contenido = tag
+                .slice(
+                    inicio.length,
+                    tag.length - fin.length
+                )
+                .trim();
+
+            return contenidoEsPosibleTag(
+                contenido
+            );
+        }
+    }
+
+    // UNA LETRA MAYÚSCULA
     if (
         tag.length === 1 &&
         /^[A-ZÁÉÍÓÚÜÑ]$/u.test(tag)
@@ -101,8 +259,7 @@ function esPosibleTag(tag) {
         return true;
     }
 
-    // Tags con símbolos típicos
-    // Ej: F.O.L™
+    // TAG CON SÍMBOLOS
     if (
         /[.™®©_\-]/u.test(tag) &&
         tag.length >= 2
@@ -110,10 +267,9 @@ function esPosibleTag(tag) {
         return true;
     }
 
-    // Tags de letras mayúsculas
-    // Ej: FOL / ABC / TEAM
+    // TAG DE MAYÚSCULAS
     const letras = tag.replace(
-        /[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g,
+        /[^\p{L}]/gu,
         ""
     );
 
@@ -129,20 +285,7 @@ function esPosibleTag(tag) {
 }
 
 // =====================================================
-// EXTRAER POSIBLES TAGS DE UN NOMBRE
-// =====================================================
-//
-// No nos quedamos solamente con la primera palabra.
-//
-// Ejemplos:
-//
-// F.O.L™ | Daren
-// F.O.L™ Daren
-// [F.O.L™] Daren
-// (F.O.L™) Daren
-// H. Tvaroh
-// Daren | F.O.L™
-// Daren [F.O.L™]
+// EXTRAER POSIBLES TAGS
 // =====================================================
 
 function extraerPosiblesTags(nombre) {
@@ -155,23 +298,38 @@ function extraerPosiblesTags(nombre) {
     const candidatos = [];
 
     // =================================================
+    // TAGS UNICODE ENCERRADOS
+    // =================================================
+
+    const tagsEncerrados =
+        extraerTagsEncerrados(texto);
+
+    for (const tag of tagsEncerrados) {
+        if (esPosibleTag(tag)) {
+            candidatos.push(tag);
+        }
+    }
+
+    // =================================================
     // [TAG]
     // =================================================
 
-    const corchetes = texto.match(
-        /\[([^\]]{1,30})\]/gu
-    );
+    const corchetes =
+        texto.match(/\[[^\]]{1,30}\]/gu);
 
     if (corchetes) {
         for (const encontrado of corchetes) {
-            const tag = limpiarTag(
-                encontrado
-                    .replace(/^\[/, "")
-                    .replace(/\]$/, "")
-            );
+            const contenido =
+                encontrado.slice(1, -1).trim();
 
-            if (esPosibleTag(tag)) {
-                candidatos.push(tag);
+            if (
+                contenidoEsPosibleTag(
+                    contenido
+                )
+            ) {
+                candidatos.push(
+                    `[${contenido}]`
+                );
             }
         }
     }
@@ -180,20 +338,64 @@ function extraerPosiblesTags(nombre) {
     // (TAG)
     // =================================================
 
-    const parentesis = texto.match(
-        /\(([^)]{1,30})\)/gu
-    );
+    const parentesis =
+        texto.match(/\([^)]{1,30}\)/gu);
 
     if (parentesis) {
         for (const encontrado of parentesis) {
-            const tag = limpiarTag(
-                encontrado
-                    .replace(/^\(/, "")
-                    .replace(/\)$/, "")
-            );
+            const contenido =
+                encontrado.slice(1, -1).trim();
 
-            if (esPosibleTag(tag)) {
-                candidatos.push(tag);
+            if (
+                contenidoEsPosibleTag(
+                    contenido
+                )
+            ) {
+                candidatos.push(
+                    `(${contenido})`
+                );
+            }
+        }
+    }
+
+    // =================================================
+    // SEPARADORES
+    // =================================================
+
+    const bloques =
+        texto.split(/\s*[|:;•·]\s*/u);
+
+    if (bloques.length > 1) {
+        for (const bloque of bloques) {
+            const palabras =
+                bloque.trim().split(/\s+/);
+
+            if (!palabras.length) {
+                continue;
+            }
+
+            const primero =
+                limpiarTag(
+                    palabras[0]
+                );
+
+            const ultimo =
+                limpiarTag(
+                    palabras[palabras.length - 1]
+                );
+
+            if (
+                primero &&
+                esPosibleTag(primero)
+            ) {
+                candidatos.push(primero);
+            }
+
+            if (
+                ultimo &&
+                esPosibleTag(ultimo)
+            ) {
+                candidatos.push(ultimo);
             }
         }
     }
@@ -202,25 +404,18 @@ function extraerPosiblesTags(nombre) {
     // SEPARAR POR ESPACIOS
     // =================================================
 
-    const partes = texto.split(/\s+/);
+    const partes =
+        texto.split(/\s+/);
 
-    for (let i = 0; i < partes.length; i++) {
-        let parte = partes[i];
-
-        parte = parte
-            .replace(/^[|:;,]+/u, "")
-            .replace(/[|:;,]+$/u, "");
+    for (const parteOriginal of partes) {
+        const parte =
+            limpiarTag(
+                parteOriginal
+            );
 
         if (!parte) {
             continue;
         }
-
-        // Quitar corchetes/paréntesis alrededor
-        parte = parte
-            .replace(/^\[/, "")
-            .replace(/\]$/, "")
-            .replace(/^\(/, "")
-            .replace(/\)$/, "");
 
         if (esPosibleTag(parte)) {
             candidatos.push(parte);
@@ -228,52 +423,26 @@ function extraerPosiblesTags(nombre) {
     }
 
     // =================================================
-    // SEPARADORES COMUNES
-    // =================================================
-
-    const porSeparadores = texto.split(
-        /\s*[|:;•·]\s*/u
-    );
-
-    if (porSeparadores.length > 1) {
-        for (const bloque of porSeparadores) {
-            const palabras = bloque.trim().split(/\s+/);
-
-            if (palabras.length > 0) {
-                const primero = limpiarTag(
-                    palabras[0]
-                );
-
-                if (esPosibleTag(primero)) {
-                    candidatos.push(primero);
-                }
-
-                const ultimo = limpiarTag(
-                    palabras[palabras.length - 1]
-                );
-
-                if (esPosibleTag(ultimo)) {
-                    candidatos.push(ultimo);
-                }
-            }
-        }
-    }
-
-    // =================================================
-    // DEVOLVER SIN DUPLICADOS
+    // ELIMINAR DUPLICADOS
     // =================================================
 
     const vistos = new Set();
     const resultado = [];
 
     for (const candidato of candidatos) {
-        const clave = candidato
-            .toLowerCase()
-            .trim();
+        const tag =
+            normalizarTag(candidato);
+
+        if (!tag) {
+            continue;
+        }
+
+        const clave =
+            tag.toLowerCase();
 
         if (!vistos.has(clave)) {
             vistos.add(clave);
-            resultado.push(candidato);
+            resultado.push(tag);
         }
     }
 
@@ -292,16 +461,21 @@ async function obtenerJugadoresDelServidor(
     );
 
     try {
-        const response = await axios.get(
-            `${BM_API}/servers/${serverId}`,
-            {
-                headers: getHeaders(),
-                params: {
-                    include: "player"
-                },
-                timeout: REQUEST_TIMEOUT
-            }
-        );
+        const response =
+            await axios.get(
+                `${BM_API}/servers/${serverId}`,
+                {
+                    headers:
+                        getHeaders(),
+
+                    params: {
+                        include: "player"
+                    },
+
+                    timeout:
+                        REQUEST_TIMEOUT
+                }
+            );
 
         console.log(
             `📡 BM | Respuesta servidor: HTTP ${response.status}`
@@ -338,23 +512,35 @@ async function obtenerJugadoresDelServidor(
         let playerRelationship = null;
 
         for (
-            const [key, relationship]
-            of Object.entries(relationships)
+            const [
+                key,
+                relationship
+            ]
+            of Object.entries(
+                relationships
+            )
         ) {
             const relationData =
                 relationship?.data;
 
-            if (!Array.isArray(relationData)) {
+            if (
+                !Array.isArray(
+                    relationData
+                )
+            ) {
                 continue;
             }
 
             const contienePlayers =
                 relationData.some(
                     item =>
-                        item?.type === "player"
+                        item?.type ===
+                        "player"
                 );
 
-            if (contienePlayers) {
+            if (
+                contienePlayers
+            ) {
                 playerRelationship =
                     relationData;
 
@@ -367,18 +553,22 @@ async function obtenerJugadoresDelServidor(
         }
 
         // =================================================
-        // SI EXISTE RELACIÓN ACTUAL
+        // RELACIÓN ACTUAL
         // =================================================
 
         if (
-            Array.isArray(playerRelationship) &&
+            Array.isArray(
+                playerRelationship
+            ) &&
             playerRelationship.length > 0
         ) {
             const idsActuales =
                 new Set(
                     playerRelationship.map(
                         player =>
-                            String(player.id)
+                            String(
+                                player.id
+                            )
                     )
                 );
 
@@ -386,7 +576,9 @@ async function obtenerJugadoresDelServidor(
                 playersIncluded.filter(
                     player =>
                         idsActuales.has(
-                            String(player.id)
+                            String(
+                                player.id
+                            )
                         )
                 );
 
@@ -397,22 +589,34 @@ async function obtenerJugadoresDelServidor(
             return {
                 jugadores:
                     jugadoresActuales
-                        .map(player => ({
-                            id: player.id,
-                            name: normalizarNombre(
-                                player.attributes?.name
-                            ),
-                            timePlayedSeconds:
-                                Number(
-                                    player.meta?.timePlayed
-                                ) || 0
-                        }))
+                        .map(
+                            player => ({
+                                id:
+                                    player.id,
+
+                                name:
+                                    normalizarNombre(
+                                        player
+                                            .attributes
+                                            ?.name
+                                    ),
+
+                                timePlayedSeconds:
+                                    Number(
+                                        player
+                                            .meta
+                                            ?.timePlayed
+                                    ) || 0
+                            })
+                        )
                         .filter(
                             player =>
                                 player.id &&
                                 player.name
                         ),
-                relacionActual: true
+
+                relacionActual:
+                    true
             };
         }
 
@@ -427,24 +631,35 @@ async function obtenerJugadoresDelServidor(
         return {
             jugadores:
                 playersIncluded
-                    .map(player => ({
-                        id: player.id,
-                        name: normalizarNombre(
-                            player.attributes?.name
-                        ),
-                        timePlayedSeconds:
-                            Number(
-                                player.meta?.timePlayed
-                            ) || 0
-                    }))
+                    .map(
+                        player => ({
+                            id:
+                                player.id,
+
+                            name:
+                                normalizarNombre(
+                                    player
+                                        .attributes
+                                        ?.name
+                                ),
+
+                            timePlayedSeconds:
+                                Number(
+                                    player
+                                        .meta
+                                        ?.timePlayed
+                                ) || 0
+                        })
+                    )
                     .filter(
                         player =>
                             player.id &&
                             player.name
                     ),
-            relacionActual: false
-        };
 
+            relacionActual:
+                false
+        };
     } catch (error) {
         console.error(
             "❌ BM | Error obteniendo jugadores:"
@@ -465,21 +680,7 @@ async function obtenerJugadoresDelServidor(
 }
 
 // =====================================================
-// CREAR MAPA DE POSIBLES CLANES
-// =====================================================
-//
-// En lugar de asumir que el tag está al principio,
-// buscamos tags repetidos.
-//
-// Ejemplo:
-//
-// F.O.L™ | A
-// F.O.L™ | B
-// F.O.L™ | C
-//
-// genera:
-//
-// F.O.L™ -> 3
+// DETECTAR POSIBLES CLANES
 // =====================================================
 
 function detectarPosiblesClanes(
@@ -506,7 +707,9 @@ function detectarPosiblesClanes(
                     clave,
                     {
                         tag,
-                        jugadores: new Map()
+
+                        jugadores:
+                            new Map()
                     }
                 );
             }
@@ -525,6 +728,7 @@ function detectarPosiblesClanes(
     )
         .map(clan => ({
             tag: clan.tag,
+
             jugadores:
                 Array.from(
                     clan.jugadores.values()
@@ -538,7 +742,7 @@ function detectarPosiblesClanes(
 }
 
 // =====================================================
-// OBTENER SESIONES DE UN JUGADOR
+// COMPROBAR SI JUGADOR ESTÁ ONLINE
 // =====================================================
 
 async function jugadorEstaOnlineEnServidor(
@@ -563,12 +767,14 @@ async function jugadorEstaOnlineEnServidor(
                     {
                         headers:
                             getHeaders(),
+
                         params:
                             pagina === 1
                                 ? {
                                     "page[size]": 100
                                 }
                                 : undefined,
+
                         timeout:
                             REQUEST_TIMEOUT
                     }
@@ -583,7 +789,8 @@ async function jugadorEstaOnlineEnServidor(
                 of sesiones
             ) {
                 const stop =
-                    sesion.attributes?.stop;
+                    sesion.attributes
+                        ?.stop;
 
                 const sessionServerId =
                     sesion.relationships
@@ -615,7 +822,6 @@ async function jugadorEstaOnlineEnServidor(
         }
 
         return false;
-
     } catch (error) {
         console.error(
             `⚠️ BM | Error comprobando jugador ${playerId}:`,
@@ -698,24 +904,15 @@ async function ejecutarConLimite(
 }
 
 // =====================================================
-// COMPROBAR ONLINE DE POSIBLES CLANES
-// =====================================================
-//
-// IMPORTANTE:
-//
-// Primero buscamos grupos de 6+.
-//
-// Después comprobamos SOLO esos jugadores.
-//
-// Así no hacemos 582 consultas.
+// COMPROBAR CLANES ONLINE
 // =====================================================
 
 async function comprobarClanesOnline(
     posiblesClanes,
     serverId
 ) {
-    const candidatos = posiblesClanes
-        .filter(
+    const candidatos =
+        posiblesClanes.filter(
             clan =>
                 clan.jugadores.length >=
                 MIN_JUGADORES_CLAN
@@ -732,7 +929,17 @@ async function comprobarClanesOnline(
     }
 
     // =================================================
-    // COMPROBAR TODOS LOS JUGADORES DE LOS CANDIDATOS
+    // MOSTRAR CANDIDATOS
+    // =================================================
+
+    for (const clan of candidatos) {
+        console.log(
+            `🏴 CANDIDATO ONLINE ${clan.tag} | ${clan.jugadores.length} jugadores`
+        );
+    }
+
+    // =================================================
+    // UNIFICAR JUGADORES
     // =================================================
 
     const todosLosJugadores =
@@ -761,6 +968,10 @@ async function comprobarClanesOnline(
         `🔎 BM | Jugadores candidatos para comprobar online: ${jugadoresUnicos.length}`
     );
 
+    // =================================================
+    // COMPROBAR SESIONES
+    // =================================================
+
     const resultados =
         await ejecutarConLimite(
             jugadoresUnicos,
@@ -783,6 +994,10 @@ async function comprobarClanesOnline(
             }
         );
 
+    // =================================================
+    // IDS ONLINE
+    // =================================================
+
     const onlineIds =
         new Set(
             resultados
@@ -793,13 +1008,15 @@ async function comprobarClanesOnline(
                 .map(
                     resultado =>
                         String(
-                            resultado.jugador.id
+                            resultado
+                                .jugador
+                                .id
                         )
                 )
         );
 
     // =================================================
-    // RECONSTRUIR LOS CLANES
+    // RECONSTRUIR CLANES
     // =================================================
 
     const clanesOnline = [];
@@ -823,6 +1040,7 @@ async function comprobarClanesOnline(
         ) {
             clanesOnline.push({
                 tag: clan.tag,
+
                 jugadores:
                     jugadoresOnline
             });
@@ -837,13 +1055,14 @@ async function comprobarClanesOnline(
 }
 
 // =====================================================
-// CREAR CAMPOS DEL CLAN
+// CREAR EMBEDS DE CLAN
 // =====================================================
 
-function crearCamposClan(
-    clan
+function crearEmbedsClan(
+    clan,
+    serverId
 ) {
-    const campos = [];
+    const embeds = [];
 
     const lineas =
         clan.jugadores.map(
@@ -851,92 +1070,172 @@ function crearCamposClan(
                 `• [${jugador.name}](https://www.battlemetrics.com/players/${jugador.id})`
         );
 
-    let bloqueActual = "";
+    let bloque = "";
+    let numeroParte = 1;
 
-    let primerBloque = true;
+    function crearEmbed(
+        contenido,
+        parte
+    ) {
+        return new EmbedBuilder()
+            .setColor(
+                "#ED4245"
+            )
+            .setTitle(
+                `🏴 Clan: ${clan.tag}`
+            )
+            .setDescription(
+                `**${clan.jugadores.length} jugadores detectados**\n\n` +
+                `🎮 BattleMetrics: \`${serverId}\`` +
+                (
+                    parte > 1
+                        ? `\n📄 Parte ${parte}`
+                        : ""
+                )
+            )
+            .addFields({
+                name:
+                    parte === 1
+                        ? "👥 Jugadores"
+                        : "👥 Jugadores — continuación",
+
+                value:
+                    contenido,
+
+                inline:
+                    false
+            })
+            .setTimestamp()
+            .setFooter({
+                text:
+                    "RustLogix"
+            });
+    }
 
     for (
-        const linea of lineas
+        const linea
+        of lineas
     ) {
-        const separador =
-            bloqueActual
-                ? "\n"
-                : "";
-
         const siguiente =
-            bloqueActual +
-            separador +
-            linea;
+            bloque
+                ? `${bloque}\n${linea}`
+                : linea;
 
         if (
-            siguiente.length >
-            900
+            siguiente.length > 950
         ) {
-            if (
-                bloqueActual
-            ) {
-                campos.push({
-                    name:
-                        primerBloque
-                            ? `🏴 Clan en el servidor: ${clan.tag}`
-                            : `🏴 ${clan.tag} | Jugadores`,
-                    value:
-                        primerBloque
-                            ? `**${clan.jugadores.length} jugadores detectados**\n\n${bloqueActual}`
-                            : bloqueActual,
-                    inline: false
-                });
+            if (bloque) {
+                embeds.push(
+                    crearEmbed(
+                        bloque,
+                        numeroParte
+                    )
+                );
 
-                primerBloque =
-                    false;
-
-                bloqueActual =
-                    linea;
-            } else {
-                campos.push({
-                    name:
-                        primerBloque
-                            ? `🏴 Clan en el servidor: ${clan.tag}`
-                            : `🏴 ${clan.tag} | Jugadores`,
-                    value:
-                        primerBloque
-                            ? `**${clan.jugadores.length} jugadores detectados**\n\n${linea.substring(0, 900)}`
-                            : linea.substring(
-                                0,
-                                900
-                            ),
-                    inline: false
-                });
-
-                primerBloque =
-                    false;
-
-                bloqueActual =
-                    "";
+                numeroParte++;
             }
+
+            bloque = linea;
         } else {
-            bloqueActual =
-                siguiente;
+            bloque = siguiente;
         }
     }
 
-    if (
-        bloqueActual
-    ) {
-        campos.push({
-            name:
-                primerBloque
-                    ? `🏴 Clan en el servidor: ${clan.tag}`
-                    : `🏴 ${clan.tag} | Jugadores`,
-            value:
-                primerBloque
-                    ? `**${clan.jugadores.length} jugadores detectados**\n\n${bloqueActual}`
-                    : bloqueActual,
-            inline: false
-        });
+    if (bloque) {
+        embeds.push(
+            crearEmbed(
+                bloque,
+                numeroParte
+            )
+        );
     }
 
-    return campos;
+    return embeds;
+}
+
+// =====================================================
+// EMBED RESUMEN
+// =====================================================
+
+function crearEmbedResumen(
+    clanes,
+    jugadores,
+    serverId
+) {
+    return new EmbedBuilder()
+        .setTitle(
+            "🏴 Clanes detectados en el servidor"
+        )
+        .setColor(
+            "#ED4245"
+        )
+        .setDescription(
+            `Se detectaron **${clanes.length} clan(es)** con **${MIN_JUGADORES_CLAN}+ jugadores**.\n\n` +
+            `👥 Jugadores analizados: **${jugadores.length}**\n` +
+            `🏴 Clanes detectados: **${clanes.length}**\n` +
+            `🎮 Servidor BattleMetrics: \`${serverId}\``
+        )
+        .setTimestamp()
+        .setFooter({
+            text:
+                "RustLogix"
+        });
+}
+
+// =====================================================
+// ENVIAR EMBEDS
+// =====================================================
+
+async function enviarEmbeds(
+    interaction,
+    embeds
+) {
+    const grupos = [];
+
+    for (
+        let i = 0;
+        i < embeds.length;
+        i += 10
+    ) {
+        grupos.push(
+            embeds.slice(
+                i,
+                i + 10
+            )
+        );
+    }
+
+    if (
+        grupos.length === 0
+    ) {
+        return;
+    }
+
+    // Primer grupo
+    await interaction.editReply({
+        embeds:
+            grupos[0],
+
+        allowedMentions: {
+            parse: []
+        }
+    });
+
+    // Grupos siguientes
+    for (
+        let i = 1;
+        i < grupos.length;
+        i++
+    ) {
+        await interaction.followUp({
+            embeds:
+                grupos[i],
+
+            allowedMentions: {
+                parse: []
+            }
+        });
+    }
 }
 
 // =====================================================
@@ -944,9 +1243,12 @@ function crearCamposClan(
 // =====================================================
 
 module.exports = {
+
     data:
         new SlashCommandBuilder()
-            .setName("revisar")
+            .setName(
+                "revisar"
+            )
             .setDescription(
                 "Revisa el servidor y detecta todos los clanes con 6 o más jugadores"
             ),
@@ -1029,10 +1331,13 @@ module.exports = {
                 error.response?.data
                     ?.errors?.[0]
                     ?.detail ||
+
                 error.response?.data
                     ?.errors?.[0]
                     ?.title ||
+
                 error.message ||
+
                 "Error desconocido";
 
             return await interaction.editReply({
@@ -1043,11 +1348,11 @@ module.exports = {
             });
         }
 
-        let jugadores =
+        const jugadores =
             resultado.jugadores;
 
         // =================================================
-        // SI NO HAY JUGADORES
+        // SIN JUGADORES
         // =================================================
 
         if (
@@ -1093,8 +1398,36 @@ module.exports = {
             `🏴 BM | Grupos posibles encontrados: ${posiblesClanes.length}`
         );
 
+        // =================================================
+        // MOSTRAR GRUPOS 2+
+        // =================================================
+
+        const gruposImportantes =
+            posiblesClanes.filter(
+                clan =>
+                    clan.jugadores.length >= 2
+            );
+
+        console.log(
+            `🔎 BM | Grupos con 2+ jugadores: ${gruposImportantes.length}`
+        );
+
         for (
-            const clan of posiblesClanes
+            const clan
+            of gruposImportantes
+        ) {
+            console.log(
+                `🏴 GRUPO ${clan.tag} | ${clan.jugadores.length} jugadores`
+            );
+        }
+
+        // =================================================
+        // MOSTRAR CANDIDATOS 6+
+        // =================================================
+
+        for (
+            const clan
+            of posiblesClanes
         ) {
             if (
                 clan.jugadores.length >=
@@ -1115,10 +1448,9 @@ module.exports = {
         if (
             resultado.relacionActual
         ) {
-            // ---------------------------------------------
-            // BattleMetrics ya nos entregó los jugadores
-            // actuales.
-            // ---------------------------------------------
+            console.log(
+                "🟢 BM | Usando relación actual del servidor."
+            );
 
             clanes =
                 posiblesClanes.filter(
@@ -1127,12 +1459,6 @@ module.exports = {
                         MIN_JUGADORES_CLAN
                 );
         } else {
-            // ---------------------------------------------
-            // No hubo relación directa.
-            //
-            // Comprobamos sesiones activas.
-            // ---------------------------------------------
-
             console.log(
                 "🔄 BM | No hay relación directa. Comprobando sesiones activas..."
             );
@@ -1145,12 +1471,15 @@ module.exports = {
         }
 
         // =================================================
-        // CONTAR JUGADORES ONLINE
+        // CONTAR JUGADORES
         // =================================================
 
         const jugadoresClanOnline =
             clanes.reduce(
-                (total, clan) =>
+                (
+                    total,
+                    clan
+                ) =>
                     total +
                     clan.jugadores.length,
                 0
@@ -1169,7 +1498,8 @@ module.exports = {
         // =================================================
 
         for (
-            const clan of clanes
+            const clan
+            of clanes
         ) {
             console.log(
                 `🏴 ${clan.tag} | ${clan.jugadores.length} jugadores`
@@ -1217,76 +1547,49 @@ module.exports = {
         }
 
         // =================================================
-        // EMBED
+        // CREAR EMBEDS
         // =================================================
 
-        const embed =
-            new EmbedBuilder()
-                .setTitle(
-                    "🏴 Clanes detectados en el servidor"
-                )
-                .setColor(
-                    "#ED4245"
-                )
-                .setDescription(
-                    `Se detectaron **${clanes.length} clan(es)** con **${MIN_JUGADORES_CLAN}+ jugadores**.\n\n` +
-                    `👥 Jugadores analizados: **${jugadores.length}**\n` +
-                    `🏴 Clanes detectados: **${clanes.length}**\n` +
-                    `🎮 Servidor BattleMetrics: \`${serverId}\``
-                )
-                .setTimestamp()
-                .setFooter({
-                    text:
-                        "RustLogix"
-                });
+        const embeds = [];
 
-        // =================================================
-        // AGREGAR TODOS LOS CLANES
-        // =================================================
-
-        let totalFields = 0;
+        embeds.push(
+            crearEmbedResumen(
+                clanes,
+                jugadores,
+                serverId
+            )
+        );
 
         for (
-            const clan of clanes
+            const clan
+            of clanes
         ) {
-            const campos =
-                crearCamposClan(
-                    clan
+            const embedsClan =
+                crearEmbedsClan(
+                    clan,
+                    serverId
                 );
 
-            for (
-                const campo of campos
-            ) {
-                if (
-                    totalFields >= 25
-                ) {
-                    console.warn(
-                        "⚠️ Discord | Se alcanzó el máximo de 25 fields."
-                    );
-
-                    break;
-                }
-
-                embed.addFields(
-                    campo
-                );
-
-                totalFields++;
-            }
-
-            if (
-                totalFields >= 25
-            ) {
-                break;
-            }
+            embeds.push(
+                ...embedsClan
+            );
         }
+
+        console.log(
+            `📦 Discord | Embeds generados: ${embeds.length}`
+        );
 
         // =================================================
         // ENVIAR
         // =================================================
 
-        return await interaction.editReply({
-            embeds: [embed]
-        });
+        await enviarEmbeds(
+            interaction,
+            embeds
+        );
+
+        console.log(
+            "✅ /revisar terminado"
+        );
     }
 };
