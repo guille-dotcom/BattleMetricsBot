@@ -299,6 +299,7 @@ function extraerPrecio(texto) {
         );
 
     if (match) {
+
         return match[0]
             .replace(/\s+/g, "");
     }
@@ -310,6 +311,7 @@ function extraerPrecio(texto) {
         );
 
     if (match) {
+
         return match[0]
             .replace(/\s+/g, "");
     }
@@ -321,6 +323,7 @@ function extraerPrecio(texto) {
         );
 
     if (match) {
+
         return match[0]
             .replace(/\s+/g, "");
     }
@@ -347,29 +350,17 @@ function extraerPrecioDesdeHtml($, html) {
     const selectores = [
 
         ".itemstore_item_price",
-
         ".itemstore_item_price_amount",
-
         ".itemstore_item_cost",
-
         ".itemstore_price",
-
         ".price",
-
         ".item_price",
-
         ".purchase_area",
-
         ".game_purchase_price",
-
         ".discount_final_price",
-
         ".final_price",
-
         ".price_box",
-
         "[class*='price']",
-
         "[class*='Price']"
     ];
 
@@ -404,7 +395,6 @@ function extraerPrecioDesdeHtml($, html) {
         }
     }
 
-    // Buscar directamente en texto completo
     const precioTexto =
         extraerPrecio(
             $("body").text()
@@ -414,7 +404,6 @@ function extraerPrecioDesdeHtml($, html) {
         return precioTexto;
     }
 
-    // Último recurso: HTML
     if (html) {
 
         const precioHtml =
@@ -483,6 +472,30 @@ function limpiarUrlImagen(url) {
 }
 
 // =====================================================
+// DETECTAR SI ES UNA IMAGEN REAL DE ITEM
+// =====================================================
+
+function esImagenItemSteam(url) {
+
+    if (!url) {
+        return false;
+    }
+
+    const texto =
+        String(url).toLowerCase();
+
+    return (
+        texto.includes("/economy/image/") ||
+        texto.includes("community.fastly.steamstatic.com") ||
+        texto.includes("community.cloudflare.steamstatic.com") ||
+        texto.includes("steamcommunity.com/economy/image") ||
+        texto.includes("images.steamusercontent.com")
+    );
+}
+
+// =====================================================
+// IMAGEN DESDE ELEMENTO
+// =====================================================
 
 function obtenerImagenElemento(
     $,
@@ -490,6 +503,46 @@ function obtenerImagenElemento(
 ) {
 
     const posibles = [
+
+        // IMPORTANTE:
+        // Primero buscamos imágenes reales del item.
+
+        $(elemento)
+            .find('img[src*="/economy/image/"]')
+            .first()
+            .attr("src"),
+
+        $(elemento)
+            .find('img[data-src*="/economy/image/"]')
+            .first()
+            .attr("data-src"),
+
+        $(elemento)
+            .find('img[data-image*="/economy/image/"]')
+            .first()
+            .attr("data-image"),
+
+        $(elemento)
+            .find('img[src*="community.fastly.steamstatic.com"]')
+            .first()
+            .attr("src"),
+
+        $(elemento)
+            .find('img[data-src*="community.fastly.steamstatic.com"]')
+            .first()
+            .attr("data-src"),
+
+        $(elemento)
+            .find('img[src*="images.steamusercontent.com"]')
+            .first()
+            .attr("src"),
+
+        $(elemento)
+            .find('img[data-src*="images.steamusercontent.com"]')
+            .first()
+            .attr("data-src"),
+
+        // Después atributos generales.
 
         $(elemento).attr(
             "data-image"
@@ -544,6 +597,9 @@ function obtenerImagenElemento(
             .attr("srcset")
     ];
 
+    // Primero intentar imágenes específicas
+    // del item.
+
     for (const valor of posibles) {
 
         if (!valor) {
@@ -551,9 +607,27 @@ function obtenerImagenElemento(
         }
 
         const imagen =
-            limpiarUrlImagen(
-                valor
-            );
+            limpiarUrlImagen(valor);
+
+        if (
+            imagen &&
+            esImagenItemSteam(imagen)
+        ) {
+
+            return imagen;
+        }
+    }
+
+    // Luego cualquier imagen válida.
+
+    for (const valor of posibles) {
+
+        if (!valor) {
+            continue;
+        }
+
+        const imagen =
+            limpiarUrlImagen(valor);
 
         if (imagen) {
             return imagen;
@@ -561,25 +635,30 @@ function obtenerImagenElemento(
     }
 
     // Background-image
+
     const style =
         $(elemento)
             .attr("style");
 
     if (style) {
 
-        const match =
-            style.match(
-                /url\(\s*['"]?([^'")]+)['"]?\s*\)/i
+        const matches =
+            style.matchAll(
+                /url\(\s*['"]?([^'")]+)['"]?\s*\)/gi
             );
 
-        if (match) {
+        for (const match of matches) {
 
             const imagen =
                 limpiarUrlImagen(
                     match[1]
                 );
 
-            if (imagen) {
+            if (
+                imagen &&
+                esImagenItemSteam(imagen)
+            ) {
+
                 return imagen;
             }
         }
@@ -589,19 +668,17 @@ function obtenerImagenElemento(
 }
 
 // =====================================================
+// IMAGEN META
+// =====================================================
 
 function obtenerImagenMeta($) {
 
     const metas = [
 
         'meta[property="og:image"]',
-
         'meta[property="og:image:url"]',
-
         'meta[property="og:image:secure_url"]',
-
         'meta[name="twitter:image"]',
-
         'meta[name="twitter:image:src"]'
     ];
 
@@ -617,7 +694,11 @@ function obtenerImagenMeta($) {
                 contenido
             );
 
-        if (imagen) {
+        if (
+            imagen &&
+            esImagenItemSteam(imagen)
+        ) {
+
             return imagen;
         }
     }
@@ -625,6 +706,8 @@ function obtenerImagenMeta($) {
     return null;
 }
 
+// =====================================================
+// EXTRAER IMAGEN STEAM ECONOMY
 // =====================================================
 
 function extraerImagenSteamEconomy(
@@ -635,23 +718,33 @@ function extraerImagenSteamEconomy(
         return null;
     }
 
+    const texto =
+        String(html)
+            .replace(/\\u0026/g, "&")
+            .replace(/\\\//g, "/")
+            .replace(/&amp;/g, "&");
+
     const patrones = [
 
-        /https?:\/\/[^"'\\\s]+steamstatic\.com[^"'\\\s]*/gi,
+        // NUEVO:
+        // Steam actualmente entrega imágenes así.
+        /https?:\/\/community\.fastly\.steamstatic\.com\/economy\/image\/[^"'\\\s<]+/gi,
 
-        /https?:\/\/[^"'\\\s]+steamcommunity\.com[^"'\\\s]*/gi,
+        /https?:\/\/community\.cloudflare\.steamstatic\.com\/economy\/image\/[^"'\\\s<]+/gi,
 
-        /https?:\/\/[^"'\\\s]+steamusercontent\.com[^"'\\\s]*/gi,
+        /https?:\/\/steamcommunity\.com\/economy\/image\/[^"'\\\s<]+/gi,
 
-        /https?:\/\/community\.cloudflare\.steamstatic\.com[^"'\\\s]*/gi
+        /https?:\/\/[^"'\\\s<]+steamstatic\.com\/economy\/image\/[^"'\\\s<]+/gi,
+
+        /https?:\/\/images\.steamusercontent\.com\/[^"'\\\s<]+/gi
     ];
+
+    const candidatas = [];
 
     for (const regex of patrones) {
 
         const coincidencias =
-            String(html).match(
-                regex
-            );
+            texto.match(regex);
 
         if (!coincidencias) {
             continue;
@@ -667,28 +760,157 @@ function extraerImagenSteamEconomy(
                     .replace(/["']/g, "");
 
             const imagen =
-                limpiarUrlImagen(
-                    url
-                );
+                limpiarUrlImagen(url);
 
-            if (imagen) {
-                return imagen;
+            if (
+                imagen &&
+                esImagenItemSteam(imagen)
+            ) {
+
+                candidatas.push(
+                    imagen
+                );
             }
         }
+    }
+
+    if (candidatas.length) {
+
+        // Preferimos la imagen 512x512
+        // o la primera imagen economy.
+
+        const grande =
+            candidatas.find(
+                url =>
+                    url.includes("512fx512f")
+            );
+
+        if (grande) {
+            return grande;
+        }
+
+        return candidatas[0];
     }
 
     return null;
 }
 
 // =====================================================
-// OBTENER IMAGEN DESDE DETAIL
+// BUSCAR IMAGEN REAL DIRECTAMENTE EN HTML
+// =====================================================
+
+function obtenerImagenItemDesdeHtml(
+    $,
+    html
+) {
+
+    // =================================================
+    // 1. IMG economy
+    // =================================================
+
+    const selectoresEconomy = [
+
+        'img[src*="/economy/image/"]',
+        'img[data-src*="/economy/image/"]',
+        'img[data-image*="/economy/image/"]',
+
+        'img[src*="community.fastly.steamstatic.com"]',
+        'img[data-src*="community.fastly.steamstatic.com"]',
+
+        'img[src*="community.cloudflare.steamstatic.com"]',
+        'img[data-src*="community.cloudflare.steamstatic.com"]',
+
+        'img[src*="images.steamusercontent.com"]',
+        'img[data-src*="images.steamusercontent.com"]'
+    ];
+
+    for (const selector of selectoresEconomy) {
+
+        const elementos =
+            $(selector);
+
+        for (
+            let i = 0;
+            i < elementos.length;
+            i++
+        ) {
+
+            const elemento =
+                $(elementos[i]);
+
+            const posibles = [
+
+                elemento.attr("src"),
+                elemento.attr("data-src"),
+                elemento.attr("data-image"),
+                elemento.attr("data-lazy-src"),
+                elemento.attr("srcset")
+            ];
+
+            for (const valor of posibles) {
+
+                const imagen =
+                    limpiarUrlImagen(
+                        valor
+                    );
+
+                if (
+                    imagen &&
+                    esImagenItemSteam(imagen)
+                ) {
+
+                    return imagen;
+                }
+            }
+        }
+    }
+
+    // =================================================
+    // 2. Buscar directamente en todo el HTML
+    // =================================================
+
+    const imagenEconomy =
+        extraerImagenSteamEconomy(
+            html
+        );
+
+    if (imagenEconomy) {
+        return imagenEconomy;
+    }
+
+    // =================================================
+    // 3. Buscar imágenes del body
+    // =================================================
+
+    const bodyImagen =
+        obtenerImagenElemento(
+            $,
+            $("body")
+        );
+
+    if (
+        bodyImagen &&
+        esImagenItemSteam(bodyImagen)
+    ) {
+
+        return bodyImagen;
+    }
+
+    return null;
+}
+
+// =====================================================
+// OBTENER DATOS DESDE DETAIL
 // =====================================================
 
 async function obtenerDatosDesdeDetail(
     item
 ) {
 
-    if (!item || !item.url) {
+    if (
+        !item ||
+        !item.url
+    ) {
         return;
     }
 
@@ -710,7 +932,9 @@ async function obtenerDatosDesdeDetail(
             response.data;
 
         const $ =
-            cheerio.load(html);
+            cheerio.load(
+                html
+            );
 
         // ---------------------------------------------
         // IMAGEN
@@ -718,29 +942,31 @@ async function obtenerDatosDesdeDetail(
 
         if (!item.imagen) {
 
+            // IMPORTANTE:
+            // Primero imagen REAL del artículo.
             let imagen =
-                obtenerImagenMeta($);
+                obtenerImagenItemDesdeHtml(
+                    $,
+                    html
+                );
 
+            // Meta solamente como último recurso.
             if (!imagen) {
 
                 imagen =
-                    obtenerImagenElemento(
-                        $,
-                        $("body")
-                    );
-            }
-
-            if (!imagen) {
-
-                imagen =
-                    extraerImagenSteamEconomy(
-                        html
+                    obtenerImagenMeta(
+                        $
                     );
             }
 
             if (imagen) {
+
                 item.imagen =
                     imagen;
+
+                console.log(
+                    `[RUST STORE] Imagen encontrada: ${item.nombre} -> ${imagen}`
+                );
             }
         }
 
@@ -757,6 +983,7 @@ async function obtenerDatosDesdeDetail(
                 );
 
             if (precio) {
+
                 item.precio =
                     precio;
             }
@@ -771,15 +998,10 @@ async function obtenerDatosDesdeDetail(
             const posiblesNombres = [
 
                 'meta[property="og:title"]',
-
                 ".itemstore_item_name",
-
                 ".item_name",
-
                 "h1",
-
                 "h2",
-
                 "title"
             ];
 
@@ -863,17 +1085,11 @@ function nombreValido(nombre) {
     const prohibidos = [
 
         "rust item store",
-
         "cart",
-
         "shopping cart",
-
         "view cart",
-
         "add to cart",
-
         "buy now",
-
         "limited"
     ];
 
@@ -937,25 +1153,15 @@ function obtenerNombreDesdeElemento(
     const selectores = [
 
         ".item_name",
-
         ".itemstore_item_name",
-
         ".item_title",
-
         ".item_name_block",
-
         ".name",
-
         "[class*='item_name']",
-
         "[class*='item_title']",
-
         "h1",
-
         "h2",
-
         "h3",
-
         "h4"
     ];
 
@@ -1011,17 +1217,11 @@ function obtenerContenedorItem(
     const selectores = [
 
         ".itemstore_item",
-
         ".itemstore_item_block",
-
         ".itemstore_item_area",
-
         ".item",
-
         "[class*='itemstore_item']",
-
         "[class*='item_block']",
-
         "[class*='item_area']"
     ];
 
@@ -1268,15 +1468,10 @@ function extraerItemsVisuales(
     const selectores = [
 
         ".itemstore_item",
-
         ".itemstore_item_block",
-
         ".itemstore_item_area",
-
         "[class*='itemstore_item']",
-
         "[class*='item_block']",
-
         "[class*='item_area']"
     ];
 
@@ -1449,11 +1644,7 @@ function extraerTotalResultados($) {
 
         /Showing\s+\d+\s*-\s*\d+\s+of\s+(\d+)\s+results?/i,
 
-        /Mostrando\s+\d+\s*-\s*\d+\s+de\s+(\d+)\s+resultados?/i,
-
-        /(\d+)\s+results?/i,
-
-        /(\d+)\s+resultados?/i
+        /Mostrando\s+\d+\s*-\s*\d+\s+de\s+(\d+)\s+resultados?/i
     ];
 
     for (
@@ -1581,7 +1772,9 @@ function obtenerSiguienteStart(
         }
     }
 
-    if (!candidatos.length) {
+    if (
+        !candidatos.length
+    ) {
         return null;
     }
 
@@ -1622,10 +1815,6 @@ async function obtenerTiendaRust() {
 
     let mejorResultado =
         [];
-
-    // =================================================
-    // PROBAR TODAS LAS VARIANTES
-    // =================================================
 
     for (
         const variante of variantes
@@ -1724,10 +1913,6 @@ async function obtenerTiendaRust() {
                         html
                     );
 
-                // -----------------------------------------
-                // TOTAL REAL DE STEAM
-                // -----------------------------------------
-
                 const totalPagina =
                     extraerTotalResultados(
                         $
@@ -1757,10 +1942,6 @@ async function obtenerTiendaRust() {
                         $
                     );
 
-                // -----------------------------------------
-                // EXTRAER ARTÍCULOS
-                // -----------------------------------------
-
                 extraerItemsDesdeEnlaces(
                     $,
                     items,
@@ -1781,10 +1962,6 @@ async function obtenerTiendaRust() {
                     `[RUST STORE] Página ${pagina + 1}: ${cantidadPagina} detectados, ${nuevos} nuevos. Total acumulado: ${items.length}`
                 );
 
-                // -----------------------------------------
-                // SI YA TENEMOS TODOS
-                // -----------------------------------------
-
                 if (
                     totalSteam &&
                     items.length >=
@@ -1798,10 +1975,6 @@ async function obtenerTiendaRust() {
                     break;
                 }
 
-                // -----------------------------------------
-                // SIN ARTÍCULOS NUEVOS
-                // -----------------------------------------
-
                 if (
                     nuevos === 0
                 ) {
@@ -1810,8 +1983,6 @@ async function obtenerTiendaRust() {
                         "[RUST STORE] La página no agregó artículos nuevos."
                     );
 
-                    // Intentamos igualmente la
-                    // siguiente paginación real.
                     const siguienteReal =
                         obtenerSiguienteStart(
                             $,
@@ -1832,18 +2003,12 @@ async function obtenerTiendaRust() {
                     continue;
                 }
 
-                // -----------------------------------------
-                // DETERMINAR SIGUIENTE PÁGINA
-                // -----------------------------------------
-
                 let siguienteStart =
                     obtenerSiguienteStart(
                         $,
                         start
                     );
 
-                // Si Steam no entrega enlace,
-                // usamos paginación manual.
                 if (
                     siguienteStart === null
                 ) {
@@ -1892,10 +2057,6 @@ async function obtenerTiendaRust() {
         }
     }
 
-    // =================================================
-    // SI NO HAY RESULTADOS
-    // =================================================
-
     if (
         !mejorResultado.length
     ) {
@@ -1912,13 +2073,7 @@ async function obtenerTiendaRust() {
     );
 
     // =================================================
-    // COMPLETAR DATOS DE CADA ARTÍCULO
-    // =================================================
-    //
-    // Steam puede mostrar correctamente el artículo
-    // pero no entregar precio/imagen en la tarjeta.
-    //
-    // Por eso consultamos la página detail.
+    // COMPLETAR DATOS
     // =================================================
 
     const faltanDatos =
@@ -2006,8 +2161,13 @@ async function obtenerTiendaRust() {
                     );
 
                 if (imagen) {
+
                     item.imagen =
                         imagen;
+
+                    console.log(
+                        `[RUST STORE] Segunda búsqueda de imagen OK: ${item.nombre}`
+                    );
                 }
 
             } catch {
@@ -2051,6 +2211,7 @@ async function obtenerTiendaRust() {
                     );
 
                 if (precio) {
+
                     item.precio =
                         precio;
                 }
@@ -2130,7 +2291,19 @@ async function obtenerImagenDesdeDetailSimple(
             html
         );
 
+    // PRIMERO imagen real
     let imagen =
+        obtenerImagenItemDesdeHtml(
+            $,
+            html
+        );
+
+    if (imagen) {
+        return imagen;
+    }
+
+    // META como último recurso
+    imagen =
         obtenerImagenMeta(
             $
         );
@@ -2139,19 +2312,7 @@ async function obtenerImagenDesdeDetailSimple(
         return imagen;
     }
 
-    imagen =
-        obtenerImagenElemento(
-            $,
-            $("body")
-        );
-
-    if (imagen) {
-        return imagen;
-    }
-
-    return extraerImagenSteamEconomy(
-        html
-    );
+    return null;
 }
 
 // =====================================================
@@ -2399,10 +2560,6 @@ async function publicarTiendaManual(
 ) {
 
     try {
-
-        // =================================================
-        // EVITAR InteractionAlreadyReplied
-        // =================================================
 
         if (
             !interaction.deferred &&
