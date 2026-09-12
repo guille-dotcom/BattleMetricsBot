@@ -31,10 +31,6 @@ const TIMEZONE_CHILE =
 
 const MAX_ITEMS = 100;
 
-const STEAM_PAGE_SIZE = 12;
-
-const MAX_PAGES = 20;
-
 const CHECK_INTERVAL =
     10 * 60 * 1000;
 
@@ -54,31 +50,38 @@ const LOCK_ID =
 // LOCK GLOBAL
 // =====================================================
 
-let rustStoreLocks = global.__rustStoreLocks;
+let rustStoreLocks =
+    global.__rustStoreLocks;
 
 if (!rustStoreLocks) {
     rustStoreLocks = new Map();
-    global.__rustStoreLocks = rustStoreLocks;
+    global.__rustStoreLocks =
+        rustStoreLocks;
 }
 
 // =====================================================
 // AXIOS
 // =====================================================
 
-const steamClient = axios.create({
-    timeout: 30000,
-    maxRedirects: 5,
-    headers: {
-        "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36",
-        "Accept":
-            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language":
-            "en-US,en;q=0.9",
-        "Referer":
-            "https://store.steampowered.com/itemstore/252490/"
-    }
-});
+const steamClient =
+    axios.create({
+        timeout: 30000,
+        maxRedirects: 5,
+
+        headers: {
+            "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+
+            "Accept":
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+
+            "Accept-Language":
+                "en-US,en;q=0.9",
+
+            "Referer":
+                "https://store.steampowered.com/itemstore/252490/"
+        }
+    });
 
 // =====================================================
 // UTILIDADES
@@ -92,7 +95,10 @@ function esperar(ms) {
 
 function normalizarTexto(valor) {
 
-    if (valor === undefined || valor === null) {
+    if (
+        valor === undefined ||
+        valor === null
+    ) {
         return "";
     }
 
@@ -107,57 +113,60 @@ function limpiarPrecio(valor) {
         return "";
     }
 
-    let texto = String(valor)
-        .replace(/&nbsp;/gi, " ")
-        .replace(/\s+/g, " ")
-        .trim();
+    const texto =
+        String(valor)
+            .replace(/&nbsp;/gi, " ")
+            .replace(/\s+/g, " ")
+            .trim();
 
-    const match = texto.match(
-        /(?:US\s*)?\$\s*\d+(?:[.,]\d{1,2})?|€\s*\d+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?\s*€|£\s*\d+(?:[.,]\d{1,2})?|USD\s*\d+(?:[.,]\d{1,2})?|EUR\s*\d+(?:[.,]\d{1,2})?|GBP\s*\d+(?:[.,]\d{1,2})?/i
-    );
+    const match =
+        texto.match(
+            /(?:US\s*)?\$\s*\d+(?:[.,]\d{1,2})?|€\s*\d+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?\s*€|£\s*\d+(?:[.,]\d{1,2})?|USD\s*\d+(?:[.,]\d{1,2})?|EUR\s*\d+(?:[.,]\d{1,2})?|GBP\s*\d+(?:[.,]\d{1,2})?/i
+        );
 
     if (!match) {
         return "";
     }
 
-    return normalizarTexto(match[0]);
-}
-
-function esUrlImagenSteam(url) {
-
-    if (!url) {
-        return false;
-    }
-
-    const texto = String(url).trim();
-
-    if (!/^https?:\/\//i.test(texto)) {
-        return false;
-    }
-
-    return (
-        texto.includes("/economy/image/") ||
-        texto.includes("community.fastly.steamstatic.com") ||
-        texto.includes("community.cloudflare.steamstatic.com") ||
-        texto.includes("steamcommunity.com/economy/image") ||
-        texto.includes("images.steamusercontent.com")
+    return normalizarTexto(
+        match[0]
     );
 }
 
-function esImagenGenerica(url) {
+// =====================================================
+// IMÁGENES
+// =====================================================
+
+function esImagenSteam(url) {
 
     if (!url) {
-        return true;
+        return false;
     }
 
-    const texto = String(url).toLowerCase();
+    const texto =
+        String(url).trim();
+
+    if (
+        !/^https?:\/\//i.test(
+            texto
+        )
+    ) {
+        return false;
+    }
 
     return (
-        texto.includes("header.jpg") ||
-        texto.includes("logo") ||
-        texto.includes("capsule") ||
-        texto.includes("store_home") ||
-        texto.includes("library_hero")
+        texto.includes(
+            "/economy/image/"
+        ) ||
+        texto.includes(
+            "steamstatic.com/economy/image"
+        ) ||
+        texto.includes(
+            "steamcommunity.com/economy/image"
+        ) ||
+        texto.includes(
+            "images.steamusercontent.com"
+        )
     );
 }
 
@@ -167,38 +176,34 @@ function normalizarImagenSteam(url) {
         return null;
     }
 
-    let imagen = String(url).trim();
-
-    imagen = imagen.replace(/^['"]|['"]$/g, "");
+    let imagen =
+        String(url)
+            .trim()
+            .replace(
+                /^['"]|['"]$/g,
+                ""
+            );
 
     if (
         imagen.startsWith("//")
     ) {
         imagen =
-            "https:" + imagen;
+            "https:" +
+            imagen;
     }
 
     if (
-        imagen.startsWith("/economy/image/")
+        imagen.startsWith(
+            "/economy/image/"
+        )
     ) {
         imagen =
-            STEAM_BASE_URL + imagen;
+            STEAM_BASE_URL +
+            imagen;
     }
 
     if (
-        imagen.includes("steamstatic.com/economy/image/")
-    ) {
-        return imagen;
-    }
-
-    if (
-        imagen.includes("steamcommunity.com/economy/image/")
-    ) {
-        return imagen;
-    }
-
-    if (
-        imagen.includes("images.steamusercontent.com")
+        esImagenSteam(imagen)
     ) {
         return imagen;
     }
@@ -206,63 +211,56 @@ function normalizarImagenSteam(url) {
     return null;
 }
 
-// =====================================================
-// EXTRAER IMAGEN REAL
-// =====================================================
-
 function buscarImagenReal($) {
 
-    let encontrada = null;
+    let encontrada =
+        null;
 
-    $("img").each((i, elemento) => {
+    $("img").each(
+        (i, elemento) => {
 
-        if (encontrada) {
-            return;
-        }
-
-        const src =
-            $(elemento).attr("src");
-
-        const dataSrc =
-            $(elemento).attr("data-src");
-
-        const dataOriginal =
-            $(elemento).attr("data-original");
-
-        const srcset =
-            $(elemento).attr("srcset");
-
-        const candidatos = [
-            src,
-            dataSrc,
-            dataOriginal,
-            srcset
-        ];
-
-        for (const candidato of candidatos) {
-
-            if (!candidato) {
-                continue;
-            }
-
-            let valor =
-                String(candidato)
-                    .split(",")[0]
-                    .trim()
-                    .split(" ")[0];
-
-            const imagen =
-                normalizarImagenSteam(valor);
-
-            if (
-                imagen &&
-                !esImagenGenerica(imagen)
-            ) {
-                encontrada = imagen;
+            if (encontrada) {
                 return;
             }
+
+            const candidatos = [
+                $(elemento).attr("src"),
+                $(elemento).attr("data-src"),
+                $(elemento).attr("data-original"),
+                $(elemento).attr("data-image"),
+                $(elemento).attr("data-image-url"),
+                $(elemento).attr("data-full-image"),
+                $(elemento).attr("data-large-image")
+            ];
+
+            for (
+                const candidato
+                of candidatos
+            ) {
+
+                if (!candidato) {
+                    continue;
+                }
+
+                const valor =
+                    String(candidato)
+                        .split(",")[0]
+                        .trim()
+                        .split(" ")[0];
+
+                const imagen =
+                    normalizarImagenSteam(
+                        valor
+                    );
+
+                if (imagen) {
+                    encontrada =
+                        imagen;
+                    return;
+                }
+            }
         }
-    });
+    );
 
     if (encontrada) {
         return encontrada;
@@ -274,31 +272,39 @@ function buscarImagenReal($) {
         "data-image-url",
         "data-full-image",
         "data-large-image",
-        "href",
         "content"
     ];
 
-    for (const atributo of atributos) {
+    for (
+        const atributo
+        of atributos
+    ) {
 
-        $(`[${atributo}]`).each((i, elemento) => {
+        $(
+            `[${atributo}]`
+        ).each(
+            (i, elemento) => {
 
-            if (encontrada) {
-                return;
+                if (encontrada) {
+                    return;
+                }
+
+                const valor =
+                    $(elemento).attr(
+                        atributo
+                    );
+
+                const imagen =
+                    normalizarImagenSteam(
+                        valor
+                    );
+
+                if (imagen) {
+                    encontrada =
+                        imagen;
+                }
             }
-
-            const valor =
-                $(elemento).attr(atributo);
-
-            const imagen =
-                normalizarImagenSteam(valor);
-
-            if (
-                imagen &&
-                !esImagenGenerica(imagen)
-            ) {
-                encontrada = imagen;
-            }
-        });
+        );
 
         if (encontrada) {
             break;
@@ -309,7 +315,7 @@ function buscarImagenReal($) {
 }
 
 // =====================================================
-// EXTRAER PRECIO
+// PRECIO
 // =====================================================
 
 function buscarPrecio($) {
@@ -327,24 +333,29 @@ function buscarPrecio($) {
         "[class*='price']"
     ];
 
-    for (const selector of selectores) {
+    for (
+        const selector
+        of selectores
+    ) {
 
-        $(selector).each((i, elemento) => {
+        $(selector).each(
+            (i, elemento) => {
 
-            if (precio) {
-                return;
+                if (precio) {
+                    return;
+                }
+
+                const encontrado =
+                    limpiarPrecio(
+                        $(elemento).text()
+                    );
+
+                if (encontrado) {
+                    precio =
+                        encontrado;
+                }
             }
-
-            const texto =
-                $(elemento).text();
-
-            const encontrado =
-                limpiarPrecio(texto);
-
-            if (encontrado) {
-                precio = encontrado;
-            }
-        });
+        );
 
         if (precio) {
             break;
@@ -355,15 +366,10 @@ function buscarPrecio($) {
         return precio;
     }
 
-    const bodyText =
-        $("body").text();
-
-    return limpiarPrecio(bodyText);
+    return limpiarPrecio(
+        $("body").text()
+    );
 }
-
-// =====================================================
-// EXTRAER PRECIO DESDE HTML RAW
-// =====================================================
 
 function buscarPrecioDesdeHTML(html) {
 
@@ -373,47 +379,63 @@ function buscarPrecioDesdeHTML(html) {
 
     const texto =
         String(html)
-            .replace(/\\"/g, '"')
-            .replace(/\\u0026/g, "&")
-            .replace(/\\u003c/g, "<")
-            .replace(/\\u003e/g, ">")
-            .replace(/\\u0027/g, "'");
+            .replace(
+                /\\"/g,
+                '"'
+            )
+            .replace(
+                /\\u0026/g,
+                "&"
+            )
+            .replace(
+                /\\u003c/g,
+                "<"
+            )
+            .replace(
+                /\\u003e/g,
+                ">"
+            )
+            .replace(
+                /\\u0027/g,
+                "'"
+            );
 
     const patrones = [
-
         /(?:US\s*)?\$\s*\d+(?:[.,]\d{1,2})?/gi,
-
         /€\s*\d+(?:[.,]\d{1,2})?/gi,
-
         /\d+(?:[.,]\d{1,2})?\s*€/gi,
-
         /£\s*\d+(?:[.,]\d{1,2})?/gi,
-
         /USD\s*\d+(?:[.,]\d{1,2})?/gi,
-
         /EUR\s*\d+(?:[.,]\d{1,2})?/gi,
-
         /GBP\s*\d+(?:[.,]\d{1,2})?/gi
     ];
 
-    for (const patron of patrones) {
+    for (
+        const patron
+        of patrones
+    ) {
 
-        const match =
-            texto.match(patron);
+        const matches =
+            texto.match(
+                patron
+            );
 
-        if (
-            match &&
-            match.length > 0
+        if (!matches) {
+            continue;
+        }
+
+        for (
+            const candidato
+            of matches
         ) {
 
-            for (const candidato of match) {
+            const precio =
+                limpiarPrecio(
+                    candidato
+                );
 
-                const precio =
-                    limpiarPrecio(candidato);
-
-                if (precio) {
-                    return precio;
-                }
+            if (precio) {
+                return precio;
             }
         }
     }
@@ -422,7 +444,7 @@ function buscarPrecioDesdeHTML(html) {
 }
 
 // =====================================================
-// DATOS DESDE DETAIL
+// DETAIL
 // =====================================================
 
 async function obtenerDatosDesdeDetail(item) {
@@ -434,31 +456,37 @@ async function obtenerDatosDesdeDetail(item) {
     try {
 
         const response =
-            await steamClient.get(item.url, {
-                headers: {
-                    "User-Agent":
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36",
-                    "Accept-Language":
-                        "en-US,en;q=0.9",
-                    "Referer":
-                        STEAM_STORE_URL
+            await steamClient.get(
+                item.url,
+                {
+                    headers: {
+                        "User-Agent":
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36",
+
+                        "Accept-Language":
+                            "en-US,en;q=0.9",
+
+                        "Referer":
+                            STEAM_STORE_URL
+                    }
                 }
-            });
+            );
 
         const html =
             response.data;
 
         const $ =
-            cheerio.load(html);
+            cheerio.load(
+                html
+            );
 
-        // -------------------------------------------------
+        // ---------------------------------------------
         // IMAGEN
-        // -------------------------------------------------
+        // ---------------------------------------------
 
         let imagen =
             buscarImagenReal($);
 
-        // Meta como fallback
         if (!imagen) {
 
             const metas = [
@@ -467,31 +495,80 @@ async function obtenerDatosDesdeDetail(item) {
                 $('meta[property="twitter:image"]').attr("content")
             ];
 
-            for (const meta of metas) {
+            for (
+                const meta
+                of metas
+            ) {
 
                 const candidata =
-                    normalizarImagenSteam(meta);
+                    normalizarImagenSteam(
+                        meta
+                    );
 
-                if (
-                    candidata &&
-                    !esImagenGenerica(candidata)
-                ) {
-                    imagen = candidata;
+                if (candidata) {
+                    imagen =
+                        candidata;
                     break;
                 }
             }
         }
 
-        // -------------------------------------------------
+        // ---------------------------------------------
+        // NOMBRE
+        // ---------------------------------------------
+
+        if (
+            !item.nombre ||
+            item.nombre.startsWith(
+                "Item Rust "
+            )
+        ) {
+
+            const posiblesNombres = [
+                $("h1").first().text(),
+                $(".item_name").first().text(),
+                $(".itemstore_item_name").first().text(),
+                $('meta[property="og:title"]').attr("content"),
+                $("title").first().text()
+            ];
+
+            for (
+                const nombre
+                of posiblesNombres
+            ) {
+
+                const limpio =
+                    normalizarTexto(
+                        nombre
+                    );
+
+                if (
+                    limpio &&
+                    !limpio.toLowerCase().includes(
+                        "steam"
+                    )
+                ) {
+
+                    item.nombre =
+                        limpio;
+
+                    break;
+                }
+            }
+        }
+
+        // ---------------------------------------------
         // PRECIO
-        // -------------------------------------------------
+        // ---------------------------------------------
 
         let precio =
             buscarPrecio($);
 
         if (!precio) {
             precio =
-                buscarPrecioDesdeHTML(html);
+                buscarPrecioDesdeHTML(
+                    html
+                );
         }
 
         if (imagen) {
@@ -518,7 +595,7 @@ async function obtenerDatosDesdeDetail(item) {
     } catch (error) {
 
         console.error(
-            `[RUST STORE] Error detail ${item.nombre}:`,
+            `[RUST STORE] Error detail ${item.id}:`,
             error.message
         );
 
@@ -527,179 +604,208 @@ async function obtenerDatosDesdeDetail(item) {
 }
 
 // =====================================================
-// SEGUNDO INTENTO SOLO IMAGEN
+// EXTRAER CUALQUIER ID ITEMDEF
 // =====================================================
 
-async function obtenerImagenDesdeDetailSimple(item) {
-
-    if (!item.url) {
-        return item;
-    }
-
-    try {
-
-        const response =
-            await steamClient.get(item.url, {
-                timeout: 20000,
-                headers: {
-                    "User-Agent":
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36",
-                    "Accept-Language":
-                        "en-US,en;q=0.9"
-                }
-            });
-
-        const html =
-            response.data;
-
-        const $ =
-            cheerio.load(html);
-
-        const imagen =
-            buscarImagenReal($);
-
-        if (imagen) {
-
-            item.imagen =
-                imagen;
-
-            console.log(
-                `[RUST STORE] Segundo intento imagen OK: ${item.nombre}`
-            );
-        }
-
-    } catch (error) {
-
-        console.error(
-            `[RUST STORE] Segundo intento imagen falló: ${item.nombre} | ${error.message}`
-        );
-    }
-
-    return item;
-}
-
-// =====================================================
-// SEGUNDO INTENTO PRECIO
-// =====================================================
-
-async function obtenerPrecioDesdeDetail(item) {
-
-    if (!item.url) {
-        return item;
-    }
-
-    try {
-
-        const response =
-            await steamClient.get(item.url, {
-                timeout: 20000,
-                headers: {
-                    "User-Agent":
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36",
-                    "Accept-Language":
-                        "en-US,en;q=0.9"
-                }
-            });
-
-        const html =
-            response.data;
-
-        const precio =
-            buscarPrecioDesdeHTML(html);
-
-        if (precio) {
-
-            item.precio =
-                precio;
-
-            console.log(
-                `[RUST STORE] Segundo intento precio OK: ${item.nombre} -> ${precio}`
-            );
-        }
-
-    } catch (error) {
-
-        console.error(
-            `[RUST STORE] Segundo intento precio falló: ${item.nombre} | ${error.message}`
-        );
-    }
-
-    return item;
-}
-
-// =====================================================
-// EXTRAER ITEMDEFS RECURSIVAMENTE
-// =====================================================
-
-function extraerObjetosItemDefs(obj, resultado = [], vistos = new Set()) {
-
-    if (!obj) {
-        return resultado;
-    }
+function pareceItemDef(obj) {
 
     if (
+        !obj ||
         typeof obj !== "object"
     ) {
-        return resultado;
+        return false;
     }
 
-    if (
-        vistos.has(obj)
-    ) {
-        return resultado;
-    }
-
-    vistos.add(obj);
-
-    if (Array.isArray(obj)) {
-
-        for (const elemento of obj) {
-
-            extraerObjetosItemDefs(
-                elemento,
-                resultado,
-                vistos
+    const claves =
+        Object.keys(obj)
+            .map(
+                key =>
+                    key.toLowerCase()
             );
-        }
 
-        return resultado;
-    }
+    return (
+        claves.includes(
+            "name"
+        ) ||
+        claves.includes(
+            "name_english"
+        ) ||
+        claves.includes(
+            "store_tags"
+        ) ||
+        claves.includes(
+            "price"
+        ) ||
+        claves.includes(
+            "price_category"
+        ) ||
+        claves.includes(
+            "icon_url"
+        ) ||
+        claves.includes(
+            "store_images"
+        )
+    );
+}
 
-    const tieneId =
-        obj.itemdefid !== undefined ||
-        obj.item_def_id !== undefined ||
-        obj.itemDefId !== undefined;
+// =====================================================
+// RECOLECTAR ITEMDEFS
+//
+// Steam puede devolver:
+// 1. array de objetos
+// 2. objeto con itemdefid
+// 3. objeto indexado por "70610"
+// 4. objetos anidados
+// =====================================================
 
-    const tieneNombre =
-        obj.name !== undefined ||
-        obj.name_english !== undefined ||
-        obj.item_name !== undefined ||
-        obj.itemname !== undefined;
+function recolectarItemDefs(
+    data
+) {
 
-    if (
-        tieneId &&
-        tieneNombre
+    const resultado =
+        new Map();
+
+    const vistos =
+        new Set();
+
+    function recorrer(
+        nodo,
+        clavePadre = ""
     ) {
-        resultado.push(obj);
-    }
-
-    for (const key of Object.keys(obj)) {
-
-        const valor =
-            obj[key];
 
         if (
-            valor &&
-            typeof valor === "object"
+            nodo === null ||
+            nodo === undefined
+        ) {
+            return;
+        }
+
+        if (
+            typeof nodo !== "object"
+        ) {
+            return;
+        }
+
+        if (
+            vistos.has(nodo)
+        ) {
+            return;
+        }
+
+        vistos.add(
+            nodo
+        );
+
+        // ---------------------------------------------
+        // Objeto que contiene itemdefid
+        // ---------------------------------------------
+
+        let id = "";
+
+        const posiblesIds = [
+            nodo.itemdefid,
+            nodo.item_def_id,
+            nodo.itemDefId,
+            nodo.itemdef_id,
+            nodo.id
+        ];
+
+        for (
+            const posible
+            of posiblesIds
         ) {
 
-            extraerObjetosItemDefs(
-                valor,
-                resultado,
-                vistos
-            );
+            if (
+                posible !== undefined &&
+                posible !== null &&
+                /^\d+$/.test(
+                    String(posible)
+                )
+            ) {
+
+                id =
+                    String(posible);
+
+                break;
+            }
+        }
+
+        // ---------------------------------------------
+        // Si la clave padre es un ID numérico,
+        // también sirve.
+        // ---------------------------------------------
+
+        if (
+            !id &&
+            /^\d+$/.test(
+                String(clavePadre)
+            ) &&
+            pareceItemDef(nodo)
+        ) {
+
+            id =
+                String(clavePadre);
+        }
+
+        if (id) {
+
+            if (
+                !resultado.has(id)
+            ) {
+
+                resultado.set(
+                    id,
+                    nodo
+                );
+            }
+        }
+
+        // ---------------------------------------------
+        // Recorrer propiedades
+        // ---------------------------------------------
+
+        if (
+            Array.isArray(nodo)
+        ) {
+
+            for (
+                const elemento
+                of nodo
+            ) {
+
+                recorrer(
+                    elemento,
+                    ""
+                );
+            }
+
+        } else {
+
+            for (
+                const [clave, valor]
+                of Object.entries(
+                    nodo
+                )
+            ) {
+
+                if (
+                    valor &&
+                    typeof valor ===
+                    "object"
+                ) {
+
+                    recorrer(
+                        valor,
+                        clave
+                    );
+                }
+            }
         }
     }
+
+    recorrer(
+        data
+    );
 
     return resultado;
 }
@@ -708,115 +814,125 @@ function extraerObjetosItemDefs(obj, resultado = [], vistos = new Set()) {
 // TAGS
 // =====================================================
 
-function obtenerTagsItemDef(itemdef) {
+function obtenerTags(itemdef) {
+
+    if (!itemdef) {
+        return [];
+    }
+
+    const resultado = [];
 
     const posibles = [
         itemdef.store_tags,
         itemdef.storeTags,
-        itemdef.tags,
         itemdef.store_tag,
-        itemdef.category
+        itemdef.tags,
+        itemdef.tag
     ];
 
-    const tags = [];
-
-    for (const valor of posibles) {
+    for (
+        const valor
+        of posibles
+    ) {
 
         if (!valor) {
             continue;
         }
 
-        if (Array.isArray(valor)) {
+        if (
+            Array.isArray(valor)
+        ) {
 
-            for (const tag of valor) {
+            for (
+                const tag
+                of valor
+            ) {
 
-                if (tag !== undefined && tag !== null) {
-                    tags.push(String(tag));
-                }
+                resultado.push(
+                    String(tag)
+                );
             }
 
         } else {
 
-            tags.push(
-                String(valor)
-            );
+            const texto =
+                String(valor);
+
+            texto
+                .split(/[;,|]/)
+                .forEach(
+                    tag => {
+
+                        if (
+                            tag.trim()
+                        ) {
+
+                            resultado.push(
+                                tag.trim()
+                            );
+                        }
+                    }
+                );
         }
     }
 
-    return tags;
+    return resultado;
 }
 
-function tieneTagLimited(itemdef) {
+function esLimited(itemdef) {
 
     const tags =
-        obtenerTagsItemDef(itemdef);
+        obtenerTags(
+            itemdef
+        );
 
-    return tags.some(tag => {
-
-        const normalizado =
+    return tags.some(
+        tag =>
             String(tag)
                 .toLowerCase()
-                .trim();
-
-        return (
-            normalizado === "limited" ||
-            normalizado.includes("limited")
-        );
-    });
+                .includes(
+                    "limited"
+                )
+    );
 }
 
 // =====================================================
 // NOMBRE ITEMDEF
 // =====================================================
 
-function obtenerNombreItemDef(itemdef) {
+function obtenerNombre(itemdef) {
+
+    if (!itemdef) {
+        return "";
+    }
 
     const posibles = [
         itemdef.name,
         itemdef.name_english,
         itemdef.item_name,
         itemdef.itemname,
-        itemdef.localized_name,
-        itemdef.display_name
+        itemdef.display_name,
+        itemdef.localized_name
     ];
 
-    for (const valor of posibles) {
+    for (
+        const valor
+        of posibles
+    ) {
 
         if (
             valor !== undefined &&
-            valor !== null &&
-            String(valor).trim()
+            valor !== null
         ) {
 
-            return normalizarTexto(valor);
-        }
-    }
+            const texto =
+                normalizarTexto(
+                    valor
+                );
 
-    return "Item Rust";
-}
-
-// =====================================================
-// ID ITEMDEF
-// =====================================================
-
-function obtenerIdItemDef(itemdef) {
-
-    const posibles = [
-        itemdef.itemdefid,
-        itemdef.item_def_id,
-        itemdef.itemDefId,
-        itemdef.id
-    ];
-
-    for (const valor of posibles) {
-
-        if (
-            valor !== undefined &&
-            valor !== null &&
-            String(valor).trim()
-        ) {
-
-            return String(valor).trim();
+            if (texto) {
+                return texto;
+            }
         }
     }
 
@@ -824,27 +940,87 @@ function obtenerIdItemDef(itemdef) {
 }
 
 // =====================================================
-// URL DETAIL
+// PRECIO ITEMDEF
 // =====================================================
 
-function crearUrlDetail(itemdefid) {
+function obtenerPrecioItemDef(itemdef) {
 
-    return (
-        `${STEAM_BASE_URL}/itemstore/${STEAM_APP_ID}/detail/${encodeURIComponent(itemdefid)}/`
-    );
+    if (!itemdef) {
+        return "";
+    }
+
+    const posibles = [
+        itemdef.price,
+        itemdef.price_category,
+        itemdef.localized_price,
+        itemdef.formatted_price
+    ];
+
+    for (
+        const valor
+        of posibles
+    ) {
+
+        const precio =
+            limpiarPrecio(
+                valor
+            );
+
+        if (precio) {
+            return precio;
+        }
+    }
+
+    return "";
 }
 
 // =====================================================
-// EXTRAER ITEMDEFS DESDE JSON
+// CREAR ITEM
 // =====================================================
 
-async function obtenerLimitedDesdeAjax() {
+function crearItemDesdeDef(
+    id,
+    itemdef
+) {
+
+    const nombre =
+        obtenerNombre(
+            itemdef
+        ) ||
+        `Item Rust ${id}`;
+
+    const precio =
+        obtenerPrecioItemDef(
+            itemdef
+        );
+
+    return {
+        id:
+            String(id),
+
+        nombre,
+
+        precio,
+
+        imagen:
+            null,
+
+        url:
+            `${STEAM_BASE_URL}/itemstore/${STEAM_APP_ID}/detail/${encodeURIComponent(id)}/`
+    };
+}
+
+// =====================================================
+// AJAX ITEMDEFS
+// =====================================================
+
+async function obtenerItemDefsAjax() {
 
     console.log(
-        "[RUST STORE] Consultando endpoint AJAX de Steam para obtener todos los Limited..."
+        "[RUST STORE] Consultando endpoint AJAX de Steam..."
     );
 
-    const configuraciones = [
+    const variantes = [
 
         {
             cc: "us",
@@ -862,32 +1038,38 @@ async function obtenerLimitedDesdeAjax() {
         }
     ];
 
+    let todos =
+        new Map();
+
     for (
-        const configuracion
-        of configuraciones
+        const variante
+        of variantes
     ) {
 
         try {
-
-            const params = {
-                start: 0,
-                count: 100,
-                json: 1,
-                searchtext: "",
-                cc: configuracion.cc,
-                l: configuracion.l
-            };
 
             const response =
                 await steamClient.get(
                     STEAM_ITEMDEFS_URL,
                     {
-                        params,
+                        params: {
+                            start: 0,
+                            count: 100,
+                            json: 1,
+                            searchtext: "",
+                            cc:
+                                variante.cc,
+                            l:
+                                variante.l
+                        },
+
                         headers: {
                             "Accept":
                                 "application/json, text/plain, */*",
+
                             "X-Requested-With":
                                 "XMLHttpRequest",
+
                             "Referer":
                                 STEAM_STORE_URL
                         }
@@ -898,234 +1080,166 @@ async function obtenerLimitedDesdeAjax() {
                 response.data;
 
             console.log(
-                `[RUST STORE] AJAX ${configuracion.cc}/${configuracion.l}: respuesta recibida (${typeof data})`
+                `[RUST STORE] AJAX ${variante.cc}/${variante.l}: respuesta recibida (${typeof data})`
             );
 
-            const itemdefs =
-                extraerObjetosItemDefs(
+            // -----------------------------------------
+            // Mostrar estructura superior
+            // -----------------------------------------
+
+            if (
+                data &&
+                typeof data ===
+                "object"
+            ) {
+
+                console.log(
+                    `[RUST STORE] AJAX claves principales: ${Object.keys(data).slice(0, 20).join(", ")}`
+                );
+            }
+
+            const encontrados =
+                recolectarItemDefs(
                     data
                 );
 
             console.log(
-                `[RUST STORE] AJAX ${configuracion.cc}/${configuracion.l}: ${itemdefs.length} itemdefs candidatos.`
+                `[RUST STORE] AJAX ${variante.cc}/${variante.l}: ${encontrados.size} ItemDefs detectados.`
             );
-
-            if (
-                itemdefs.length === 0
-            ) {
-                continue;
-            }
-
-            const unicos =
-                new Map();
 
             for (
-                const itemdef
-                of itemdefs
+                const [id, itemdef]
+                of encontrados
             ) {
-
-                const id =
-                    obtenerIdItemDef(
-                        itemdef
-                    );
-
-                if (!id) {
-                    continue;
-                }
 
                 if (
-                    !unicos.has(id)
+                    !todos.has(id)
                 ) {
-                    unicos.set(
+
+                    todos.set(
                         id,
                         itemdef
                     );
                 }
             }
 
-            const todos =
-                Array.from(
-                    unicos.values()
-                );
-
             console.log(
-                `[RUST STORE] AJAX: ${todos.length} itemdefs únicos.`
+                `[RUST STORE] AJAX acumulado: ${todos.size} ItemDefs.`
             );
-
-            const limited =
-                todos.filter(
-                    tieneTagLimited
-                );
-
-            console.log(
-                `[RUST STORE] AJAX: ${limited.length} itemdefs con tag Limited.`
-            );
-
-            if (
-                limited.length === 0
-            ) {
-
-                // Mostrar tags para poder detectar cambios de Steam
-                console.log(
-                    "[RUST STORE] No se encontraron tags Limited. Mostrando muestra de tags:"
-                );
-
-                todos
-                    .slice(0, 10)
-                    .forEach(itemdef => {
-
-                        const nombre =
-                            obtenerNombreItemDef(
-                                itemdef
-                            );
-
-                        const tags =
-                            obtenerTagsItemDef(
-                                itemdef
-                            );
-
-                        console.log(
-                            `[RUST STORE] TAGS: ${nombre} -> ${tags.join(", ") || "SIN TAGS"}`
-                        );
-                    });
-
-                continue;
-            }
-
-            const resultado =
-                limited.map(itemdef => {
-
-                    const id =
-                        obtenerIdItemDef(
-                            itemdef
-                        );
-
-                    const nombre =
-                        obtenerNombreItemDef(
-                            itemdef
-                        );
-
-                    let precio =
-                        limpiarPrecio(
-                            itemdef.price
-                        );
-
-                    if (!precio) {
-                        precio =
-                            limpiarPrecio(
-                                itemdef.price_category
-                            );
-                    }
-
-                    let imagen =
-                        null;
-
-                    const imagenes = [
-                        itemdef.store_images,
-                        itemdef.storeImages,
-                        itemdef.icon_url_large,
-                        itemdef.icon_url,
-                        itemdef.image_url
-                    ];
-
-                    for (
-                        const posible
-                        of imagenes
-                    ) {
-
-                        if (
-                            typeof posible === "string"
-                        ) {
-
-                            const candidata =
-                                normalizarImagenSteam(
-                                    posible
-                                );
-
-                            if (
-                                candidata
-                            ) {
-
-                                imagen =
-                                    candidata;
-
-                                break;
-                            }
-                        }
-
-                        if (
-                            Array.isArray(posible)
-                        ) {
-
-                            for (
-                                const valor
-                                of posible
-                            ) {
-
-                                const candidata =
-                                    normalizarImagenSteam(
-                                        valor
-                                    );
-
-                                if (
-                                    candidata
-                                ) {
-
-                                    imagen =
-                                        candidata;
-
-                                    break;
-                                }
-                            }
-
-                            if (imagen) {
-                                break;
-                            }
-                        }
-                    }
-
-                    return {
-                        id,
-                        nombre,
-                        precio,
-                        imagen,
-                        url:
-                            crearUrlDetail(
-                                id
-                            )
-                    };
-                });
-
-            console.log(
-                `[RUST STORE] AJAX: ${resultado.length} Limited preparados.`
-            );
-
-            resultado.forEach(item => {
-
-                console.log(
-                    `[RUST STORE] Limited: ${item.id} | ${item.nombre}`
-                );
-            });
-
-            return resultado;
 
         } catch (error) {
 
             console.error(
-                `[RUST STORE] Error AJAX ${configuracion.cc}/${configuracion.l}:`,
+                `[RUST STORE] Error AJAX ${variante.cc}/${variante.l}:`,
                 error.response?.status ||
                 error.message
             );
         }
 
-        await esperar(500);
+        await esperar(
+            500
+        );
     }
 
-    return [];
+    return todos;
 }
 
 // =====================================================
-// FALLBACK HTML
+// OBTENER LIMITED DESDE AJAX
+// =====================================================
+
+async function obtenerLimitedDesdeAjax() {
+
+    const defs =
+        await obtenerItemDefsAjax();
+
+    if (
+        defs.size === 0
+    ) {
+
+        console.log(
+            "[RUST STORE] AJAX no entregó ItemDefs reconocibles."
+        );
+
+        return [];
+    }
+
+    let limited =
+        [];
+
+    for (
+        const [id, itemdef]
+        of defs
+    ) {
+
+        if (
+            esLimited(
+                itemdef
+            )
+        ) {
+
+            limited.push(
+                crearItemDesdeDef(
+                    id,
+                    itemdef
+                )
+            );
+        }
+    }
+
+    console.log(
+        `[RUST STORE] ItemDefs con tag Limited: ${limited.length}.`
+    );
+
+    // ---------------------------------------------
+    // Diagnóstico
+    // ---------------------------------------------
+
+    if (
+        limited.length === 0
+    ) {
+
+        console.log(
+            "[RUST STORE] No se encontró tag Limited. Mostrando muestra de ItemDefs:"
+        );
+
+        let contador =
+            0;
+
+        for (
+            const [id, itemdef]
+            of defs
+        ) {
+
+            const tags =
+                obtenerTags(
+                    itemdef
+                );
+
+            const nombre =
+                obtenerNombre(
+                    itemdef
+                );
+
+            console.log(
+                `[RUST STORE] DEF ${id} | ${nombre || "SIN NOMBRE"} | TAGS: ${tags.join(", ") || "SIN TAGS"}`
+            );
+
+            contador++;
+
+            if (
+                contador >= 15
+            ) {
+                break;
+            }
+        }
+    }
+
+    return limited;
+}
+
+// =====================================================
+// HTML FALLBACK
 // =====================================================
 
 async function obtenerTiendaHTML() {
@@ -1134,82 +1248,92 @@ async function obtenerTiendaHTML() {
         "[RUST STORE] Usando fallback HTML de Steam..."
     );
 
-    const resultados =
+    const resultado =
         new Map();
 
-    let totalSteam =
-        0;
+    try {
 
-    for (
-        let pagina = 1;
-        pagina <= MAX_PAGES;
-        pagina++
-    ) {
-
-        const start =
-            (pagina - 1) *
-            STEAM_PAGE_SIZE;
-
-        console.log(
-            `[RUST STORE] Página ${pagina}: start=${start}`
-        );
-
-        try {
-
-            const response =
-                await steamClient.get(
-                    STEAM_STORE_URL,
-                    {
-                        params: {
-                            start,
-                            count:
-                                STEAM_PAGE_SIZE,
-                            cc: "us",
-                            l: "english"
-                        }
+        const response =
+            await steamClient.get(
+                STEAM_STORE_URL,
+                {
+                    params: {
+                        cc: "us",
+                        l: "english"
                     }
-                );
+                }
+            );
 
-            const html =
-                response.data;
+        const html =
+            response.data;
 
-            const $ =
-                cheerio.load(html);
+        const $ =
+            cheerio.load(
+                html
+            );
 
-            const textoPagina =
-                $("body").text();
+        const texto =
+            $("body").text();
 
-            const totalMatch =
-                textoPagina.match(
-                    /(?:Showing|Mostrando)\s+\d+\s*-\s*\d+\s+(?:of|de)\s+(\d+)/i
-                );
+        const totalMatch =
+            texto.match(
+                /(?:Showing|Mostrando)\s+\d+\s*-\s*\d+\s+(?:of|de)\s+(\d+)/i
+            );
 
-            if (
-                totalMatch
+        if (totalMatch) {
+
+            console.log(
+                `[RUST STORE] Steam indica ${totalMatch[1]} resultados totales.`
+            );
+        }
+
+        // ---------------------------------------------
+        // Buscar todos los IDs que aparezcan en HTML
+        // ---------------------------------------------
+
+        const htmlTexto =
+            String(html);
+
+        const patrones = [
+            /itemdef(?:id)?["':=\\\s]+(\d{4,})/gi,
+            /itemstore\/252490\/detail\/(\d+)/gi,
+            /itemdefid[^\d]{0,20}(\d{4,})/gi
+        ];
+
+        const ids =
+            new Set();
+
+        for (
+            const patron
+            of patrones
+        ) {
+
+            let match;
+
+            while (
+                (match =
+                    patron.exec(
+                        htmlTexto
+                    )) !== null
             ) {
 
-                totalSteam =
-                    parseInt(
-                        totalMatch[1],
-                        10
-                    ) || 0;
-
-                console.log(
-                    `[RUST STORE] Steam indica ${totalSteam} resultados totales.`
+                ids.add(
+                    match[1]
                 );
             }
+        }
 
-            let detectados =
-                0;
+        // ---------------------------------------------
+        // Links detail
+        // ---------------------------------------------
 
-            // ---------------------------------------------
-            // Buscar links detail
-            // ---------------------------------------------
-
-            $("a").each((i, elemento) => {
+        $("a").each(
+            (i, elemento) => {
 
                 const href =
-                    $(elemento).attr("href");
+                    $(elemento).attr(
+                        "href"
+                    );
 
                 if (!href) {
                     return;
@@ -1220,170 +1344,87 @@ async function obtenerTiendaHTML() {
                         /\/itemstore\/252490\/detail\/(\d+)\/?/i
                     );
 
-                if (!match) {
-                    return;
-                }
-
-                const id =
-                    match[1];
-
-                if (
-                    resultados.has(id)
-                ) {
-                    return;
-                }
-
-                let nombre =
-                    normalizarTexto(
-                        $(elemento).text()
+                if (match) {
+                    ids.add(
+                        match[1]
                     );
-
-                if (!nombre) {
-
-                    const title =
-                        $(elemento).attr("title");
-
-                    if (title) {
-                        nombre =
-                            normalizarTexto(
-                                title
-                            );
-                    }
                 }
+            }
+        );
 
-                if (!nombre) {
-                    nombre =
-                        `Item Rust ${id}`;
-                }
+        console.log(
+            `[RUST STORE] IDs detectados en HTML: ${ids.size}`
+        );
 
-                resultados.set(
-                    id,
-                    {
-                        id,
-                        nombre,
-                        precio: "",
-                        imagen: null,
-                        url:
-                            `${STEAM_BASE_URL}/itemstore/252490/detail/${id}/`
-                    }
-                );
+        // ---------------------------------------------
+        // Crear items
+        // ---------------------------------------------
 
-                detectados++;
-            });
+        for (
+            const id
+            of ids
+        ) {
 
-            // ---------------------------------------------
-            // Buscar elementos con data-itemdef
-            // ---------------------------------------------
+            if (
+                resultado.has(id)
+            ) {
+                continue;
+            }
 
-            $(
-                "[data-itemdefid], [data-itemdef]"
-            ).each((i, elemento) => {
+            let nombre =
+                "";
 
-                const id =
-                    $(elemento).attr("data-itemdefid") ||
-                    $(elemento).attr("data-itemdef");
+            const enlace =
+                $(
+                    `a[href*="/itemstore/252490/detail/${id}"]`
+                ).first();
 
-                if (!id) {
-                    return;
-                }
+            if (
+                enlace.length
+            ) {
 
-                const idString =
-                    String(id).trim();
-
-                if (
-                    resultados.has(idString)
-                ) {
-                    return;
-                }
-
-                let nombre =
+                nombre =
                     normalizarTexto(
-                        $(elemento).text()
+                        enlace.text()
                     );
 
                 if (!nombre) {
 
                     nombre =
                         normalizarTexto(
-                            $(elemento).attr("data-name")
+                            enlace.attr(
+                                "title"
+                            )
                         );
                 }
+            }
 
-                if (!nombre) {
-                    nombre =
-                        `Item Rust ${idString}`;
+            resultado.set(
+                id,
+                {
+                    id,
+                    nombre:
+                        nombre ||
+                        `Item Rust ${id}`,
+                    precio: "",
+                    imagen: null,
+                    url:
+                        `${STEAM_BASE_URL}/itemstore/252490/detail/${id}/`
                 }
-
-                resultados.set(
-                    idString,
-                    {
-                        id:
-                            idString,
-                        nombre,
-                        precio: "",
-                        imagen: null,
-                        url:
-                            `${STEAM_BASE_URL}/itemstore/252490/detail/${idString}/`
-                    }
-                );
-
-                detectados++;
-            });
-
-            console.log(
-                `[RUST STORE] Página ${pagina}: ${detectados} nuevos. Total acumulado: ${resultados.size}`
             );
-
-            if (
-                resultados.size >= MAX_ITEMS
-            ) {
-                break;
-            }
-
-            if (
-                totalSteam > 0 &&
-                resultados.size >= totalSteam
-            ) {
-                break;
-            }
-
-            // ---------------------------------------------
-            // Steam actualmente puede ignorar start/count
-            // en determinadas respuestas.
-            //
-            // Si no aparece nada nuevo, no seguimos
-            // martillando la misma página.
-            // ---------------------------------------------
-
-            if (
-                detectados === 0
-            ) {
-
-                console.log(
-                    "[RUST STORE] La página no agregó artículos nuevos."
-                );
-
-                break;
-            }
-
-            await esperar(
-                REQUEST_DELAY
-            );
-
-        } catch (error) {
-
-            console.error(
-                `[RUST STORE] Error página ${pagina}:`,
-                error.message
-            );
-
-            break;
         }
+
+    } catch (error) {
+
+        console.error(
+            "[RUST STORE] Error fallback HTML:",
+            error.message
+        );
     }
 
     const items =
         Array.from(
-            resultados.values()
+            resultado.values()
         );
 
     console.log(
@@ -1394,25 +1435,30 @@ async function obtenerTiendaHTML() {
 }
 
 // =====================================================
-// MÉTODO EXTRA: DESCUBRIR TODOS DESDE HTML + DETALLES
+// BUSCAR IDs ADICIONALES DESDE LA PÁGINA
 // =====================================================
 
-async function obtenerLimitedDesdeHTMLCompleto() {
+async function buscarIDsAdicionales() {
 
-    const paginas = [
-        `${STEAM_STORE_URL}&start=0&count=100`,
-        `${STEAM_STORE_URL}&start=12&count=100`,
-        `${STEAM_STORE_URL}&start=24&count=100`,
-        `${STEAM_STORE_URL}&start=36&count=100`,
-        `${STEAM_STORE_URL}&start=48&count=100`
-    ];
+    console.log(
+        "[RUST STORE] Buscando IDs adicionales en respuestas alternativas de Steam..."
+    );
 
     const resultado =
         new Map();
 
+    const urls = [
+
+        "https://store.steampowered.com/itemstore/252490/browse/?filter=Limited&cc=us&l=english",
+
+        "https://store.steampowered.com/itemstore/252490/browse/?filter=Limited&cc=cl&l=english",
+
+        "https://store.steampowered.com/itemstore/252490/browse/?filter=Limited&cc=us&l=spanish"
+    ];
+
     for (
         const url
-        of paginas
+        of urls
     ) {
 
         try {
@@ -1423,84 +1469,78 @@ async function obtenerLimitedDesdeHTMLCompleto() {
                 );
 
             const html =
-                response.data;
-
-            const $ =
-                cheerio.load(html);
-
-            $("a").each((i, elemento) => {
-
-                const href =
-                    $(elemento).attr("href");
-
-                if (!href) {
-                    return;
-                }
-
-                const match =
-                    href.match(
-                        /\/itemstore\/252490\/detail\/(\d+)\/?/i
-                    );
-
-                if (!match) {
-                    return;
-                }
-
-                const id =
-                    match[1];
-
-                if (
-                    resultado.has(id)
-                ) {
-                    return;
-                }
-
-                let nombre =
-                    normalizarTexto(
-                        $(elemento).text()
-                    );
-
-                if (!nombre) {
-
-                    nombre =
-                        normalizarTexto(
-                            $(elemento).attr("title")
-                        );
-                }
-
-                if (!nombre) {
-                    nombre =
-                        `Item Rust ${id}`;
-                }
-
-                resultado.set(
-                    id,
-                    {
-                        id,
-                        nombre,
-                        precio: "",
-                        imagen: null,
-                        url:
-                            `${STEAM_BASE_URL}/itemstore/252490/detail/${id}/`
-                    }
+                String(
+                    response.data
                 );
-            });
+
+            // -----------------------------------------
+            // IDs numéricos asociados a itemdefs
+            // -----------------------------------------
+
+            const patrones = [
+
+                /itemdefid["'\s:=\\]+(\d{4,})/gi,
+
+                /item_def_id["'\s:=\\]+(\d{4,})/gi,
+
+                /itemdef_id["'\s:=\\]+(\d{4,})/gi,
+
+                /detail\/(\d{4,})/gi,
+
+                /"(\d{5,})"\s*:\s*\{[^{}]{0,2000}(?:store_tags|price|name)/gi
+            ];
+
+            for (
+                const patron
+                of patrones
+            ) {
+
+                let match;
+
+                while (
+                    (match =
+                        patron.exec(
+                            html
+                        )) !== null
+                ) {
+
+                    const id =
+                        match[1];
+
+                    if (
+                        id &&
+                        /^\d+$/.test(
+                            id
+                        )
+                    ) {
+
+                        resultado.set(
+                            id,
+                            true
+                        );
+                    }
+                }
+            }
 
         } catch (error) {
 
             console.error(
-                "[RUST STORE] Error HTML completo:",
+                "[RUST STORE] Error buscando IDs adicionales:",
                 error.message
             );
         }
 
         await esperar(
-            REQUEST_DELAY
+            250
         );
     }
 
+    console.log(
+        `[RUST STORE] IDs adicionales detectados: ${resultado.size}`
+    );
+
     return Array.from(
-        resultado.values()
+        resultado.keys()
     );
 }
 
@@ -1515,38 +1555,105 @@ async function obtenerTiendaRust() {
     );
 
     // =================================================
-    // PRIMERA OPCIÓN:
-    // ITEMDEFS
+    // 1. AJAX
     // =================================================
 
     let items =
         await obtenerLimitedDesdeAjax();
 
+    // =================================================
+    // 2. FALLBACK HTML
+    // =================================================
+
     if (
-        items.length > 0
+        items.length === 0
     ) {
 
         console.log(
-            `[RUST STORE] Resultado AJAX: ${items.length} artículos.`
+            "[RUST STORE] AJAX no pudo identificar Limited. Usando fallback HTML."
         );
-
-    } else {
-
-        console.log(
-            "[RUST STORE] El endpoint no devolvió tags Limited reconocibles."
-        );
-
-        // =================================================
-        // FALLBACK HTML
-        // =================================================
 
         items =
             await obtenerTiendaHTML();
+    }
 
-        console.log(
-            `[RUST STORE] Resultado fallback HTML: ${items.length} artículos.`
+    // =================================================
+    // 3. IDs ADICIONALES
+    // =================================================
+
+    const idsAdicionales =
+        await buscarIDsAdicionales();
+
+    // Agregar los que todavía no estén
+    const existentes =
+        new Set(
+            items.map(
+                item =>
+                    String(item.id)
+            )
+        );
+
+    for (
+        const id
+        of idsAdicionales
+    ) {
+
+        if (
+            existentes.has(
+                String(id)
+            )
+        ) {
+            continue;
+        }
+
+        items.push({
+            id:
+                String(id),
+
+            nombre:
+                `Item Rust ${id}`,
+
+            precio:
+                "",
+
+            imagen:
+                null,
+
+            url:
+                `${STEAM_BASE_URL}/itemstore/252490/detail/${encodeURIComponent(id)}/`
+        });
+
+        existentes.add(
+            String(id)
         );
     }
+
+    // =================================================
+    // 4. ELIMINAR IDS QUE NO SEAN ITEMDEFS VÁLIDOS
+    // =================================================
+
+    items =
+        items.filter(
+            item =>
+                item &&
+                /^\d+$/.test(
+                    String(item.id)
+                )
+        );
+
+    // =================================================
+    // 5. LIMITAR
+    // =================================================
+
+    items =
+        items.slice(
+            0,
+            MAX_ITEMS
+        );
+
+    console.log(
+        `[RUST STORE] Total de candidatos antes de detalles: ${items.length}`
+    );
 
     if (
         items.length === 0
@@ -1560,24 +1667,15 @@ async function obtenerTiendaRust() {
     }
 
     // =================================================
-    // LIMITAR
-    // =================================================
-
-    items =
-        items.slice(
-            0,
-            MAX_ITEMS
-        );
-
-    // =================================================
-    // COMPLETAR DATOS
+    // 6. COMPLETAR DETALLES
     // =================================================
 
     console.log(
         `[RUST STORE] Completando datos de ${items.length} artículos desde sus páginas detail...`
     );
 
-    const completos = [];
+    const completos =
+        [];
 
     for (
         const item
@@ -1599,43 +1697,7 @@ async function obtenerTiendaRust() {
     }
 
     // =================================================
-    // SEGUNDO INTENTO PARA DATOS FALTANTES
-    // =================================================
-
-    for (
-        const item
-        of completos
-    ) {
-
-        if (
-            !item.imagen
-        ) {
-
-            await obtenerImagenDesdeDetailSimple(
-                item
-            );
-
-            await esperar(
-                DETAIL_DELAY
-            );
-        }
-
-        if (
-            !item.precio
-        ) {
-
-            await obtenerPrecioDesdeDetail(
-                item
-            );
-
-            await esperar(
-                DETAIL_DELAY
-            );
-        }
-    }
-
-    // =================================================
-    // ELIMINAR DUPLICADOS
+    // 7. ELIMINAR DUPLICADOS
     // =================================================
 
     const unicos =
@@ -1647,12 +1709,14 @@ async function obtenerTiendaRust() {
     ) {
 
         const clave =
-            item.id ||
-            item.url ||
-            item.nombre;
+            String(
+                item.id
+            );
 
         if (
-            !unicos.has(clave)
+            !unicos.has(
+                clave
+            )
         ) {
 
             unicos.set(
@@ -1662,19 +1726,23 @@ async function obtenerTiendaRust() {
         }
     }
 
-    const finales =
+    let finales =
         Array.from(
             unicos.values()
         );
 
     // =================================================
-    // ORDEN ALFABÉTICO
+    // 8. ORDENAR
     // =================================================
 
     finales.sort(
         (a, b) =>
-            a.nombre.localeCompare(
-                b.nombre,
+            String(
+                a.nombre
+            ).localeCompare(
+                String(
+                    b.nombre
+                ),
                 "en",
                 {
                     sensitivity:
@@ -1684,17 +1752,19 @@ async function obtenerTiendaRust() {
     );
 
     // =================================================
-    // LOG FINAL
+    // 9. DATOS FINALES
     // =================================================
 
     const conImagen =
         finales.filter(
-            item => !!item.imagen
+            item =>
+                !!item.imagen
         ).length;
 
     const conPrecio =
         finales.filter(
-            item => !!item.precio
+            item =>
+                !!item.precio
         ).length;
 
     console.log(
@@ -1709,10 +1779,12 @@ async function obtenerTiendaRust() {
 }
 
 // =====================================================
-// FIRMA DE LA TIENDA
+// FIRMA
 // =====================================================
 
-function generarFirmaTienda(items) {
+function generarFirmaTienda(
+    items
+) {
 
     if (
         !Array.isArray(items)
@@ -1722,32 +1794,43 @@ function generarFirmaTienda(items) {
 
     const datos =
         items
-            .map(item =>
-                [
-                    item.id || "",
-                    item.nombre || "",
-                    item.precio || "",
-                    item.imagen || "",
-                    item.url || ""
-                ].join("|")
+            .map(
+                item =>
+                    [
+                        item.id || "",
+                        item.nombre || "",
+                        item.precio || "",
+                        item.imagen || "",
+                        item.url || ""
+                    ].join("|")
             )
             .join("\n");
 
     return crypto
-        .createHash("sha256")
-        .update(datos)
-        .digest("hex");
+        .createHash(
+            "sha256"
+        )
+        .update(
+            datos
+        )
+        .digest(
+            "hex"
+        );
 }
 
 // =====================================================
 // EMBED
 // =====================================================
 
-function crearEmbedItem(item) {
+function crearEmbedItem(
+    item
+) {
 
     const embed =
         new EmbedBuilder()
-            .setColor(0xE67E22)
+            .setColor(
+                0xE67E22
+            )
             .setTitle(
                 item.nombre ||
                 "Item de Rust"
@@ -1801,7 +1884,7 @@ function crearEmbedItem(item) {
 }
 
 // =====================================================
-// PUBLICAR TIENDA
+// PUBLICAR
 // =====================================================
 
 async function publicarTienda(
@@ -1813,6 +1896,7 @@ async function publicarTienda(
         !channel ||
         !channel.isTextBased()
     ) {
+
         throw new Error(
             "Canal inválido para publicar la tienda."
         );
@@ -1838,13 +1922,10 @@ async function publicarTienda(
 
         try {
 
-            const mensaje =
+            await channel.send(
                 crearEmbedItem(
                     item
-                );
-
-            await channel.send(
-                mensaje
+                )
             );
 
             console.log(
@@ -1866,7 +1947,7 @@ async function publicarTienda(
 }
 
 // =====================================================
-// PUBLICACIÓN MANUAL /TIENDA
+// /TIENDA
 // =====================================================
 
 async function publicarTiendaManual(
@@ -1949,9 +2030,15 @@ function obtenerFechaChile() {
         {
             timeZone:
                 TIMEZONE_CHILE,
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit"
+
+            year:
+                "numeric",
+
+            month:
+                "2-digit",
+
+            day:
+                "2-digit"
         }
     ).format(
         new Date()
@@ -1966,16 +2053,21 @@ function obtenerHoraChile() {
             {
                 timeZone:
                     TIMEZONE_CHILE,
+
                 hour:
                     "2-digit",
+
                 minute:
                     "2-digit",
+
                 hour12:
                     false,
+
                 weekday:
                     "short"
             }
-        ).formatToParts(
+        )
+        .formatToParts(
             new Date()
         );
 
@@ -1985,6 +2077,7 @@ function obtenerHoraChile() {
         const parte
         of partes
     ) {
+
         mapa[
             parte.type
         ] =
@@ -1994,11 +2087,13 @@ function obtenerHoraChile() {
     return {
         dia:
             mapa.weekday,
+
         hora:
             parseInt(
                 mapa.hour,
                 10
             ) || 0,
+
         minuto:
             parseInt(
                 mapa.minute,
@@ -2008,16 +2103,14 @@ function obtenerHoraChile() {
 }
 
 // =====================================================
-// REVISIÓN AUTOMÁTICA
+// AUTOMÁTICO
 // =====================================================
 
 async function revisarTiendaAutomatica(
     client
 ) {
 
-    if (
-        !client
-    ) {
+    if (!client) {
         return;
     }
 
@@ -2038,11 +2131,6 @@ async function revisarTiendaAutomatica(
         const hora =
             obtenerHoraChile();
 
-        // ---------------------------------------------
-        // Rust Store cambia semanalmente.
-        // Jueves, viernes y sábado.
-        // ---------------------------------------------
-
         const diasPermitidos = [
             "Thu",
             "Fri",
@@ -2055,10 +2143,6 @@ async function revisarTiendaAutomatica(
             )
         ) {
 
-            console.log(
-                `[RUST STORE] Hoy es ${hora.dia}. No corresponde publicar automáticamente.`
-            );
-
             return;
         }
 
@@ -2069,11 +2153,6 @@ async function revisarTiendaAutomatica(
             !items ||
             items.length === 0
         ) {
-
-            console.log(
-                "[RUST STORE] No hay artículos para publicación automática."
-            );
-
             return;
         }
 
@@ -2088,9 +2167,12 @@ async function revisarTiendaAutomatica(
 
         const configs =
             await ServerConfig.find({
-                planillaChannelId: {
-                    $exists: true,
-                    $ne: null
+                tiendaChannelId: {
+                    $exists:
+                        true,
+
+                    $ne:
+                        null
                 }
             });
 
@@ -2100,7 +2182,7 @@ async function revisarTiendaAutomatica(
         ) {
 
             console.log(
-                "[RUST STORE] No hay servidores configurados para tienda."
+                "[RUST STORE] No hay canales configurados para tienda."
             );
 
             return;
@@ -2118,32 +2200,13 @@ async function revisarTiendaAutomatica(
                         config.guildId
                     );
 
-                if (
-                    !guild
-                ) {
-                    continue;
-                }
-
-                // -----------------------------------------
-                // Canal de tienda.
-                //
-                // Se intenta primero configurarTiendaChannelId
-                // y luego tiendaChannelId.
-                // -----------------------------------------
-
-                const channelId =
-                    config.tiendaChannelId ||
-                    config.configurarTiendaChannelId;
-
-                if (
-                    !channelId
-                ) {
+                if (!guild) {
                     continue;
                 }
 
                 const channel =
                     guild.channels.cache.get(
-                        channelId
+                        config.tiendaChannelId
                     );
 
                 if (
@@ -2152,10 +2215,6 @@ async function revisarTiendaAutomatica(
                 ) {
                     continue;
                 }
-
-                // -----------------------------------------
-                // Evitar publicar la misma tienda
-                // -----------------------------------------
 
                 if (
                     config.rustStoreSignature ===
@@ -2187,6 +2246,7 @@ async function revisarTiendaAutomatica(
                         $set: {
                             rustStoreSignature:
                                 firma,
+
                             rustStoreLastDate:
                                 obtenerFechaChile()
                         }
@@ -2219,7 +2279,8 @@ async function revisarTiendaAutomatica(
 // INICIAR AUTOMÁTICO
 // =====================================================
 
-let intervaloRustStore = null;
+let intervaloRustStore =
+    null;
 
 function iniciarTiendaAutomatica(
     client
@@ -2253,7 +2314,7 @@ function iniciarTiendaAutomatica(
                 } catch (error) {
 
                     console.error(
-                        "[RUST STORE] Error en intervalo automático:",
+                        "[RUST STORE] Error intervalo automático:",
                         error
                     );
                 }
