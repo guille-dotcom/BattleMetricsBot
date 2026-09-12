@@ -21,6 +21,9 @@ const STEAM_STORE_URL =
 const STEAM_BASE_URL =
     "https://store.steampowered.com";
 
+const STEAM_AJAX_URL =
+    "https://store.steampowered.com/itemstore/252490/ajaxgetitemdefs";
+
 const TIMEZONE_CHILE =
     "America/Santiago";
 
@@ -63,6 +66,7 @@ const LOCK_DURATION =
 // =====================================================
 
 const STEAM_HEADERS = {
+
     "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
 
@@ -168,10 +172,14 @@ async function adquirirBloqueoTienda() {
         try {
 
             await collection.deleteMany({
-                lockId: LOCK_ID,
+
+                lockId:
+                    LOCK_ID,
+
                 expiresAt: {
                     $lte: ahora
                 }
+
             });
 
         } catch (error) {
@@ -185,10 +193,19 @@ async function adquirirBloqueoTienda() {
         try {
 
             await collection.insertOne({
-                lockId: LOCK_ID,
-                instanceId: INSTANCE_ID,
-                createdAt: ahora,
-                expiresAt: expiracion
+
+                lockId:
+                    LOCK_ID,
+
+                instanceId:
+                    INSTANCE_ID,
+
+                createdAt:
+                    ahora,
+
+                expiresAt:
+                    expiracion
+
             });
 
             console.log(
@@ -237,8 +254,13 @@ async function liberarBloqueoTienda() {
             );
 
         await collection.deleteOne({
-            lockId: LOCK_ID,
-            instanceId: INSTANCE_ID
+
+            lockId:
+                LOCK_ID,
+
+            instanceId:
+                INSTANCE_ID
+
         });
 
         console.log(
@@ -293,6 +315,7 @@ function extraerPrecio(texto) {
         limpiarTexto(texto);
 
     // USD
+
     let match =
         limpio.match(
             /\$\s*\d+(?:[.,]\d{1,2})?/i
@@ -305,6 +328,7 @@ function extraerPrecio(texto) {
     }
 
     // EUR
+
     match =
         limpio.match(
             /€\s*\d+(?:[.,]\d{1,2})?/i
@@ -317,6 +341,7 @@ function extraerPrecio(texto) {
     }
 
     // GBP
+
     match =
         limpio.match(
             /£\s*\d+(?:[.,]\d{1,2})?/i
@@ -328,7 +353,8 @@ function extraerPrecio(texto) {
             .replace(/\s+/g, "");
     }
 
-    // Precio con palabra USD
+    // Precio con moneda
+
     match =
         limpio.match(
             /\d+(?:[.,]\d{1,2})?\s*(?:USD|EUR|GBP)/i
@@ -362,6 +388,7 @@ function extraerPrecioDesdeHtml($, html) {
         ".price_box",
         "[class*='price']",
         "[class*='Price']"
+
     ];
 
     for (const selector of selectores) {
@@ -391,6 +418,7 @@ function extraerPrecioDesdeHtml($, html) {
             }
 
         } catch {
+
             // continuar
         }
     }
@@ -457,6 +485,7 @@ function limpiarUrlImagen(url) {
             .replace(/^["']|["']$/g, "");
 
     // srcset
+
     if (resultado.includes(",")) {
 
         resultado =
@@ -472,7 +501,7 @@ function limpiarUrlImagen(url) {
 }
 
 // =====================================================
-// DETECTAR SI ES UNA IMAGEN REAL DE ITEM
+// DETECTAR SI ES IMAGEN REAL DE ITEM
 // =====================================================
 
 function esImagenItemSteam(url) {
@@ -485,11 +514,24 @@ function esImagenItemSteam(url) {
         String(url).toLowerCase();
 
     return (
+
         texto.includes("/economy/image/") ||
-        texto.includes("community.fastly.steamstatic.com") ||
-        texto.includes("community.cloudflare.steamstatic.com") ||
-        texto.includes("steamcommunity.com/economy/image") ||
-        texto.includes("images.steamusercontent.com")
+
+        texto.includes(
+            "community.fastly.steamstatic.com"
+        ) ||
+
+        texto.includes(
+            "community.cloudflare.steamstatic.com"
+        ) ||
+
+        texto.includes(
+            "steamcommunity.com/economy/image"
+        ) ||
+
+        texto.includes(
+            "images.steamusercontent.com"
+        )
     );
 }
 
@@ -503,9 +545,6 @@ function obtenerImagenElemento(
 ) {
 
     const posibles = [
-
-        // IMPORTANTE:
-        // Primero buscamos imágenes reales del item.
 
         $(elemento)
             .find('img[src*="/economy/image/"]')
@@ -523,26 +562,46 @@ function obtenerImagenElemento(
             .attr("data-image"),
 
         $(elemento)
-            .find('img[src*="community.fastly.steamstatic.com"]')
+            .find(
+                'img[src*="community.fastly.steamstatic.com"]'
+            )
             .first()
             .attr("src"),
 
         $(elemento)
-            .find('img[data-src*="community.fastly.steamstatic.com"]')
+            .find(
+                'img[data-src*="community.fastly.steamstatic.com"]'
+            )
             .first()
             .attr("data-src"),
 
         $(elemento)
-            .find('img[src*="images.steamusercontent.com"]')
+            .find(
+                'img[src*="community.cloudflare.steamstatic.com"]'
+            )
             .first()
             .attr("src"),
 
         $(elemento)
-            .find('img[data-src*="images.steamusercontent.com"]')
+            .find(
+                'img[data-src*="community.cloudflare.steamstatic.com"]'
+            )
             .first()
             .attr("data-src"),
 
-        // Después atributos generales.
+        $(elemento)
+            .find(
+                'img[src*="images.steamusercontent.com"]'
+            )
+            .first()
+            .attr("src"),
+
+        $(elemento)
+            .find(
+                'img[data-src*="images.steamusercontent.com"]'
+            )
+            .first()
+            .attr("data-src"),
 
         $(elemento).attr(
             "data-image"
@@ -597,8 +656,7 @@ function obtenerImagenElemento(
             .attr("srcset")
     ];
 
-    // Primero intentar imágenes específicas
-    // del item.
+    // Primero imágenes reales
 
     for (const valor of posibles) {
 
@@ -613,12 +671,11 @@ function obtenerImagenElemento(
             imagen &&
             esImagenItemSteam(imagen)
         ) {
-
             return imagen;
         }
     }
 
-    // Luego cualquier imagen válida.
+    // Después cualquier imagen
 
     for (const valor of posibles) {
 
@@ -658,7 +715,6 @@ function obtenerImagenElemento(
                 imagen &&
                 esImagenItemSteam(imagen)
             ) {
-
                 return imagen;
             }
         }
@@ -680,6 +736,7 @@ function obtenerImagenMeta($) {
         'meta[property="og:image:secure_url"]',
         'meta[name="twitter:image"]',
         'meta[name="twitter:image:src"]'
+
     ];
 
     for (const selector of metas) {
@@ -698,7 +755,6 @@ function obtenerImagenMeta($) {
             imagen &&
             esImagenItemSteam(imagen)
         ) {
-
             return imagen;
         }
     }
@@ -710,9 +766,7 @@ function obtenerImagenMeta($) {
 // EXTRAER IMAGEN STEAM ECONOMY
 // =====================================================
 
-function extraerImagenSteamEconomy(
-    html
-) {
+function extraerImagenSteamEconomy(html) {
 
     if (!html) {
         return null;
@@ -726,17 +780,15 @@ function extraerImagenSteamEconomy(
 
     const patrones = [
 
-        // NUEVO:
-        // Steam actualmente entrega imágenes así.
-        /https?:\/\/community\.fastly\.steamstatic\.com\/economy\/image\/[^"'\\\s<]+/gi,
+        /https?:\/\/community\.fastly\.steamstatic\.com\/economy\/image\/[^"'\s<\\]+/gi,
 
-        /https?:\/\/community\.cloudflare\.steamstatic\.com\/economy\/image\/[^"'\\\s<]+/gi,
+        /https?:\/\/community\.cloudflare\.steamstatic\.com\/economy\/image\/[^"'\s<\\]+/gi,
 
-        /https?:\/\/steamcommunity\.com\/economy\/image\/[^"'\\\s<]+/gi,
+        /https?:\/\/steamcommunity\.com\/economy\/image\/[^"'\s<\\]+/gi,
 
-        /https?:\/\/[^"'\\\s<]+steamstatic\.com\/economy\/image\/[^"'\\\s<]+/gi,
+        /https?:\/\/[^"'\s<\\]+steamstatic\.com\/economy\/image\/[^"'\s<\\]+/gi,
 
-        /https?:\/\/images\.steamusercontent\.com\/[^"'\\\s<]+/gi
+        /https?:\/\/images\.steamusercontent\.com\/[^"'\s<\\]+/gi
     ];
 
     const candidatas = [];
@@ -776,9 +828,6 @@ function extraerImagenSteamEconomy(
 
     if (candidatas.length) {
 
-        // Preferimos la imagen 512x512
-        // o la primera imagen economy.
-
         const grande =
             candidatas.find(
                 url =>
@@ -804,27 +853,31 @@ function obtenerImagenItemDesdeHtml(
     html
 ) {
 
-    // =================================================
-    // 1. IMG economy
-    // =================================================
-
     const selectoresEconomy = [
 
         'img[src*="/economy/image/"]',
+
         'img[data-src*="/economy/image/"]',
+
         'img[data-image*="/economy/image/"]',
 
         'img[src*="community.fastly.steamstatic.com"]',
+
         'img[data-src*="community.fastly.steamstatic.com"]',
 
         'img[src*="community.cloudflare.steamstatic.com"]',
+
         'img[data-src*="community.cloudflare.steamstatic.com"]',
 
         'img[src*="images.steamusercontent.com"]',
+
         'img[data-src*="images.steamusercontent.com"]'
+
     ];
 
-    for (const selector of selectoresEconomy) {
+    for (
+        const selector of selectoresEconomy
+    ) {
 
         const elementos =
             $(selector);
@@ -845,6 +898,7 @@ function obtenerImagenItemDesdeHtml(
                 elemento.attr("data-image"),
                 elemento.attr("data-lazy-src"),
                 elemento.attr("srcset")
+
             ];
 
             for (const valor of posibles) {
@@ -858,16 +912,11 @@ function obtenerImagenItemDesdeHtml(
                     imagen &&
                     esImagenItemSteam(imagen)
                 ) {
-
                     return imagen;
                 }
             }
         }
     }
-
-    // =================================================
-    // 2. Buscar directamente en todo el HTML
-    // =================================================
 
     const imagenEconomy =
         extraerImagenSteamEconomy(
@@ -877,10 +926,6 @@ function obtenerImagenItemDesdeHtml(
     if (imagenEconomy) {
         return imagenEconomy;
     }
-
-    // =================================================
-    // 3. Buscar imágenes del body
-    // =================================================
 
     const bodyImagen =
         obtenerImagenElemento(
@@ -892,7 +937,6 @@ function obtenerImagenItemDesdeHtml(
         bodyImagen &&
         esImagenItemSteam(bodyImagen)
     ) {
-
         return bodyImagen;
     }
 
@@ -922,7 +966,6 @@ async function obtenerDatosDesdeDetail(
                 {
                     headers:
                         STEAM_HEADERS,
-
                     timeout:
                         30000
                 }
@@ -936,21 +979,16 @@ async function obtenerDatosDesdeDetail(
                 html
             );
 
-        // ---------------------------------------------
         // IMAGEN
-        // ---------------------------------------------
 
         if (!item.imagen) {
 
-            // IMPORTANTE:
-            // Primero imagen REAL del artículo.
             let imagen =
                 obtenerImagenItemDesdeHtml(
                     $,
                     html
                 );
 
-            // Meta solamente como último recurso.
             if (!imagen) {
 
                 imagen =
@@ -970,9 +1008,7 @@ async function obtenerDatosDesdeDetail(
             }
         }
 
-        // ---------------------------------------------
         // PRECIO
-        // ---------------------------------------------
 
         if (!item.precio) {
 
@@ -983,15 +1019,12 @@ async function obtenerDatosDesdeDetail(
                 );
 
             if (precio) {
-
                 item.precio =
                     precio;
             }
         }
 
-        // ---------------------------------------------
         // NOMBRE
-        // ---------------------------------------------
 
         if (!item.nombre) {
 
@@ -1003,6 +1036,7 @@ async function obtenerDatosDesdeDetail(
                 "h1",
                 "h2",
                 "title"
+
             ];
 
             for (
@@ -1091,18 +1125,19 @@ function nombreValido(nombre) {
         "add to cart",
         "buy now",
         "limited"
+
     ];
 
     const minusculas =
         nombre.toLowerCase();
 
-    for (const prohibido of prohibidos) {
+    for (
+        const prohibido of prohibidos
+    ) {
 
         if (
             minusculas === prohibido ||
-            minusculas.includes(
-                prohibido
-            )
+            minusculas.includes(prohibido)
         ) {
             return false;
         }
@@ -1163,9 +1198,12 @@ function obtenerNombreDesdeElemento(
         "h2",
         "h3",
         "h4"
+
     ];
 
-    for (const selector of selectores) {
+    for (
+        const selector of selectores
+    ) {
 
         const texto =
             limpiarNombre(
@@ -1223,9 +1261,12 @@ function obtenerContenedorItem(
         "[class*='itemstore_item']",
         "[class*='item_block']",
         "[class*='item_area']"
+
     ];
 
-    for (const selector of selectores) {
+    for (
+        const selector of selectores
+    ) {
 
         const padre =
             $(elemento)
@@ -1334,6 +1375,7 @@ function agregarItem(
             convertirImagen(
                 item.imagen
             )
+
     });
 
     return true;
@@ -1473,6 +1515,7 @@ function extraerItemsVisuales(
         "[class*='itemstore_item']",
         "[class*='item_block']",
         "[class*='item_area']"
+
     ];
 
     let encontrados = 0;
@@ -1645,6 +1688,7 @@ function extraerTotalResultados($) {
         /Showing\s+\d+\s*-\s*\d+\s+of\s+(\d+)\s+results?/i,
 
         /Mostrando\s+\d+\s*-\s*\d+\s+de\s+(\d+)\s+resultados?/i
+
     ];
 
     for (
@@ -1678,111 +1722,617 @@ function extraerTotalResultados($) {
 }
 
 // =====================================================
-// PAGINACIÓN REAL
+// NUEVO SISTEMA:
+// OBTENER ITEM DEFS DIRECTAMENTE DESDE STEAM
+// =====================================================
+//
+// Steam expone internamente:
+// /itemstore/{appid}/ajaxgetitemdefs
+//
+// Este endpoint soporta start/count y devuelve las
+// definiciones de los artículos. Los itemdefs utilizan
+// store_tags para categorizar/filtar los artículos.
 // =====================================================
 
-function obtenerEnlacesPaginacion($) {
+function objetoPareceItemDef(obj) {
 
-    const urls =
-        new Set();
+    if (
+        !obj ||
+        typeof obj !== "object"
+    ) {
+        return false;
+    }
 
-    $("a").each((_, enlace) => {
+    const id =
+        obj.itemdefid ??
+        obj.item_def_id ??
+        obj.id;
 
-        const href =
-            $(enlace).attr(
-                "href"
-            );
+    const nombre =
+        obj.name ??
+        obj.name_english ??
+        obj.store_name ??
+        obj.display_name ??
+        obj.title;
 
-        if (!href) {
-            return;
-        }
-
-        if (
-            !href.includes(
-                "/itemstore/252490/browse/"
-            )
-        ) {
-            return;
-        }
-
-        if (
-            !/[?&]start=\d+/i.test(
-                href
-            )
-        ) {
-            return;
-        }
-
-        const url =
-            convertirUrl(
-                href
-            );
-
-        if (url) {
-            urls.add(url);
-        }
-    });
-
-    return [...urls];
+    return (
+        id !== undefined &&
+        id !== null &&
+        nombre
+    );
 }
 
 // =====================================================
-// OBTENER SIGUIENTE START
-// =====================================================
 
-function obtenerSiguienteStart(
-    $,
-    startActual
+function buscarArraysDeItems(
+    valor,
+    encontrados = []
 ) {
 
-    const candidatos =
-        [];
+    if (!valor) {
+        return encontrados;
+    }
 
-    const enlaces =
-        obtenerEnlacesPaginacion(
-            $
-        );
+    if (Array.isArray(valor)) {
 
-    for (
-        const url of enlaces
-    ) {
-
-        const match =
-            url.match(
-                /[?&]start=(\d+)/i
-            );
-
-        if (!match) {
-            continue;
-        }
-
-        const numero =
-            parseInt(
-                match[1],
-                10
-            );
+        const cantidadItems =
+            valor.filter(
+                objetoPareceItemDef
+            ).length;
 
         if (
-            Number.isFinite(numero) &&
-            numero > startActual
+            cantidadItems > 0
         ) {
-            candidatos.push(
-                numero
-            );
+
+            for (
+                const item of valor
+            ) {
+
+                if (
+                    objetoPareceItemDef(item)
+                ) {
+                    encontrados.push(
+                        item
+                    );
+                }
+            }
         }
+
+        for (
+            const elemento of valor
+        ) {
+
+            if (
+                elemento &&
+                typeof elemento === "object"
+            ) {
+
+                buscarArraysDeItems(
+                    elemento,
+                    encontrados
+                );
+            }
+        }
+
+        return encontrados;
     }
 
     if (
-        !candidatos.length
+        typeof valor === "object"
     ) {
-        return null;
+
+        for (
+            const clave of Object.keys(valor)
+        ) {
+
+            const siguiente =
+                valor[clave];
+
+            if (
+                siguiente &&
+                typeof siguiente === "object"
+            ) {
+
+                buscarArraysDeItems(
+                    siguiente,
+                    encontrados
+                );
+            }
+        }
     }
 
-    candidatos.sort(
-        (a, b) => a - b
+    return encontrados;
+}
+
+// =====================================================
+
+function obtenerIdItemDef(item) {
+
+    return String(
+        item.itemdefid ??
+        item.item_def_id ??
+        item.id ??
+        ""
+    );
+}
+
+// =====================================================
+
+function obtenerNombreItemDef(item) {
+
+    return (
+        item.name ??
+        item.name_english ??
+        item.store_name ??
+        item.display_name ??
+        item.title ??
+        null
+    );
+}
+
+// =====================================================
+
+function obtenerTagsItemDef(item) {
+
+    const posibles = [
+
+        item.store_tags,
+        item.storeTags,
+        item.tags,
+        item.tag,
+        item.category,
+        item.categories
+
+    ];
+
+    const resultado = [];
+
+    for (
+        const valor of posibles
+    ) {
+
+        if (!valor) {
+            continue;
+        }
+
+        if (Array.isArray(valor)) {
+
+            for (
+                const tag of valor
+            ) {
+
+                if (
+                    typeof tag === "string"
+                ) {
+
+                    resultado.push(tag);
+                    continue;
+                }
+
+                if (
+                    tag &&
+                    typeof tag === "object"
+                ) {
+
+                    if (tag.name) {
+                        resultado.push(
+                            tag.name
+                        );
+                    }
+
+                    if (tag.internal_name) {
+                        resultado.push(
+                            tag.internal_name
+                        );
+                    }
+
+                    if (tag.value) {
+                        resultado.push(
+                            tag.value
+                        );
+                    }
+                }
+            }
+
+        } else {
+
+            resultado.push(
+                String(valor)
+            );
+        }
+    }
+
+    return resultado;
+}
+
+// =====================================================
+
+function itemEsLimited(item) {
+
+    const tags =
+        obtenerTagsItemDef(
+            item
+        );
+
+    return tags.some(
+        tag =>
+            String(tag)
+                .toLowerCase()
+                .trim()
+                .includes("limited")
+    );
+}
+
+// =====================================================
+// EXTRAER PRECIO DE ITEMDEF
+// =====================================================
+
+function extraerPrecioItemDef(item) {
+
+    const valores = [
+
+        item.price,
+        item.price_usd,
+        item.price_usd_formatted,
+        item.price_display,
+        item.formatted_price,
+        item.localized_price
+
+    ];
+
+    for (
+        const valor of valores
+    ) {
+
+        if (
+            valor === undefined ||
+            valor === null
+        ) {
+            continue;
+        }
+
+        if (
+            typeof valor === "object"
+        ) {
+
+            const texto =
+                JSON.stringify(
+                    valor
+                );
+
+            const precio =
+                extraerPrecio(
+                    texto
+                );
+
+            if (precio) {
+                return precio;
+            }
+
+            continue;
+        }
+
+        const precio =
+            extraerPrecio(
+                String(valor)
+            );
+
+        if (precio) {
+            return precio;
+        }
+    }
+
+    return null;
+}
+
+// =====================================================
+// OBTENER ITEM DEFS LIMITED
+// =====================================================
+
+async function obtenerItemsLimitedDesdeAjax() {
+
+    console.log(
+        "[RUST STORE] Consultando endpoint AJAX de Steam para obtener todos los Limited..."
     );
 
-    return candidatos[0];
+    const url =
+        new URL(
+            STEAM_AJAX_URL
+        );
+
+    url.searchParams.set(
+        "start",
+        "0"
+    );
+
+    url.searchParams.set(
+        "count",
+        "100"
+    );
+
+    url.searchParams.set(
+        "json",
+        "1"
+    );
+
+    url.searchParams.set(
+        "searchtext",
+        ""
+    );
+
+    url.searchParams.set(
+        "cc",
+        "us"
+    );
+
+    url.searchParams.set(
+        "l",
+        "english"
+    );
+
+    const response =
+        await axios.get(
+            url.href,
+            {
+                headers: {
+
+                    ...STEAM_HEADERS,
+
+                    "Accept":
+                        "application/json,text/plain,*/*",
+
+                    "Referer":
+                        STEAM_STORE_URL
+
+                },
+
+                timeout:
+                    30000
+            }
+        );
+
+    let data =
+        response.data;
+
+    // Algunas respuestas pueden llegar
+    // como texto JSON.
+
+    if (
+        typeof data === "string"
+    ) {
+
+        try {
+
+            data =
+                JSON.parse(
+                    data
+                );
+
+        } catch {
+
+            throw new Error(
+                "Steam AJAX devolvió una respuesta que no es JSON válido."
+            );
+        }
+    }
+
+    const candidatos =
+        buscarArraysDeItems(
+            data,
+            []
+        );
+
+    // El buscador recursivo puede encontrar
+    // referencias repetidas.
+
+    const unicos =
+        new Map();
+
+    for (
+        const item of candidatos
+    ) {
+
+        const id =
+            obtenerIdItemDef(
+                item
+            );
+
+        if (!id) {
+            continue;
+        }
+
+        if (
+            !unicos.has(id)
+        ) {
+
+            unicos.set(
+                id,
+                item
+            );
+        }
+    }
+
+    const todos =
+        [...unicos.values()];
+
+    console.log(
+        `[RUST STORE] Steam AJAX devolvió ${todos.length} itemdefs.`
+    );
+
+    const limited =
+        todos.filter(
+            item =>
+                itemEsLimited(
+                    item
+                )
+        );
+
+    console.log(
+        `[RUST STORE] Itemdefs con tag Limited: ${limited.length}.`
+    );
+
+    if (!limited.length) {
+
+        console.warn(
+            "[RUST STORE] El endpoint no devolvió tags Limited reconocibles."
+        );
+
+        return [];
+    }
+
+    const items =
+        [];
+
+    const vistos =
+        new Set();
+
+    for (
+        const item of limited
+    ) {
+
+        const id =
+            obtenerIdItemDef(
+                item
+            );
+
+        const nombre =
+            limpiarNombre(
+                obtenerNombreItemDef(
+                    item
+                )
+            );
+
+        if (
+            !id ||
+            !nombre
+        ) {
+            continue;
+        }
+
+        const url =
+            `${STEAM_BASE_URL}/itemstore/252490/detail/${id}/`;
+
+        const imagen =
+            convertirImagen(
+                item.icon_url_large ||
+                item.icon_url ||
+                (
+                    typeof item.store_images === "string"
+                        ? item.store_images.split(";")[0]
+                        : null
+                )
+            );
+
+        const precio =
+            extraerPrecioItemDef(
+                item
+            );
+
+        agregarItem(
+            items,
+            vistos,
+            {
+                id,
+                nombre,
+                precio,
+                url,
+                imagen
+            }
+        );
+    }
+
+    console.log(
+        `[RUST STORE] AJAX Limited final: ${items.length} artículos.`
+    );
+
+    for (
+        const item of items
+    ) {
+
+        console.log(
+            `[RUST STORE] AJAX ITEM: ${item.id} | ${item.nombre}`
+        );
+    }
+
+    return items;
+}
+
+// =====================================================
+// FALLBACK HTML
+// =====================================================
+
+async function obtenerItemsLimitedDesdeHtml() {
+
+    console.log(
+        "[RUST STORE] Usando fallback HTML de Steam..."
+    );
+
+    const items =
+        [];
+
+    const vistos =
+        new Set();
+
+    try {
+
+        const response =
+            await axios.get(
+                STEAM_STORE_URL,
+                {
+                    headers:
+                        STEAM_HEADERS,
+                    timeout:
+                        30000
+                }
+            );
+
+        const html =
+            response.data;
+
+        const $ =
+            cheerio.load(
+                html
+            );
+
+        const total =
+            extraerTotalResultados(
+                $
+            );
+
+        if (total) {
+
+            console.log(
+                `[RUST STORE] Steam indica ${total} resultados totales.`
+            );
+        }
+
+        extraerItemsDesdeEnlaces(
+            $,
+            items,
+            vistos
+        );
+
+        extraerItemsVisuales(
+            $,
+            items,
+            vistos
+        );
+
+        console.log(
+            `[RUST STORE] Fallback HTML: ${items.length} artículos encontrados.`
+        );
+
+        return items;
+
+    } catch (error) {
+
+        console.error(
+            "[RUST STORE] Error en fallback HTML:",
+            error.message
+        );
+
+        return [];
+    }
 }
 
 // =====================================================
@@ -1795,267 +2345,57 @@ async function obtenerTiendaRust() {
         "[RUST STORE] Consultando Steam..."
     );
 
-    const variantes = [
-
-        {
-            cc: "us",
-            language: "english"
-        },
-
-        {
-            cc: "cl",
-            language: "english"
-        },
-
-        {
-            cc: "cl",
-            language: "spanish"
-        }
-    ];
-
     let mejorResultado =
         [];
 
-    for (
-        const variante of variantes
-    ) {
+    // =================================================
+    // 1. MÉTODO NUEVO AJAX
+    // =================================================
 
-        const items =
-            [];
+    try {
 
-        const vistos =
-            new Set();
+        const ajaxItems =
+            await obtenerItemsLimitedDesdeAjax();
 
-        try {
+        if (
+            ajaxItems.length
+        ) {
 
-            console.log(
-                `[RUST STORE] Probando Steam cc=${variante.cc} lang=${variante.language}`
-            );
-
-            let pagina =
-                0;
-
-            let start =
-                0;
-
-            const startsVisitados =
-                new Set();
-
-            let totalSteam =
-                null;
-
-            while (
-                pagina < MAX_PAGES &&
-                items.length < MAX_ITEMS
-            ) {
-
-                if (
-                    startsVisitados.has(
-                        start
-                    )
-                ) {
-                    break;
-                }
-
-                startsVisitados.add(
-                    start
-                );
-
-                const url =
-                    new URL(
-                        STEAM_STORE_URL
-                    );
-
-                url.searchParams.set(
-                    "start",
-                    String(start)
-                );
-
-                url.searchParams.set(
-                    "count",
-                    String(STEAM_PAGE_SIZE)
-                );
-
-                url.searchParams.set(
-                    "cc",
-                    variante.cc
-                );
-
-                url.searchParams.set(
-                    "l",
-                    variante.language
-                );
-
-                const urlFinal =
-                    url.href;
-
-                console.log(
-                    `[RUST STORE] Página ${pagina + 1}: start=${start}`
-                );
-
-                const response =
-                    await axios.get(
-                        urlFinal,
-                        {
-                            headers:
-                                STEAM_HEADERS,
-
-                            timeout:
-                                30000
-                        }
-                    );
-
-                const html =
-                    response.data;
-
-                const $ =
-                    cheerio.load(
-                        html
-                    );
-
-                const totalPagina =
-                    extraerTotalResultados(
-                        $
-                    );
-
-                if (
-                    totalPagina &&
-                    (
-                        !totalSteam ||
-                        totalPagina > totalSteam
-                    )
-                ) {
-
-                    totalSteam =
-                        totalPagina;
-
-                    console.log(
-                        `[RUST STORE] Steam indica ${totalSteam} resultados totales.`
-                    );
-                }
-
-                const antes =
-                    items.length;
-
-                const cantidadPagina =
-                    contarItemsPagina(
-                        $
-                    );
-
-                extraerItemsDesdeEnlaces(
-                    $,
-                    items,
-                    vistos
-                );
-
-                extraerItemsVisuales(
-                    $,
-                    items,
-                    vistos
-                );
-
-                const nuevos =
-                    items.length -
-                    antes;
-
-                console.log(
-                    `[RUST STORE] Página ${pagina + 1}: ${cantidadPagina} detectados, ${nuevos} nuevos. Total acumulado: ${items.length}`
-                );
-
-                if (
-                    totalSteam &&
-                    items.length >=
-                    totalSteam
-                ) {
-
-                    console.log(
-                        `[RUST STORE] Se alcanzó el total de Steam: ${items.length}/${totalSteam}.`
-                    );
-
-                    break;
-                }
-
-                if (
-                    nuevos === 0
-                ) {
-
-                    console.log(
-                        "[RUST STORE] La página no agregó artículos nuevos."
-                    );
-
-                    const siguienteReal =
-                        obtenerSiguienteStart(
-                            $,
-                            start
-                        );
-
-                    if (
-                        siguienteReal === null
-                    ) {
-                        break;
-                    }
-
-                    start =
-                        siguienteReal;
-
-                    pagina++;
-
-                    continue;
-                }
-
-                let siguienteStart =
-                    obtenerSiguienteStart(
-                        $,
-                        start
-                    );
-
-                if (
-                    siguienteStart === null
-                ) {
-
-                    siguienteStart =
-                        start +
-                        STEAM_PAGE_SIZE;
-                }
-
-                if (
-                    siguienteStart <=
-                    start
-                ) {
-                    break;
-                }
-
-                start =
-                    siguienteStart;
-
-                pagina++;
-
-                await esperar(
-                    REQUEST_DELAY
-                );
-            }
+            mejorResultado =
+                ajaxItems;
 
             console.log(
-                `[RUST STORE] Variante ${variante.cc}/${variante.language}: ${items.length} artículos encontrados.`
-            );
-
-            if (
-                items.length >
-                mejorResultado.length
-            ) {
-
-                mejorResultado =
-                    items;
-            }
-
-        } catch (error) {
-
-            console.error(
-                `[RUST STORE] Error con cc=${variante.cc} lang=${variante.language}:`,
-                error.message
+                `[RUST STORE] Mejor resultado AJAX: ${mejorResultado.length} artículos.`
             );
         }
+
+    } catch (error) {
+
+        console.error(
+            "[RUST STORE] Error obteniendo Limited mediante AJAX:",
+            error.message
+        );
     }
+
+    // =================================================
+    // 2. FALLBACK HTML SI AJAX FALLA
+    // =================================================
+
+    if (
+        !mejorResultado.length
+    ) {
+
+        mejorResultado =
+            await obtenerItemsLimitedDesdeHtml();
+
+        console.log(
+            `[RUST STORE] Resultado fallback HTML: ${mejorResultado.length} artículos.`
+        );
+    }
+
+    // =================================================
+    // SI NO HAY NADA
+    // =================================================
 
     if (
         !mejorResultado.length
@@ -2068,12 +2408,8 @@ async function obtenerTiendaRust() {
         return [];
     }
 
-    console.log(
-        `[RUST STORE] Mejor resultado inicial: ${mejorResultado.length} artículos.`
-    );
-
     // =================================================
-    // COMPLETAR DATOS
+    // COMPLETAR DATOS DESDE DETAIL
     // =================================================
 
     const faltanDatos =
@@ -2171,6 +2507,7 @@ async function obtenerTiendaRust() {
                 }
 
             } catch {
+
                 // ignorar
             }
 
@@ -2217,6 +2554,7 @@ async function obtenerTiendaRust() {
                 }
 
             } catch {
+
                 // ignorar
             }
 
@@ -2277,7 +2615,6 @@ async function obtenerImagenDesdeDetailSimple(
             {
                 headers:
                     STEAM_HEADERS,
-
                 timeout:
                     30000
             }
@@ -2292,6 +2629,7 @@ async function obtenerImagenDesdeDetailSimple(
         );
 
     // PRIMERO imagen real
+
     let imagen =
         obtenerImagenItemDesdeHtml(
             $,
@@ -2303,6 +2641,7 @@ async function obtenerImagenDesdeDetailSimple(
     }
 
     // META como último recurso
+
     imagen =
         obtenerImagenMeta(
             $
@@ -2329,7 +2668,6 @@ async function obtenerPrecioDesdeDetail(
             {
                 headers:
                     STEAM_HEADERS,
-
                 timeout:
                     30000
             }
@@ -2384,17 +2722,21 @@ function crearEmbedItem(item) {
 
     const embed =
         new EmbedBuilder()
+
             .setTitle(
                 `🎨 ${item.nombre}`
             )
+
             .setDescription(
                 descripcion.join(
                     "\n\n"
                 )
             )
+
             .setColor(
                 0xff6a00
             )
+
             .setFooter({
                 text:
                     "RustLogix • Rust Item Store"
@@ -2437,12 +2779,15 @@ function crearBotonItem(item) {
         .addComponents(
 
             new ButtonBuilder()
+
                 .setLabel(
                     "Ver en Steam"
                 )
+
                 .setStyle(
                     ButtonStyle.Link
                 )
+
                 .setURL(
                     item.url
                 )
@@ -2477,6 +2822,7 @@ async function publicarItem(
                 row
                     ? [row]
                     : []
+
         });
 
         console.log(
@@ -2634,6 +2980,7 @@ async function publicarTiendaManual(
             } else {
 
                 await interaction.reply({
+
                     content:
                         "❌ Ocurrió un error al publicar la tienda.",
 
@@ -2688,7 +3035,6 @@ async function revisarTiendaAutomatica(
                 {
                     timeZone:
                         TIMEZONE_CHILE,
-
                     weekday:
                         "short"
                 }
@@ -2697,6 +3043,7 @@ async function revisarTiendaAutomatica(
             );
 
         // Solo jueves, viernes y sábado.
+
         if (
             ![
                 "Thu",
@@ -2711,12 +3058,14 @@ async function revisarTiendaAutomatica(
 
         const configs =
             await ServerConfig.find({
+
                 rustStoreEnabled:
                     true,
 
                 planillaChannelId: {
                     $ne: null
                 }
+
             });
 
         if (
@@ -2953,4 +3302,5 @@ module.exports = {
     revisarTiendaAutomatica,
 
     iniciarTiendaAutomatica
+
 };
