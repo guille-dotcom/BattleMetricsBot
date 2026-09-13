@@ -2,7 +2,10 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 
 const {
-    EmbedBuilder
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle
 } = require("discord.js");
 
 // =====================================================
@@ -32,11 +35,15 @@ const HEADERS = {
 };
 
 // =====================================================
-// IDS LIMITED QUE YA CONFIRMAMOS
+// IDS LIMITED CONFIRMADOS
 // =====================================================
 
 const IDS_LIMITED_CONOCIDOS = new Set([
+    70600,
+    70601,
     70602,
+    70603,
+    70604,
     70605,
     70606,
     70607,
@@ -47,15 +54,20 @@ const IDS_LIMITED_CONOCIDOS = new Set([
     70612,
     70613,
     70614,
-    70615
+    70615,
+    70616
 ]);
 
 // =====================================================
-// NOMBRES CONFIRMADOS
+// NOMBRES DE RESPALDO
 // =====================================================
 
 const NOMBRES_CONOCIDOS = {
+    70600: "Young Dragon Garage Door",
+    70601: "Salvation SAR",
+
     70602: "Pirate Wood Gloves",
+
     70605: "Apotheosis of War Locker",
     70606: "Project Nova Bed",
     70607: "No Mercy Wood Pants",
@@ -66,7 +78,9 @@ const NOMBRES_CONOCIDOS = {
     70612: "Devourer Metal Chest Plate",
     70613: "Flame Anarchy Wood Armor Pants",
     70614: "Flame Anarchy Wood Armor Jacket",
-    70615: "Flame Anarchy Wood Armor Helmet"
+    70615: "Flame Anarchy Wood Armor Helmet",
+
+    70616: "Super Star MP5"
 };
 
 // =====================================================
@@ -93,12 +107,14 @@ function esNombreGenerico(nombre) {
         return true;
     }
 
-    const texto = limpiarTexto(nombre).toLowerCase();
+    const texto =
+        limpiarTexto(nombre).toLowerCase();
 
     return [
         "save 50% on rust on steam",
         "save 50% on rust",
         "rust on steam",
+        "rust item store",
         "rust",
         "steam"
     ].includes(texto);
@@ -109,16 +125,21 @@ function normalizarImagen(url) {
         return "";
     }
 
-    let imagen = String(url).trim();
+    let imagen =
+        String(url).trim();
 
     if (imagen.startsWith("//")) {
-        imagen = "https:" + imagen;
+        imagen =
+            "https:" + imagen;
     }
 
-    // MUY IMPORTANTE:
-    // solamente aceptamos imágenes individuales
+    // SOLO imágenes individuales
     // de Steam Economy.
-    if (!imagen.includes("/economy/image/")) {
+    if (
+        !imagen.includes(
+            "/economy/image/"
+        )
+    ) {
         return "";
     }
 
@@ -130,11 +151,13 @@ function normalizarPrecio(texto) {
         return "";
     }
 
-    const limpio = limpiarTexto(texto);
+    const limpio =
+        limpiarTexto(texto);
 
-    const match = limpio.match(
-        /(?:[$€£]\s?\d+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?\s?(?:USD|EUR|GBP))/i
-    );
+    const match =
+        limpio.match(
+            /(?:[$€£]\s?\d+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?\s?(?:USD|EUR|GBP)|R\$\s?\d+(?:[.,]\d{1,2})?)/i
+        );
 
     return match
         ? limpiarTexto(match[0])
@@ -142,20 +165,28 @@ function normalizarPrecio(texto) {
 }
 
 function extraerIDs706(texto) {
-    const ids = new Set();
+    const ids =
+        new Set();
 
     if (!texto) {
         return ids;
     }
 
-    const regex = /\b706\d{2}\b/g;
+    const regex =
+        /\b706\d{2}\b/g;
 
     let match;
 
-    while ((match = regex.exec(String(texto))) !== null) {
-        const id = Number(match[0]);
+    while (
+        (match = regex.exec(String(texto)))
+    ) {
+        const id =
+            Number(match[0]);
 
-        if (id >= 70600 && id <= 70699) {
+        if (
+            id >= 70600 &&
+            id <= 70699
+        ) {
             ids.add(id);
         }
     }
@@ -167,50 +198,76 @@ function extraerIDs706(texto) {
 // OBTENER HTML
 // =====================================================
 
-async function obtenerHTML(url, params = {}) {
-    const response = await axios.get(url, {
-        params,
-        headers: HEADERS,
-        timeout: 30000,
-        validateStatus: status =>
-            status >= 200 && status < 400
-    });
+async function obtenerHTML(
+    url,
+    params = {}
+) {
+    const response =
+        await axios.get(
+            url,
+            {
+                params,
+                headers: HEADERS,
+                timeout: 30000,
+                validateStatus:
+                    status =>
+                        status >= 200 &&
+                        status < 400
+            }
+        );
 
     return response.data;
 }
 
 // =====================================================
-// BUSCAR IDS EN EL HTML
+// BUSCAR IDS EN HTML
 // =====================================================
 
 function buscarIDsEnHTML(html) {
-    const ids = new Set();
+    const ids =
+        new Set();
 
-    const $ = cheerio.load(html);
+    const $ =
+        cheerio.load(html);
 
-    $("a").each((_, elemento) => {
-        const $a = $(elemento);
+    $("a").each(
+        (_, elemento) => {
+            const $a =
+                $(elemento);
 
-        const valores = [
-            $a.attr("href"),
-            $a.attr("data-itemdefid"),
-            $a.attr("data-item-def-id"),
-            $a.attr("data-itemdef"),
-            $a.attr("data-id")
-        ];
+            const valores = [
+                $a.attr("href"),
+                $a.attr("data-itemdefid"),
+                $a.attr("data-item-def-id"),
+                $a.attr("data-itemdef"),
+                $a.attr("data-id")
+            ];
 
-        for (const valor of valores) {
-            const encontrados = extraerIDs706(valor);
+            for (
+                const valor of valores
+            ) {
+                const encontrados =
+                    extraerIDs706(
+                        valor
+                    );
 
-            for (const id of encontrados) {
-                ids.add(id);
+                for (
+                    const id of encontrados
+                ) {
+                    ids.add(id);
+                }
             }
         }
-    });
+    );
 
-    const encontradosHTML = extraerIDs706(html);
+    const encontradosHTML =
+        extraerIDs706(
+            html
+        );
 
-    for (const id of encontradosHTML) {
+    for (
+        const id of encontradosHTML
+    ) {
         ids.add(id);
     }
 
@@ -218,11 +275,15 @@ function buscarIDsEnHTML(html) {
 }
 
 // =====================================================
-// BUSCAR DATOS DE LAS TARJETAS
+// BUSCAR DATOS DE TARJETA
 // =====================================================
 
-function buscarTarjeta(html, id) {
-    const $ = cheerio.load(html);
+function buscarTarjeta(
+    html,
+    id
+) {
+    const $ =
+        cheerio.load(html);
 
     const resultado = {
         nombre: "",
@@ -236,99 +297,136 @@ function buscarTarjeta(html, id) {
         `a[href*="/detail/${id}"]`
     ];
 
-    for (const selector of selectores) {
-        $(selector).each((_, elemento) => {
-            const $elemento = $(elemento);
+    for (
+        const selector of selectores
+    ) {
+        $(selector).each(
+            (_, elemento) => {
+                const $elemento =
+                    $(elemento);
 
-            // -----------------------------
-            // Nombre
-            // -----------------------------
+                // =========================================
+                // NOMBRE
+                // =========================================
 
-            const nombres = [
-                $elemento.attr("title"),
-                $elemento.attr("aria-label"),
-                $elemento.attr("data-title"),
-                $elemento.attr("data-item-name"),
-                $elemento.attr("data-name")
-            ];
+                const nombres = [
+                    $elemento.attr("title"),
+                    $elemento.attr("aria-label"),
+                    $elemento.attr("data-title"),
+                    $elemento.attr("data-item-name"),
+                    $elemento.attr("data-name")
+                ];
 
-            for (const nombre of nombres) {
-                const limpio = limpiarTexto(nombre);
+                for (
+                    const candidato of nombres
+                ) {
+                    const nombre =
+                        limpiarTexto(
+                            candidato
+                        );
+
+                    if (
+                        nombre &&
+                        !esNombreGenerico(
+                            nombre
+                        ) &&
+                        nombre.length < 150
+                    ) {
+                        resultado.nombre =
+                            nombre;
+                        break;
+                    }
+                }
 
                 if (
-                    limpio &&
-                    !esNombreGenerico(limpio) &&
-                    limpio.length < 150
+                    !resultado.nombre
                 ) {
-                    resultado.nombre = limpio;
-                    break;
-                }
-            }
+                    const texto =
+                        limpiarTexto(
+                            $elemento.text()
+                        );
 
-            if (!resultado.nombre) {
-                const texto = limpiarTexto(
-                    $elemento.text()
-                );
+                    if (
+                        texto &&
+                        !esNombreGenerico(
+                            texto
+                        ) &&
+                        texto.length < 150
+                    ) {
+                        resultado.nombre =
+                            texto;
+                    }
+                }
+
+                // =========================================
+                // IMAGEN
+                // =========================================
+
+                const imagenes = [];
 
                 if (
-                    texto &&
-                    !esNombreGenerico(texto) &&
-                    texto.length < 150
+                    $elemento.is("img")
                 ) {
-                    resultado.nombre = texto;
+                    imagenes.push(
+                        $elemento.attr("src"),
+                        $elemento.attr("data-src"),
+                        $elemento.attr("data-original")
+                    );
+                }
+
+                $elemento
+                    .find("img")
+                    .each(
+                        (_, img) => {
+                            imagenes.push(
+                                $(img).attr("src"),
+                                $(img).attr("data-src"),
+                                $(img).attr("data-original")
+                            );
+                        }
+                    );
+
+                for (
+                    const url of imagenes
+                ) {
+                    const imagen =
+                        normalizarImagen(
+                            url
+                        );
+
+                    if (imagen) {
+                        resultado.imagen =
+                            imagen;
+                        break;
+                    }
+                }
+
+                // =========================================
+                // PRECIO
+                // =========================================
+
+                const posiblesPrecios = [
+                    $elemento.text(),
+                    $elemento.attr("data-price"),
+                    $elemento.attr("data-item-price")
+                ];
+
+                for (
+                    const texto of posiblesPrecios
+                ) {
+                    const precio =
+                        normalizarPrecio(
+                            texto
+                        );
+
+                    if (precio) {
+                        resultado.precio =
+                            precio;
+                        break;
+                    }
                 }
             }
-
-            // -----------------------------
-            // Imagen individual
-            // -----------------------------
-
-            const imagenes = [];
-
-            if ($elemento.is("img")) {
-                imagenes.push(
-                    $elemento.attr("src"),
-                    $elemento.attr("data-src"),
-                    $elemento.attr("data-original")
-                );
-            }
-
-            $elemento.find("img").each((_, img) => {
-                imagenes.push(
-                    $(img).attr("src"),
-                    $(img).attr("data-src"),
-                    $(img).attr("data-original")
-                );
-            });
-
-            for (const url of imagenes) {
-                const imagen = normalizarImagen(url);
-
-                if (imagen) {
-                    resultado.imagen = imagen;
-                    break;
-                }
-            }
-
-            // -----------------------------
-            // Precio
-            // -----------------------------
-
-            const textosPrecio = [
-                $elemento.text(),
-                $elemento.attr("data-price"),
-                $elemento.attr("data-item-price")
-            ];
-
-            for (const texto of textosPrecio) {
-                const precio = normalizarPrecio(texto);
-
-                if (precio) {
-                    resultado.precio = precio;
-                    break;
-                }
-            }
-        });
+        );
 
         if (
             resultado.nombre ||
@@ -352,39 +450,46 @@ async function obtenerIDsDesdeAjax() {
     );
 
     try {
-        const response = await axios.get(
-            STEAM_AJAX_URL,
-            {
-                params: {
-                    start: 0,
-                    count: 100,
-                    json: 1,
-                    searchtext: "",
-                    cc: "us",
-                    l: "english"
-                },
+        const response =
+            await axios.get(
+                STEAM_AJAX_URL,
+                {
+                    params: {
+                        start: 0,
+                        count: 100,
+                        json: 1,
+                        searchtext: "",
+                        cc: "us",
+                        l: "english"
+                    },
 
-                headers: {
-                    ...HEADERS,
-                    "Referer": STEAM_STORE_URL,
-                    "X-Requested-With": "XMLHttpRequest"
-                },
+                    headers: {
+                        ...HEADERS,
+                        "Referer":
+                            STEAM_STORE_URL,
+                        "X-Requested-With":
+                            "XMLHttpRequest"
+                    },
 
-                timeout: 30000
-            }
-        );
+                    timeout: 30000
+                }
+            );
 
-        const data = response.data;
+        const data =
+            response.data;
 
         console.log(
             "[RUST STORE] AJAX keys:",
             Object.keys(data || {})
         );
 
-        const ids = new Set();
+        const ids =
+            new Set();
 
-        // Buscar IDs dentro de TODO el JSON.
-        function recorrer(valor, profundidad = 0) {
+        function recorrer(
+            valor,
+            profundidad = 0
+        ) {
             if (
                 valor === null ||
                 valor === undefined ||
@@ -393,23 +498,35 @@ async function obtenerIDsDesdeAjax() {
                 return;
             }
 
-            if (typeof valor === "string") {
+            if (
+                typeof valor === "string"
+            ) {
                 const encontrados =
-                    extraerIDs706(valor);
+                    extraerIDs706(
+                        valor
+                    );
 
-                for (const id of encontrados) {
+                for (
+                    const id of encontrados
+                ) {
                     ids.add(id);
                 }
 
                 return;
             }
 
-            if (typeof valor !== "object") {
+            if (
+                typeof valor !== "object"
+            ) {
                 return;
             }
 
-            if (Array.isArray(valor)) {
-                for (const elemento of valor) {
+            if (
+                Array.isArray(valor)
+            ) {
+                for (
+                    const elemento of valor
+                ) {
                     recorrer(
                         elemento,
                         profundidad + 1
@@ -419,8 +536,15 @@ async function obtenerIDsDesdeAjax() {
                 return;
             }
 
-            for (const [clave, contenido] of Object.entries(valor)) {
-                const numero = Number(clave);
+            for (
+                const [
+                    clave,
+                    contenido
+                ]
+                of Object.entries(valor)
+            ) {
+                const numero =
+                    Number(clave);
 
                 if (
                     Number.isInteger(numero) &&
@@ -431,12 +555,17 @@ async function obtenerIDsDesdeAjax() {
                 }
 
                 if (
-                    typeof contenido === "string"
+                    typeof contenido ===
+                    "string"
                 ) {
                     const encontrados =
-                        extraerIDs706(contenido);
+                        extraerIDs706(
+                            contenido
+                        );
 
-                    for (const id of encontrados) {
+                    for (
+                        const id of encontrados
+                    ) {
                         ids.add(id);
                     }
                 }
@@ -467,7 +596,7 @@ async function obtenerIDsDesdeAjax() {
 }
 
 // =====================================================
-// DETALLE DE UN ITEM
+// OBTENER DETALLE INDIVIDUAL
 // =====================================================
 
 async function obtenerDetalle(id) {
@@ -475,62 +604,78 @@ async function obtenerDetalle(id) {
         const url =
             `${STEAM_DETAIL_URL}${id}`;
 
-        const html = await obtenerHTML(
-            url,
-            {
-                cc: "us",
-                l: "english"
-            }
-        );
+        const html =
+            await obtenerHTML(
+                url,
+                {
+                    cc: "us",
+                    l: "english"
+                }
+            );
 
-        const $ = cheerio.load(html);
+        const $ =
+            cheerio.load(html);
 
         let nombre = "";
         let imagen = "";
         let precio = "";
 
         // =================================================
-        // NOMBRE
+        // NOMBRE POR SELECTORES ESPECÍFICOS
         // =================================================
 
         const selectoresNombre = [
             `[data-itemdefid="${id}"]`,
             `[data-item-def-id="${id}"]`,
-            `.item_name`,
-            `.itemstore_item_name`,
-            `.item_def_name`
+            ".item_name",
+            ".itemstore_item_name",
+            ".item_def_name",
+            ".itemstore_item_name_text"
         ];
 
-        for (const selector of selectoresNombre) {
-            $(selector).each((_, elemento) => {
-                if (nombre) {
-                    return;
-                }
+        for (
+            const selector of selectoresNombre
+        ) {
+            $(selector).each(
+                (_, elemento) => {
+                    if (nombre) {
+                        return;
+                    }
 
-                const $elemento = $(elemento);
+                    const $elemento =
+                        $(elemento);
 
-                const candidatos = [
-                    $elemento.attr("title"),
-                    $elemento.attr("aria-label"),
-                    $elemento.attr("data-item-name"),
-                    $elemento.attr("data-name"),
-                    $elemento.text()
-                ];
+                    const candidatos = [
+                        $elemento.attr("title"),
+                        $elemento.attr("aria-label"),
+                        $elemento.attr("data-item-name"),
+                        $elemento.attr("data-name"),
+                        $elemento.text()
+                    ];
 
-                for (const candidato of candidatos) {
-                    const texto =
-                        limpiarTexto(candidato);
-
-                    if (
-                        texto &&
-                        !esNombreGenerico(texto) &&
-                        texto.length < 150
+                    for (
+                        const candidato
+                        of candidatos
                     ) {
-                        nombre = texto;
-                        break;
+                        const texto =
+                            limpiarTexto(
+                                candidato
+                            );
+
+                        if (
+                            texto &&
+                            !esNombreGenerico(
+                                texto
+                            ) &&
+                            texto.length < 150
+                        ) {
+                            nombre =
+                                texto;
+                            break;
+                        }
                     }
                 }
-            });
+            );
 
             if (nombre) {
                 break;
@@ -538,17 +683,56 @@ async function obtenerDetalle(id) {
         }
 
         // =================================================
-        // BUSCAR NOMBRE EN JSON / HTML
+        // NUEVO:
+        // STEAM ESTÁ ENTREGANDO EL NOMBRE EN h1/h2/h3
+        // =================================================
+
+        if (!nombre) {
+            $("h1, h2, h3").each(
+                (_, elemento) => {
+                    if (nombre) {
+                        return;
+                    }
+
+                    const texto =
+                        limpiarTexto(
+                            $(elemento).text()
+                        );
+
+                    if (
+                        texto &&
+                        !esNombreGenerico(
+                            texto
+                        ) &&
+                        texto.length >= 3 &&
+                        texto.length <= 150
+                    ) {
+                        nombre =
+                            texto;
+                    }
+                }
+            );
+        }
+
+        // =================================================
+        // BUSCAR NOMBRE EN BLOQUES JSON
         // =================================================
 
         if (!nombre) {
             const posicion =
-                html.indexOf(String(id));
+                html.indexOf(
+                    String(id)
+                );
 
-            if (posicion !== -1) {
+            if (
+                posicion !== -1
+            ) {
                 const bloque =
                     html.slice(
-                        Math.max(0, posicion - 5000),
+                        Math.max(
+                            0,
+                            posicion - 5000
+                        ),
                         Math.min(
                             html.length,
                             posicion + 15000
@@ -561,16 +745,24 @@ async function obtenerDetalle(id) {
                 let match;
 
                 while (
-                    (match = regexNombre.exec(bloque))
+                    (match =
+                        regexNombre.exec(
+                            bloque
+                        ))
                 ) {
                     const candidato =
-                        limpiarTexto(match[1]);
+                        limpiarTexto(
+                            match[1]
+                        );
 
                     if (
                         candidato &&
-                        !esNombreGenerico(candidato)
+                        !esNombreGenerico(
+                            candidato
+                        )
                     ) {
-                        nombre = candidato;
+                        nombre =
+                            candidato;
                         break;
                     }
                 }
@@ -578,21 +770,28 @@ async function obtenerDetalle(id) {
         }
 
         // =================================================
-        // IMAGEN
+        // IMAGEN INDIVIDUAL
         // =================================================
 
         const regexImagen =
             /https?:\/\/[^"'\\\s]+\/economy\/image\/[^"'\\\s]+/gi;
 
         const imagenes =
-            html.match(regexImagen) || [];
+            html.match(
+                regexImagen
+            ) || [];
 
-        for (const url of imagenes) {
+        for (
+            const url of imagenes
+        ) {
             const normalizada =
-                normalizarImagen(url);
+                normalizarImagen(
+                    url
+                );
 
             if (normalizada) {
-                imagen = normalizada;
+                imagen =
+                    normalizada;
                 break;
             }
         }
@@ -605,40 +804,27 @@ async function obtenerDetalle(id) {
             $(".itemstore_item_price").text(),
             $(".item_price").text(),
             $(".price").text(),
-            html.slice(
-                Math.max(
-                    0,
-                    html.indexOf(String(id)) - 3000
-                ),
-                Math.min(
-                    html.length,
-                    html.indexOf(String(id)) + 10000
-                )
-            )
+            html
         ];
 
-        for (const bloque of bloquesPrecio) {
-            const precio =
-                normalizarPrecio(bloque);
-
-            if (precio) {
-                precio && (precio);
-                break;
-            }
-        }
-
-        // Rehacer precio correctamente
-        let precioFinal = "";
-
-        for (const bloque of bloquesPrecio) {
+        for (
+            const bloque of bloquesPrecio
+        ) {
             const encontrado =
-                normalizarPrecio(bloque);
+                normalizarPrecio(
+                    bloque
+                );
 
             if (encontrado) {
-                precioFinal = encontrado;
+                precio =
+                    encontrado;
                 break;
             }
         }
+
+        // =================================================
+        // RESPALDO
+        // =================================================
 
         if (
             !nombre &&
@@ -648,7 +834,9 @@ async function obtenerDetalle(id) {
                 NOMBRES_CONOCIDOS[id];
         }
 
-        if (esNombreGenerico(nombre)) {
+        if (
+            esNombreGenerico(nombre)
+        ) {
             nombre =
                 NOMBRES_CONOCIDOS[id] || "";
         }
@@ -656,7 +844,7 @@ async function obtenerDetalle(id) {
         console.log(
             `[RUST STORE] Detail ${id}: ` +
             `${nombre || "SIN NOMBRE"} | ` +
-            `${precioFinal || "SIN PRECIO"} | ` +
+            `${precio || "SIN PRECIO"} | ` +
             `${imagen ? "IMAGEN OK" : "SIN IMAGEN"}`
         );
 
@@ -664,7 +852,7 @@ async function obtenerDetalle(id) {
             id,
             nombre,
             imagen,
-            precio: precioFinal
+            precio
         };
 
     } catch (error) {
@@ -684,54 +872,7 @@ async function obtenerDetalle(id) {
 }
 
 // =====================================================
-// BUSCAR IDS FALTANTES
-//
-// NO USA start=12.
-// NO HACE PAGINACIÓN.
-// Comprueba únicamente IDs cercanos al bloque actual.
-// =====================================================
-
-async function buscarIDsFaltantes(ids) {
-    console.log(
-        "[RUST STORE] Buscando Limited faltantes sin paginación..."
-    );
-
-    const faltantes = [];
-
-    for (
-        let id = 70602;
-        id <= 70630;
-        id++
-    ) {
-        if (ids.has(id)) {
-            continue;
-        }
-
-        const detalle =
-            await obtenerDetalle(id);
-
-        await esperar(
-            REQUEST_DELAY
-        );
-
-        if (
-            detalle.nombre ||
-            detalle.imagen ||
-            detalle.precio
-        ) {
-            console.log(
-                `[RUST STORE] Posible Limited adicional: ${id}`
-            );
-
-            faltantes.push(detalle);
-        }
-    }
-
-    return faltantes;
-}
-
-// =====================================================
-// OBTENER TIENDA
+// OBTENER TIENDA LIMITED
 // =====================================================
 
 async function obtenerTiendaLimited() {
@@ -748,7 +889,7 @@ async function obtenerTiendaLimited() {
         cheerio.load(html);
 
     // =================================================
-    // CANTIDAD QUE STEAM MUESTRA
+    // CANTIDAD DE RESULTADOS
     // =================================================
 
     const texto =
@@ -766,17 +907,22 @@ async function obtenerTiendaLimited() {
     }
 
     // =================================================
-    // IDS DEL HTML
+    // IDS HTML
     // =================================================
 
     const ids =
-        buscarIDsEnHTML(html);
+        buscarIDsEnHTML(
+            html
+        );
 
     console.log(
         `[RUST STORE] IDs Limited detectados en HTML: ${ids.size}`
     );
 
-    // Agregar los conocidos
+    // =================================================
+    // AGREGAR LOS 17 CONFIRMADOS
+    // =================================================
+
     for (
         const id of IDS_LIMITED_CONOCIDOS
     ) {
@@ -797,7 +943,7 @@ async function obtenerTiendaLimited() {
     }
 
     // =================================================
-    // SOLO 706xx
+    // FILTRAR SOLAMENTE 706xx
     // =================================================
 
     for (
@@ -814,26 +960,6 @@ async function obtenerTiendaLimited() {
     console.log(
         `[RUST STORE] IDs Limited después de AJAX: ${ids.size}`
     );
-
-    // =================================================
-    // SI SIGUEN SIENDO MENOS DE 17
-    //
-    // Buscamos candidatos por detalle.
-    // Esto NO usa start=12.
-    // =================================================
-
-    if (ids.size < 17) {
-        const faltantes =
-            await buscarIDsFaltantes(
-                ids
-            );
-
-        for (
-            const item of faltantes
-        ) {
-            ids.add(item.id);
-        }
-    }
 
     // =================================================
     // IDS FINALES
@@ -861,7 +987,7 @@ async function obtenerTiendaLimited() {
     );
 
     // =================================================
-    // COMPLETAR CADA ITEM
+    // COMPLETAR ARTÍCULOS
     // =================================================
 
     const items = [];
@@ -889,7 +1015,8 @@ async function obtenerTiendaLimited() {
             );
 
         // =================================================
-        // DETALLE SI FALTA ALGO
+        // SI FALTA INFORMACIÓN:
+        // consultar detalle individual
         // =================================================
 
         if (
@@ -943,41 +1070,57 @@ async function obtenerTiendaLimited() {
                 NOMBRES_CONOCIDOS[id];
         }
 
-        if (esNombreGenerico(nombre)) {
+        if (
+            esNombreGenerico(nombre)
+        ) {
             nombre =
                 NOMBRES_CONOCIDOS[id] || "";
         }
 
         // =================================================
-        // NO PERMITIR HEADER DE RUST
+        // SOLO IMAGEN ECONOMY
         // =================================================
 
         if (
             imagen &&
-            !imagen.includes("/economy/image/")
+            !imagen.includes(
+                "/economy/image/"
+            )
         ) {
             imagen = "";
         }
 
         items.push({
             id,
+
             nombre:
                 nombre ||
                 `Item Rust ${id}`,
+
             imagen:
                 imagen || null,
+
             precio:
                 precio ||
-                "Precio no disponible"
+                "Precio no disponible",
+
+            url:
+                `${STEAM_DETAIL_URL}${id}`
         });
     }
+
+    // =================================================
+    // LOG FINAL
+    // =================================================
 
     console.log(
         `[RUST STORE] DATOS FINALES: ` +
         `${items.filter(
             item =>
                 item.nombre &&
-                !item.nombre.startsWith("Item Rust")
+                !item.nombre.startsWith(
+                    "Item Rust"
+                )
         ).length}/${items.length} con nombre, ` +
         `${items.filter(
             item => item.imagen
@@ -1003,7 +1146,11 @@ async function obtenerTiendaLimited() {
 // EMBED
 // =====================================================
 
-function crearEmbed(item, indice, total) {
+function crearEmbed(
+    item,
+    indice,
+    total
+) {
     const embed =
         new EmbedBuilder()
             .setTitle(
@@ -1020,10 +1167,12 @@ function crearEmbed(item, indice, total) {
             })
             .setTimestamp();
 
-    // SOLO imagen individual
+    // Imagen individual
     if (
         item.imagen &&
-        item.imagen.includes("/economy/image/")
+        item.imagen.includes(
+            "/economy/image/"
+        )
     ) {
         embed.setThumbnail(
             item.imagen
@@ -1034,10 +1183,32 @@ function crearEmbed(item, indice, total) {
 }
 
 // =====================================================
-// PUBLICAR
+// BOTÓN DEL ARTÍCULO
 // =====================================================
 
-async function publicarTiendaManual(interaction) {
+function crearBotonSteam(item) {
+    return new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setLabel(
+                    "Ver artículo en Steam"
+                )
+                .setStyle(
+                    ButtonStyle.Link
+                )
+                .setURL(
+                    item.url
+                )
+        );
+}
+
+// =====================================================
+// PUBLICAR TIENDA
+// =====================================================
+
+async function publicarTiendaManual(
+    interaction
+) {
     console.log(
         "🎯 Ejecutando /tienda"
     );
@@ -1058,51 +1229,92 @@ async function publicarTiendaManual(interaction) {
         `[RUST STORE] Publicando ${items.length} artículos...`
     );
 
-    const embeds =
-        items.map(
-            (item, indice) =>
-                crearEmbed(
-                    item,
-                    indice,
-                    items.length
-                )
-        );
-
-    // Discord permite máximo 10 embeds
-    // por mensaje.
+    // =================================================
+    // DISCORD PERMITE 10 EMBEDS POR MENSAJE
+    // =================================================
 
     const bloques = [];
 
     for (
         let i = 0;
-        i < embeds.length;
+        i < items.length;
         i += 10
     ) {
         bloques.push(
-            embeds.slice(
+            items.slice(
                 i,
                 i + 10
             )
         );
     }
 
-    await interaction.editReply({
-        content:
-            `🛒 **Tienda Limited de Rust**\n` +
-            `Se encontraron **${items.length} artículos**.`,
-        embeds:
-            bloques[0]
-    });
+    // =================================================
+    // PUBLICAR CADA ARTÍCULO
+    //
+    // Cada embed lleva su propio botón.
+    // =================================================
+
+    let primeraRespuesta = true;
 
     for (
-        let i = 1;
-        i < bloques.length;
-        i++
+        const bloque of bloques
     ) {
-        await interaction.followUp({
-            embeds:
-                bloques[i]
-        });
+        for (
+            let i = 0;
+            i < bloque.length;
+            i++
+        ) {
+            const item =
+                bloque[i];
+
+            const indiceGlobal =
+                items.indexOf(
+                    item
+                );
+
+            const embed =
+                crearEmbed(
+                    item,
+                    indiceGlobal,
+                    items.length
+                );
+
+            const botones =
+                crearBotonSteam(
+                    item
+                );
+
+            if (
+                primeraRespuesta
+            ) {
+                await interaction.editReply({
+                    content:
+                        `🛒 **Tienda Limited de Rust**\n` +
+                        `Artículo **${indiceGlobal + 1}/${items.length}**`,
+                    embeds: [
+                        embed
+                    ],
+                    components: [
+                        botones
+                    ]
+                });
+
+                primeraRespuesta =
+                    false;
+            } else {
+                await interaction.followUp({
+                    content:
+                        `🛒 **Tienda Limited de Rust**\n` +
+                        `Artículo **${indiceGlobal + 1}/${items.length}**`,
+                    embeds: [
+                        embed
+                    ],
+                    components: [
+                        botones
+                    ]
+                });
+            }
+        }
     }
 
     console.log(
