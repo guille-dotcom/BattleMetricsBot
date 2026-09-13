@@ -1,6 +1,8 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 
 const {
     EmbedBuilder,
@@ -16,13 +18,10 @@ const ServerConfig = require("../models/ServerConfig");
 // =====================================================
 
 const STEAM_LIMITED_URL =
-    "https://store.steampowered.com/itemstore/252490/browse/?filter=Limited";
+    "https://store.steampowered.com/itemstore/252490/browse/?filter=Limited&l=english";
 
 const STEAM_AJAX_URL =
     "https://store.steampowered.com/itemstore/252490/ajaxgetitemdefs";
-
-const STEAM_DETAIL_URL =
-    "https://store.steampowered.com/itemstore/252490/detail/";
 
 const CHECK_INTERVAL =
     10 * 60 * 1000;
@@ -44,6 +43,7 @@ const HEADERS = {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
         "AppleWebKit/537.36 (KHTML, like Gecko) " +
         "Chrome/140.0.0.0 Safari/537.36",
+
     "Accept-Language":
         "en-US,en;q=0.9"
 };
@@ -77,10 +77,225 @@ async function obtenerHTML(url) {
 }
 
 // =====================================================
-// EXTRAER ID DESDE LINK
+// ENCONTRAR CHROME DE PUPPETEER
 // =====================================================
 
-function extraerIDItem(href) {
+function buscarChromeRecursivo(
+    directorio,
+    profundidad = 0
+) {
+
+    if (
+        profundidad > 8 ||
+        !directorio ||
+        !fs.existsSync(directorio)
+    ) {
+        return null;
+    }
+
+    let entradas;
+
+    try {
+
+        entradas =
+            fs.readdirSync(
+                directorio,
+                {
+                    withFileTypes: true
+                }
+            );
+
+    } catch (_) {
+
+        return null;
+    }
+
+    for (
+        const entrada
+        of entradas
+    ) {
+
+        const ruta =
+            path.join(
+                directorio,
+                entrada.name
+            );
+
+        if (
+            entrada.isFile()
+        ) {
+
+            const nombre =
+                entrada.name
+                    .toLowerCase();
+
+            if (
+                process.platform ===
+                "win32"
+            ) {
+
+                if (
+                    nombre ===
+                    "chrome.exe"
+                ) {
+
+                    return ruta;
+                }
+
+            } else {
+
+                if (
+                    nombre ===
+                    "chrome" ||
+                    nombre ===
+                    "chrome-headless-shell"
+                ) {
+
+                    return ruta;
+                }
+            }
+
+        } else if (
+            entrada.isDirectory()
+        ) {
+
+            const encontrado =
+                buscarChromeRecursivo(
+                    ruta,
+                    profundidad + 1
+                );
+
+            if (encontrado) {
+                return encontrado;
+            }
+        }
+    }
+
+    return null;
+}
+
+// =====================================================
+// OBTENER EXECUTABLE DE CHROME
+// =====================================================
+
+function obtenerChromeExecutable() {
+
+    const candidatos = [];
+
+    // -------------------------------------------------
+    // Windows local
+    // -------------------------------------------------
+
+    if (
+        process.platform ===
+        "win32"
+    ) {
+
+        candidatos.push(
+            "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+        );
+
+        candidatos.push(
+            "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+        );
+    }
+
+    // -------------------------------------------------
+    // Render / Linux
+    // -------------------------------------------------
+
+    if (
+        process.platform !==
+        "win32"
+    ) {
+
+        candidatos.push(
+            "/usr/bin/google-chrome"
+        );
+
+        candidatos.push(
+            "/usr/bin/google-chrome-stable"
+        );
+
+        candidatos.push(
+            "/usr/bin/chromium"
+        );
+
+        candidatos.push(
+            "/usr/bin/chromium-browser"
+        );
+    }
+
+    // -------------------------------------------------
+    // PUPPETEER_CACHE_DIR
+    // -------------------------------------------------
+
+    if (
+        process.env.PUPPETEER_CACHE_DIR
+    ) {
+
+        const encontrado =
+            buscarChromeRecursivo(
+                process.env.PUPPETEER_CACHE_DIR
+            );
+
+        if (encontrado) {
+            return encontrado;
+        }
+    }
+
+    // -------------------------------------------------
+    // Cache del proyecto
+    // -------------------------------------------------
+
+    const cacheProyecto =
+        path.join(
+            process.cwd(),
+            ".puppeteer-cache"
+        );
+
+    const encontradoProyecto =
+        buscarChromeRecursivo(
+            cacheProyecto
+        );
+
+    if (encontradoProyecto) {
+        return encontradoProyecto;
+    }
+
+    // -------------------------------------------------
+    // Candidatos directos
+    // -------------------------------------------------
+
+    for (
+        const candidato
+        of candidatos
+    ) {
+
+        try {
+
+            if (
+                fs.existsSync(
+                    candidato
+                )
+            ) {
+
+                return candidato;
+            }
+
+        } catch (_) {}
+    }
+
+    return null;
+}
+
+// =====================================================
+// EXTRAER ID
+// =====================================================
+
+function extraerIDItem(
+    href
+) {
 
     if (!href) {
         return null;
@@ -99,90 +314,570 @@ function extraerIDItem(href) {
 }
 
 // =====================================================
-// EXTRAER IDS DESDE HTML
+// LIMPIAR TEXTO
 // =====================================================
 
-function extraerIDsDesdeHTML(html) {
+function limpiarTexto(
+    texto
+) {
 
-    const $ =
-        cheerio.load(html);
-
-    const ids =
-        new Set();
-
-    $("a").each(
-        (_, elemento) => {
-
-            const href =
-                $(elemento).attr("href");
-
-            const id =
-                extraerIDItem(href);
-
-            if (id) {
-                ids.add(id);
-            }
-        }
-    );
-
-    // También buscamos IDs en atributos/data por si Steam
-    // cambia la estructura de los enlaces.
-    $("[data-itemid], [data-item-id], [data-defid], [data-item]").each(
-        (_, elemento) => {
-
-            const atributos = [
-                "data-itemid",
-                "data-item-id",
-                "data-defid",
-                "data-item"
-            ];
-
-            for (const atributo of atributos) {
-
-                const valor =
-                    $(elemento).attr(atributo);
-
-                if (!valor) {
-                    continue;
-                }
-
-                const match =
-                    String(valor).match(
-                        /\b(\d{3,})\b/
-                    );
-
-                if (match) {
-                    ids.add(match[1]);
-                }
-            }
-        }
-    );
-
-    return [...ids];
+    return String(
+        texto || ""
+    )
+        .replace(
+            /\s+/g,
+            " "
+        )
+        .trim();
 }
 
 // =====================================================
-// PAGINACIÓN REAL DE STEAM CON CHROME
+// EXTRAER PRECIO
 // =====================================================
 
-async function obtenerIDsLimitedConChrome() {
+function extraerPrecioTexto(
+    texto
+) {
+
+    const limpio =
+        limpiarTexto(
+            texto
+        );
+
+    const match =
+        limpio.match(
+            /\$\s*\d+(?:[.,]\d{2})?/
+        );
+
+    if (!match) {
+        return null;
+    }
+
+    return match[0]
+        .replace(
+            /\s+/g,
+            ""
+        );
+}
+
+// =====================================================
+// ENCONTRAR TARJETA DE ITEM
+// =====================================================
+
+async function extraerItemsDesdePagina(
+    page
+) {
+
+    return await page.evaluate(() => {
+
+        function limpiar(
+            texto
+        ) {
+
+            return String(
+                texto || ""
+            )
+                .replace(
+                    /\s+/g,
+                    " "
+                )
+                .trim();
+        }
+
+        function precio(
+            texto
+        ) {
+
+            const limpio =
+                limpiar(
+                    texto
+                );
+
+            const match =
+                limpio.match(
+                    /\$\s*\d+(?:[.,]\d{2})?/
+                );
+
+            if (!match) {
+                return null;
+            }
+
+            return match[0]
+                .replace(
+                    /\s+/g,
+                    ""
+                );
+        }
+
+        const encontrados =
+            [];
+
+        const links =
+            document.querySelectorAll(
+                'a[href*="/itemstore/252490/detail/"]'
+            );
+
+        for (
+            const link
+            of links
+        ) {
+
+            const href =
+                link.href || "";
+
+            const match =
+                href.match(
+                    /\/itemstore\/252490\/detail\/(\d+)/
+                );
+
+            if (!match) {
+                continue;
+            }
+
+            const id =
+                match[1];
+
+            // =========================================
+            // BUSCAR CONTENEDOR DEL ITEM
+            // =========================================
+
+            let contenedor =
+                link;
+
+            const candidatos = [
+                ".itemstore_item",
+                ".itemstore_item_block",
+                ".itemstore_item_container",
+                ".itemstore_item_card",
+                ".itemstore_item_details",
+                ".itemstore_item_info"
+            ];
+
+            for (
+                const selector
+                of candidatos
+            ) {
+
+                const padre =
+                    link.closest(
+                        selector
+                    );
+
+                if (padre) {
+
+                    contenedor =
+                        padre;
+
+                    break;
+                }
+            }
+
+            // =========================================
+            // NOMBRE
+            // =========================================
+
+            let nombre =
+                limpiar(
+                    link.innerText
+                );
+
+            if (!nombre) {
+
+                const selectoresNombre = [
+                    ".itemstore_item_name",
+                    ".itemstore_item_title",
+                    ".item_desc_title",
+                    ".item_name"
+                ];
+
+                for (
+                    const selector
+                    of selectoresNombre
+                ) {
+
+                    const elemento =
+                        contenedor.querySelector(
+                            selector
+                        );
+
+                    if (
+                        elemento &&
+                        limpiar(
+                            elemento.innerText
+                        )
+                    ) {
+
+                        nombre =
+                            limpiar(
+                                elemento.innerText
+                            );
+
+                        break;
+                    }
+                }
+            }
+
+            // =========================================
+            // PRECIO
+            // =========================================
+
+            let textoContenedor =
+                limpiar(
+                    contenedor.innerText
+                );
+
+            let precioItem =
+                precio(
+                    textoContenedor
+                );
+
+            // Si el contenedor es demasiado pequeño,
+            // buscamos en los padres.
+            if (!precioItem) {
+
+                let padre =
+                    contenedor.parentElement;
+
+                let niveles =
+                    0;
+
+                while (
+                    padre &&
+                    niveles < 5 &&
+                    !precioItem
+                ) {
+
+                    precioItem =
+                        precio(
+                            padre.innerText
+                        );
+
+                    padre =
+                        padre.parentElement;
+
+                    niveles++;
+                }
+            }
+
+            // =========================================
+            // IMAGEN
+            // =========================================
+
+            let imagen =
+                null;
+
+            const img =
+                contenedor.querySelector(
+                    "img"
+                );
+
+            if (img) {
+
+                imagen =
+                    img.getAttribute(
+                        "src"
+                    ) ||
+                    img.getAttribute(
+                        "data-src"
+                    ) ||
+                    img.getAttribute(
+                        "data-lazy-src"
+                    );
+            }
+
+            // =========================================
+            // SI NO ENCONTRAMOS IMAGEN
+            // =========================================
+
+            if (!imagen) {
+
+                const imgPadre =
+                    link.parentElement
+                        ?.querySelector(
+                            "img"
+                        );
+
+                if (imgPadre) {
+
+                    imagen =
+                        imgPadre.getAttribute(
+                            "src"
+                        ) ||
+                        imgPadre.getAttribute(
+                            "data-src"
+                        );
+                }
+            }
+
+            // =========================================
+            // NORMALIZAR IMAGEN
+            // =========================================
+
+            if (
+                imagen &&
+                imagen.startsWith("//")
+            ) {
+
+                imagen =
+                    "https:" +
+                    imagen;
+            }
+
+            encontrados.push({
+                id,
+                nombre:
+                    nombre || null,
+                precio:
+                    precioItem || null,
+                imagen:
+                    imagen || null,
+                url:
+                    href
+            });
+        }
+
+        // =============================================
+        // ELIMINAR DUPLICADOS
+        // =============================================
+
+        return [
+            ...new Map(
+                encontrados.map(
+                    item => [
+                        item.id,
+                        item
+                    ]
+                )
+            ).values()
+        ];
+    });
+}
+
+// =====================================================
+// DETECTAR BOTÓN SIGUIENTE
+// =====================================================
+
+async function buscarBotonSiguiente(
+    page
+) {
+
+    return await page.evaluate(() => {
+
+        const elementos =
+            document.querySelectorAll(
+                "a, button, span, div"
+            );
+
+        for (
+            const elemento
+            of elementos
+        ) {
+
+            const texto =
+                (
+                    elemento.innerText ||
+                    elemento.textContent ||
+                    ""
+                )
+                    .trim()
+                    .toLowerCase();
+
+            const aria =
+                (
+                    elemento.getAttribute(
+                        "aria-label"
+                    ) || ""
+                )
+                    .trim()
+                    .toLowerCase();
+
+            const title =
+                (
+                    elemento.getAttribute(
+                        "title"
+                    ) || ""
+                )
+                    .trim()
+                    .toLowerCase();
+
+            const clase =
+                (
+                    elemento.className ||
+                    ""
+                )
+                    .toString()
+                    .toLowerCase();
+
+            // Steam puede usar distintos símbolos
+            // para la flecha siguiente.
+            if (
+                texto === ">" ||
+                texto === "›" ||
+                texto === "»" ||
+                texto === "next" ||
+                texto === "siguiente" ||
+                aria === "next" ||
+                aria === "siguiente" ||
+                title === "next" ||
+                title === "siguiente" ||
+                clase.includes("next")
+            ) {
+
+                // Comprobamos que no esté deshabilitado.
+                const disabled =
+                    elemento.disabled ||
+                    elemento.getAttribute(
+                        "aria-disabled"
+                    ) === "true" ||
+                    elemento.classList.contains(
+                        "disabled"
+                    );
+
+                if (!disabled) {
+
+                    return {
+                        encontrado: true,
+                        texto,
+                        aria,
+                        title,
+                        clase
+                    };
+                }
+            }
+        }
+
+        return {
+            encontrado: false
+        };
+    });
+}
+
+// =====================================================
+// CLICK SIGUIENTE
+// =====================================================
+
+async function clickSiguiente(
+    page
+) {
+
+    const resultado =
+        await page.evaluate(() => {
+
+            const elementos =
+                document.querySelectorAll(
+                    "a, button, span, div"
+                );
+
+            for (
+                const elemento
+                of elementos
+            ) {
+
+                const texto =
+                    (
+                        elemento.innerText ||
+                        elemento.textContent ||
+                        ""
+                    )
+                        .trim()
+                        .toLowerCase();
+
+                const aria =
+                    (
+                        elemento.getAttribute(
+                            "aria-label"
+                        ) || ""
+                    )
+                        .trim()
+                        .toLowerCase();
+
+                const title =
+                    (
+                        elemento.getAttribute(
+                            "title"
+                        ) || ""
+                    )
+                        .trim()
+                        .toLowerCase();
+
+                const clase =
+                    (
+                        elemento.className ||
+                        ""
+                    )
+                        .toString()
+                        .toLowerCase();
+
+                if (
+                    texto === ">" ||
+                    texto === "›" ||
+                    texto === "»" ||
+                    texto === "next" ||
+                    texto === "siguiente" ||
+                    aria === "next" ||
+                    aria === "siguiente" ||
+                    title === "next" ||
+                    title === "siguiente" ||
+                    clase.includes("next")
+                ) {
+
+                    const disabled =
+                        elemento.disabled ||
+                        elemento.getAttribute(
+                            "aria-disabled"
+                        ) === "true" ||
+                        elemento.classList.contains(
+                            "disabled"
+                        );
+
+                    if (
+                        !disabled
+                    ) {
+
+                        elemento.click();
+
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        });
+
+    return resultado;
+}
+
+// =====================================================
+// OBTENER TODOS LOS ITEMS LIMITED CON CHROME
+// =====================================================
+
+async function obtenerItemsLimitedConChrome() {
 
     let puppeteer;
 
     try {
+
         puppeteer =
             require("puppeteer");
+
     } catch (error) {
 
         console.error(
-            "[RUST STORE] ❌ Puppeteer no está disponible."
+            "[RUST STORE] ❌ No se pudo cargar Puppeteer:",
+            error.message
         );
 
         return [];
     }
 
-    let browser = null;
-    let page = null;
+    let browser =
+        null;
+
+    let page =
+        null;
+
+    let browserPropio =
+        false;
 
     try {
 
@@ -191,7 +886,7 @@ async function obtenerIDsLimitedConChrome() {
         );
 
         // =================================================
-        // CONECTAR AL CHROME EXISTENTE
+        // INTENTAR CHROME YA ABIERTO
         // =================================================
 
         try {
@@ -200,25 +895,80 @@ async function obtenerIDsLimitedConChrome() {
                 await puppeteer.connect({
                     browserURL:
                         "http://127.0.0.1:9222",
-                    defaultViewport: null
+                    defaultViewport:
+                        null
                 });
-
-        } catch (error) {
 
             console.log(
-                "[RUST STORE] Chrome en 9222 no disponible. Lanzando navegador propio..."
+                "[RUST STORE] Conectado al Chrome existente en 9222."
             );
 
+        } catch (_) {
+
+            console.log(
+                "[RUST STORE] Chrome en 9222 no disponible."
+            );
+
+            // =================================================
+            // BUSCAR CHROME INSTALADO
+            // =================================================
+
+            const executablePath =
+                obtenerChromeExecutable();
+
+            if (
+                executablePath
+            ) {
+
+                console.log(
+                    `[RUST STORE] Chrome encontrado en: ${executablePath}`
+                );
+
+            } else {
+
+                console.log(
+                    "[RUST STORE] No se encontró Chrome instalado. Puppeteer intentará usar su instalación."
+                );
+            }
+
+            // =================================================
+            // LANZAR
+            // =================================================
+
+            const opciones = {
+                headless: true,
+                args: [
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu"
+                ]
+            };
+
+            if (
+                executablePath
+            ) {
+
+                opciones.executablePath =
+                    executablePath;
+            }
+
             browser =
-                await puppeteer.launch({
-                    headless: true,
-                    args: [
-                        "--no-sandbox",
-                        "--disable-setuid-sandbox",
-                        "--disable-dev-shm-usage"
-                    ]
-                });
+                await puppeteer.launch(
+                    opciones
+                );
+
+            browserPropio =
+                true;
+
+            console.log(
+                "[RUST STORE] Navegador propio iniciado."
+            );
         }
+
+        // =================================================
+        // NUEVA PÁGINA
+        // =================================================
 
         page =
             await browser.newPage();
@@ -232,533 +982,178 @@ async function obtenerIDsLimitedConChrome() {
                 "en-US,en;q=0.9"
         });
 
+        console.log(
+            "[RUST STORE] Cargando página Limited..."
+        );
+
         await page.goto(
             STEAM_LIMITED_URL,
             {
                 waitUntil:
-                    "networkidle2",
+                    "domcontentloaded",
                 timeout:
                     60000
             }
         );
 
-        await esperar(2000);
-
-        const ids =
-            new Set();
+        await esperar(
+            3000
+        );
 
         // =================================================
-        // FUNCIÓN PARA OBTENER IDS DEL DOM
+        // ITEMS
         // =================================================
 
-        async function recogerIDsDOM() {
-
-            const encontrados =
-                await page.evaluate(() => {
-
-                    const resultado =
-                        new Set();
-
-                    // Links normales de detalle
-                    document
-                        .querySelectorAll(
-                            'a[href*="/itemstore/252490/detail/"]'
-                        )
-                        .forEach(elemento => {
-
-                            const href =
-                                elemento.href || "";
-
-                            const match =
-                                href.match(
-                                    /\/itemstore\/252490\/detail\/(\d+)/
-                                );
-
-                            if (match) {
-                                resultado.add(
-                                    match[1]
-                                );
-                            }
-                        });
-
-                    // Data attributes
-                    document
-                        .querySelectorAll(
-                            "[data-itemid], [data-item-id], [data-defid]"
-                        )
-                        .forEach(elemento => {
-
-                            const valores = [
-                                elemento.getAttribute(
-                                    "data-itemid"
-                                ),
-                                elemento.getAttribute(
-                                    "data-item-id"
-                                ),
-                                elemento.getAttribute(
-                                    "data-defid"
-                                )
-                            ];
-
-                            for (
-                                const valor
-                                of valores
-                            ) {
-
-                                if (!valor) {
-                                    continue;
-                                }
-
-                                const match =
-                                    String(valor).match(
-                                        /\b(\d{3,})\b/
-                                    );
-
-                                if (match) {
-                                    resultado.add(
-                                        match[1]
-                                    );
-                                }
-                            }
-                        });
-
-                    return [...resultado];
-                });
-
-            for (const id of encontrados) {
-                ids.add(id);
-            }
-
-            console.log(
-                `[RUST STORE] IDs acumulados en Chrome: ${ids.size}`
-            );
-
-            if (encontrados.length) {
-
-                console.log(
-                    `[RUST STORE] IDs encontrados en esta página: ${encontrados.join(", ")}`
-                );
-            }
-        }
+        const items =
+            new Map();
 
         // =================================================
         // PRIMERA PÁGINA
         // =================================================
 
-        await recogerIDsDOM();
+        let pagina =
+            1;
 
-        // =================================================
-        // DESCUBRIR BOTONES DE PAGINACIÓN
-        // =================================================
-
-        const paginas =
-            await page.evaluate(() => {
-
-                const resultado = [];
-
-                const elementos =
-                    document.querySelectorAll(
-                        "a, button, div"
-                    );
-
-                for (const elemento of elementos) {
-
-                    const texto =
-                        (elemento.innerText || "")
-                            .trim();
-
-                    const href =
-                        elemento.getAttribute(
-                            "href"
-                        ) || "";
-
-                    // Detectamos anchors tipo #p1, #p2...
-                    const match =
-                        href.match(
-                            /#p(\d+)$/i
-                        );
-
-                    if (match) {
-
-                        resultado.push({
-                            tipo: "anchor",
-                            pagina:
-                                Number(match[1]),
-                            texto,
-                            href
-                        });
-
-                        continue;
-                    }
-
-                    // Detectamos botones numerados
-                    if (
-                        /^\d+$/.test(texto) &&
-                        Number(texto) >= 1 &&
-                        Number(texto) <= 100
-                    ) {
-
-                        resultado.push({
-                            tipo: "numero",
-                            pagina:
-                                Number(texto),
-                            texto,
-                            href
-                        });
-                    }
-                }
-
-                return resultado;
-            });
-
-        const paginasUnicas =
-            [
-                ...new Map(
-                    paginas.map(
-                        pagina => [
-                            pagina.pagina,
-                            pagina
-                        ]
-                    )
-                ).values()
-            ]
-                .sort(
-                    (a, b) =>
-                        a.pagina - b.pagina
-                );
+        const primeraPagina =
+            await extraerItemsDesdePagina(
+                page
+            );
 
         console.log(
-            "[RUST STORE] Paginación detectada:",
-            paginasUnicas
+            `[RUST STORE] Página ${pagina}: ${primeraPagina.length} artículos detectados.`
         );
-
-        // =================================================
-        // INTENTAR PAGINACIÓN
-        // =================================================
-
-        const visitadas =
-            new Set();
-
-        visitadas.add(1);
 
         for (
-            const pagina
-            of paginasUnicas
+            const item
+            of primeraPagina
         ) {
 
-            if (
-                pagina.pagina <= 1 ||
-                visitadas.has(
-                    pagina.pagina
-                )
-            ) {
-                continue;
-            }
-
-            try {
-
-                console.log(
-                    `[RUST STORE] Intentando abrir página ${pagina.pagina}...`
-                );
-
-                const antes =
-                    [...ids];
-
-                // -----------------------------------------
-                // PRIMERO: buscar href #pN
-                // -----------------------------------------
-
-                let selector =
-                    `a[href$="#p${pagina.pagina}"]`;
-
-                let elemento =
-                    await page.$(selector);
-
-                // -----------------------------------------
-                // SEGUNDO: buscar elemento con texto
-                // -----------------------------------------
-
-                if (!elemento) {
-
-                    const candidatos =
-                        await page.$$("a, button");
-
-                    for (
-                        const candidato
-                        of candidatos
-                    ) {
-
-                        const texto =
-                            await candidato.evaluate(
-                                el =>
-                                    (el.innerText || "")
-                                        .trim()
-                            );
-
-                        if (
-                            texto ===
-                            String(
-                                pagina.pagina
-                            )
-                        ) {
-
-                            elemento =
-                                candidato;
-
-                            break;
-                        }
-                    }
-                }
-
-                if (!elemento) {
-
-                    console.log(
-                        `[RUST STORE] No se encontró botón para página ${pagina.pagina}.`
-                    );
-
-                    continue;
-                }
-
-                await elemento.click();
-
-                await esperar(1500);
-
-                // Esperamos a que cambie el DOM
-                try {
-
-                    await page.waitForFunction(
-                        (idsAntes) => {
-
-                            const actual =
-                                [
-                                    ...document.querySelectorAll(
-                                        'a[href*="/itemstore/252490/detail/"]'
-                                    )
-                                ]
-                                    .map(
-                                        el => {
-
-                                            const match =
-                                                (
-                                                    el.href ||
-                                                    ""
-                                                ).match(
-                                                    /\/itemstore\/252490\/detail\/(\d+)/
-                                                );
-
-                                            return match
-                                                ? match[1]
-                                                : null;
-                                        }
-                                    )
-                                    .filter(Boolean);
-
-                            return actual.some(
-                                id =>
-                                    !idsAntes.includes(
-                                        id
-                                    )
-                            );
-                        },
-                        {
-                            timeout: 5000
-                        },
-                        antes
-                    );
-
-                } catch (_) {
-                    // No pasa nada: igual recogemos DOM
-                }
-
-                await recogerIDsDOM();
-
-                visitadas.add(
-                    pagina.pagina
-                );
-
-            } catch (error) {
-
-                console.error(
-                    `[RUST STORE] Error abriendo página ${pagina.pagina}:`,
-                    error.message
-                );
-            }
+            items.set(
+                item.id,
+                item
+            );
         }
 
         // =================================================
-        // SEGUNDO INTENTO: BUSCAR "NEXT"
+        // PAGINACIÓN
         // =================================================
 
-        let intentosNext = 0;
+        const MAX_PAGINAS =
+            20;
 
         while (
-            intentosNext < 20
+            pagina < MAX_PAGINAS
         ) {
 
-            intentosNext++;
+            const cantidadAntes =
+                items.size;
 
-            const idsAntes =
-                [...ids];
+            const haySiguiente =
+                await buscarBotonSiguiente(
+                    page
+                );
 
-            const siguiente =
-                await page.evaluate(() => {
+            if (
+                !haySiguiente.encontrado
+            ) {
 
-                    const elementos =
-                        document.querySelectorAll(
-                            "a, button"
-                        );
-
-                    for (
-                        const elemento
-                        of elementos
-                    ) {
-
-                        const texto =
-                            (
-                                elemento.innerText ||
-                                elemento.textContent ||
-                                ""
-                            )
-                                .trim()
-                                .toLowerCase();
-
-                        const aria =
-                            (
-                                elemento.getAttribute(
-                                    "aria-label"
-                                ) || ""
-                            )
-                                .trim()
-                                .toLowerCase();
-
-                        const title =
-                            (
-                                elemento.getAttribute(
-                                    "title"
-                                ) || ""
-                            )
-                                .trim()
-                                .toLowerCase();
-
-                        if (
-                            texto === ">" ||
-                            texto === "›" ||
-                            texto === "»" ||
-                            texto === "next" ||
-                            texto === "siguiente" ||
-                            aria === "next" ||
-                            aria === "siguiente" ||
-                            title === "next" ||
-                            title === "siguiente"
-                        ) {
-
-                            return true;
-                        }
-                    }
-
-                    return false;
-                });
-
-            if (!siguiente) {
-                break;
-            }
-
-            const elemento =
-                await page.evaluateHandle(() => {
-
-                    const elementos =
-                        document.querySelectorAll(
-                            "a, button"
-                        );
-
-                    for (
-                        const elemento
-                        of elementos
-                    ) {
-
-                        const texto =
-                            (
-                                elemento.innerText ||
-                                elemento.textContent ||
-                                ""
-                            )
-                                .trim()
-                                .toLowerCase();
-
-                        const aria =
-                            (
-                                elemento.getAttribute(
-                                    "aria-label"
-                                ) || ""
-                            )
-                                .trim()
-                                .toLowerCase();
-
-                        const title =
-                            (
-                                elemento.getAttribute(
-                                    "title"
-                                ) || ""
-                            )
-                                .trim()
-                                .toLowerCase();
-
-                        if (
-                            texto === ">" ||
-                            texto === "›" ||
-                            texto === "»" ||
-                            texto === "next" ||
-                            texto === "siguiente" ||
-                            aria === "next" ||
-                            aria === "siguiente" ||
-                            title === "next" ||
-                            title === "siguiente"
-                        ) {
-                            return elemento;
-                        }
-                    }
-
-                    return null;
-                });
-
-            const elementoJS =
-                elemento.asElement();
-
-            if (!elementoJS) {
-                break;
-            }
-
-            try {
-
-                await elementoJS.click();
-
-            } catch (_) {
+                console.log(
+                    "[RUST STORE] No se encontró botón de siguiente."
+                );
 
                 break;
             }
 
-            await esperar(1500);
+            console.log(
+                `[RUST STORE] Botón siguiente detectado. Avanzando desde página ${pagina}...`
+            );
 
-            await recogerIDsDOM();
+            const clic =
+                await clickSiguiente(
+                    page
+                );
 
-            const cambiaron =
-                ids.size >
-                idsAntes.length;
+            if (!clic) {
 
-            if (!cambiaron) {
+                console.log(
+                    "[RUST STORE] No se pudo hacer click en siguiente."
+                );
+
+                break;
+            }
+
+            await esperar(
+                2000
+            );
+
+            pagina++;
+
+            const nuevos =
+                await extraerItemsDesdePagina(
+                    page
+                );
+
+            console.log(
+                `[RUST STORE] Página ${pagina}: ${nuevos.length} artículos detectados.`
+            );
+
+            for (
+                const item
+                of nuevos
+            ) {
+
+                items.set(
+                    item.id,
+                    item
+                );
+            }
+
+            console.log(
+                `[RUST STORE] Total acumulado: ${items.size}`
+            );
+
+            // Si no apareció absolutamente nada nuevo,
+            // detenemos la paginación.
+            if (
+                items.size ===
+                cantidadAntes
+            ) {
+
+                console.log(
+                    "[RUST STORE] La siguiente página no agregó artículos nuevos. Fin de paginación."
+                );
+
                 break;
             }
         }
 
+        const resultado =
+            [...items.values()];
+
         console.log(
-            `[RUST STORE] TOTAL IDS DETECTADOS CON CHROME: ${ids.size}`
+            `[RUST STORE] TOTAL ITEMS LIMITED DETECTADOS: ${resultado.length}`
         );
 
         console.log(
-            `[RUST STORE] IDS LIMITED: ${[...ids].join(", ")}`
+            "[RUST STORE] IDS:",
+            resultado
+                .map(
+                    item => item.id
+                )
+                .join(", ")
         );
 
-        return [...ids];
+        console.log(
+            "[RUST STORE] NOMBRES:",
+            resultado
+                .map(
+                    item =>
+                        `${item.id}=${item.nombre}`
+                )
+                .join(" | ")
+        );
+
+        return resultado;
 
     } catch (error) {
 
@@ -779,13 +1174,240 @@ async function obtenerIDsLimitedConChrome() {
 
         } catch (_) {}
 
-        // Si nos conectamos al Chrome existente NO lo cerramos.
-        // Si se lanzó uno propio, tampoco es crítico mantenerlo.
+        // Solo cerramos el navegador si nosotros
+        // lo iniciamos.
+        if (
+            browser &&
+            browserPropio
+        ) {
+
+            try {
+                await browser.close();
+            } catch (_) {}
+        }
     }
 }
 
 // =====================================================
-// AJAX - SOLO PARA ENRIQUECER
+// FALLBACK HTML DIRECTO
+// =====================================================
+
+async function obtenerItemsDesdeHTML() {
+
+    try {
+
+        console.log(
+            "[RUST STORE] Probando HTML directo..."
+        );
+
+        const html =
+            await obtenerHTML(
+                STEAM_LIMITED_URL
+            );
+
+        const $ =
+            cheerio.load(
+                html
+            );
+
+        const items =
+            new Map();
+
+        $("a").each(
+            (_, elemento) => {
+
+                const href =
+                    $(elemento).attr(
+                        "href"
+                    );
+
+                const id =
+                    extraerIDItem(
+                        href
+                    );
+
+                if (!id) {
+                    return;
+                }
+
+                let nombre =
+                    limpiarTexto(
+                        $(elemento).text()
+                    );
+
+                let contenedor =
+                    $(elemento);
+
+                // Buscar algunos niveles hacia arriba
+                // para encontrar precio e imagen.
+                for (
+                    let i = 0;
+                    i < 5;
+                    i++
+                ) {
+
+                    const padre =
+                        contenedor.parent();
+
+                    if (
+                        !padre.length
+                    ) {
+                        break;
+                    }
+
+                    contenedor =
+                        padre;
+
+                    const texto =
+                        limpiarTexto(
+                            contenedor.text()
+                        );
+
+                    const precio =
+                        extraerPrecioTexto(
+                            texto
+                        );
+
+                    const imagen =
+                        contenedor
+                            .find(
+                                "img"
+                            )
+                            .first()
+                            .attr(
+                                "src"
+                            );
+
+                    if (
+                        nombre &&
+                        precio &&
+                        imagen
+                    ) {
+                        break;
+                    }
+                }
+
+                const textoContenedor =
+                    limpiarTexto(
+                        contenedor.text()
+                    );
+
+                const precio =
+                    extraerPrecioTexto(
+                        textoContenedor
+                    );
+
+                let imagen =
+                    contenedor
+                        .find(
+                            "img"
+                        )
+                        .first()
+                        .attr(
+                            "src"
+                        ) ||
+                    null;
+
+                if (
+                    imagen &&
+                    imagen.startsWith(
+                        "//"
+                    )
+                ) {
+
+                    imagen =
+                        "https:" +
+                        imagen;
+                }
+
+                if (
+                    !nombre
+                ) {
+
+                    const posibles =
+                        [
+                            ".itemstore_item_name",
+                            ".itemstore_item_title",
+                            ".item_name"
+                        ];
+
+                    for (
+                        const selector
+                        of posibles
+                    ) {
+
+                        const encontrado =
+                            contenedor
+                                .find(
+                                    selector
+                                )
+                                .first()
+                                .text();
+
+                        if (
+                            limpiarTexto(
+                                encontrado
+                            )
+                        ) {
+
+                            nombre =
+                                limpiarTexto(
+                                    encontrado
+                                );
+
+                            break;
+                        }
+                    }
+                }
+
+                if (
+                    nombre &&
+                    nombre !==
+                    "Rust Item Store"
+                ) {
+
+                    items.set(
+                        id,
+                        {
+                            id,
+                            nombre,
+                            precio:
+                                precio || null,
+                            imagen,
+                            url:
+                                href.startsWith(
+                                    "http"
+                                )
+                                    ? href
+                                    : `https://store.steampowered.com${href}`
+                        }
+                    );
+                }
+            }
+        );
+
+        const resultado =
+            [...items.values()];
+
+        console.log(
+            `[RUST STORE] HTML directo encontró ${resultado.length} artículos.`
+        );
+
+        return resultado;
+
+    } catch (error) {
+
+        console.error(
+            "[RUST STORE] ❌ Error HTML directo:",
+            error.message
+        );
+
+        return [];
+    }
+}
+
+// =====================================================
+// AJAX SOLO COMO RESPALDO
 // =====================================================
 
 async function obtenerDatosAjax() {
@@ -793,7 +1415,7 @@ async function obtenerDatosAjax() {
     try {
 
         console.log(
-            "[RUST STORE] Consultando ajaxgetitemdefs..."
+            "[RUST STORE] Consultando ajaxgetitemdefs como respaldo..."
         );
 
         const response =
@@ -808,8 +1430,10 @@ async function obtenerDatosAjax() {
                         cc: "us",
                         l: "english"
                     },
-                    headers: HEADERS,
-                    timeout: REQUEST_TIMEOUT
+                    headers:
+                        HEADERS,
+                    timeout:
+                        REQUEST_TIMEOUT
                 }
             );
 
@@ -825,7 +1449,7 @@ async function obtenerDatosAjax() {
     } catch (error) {
 
         console.error(
-            "[RUST STORE] ❌ Error AJAX:",
+            "[RUST STORE] Error AJAX:",
             error.message
         );
 
@@ -834,23 +1458,25 @@ async function obtenerDatosAjax() {
 }
 
 // =====================================================
-// BUSCAR DATOS AJAX DE UN ID
+// BUSCAR ITEM EN AJAX
 // =====================================================
 
-function buscarDatosEnAjax(
+function buscarItemAjax(
     ajax,
     id
 ) {
 
-    if (!ajax) {
+    if (
+        !ajax
+    ) {
         return null;
     }
 
     const objetivo =
         String(id);
 
-    const posibles =
-        [];
+    let resultado =
+        null;
 
     function recorrer(
         valor,
@@ -858,457 +1484,239 @@ function buscarDatosEnAjax(
     ) {
 
         if (
-            profundidad > 8 ||
+            resultado ||
+            profundidad > 10 ||
             valor == null
         ) {
             return;
         }
 
         if (
-            typeof valor ===
-            "object"
-        ) {
-
-            if (
-                !Array.isArray(valor)
-            ) {
-
-                for (
-                    const [clave, dato]
-                    of Object.entries(
-                        valor
-                    )
-                ) {
-
-                    if (
-                        String(clave) ===
-                        objetivo
-                    ) {
-
-                        posibles.push(
-                            dato
-                        );
-                    }
-
-                    recorrer(
-                        dato,
-                        profundidad + 1
-                    );
-                }
-
-            } else {
-
-                for (
-                    const dato
-                    of valor
-                ) {
-
-                    recorrer(
-                        dato,
-                        profundidad + 1
-                    );
-                }
-            }
-        }
-    }
-
-    recorrer(ajax);
-
-    return posibles[0] || null;
-}
-
-// =====================================================
-// EXTRAER NOMBRE
-// =====================================================
-
-function extraerNombreObjeto(
-    objeto
-) {
-
-    if (!objeto) {
-        return null;
-    }
-
-    const campos = [
-        "name",
-        "display_name",
-        "item_name",
-        "title",
-        "localized_name"
-    ];
-
-    for (
-        const campo
-        of campos
-    ) {
-
-        if (
-            typeof objeto[campo] ===
-            "string" &&
-            objeto[campo].trim()
-        ) {
-
-            return objeto[campo]
-                .trim();
-        }
-    }
-
-    return null;
-}
-
-// =====================================================
-// EXTRAER IMAGEN
-// =====================================================
-
-function extraerImagenObjeto(
-    objeto
-) {
-
-    if (!objeto) {
-        return null;
-    }
-
-    const campos = [
-        "image",
-        "image_url",
-        "imageurl",
-        "icon",
-        "icon_url",
-        "large_image",
-        "large_image_url"
-    ];
-
-    for (
-        const campo
-        of campos
-    ) {
-
-        if (
-            typeof objeto[campo] ===
-            "string" &&
-            /^https?:\/\//i.test(
-                objeto[campo]
+            Array.isArray(
+                valor
             )
         ) {
 
-            return objeto[campo];
-        }
-    }
+            for (
+                const elemento
+                of valor
+            ) {
 
-    return null;
-}
+                recorrer(
+                    elemento,
+                    profundidad + 1
+                );
 
-// =====================================================
-// EXTRAER PRECIO
-// =====================================================
+                if (resultado) {
+                    return;
+                }
+            }
 
-function extraerPrecioObjeto(
-    objeto
-) {
-
-    if (!objeto) {
-        return null;
-    }
-
-    const campos = [
-        "price",
-        "price_text",
-        "formatted_price",
-        "final_price"
-    ];
-
-    for (
-        const campo
-        of campos
-    ) {
-
-        if (
-            typeof objeto[campo] ===
-            "string" &&
-            objeto[campo].trim()
-        ) {
-
-            return objeto[campo]
-                .trim();
+            return;
         }
 
         if (
-            typeof objeto[campo] ===
-            "number"
+            typeof valor !==
+            "object"
+        ) {
+            return;
+        }
+
+        // =============================================
+        // COMPROBAR CAMPOS DE ID
+        // =============================================
+
+        const camposID = [
+            "itemdefid",
+            "item_def_id",
+            "itemid",
+            "item_id",
+            "defid",
+            "id"
+        ];
+
+        for (
+            const campo
+            of camposID
         ) {
 
-            return `$${(
-                objeto[campo] /
-                100
-            ).toFixed(2)}`;
+            if (
+                String(
+                    valor[campo]
+                ) ===
+                objetivo
+            ) {
+
+                resultado =
+                    valor;
+
+                return;
+            }
+        }
+
+        // =============================================
+        // RECURSIÓN
+        // =============================================
+
+        for (
+            const dato
+            of Object.values(
+                valor
+            )
+        ) {
+
+            recorrer(
+                dato,
+                profundidad + 1
+            );
+
+            if (resultado) {
+                return;
+            }
         }
     }
 
-    return null;
+    recorrer(
+        ajax
+    );
+
+    return resultado;
 }
 
 // =====================================================
-// DETALLE DEL ITEM
+// ENRIQUECER ITEMS
 // =====================================================
 
-async function obtenerDetalle(
-    id,
+function enriquecerItem(
+    item,
     ajax
 ) {
 
-    const url =
-        `${STEAM_DETAIL_URL}${id}/`;
-
-    try {
-
-        const html =
-            await obtenerHTML(
-                url
-            );
-
-        const $ =
-            cheerio.load(html);
-
-        let nombre = null;
-        let imagen = null;
-        let precio = null;
-
-        // -------------------------------------------------
-        // NOMBRE
-        // -------------------------------------------------
-
-        const selectoresNombre = [
-            ".itemstore_item_name",
-            ".itemstore_item_title",
-            ".item_desc_title",
-            ".item_name",
-            "h1",
-            "h2"
-        ];
-
-        for (
-            const selector
-            of selectoresNombre
-        ) {
-
-            const texto =
-                $(selector)
-                    .first()
-                    .text()
-                    .trim();
-
-            if (texto) {
-
-                nombre =
-                    texto;
-
-                break;
-            }
-        }
-
-        // -------------------------------------------------
-        // IMAGEN
-        // -------------------------------------------------
-
-        const imagenes =
-            $("img");
-
-        imagenes.each(
-            (_, elemento) => {
-
-                if (imagen) {
-                    return;
-                }
-
-                const src =
-                    $(elemento)
-                        .attr("src");
-
-                const dataSrc =
-                    $(elemento)
-                        .attr(
-                            "data-src"
-                        );
-
-                const candidata =
-                    src ||
-                    dataSrc;
-
-                if (
-                    candidata &&
-                    /^https?:\/\//i.test(
-                        candidata
-                    )
-                ) {
-
-                    if (
-                        !/avatar/i.test(
-                            candidata
-                        ) &&
-                        !/logo/i.test(
-                            candidata
-                        )
-                    ) {
-
-                        imagen =
-                            candidata;
-                    }
-                }
-            }
+    const datos =
+        buscarItemAjax(
+            ajax,
+            item.id
         );
 
-        // -------------------------------------------------
-        // PRECIO
-        // -------------------------------------------------
+    if (!datos) {
+        return item;
+    }
 
-        const selectoresPrecio = [
-            ".itemstore_item_price",
-            ".item_price",
-            ".price",
-            ".purchase_item_price"
+    if (
+        !item.nombre ||
+        item.nombre ===
+        "Rust Item Store"
+    ) {
+
+        const posiblesNombres = [
+            datos.name,
+            datos.display_name,
+            datos.item_name,
+            datos.title,
+            datos.localized_name
         ];
 
         for (
-            const selector
-            of selectoresPrecio
+            const nombre
+            of posiblesNombres
         ) {
 
-            const texto =
-                $(selector)
-                    .first()
-                    .text()
-                    .trim();
+            if (
+                typeof nombre ===
+                "string" &&
+                nombre.trim()
+            ) {
 
-            if (texto) {
-
-                precio =
-                    texto;
+                item.nombre =
+                    nombre.trim();
 
                 break;
             }
         }
+    }
 
-        // -------------------------------------------------
-        // JSON / AJAX COMO RESPALDO
-        // -------------------------------------------------
+    if (
+        !item.imagen
+    ) {
 
-        const datosAjax =
-            buscarDatosEnAjax(
-                ajax,
-                id
-            );
+        const posiblesImagenes = [
+            datos.image,
+            datos.image_url,
+            datos.imageurl,
+            datos.icon,
+            datos.icon_url,
+            datos.large_image,
+            datos.large_image_url
+        ];
 
-        if (!nombre) {
-            nombre =
-                extraerNombreObjeto(
-                    datosAjax
-                );
-        }
-
-        if (!imagen) {
-            imagen =
-                extraerImagenObjeto(
-                    datosAjax
-                );
-        }
-
-        if (!precio) {
-            precio =
-                extraerPrecioObjeto(
-                    datosAjax
-                );
-        }
-
-        // -------------------------------------------------
-        // FALLBACK DE META
-        // -------------------------------------------------
-
-        if (!nombre) {
-
-            const metaNombre =
-                $('meta[property="og:title"]')
-                    .attr("content");
-
-            if (metaNombre) {
-                nombre =
-                    metaNombre
-                        .replace(
-                            /\s*-\s*Rust.*$/i,
-                            ""
-                        )
-                        .trim();
-            }
-        }
-
-        if (!imagen) {
-
-            const metaImagen =
-                $('meta[property="og:image"]')
-                    .attr("content");
+        for (
+            const imagen
+            of posiblesImagenes
+        ) {
 
             if (
-                metaImagen &&
+                typeof imagen ===
+                "string" &&
                 /^https?:\/\//i.test(
-                    metaImagen
+                    imagen
                 )
             ) {
 
-                imagen =
-                    metaImagen;
+                item.imagen =
+                    imagen;
+
+                break;
             }
         }
-
-        if (!precio) {
-
-            const textoCompleto =
-                $("body")
-                    .text();
-
-            const match =
-                textoCompleto.match(
-                    /\$\s*\d+(?:[.,]\d{2})?/
-                );
-
-            if (match) {
-                precio =
-                    match[0]
-                        .replace(
-                            /\s+/g,
-                            ""
-                        );
-            }
-        }
-
-        return {
-            id,
-            nombre:
-                nombre || null,
-            imagen:
-                imagen || null,
-            precio:
-                precio || null,
-            url
-        };
-
-    } catch (error) {
-
-        console.error(
-            `[RUST STORE] Error obteniendo detail ${id}:`,
-            error.message
-        );
-
-        return {
-            id,
-            nombre: null,
-            imagen: null,
-            precio: null,
-            url
-        };
     }
+
+    if (
+        !item.precio
+    ) {
+
+        const posiblesPrecios = [
+            datos.price,
+            datos.price_text,
+            datos.formatted_price
+        ];
+
+        for (
+            const precio
+            of posiblesPrecios
+        ) {
+
+            if (
+                typeof precio ===
+                "string" &&
+                precio.trim()
+            ) {
+
+                item.precio =
+                    precio.trim();
+
+                break;
+            }
+
+            if (
+                typeof precio ===
+                "number"
+            ) {
+
+                item.precio =
+                    `$${(
+                        precio / 100
+                    ).toFixed(2)}`;
+
+                break;
+            }
+        }
+    }
+
+    return item;
 }
 
 // =====================================================
-// OBTENER TIENDA LIMITED COMPLETA
+// OBTENER TIENDA LIMITED
 // =====================================================
 
 async function obtenerTiendaLimited() {
@@ -1325,131 +1733,67 @@ async function obtenerTiendaLimited() {
         "[RUST STORE] ========================================"
     );
 
-    // =================================================
-    // 1. CHROME ES LA FUENTE DE VERDAD
-    // =================================================
-
-    let ids =
-        await obtenerIDsLimitedConChrome();
+    let items =
+        await obtenerItemsLimitedConChrome();
 
     // =================================================
-    // FALLBACK HTML SI CHROME NO OBTUVO NADA
+    // FALLBACK HTML
     // =================================================
 
     if (
-        !ids.length
+        !items.length
     ) {
 
-        console.log(
-            "[RUST STORE] Chrome no devolvió IDs. Probando HTML directo..."
-        );
-
-        try {
-
-            const html =
-                await obtenerHTML(
-                    STEAM_LIMITED_URL
-                );
-
-            ids =
-                extraerIDsDesdeHTML(
-                    html
-                );
-
-            console.log(
-                `[RUST STORE] IDs detectados en HTML directo: ${ids.length}`
-            );
-
-        } catch (error) {
-
-            console.error(
-                "[RUST STORE] Error obteniendo HTML:",
-                error.message
-            );
-        }
+        items =
+            await obtenerItemsDesdeHTML();
     }
 
-    ids =
-        [
-            ...new Set(
-                ids
-                    .filter(Boolean)
-                    .map(
-                        id => String(id)
-                    )
-            )
-        ];
-
     if (
-        !ids.length
+        !items.length
     ) {
 
         console.error(
-            "[RUST STORE] ❌ NO SE DETECTARON ITEMS LIMITED."
+            "[RUST STORE] ❌ No se detectaron artículos Limited."
         );
 
         return [];
     }
 
-    console.log(
-        `[RUST STORE] TOTAL IDS LIMITED REALES DETECTADOS: ${ids.length}`
-    );
-
-    console.log(
-        `[RUST STORE] IDS LIMITED: ${ids.join(", ")}`
-    );
-
     // =================================================
-    // 2. AJAX SOLO COMO ENRIQUECIMIENTO
+    // AJAX SOLO PARA COMPLETAR INFORMACIÓN
     // =================================================
 
     const ajax =
         await obtenerDatosAjax();
 
-    // =================================================
-    // 3. OBTENER DETALLES
-    // =================================================
-
-    const items =
-        [];
-
     for (
-        const id
-        of ids
+        const item
+        of items
     ) {
 
-        const item =
-            await obtenerDetalle(
-                id,
-                ajax
-            );
-
-        console.log(
-            `[RUST STORE] Detail ${id}: ` +
-            `${item.nombre || "SIN NOMBRE"} | ` +
-            `${item.precio || "SIN PRECIO"} | ` +
-            `${item.imagen ? "IMAGEN OK" : "SIN IMAGEN"}`
-        );
-
-        if (
-            item.nombre
-        ) {
-
-            items.push(
-                item
-            );
-        }
-
-        await esperar(
-            REQUEST_DELAY
+        enriquecerItem(
+            item,
+            ajax
         );
     }
 
     // =================================================
-    // 4. ELIMINAR DUPLICADOS
+    // LIMPIAR NOMBRES INCORRECTOS
     // =================================================
 
-    const finales =
+    items =
+        items.filter(
+            item =>
+                item.nombre &&
+                item.nombre !==
+                "Rust Item Store"
+        );
+
+    // =================================================
+    // DEDUPLICAR
+    // =================================================
+
+    items =
         [
             ...new Map(
                 items.map(
@@ -1463,20 +1807,31 @@ async function obtenerTiendaLimited() {
 
     console.log(
         `[RUST STORE] DATOS FINALES: ` +
-        `${finales.length}/${ids.length} con nombre, ` +
-        `${finales.filter(i => i.imagen).length}/${ids.length} con imagen, ` +
-        `${finales.filter(i => i.precio).length}/${ids.length} con precio.`
+        `${items.length} artículos válidos`
     );
+
+    for (
+        const item
+        of items
+    ) {
+
+        console.log(
+            `[RUST STORE] ${item.id}: ` +
+            `${item.nombre} | ` +
+            `${item.precio || "SIN PRECIO"} | ` +
+            `${item.imagen ? "IMAGEN OK" : "SIN IMAGEN"}`
+        );
+    }
 
     console.log(
-        `[RUST STORE] TOTAL FINAL: ${finales.length} artículos Limited encontrados.`
+        `[RUST STORE] TOTAL FINAL: ${items.length} artículos Limited encontrados.`
     );
 
-    return finales;
+    return items;
 }
 
 // =====================================================
-// EMBED
+// CREAR MENSAJE
 // =====================================================
 
 function crearMensajeItem(
@@ -1499,7 +1854,9 @@ function crearMensajeItem(
                     "Rust Store • Steam"
             });
 
-    if (item.imagen) {
+    if (
+        item.imagen
+    ) {
 
         embed.setImage(
             item.imagen
@@ -1532,7 +1889,7 @@ function crearMensajeItem(
 }
 
 // =====================================================
-// PUBLICAR TIENDA
+// PUBLICAR TIENDA EN CANAL
 // =====================================================
 
 async function publicarTiendaEnCanal(
@@ -1585,7 +1942,7 @@ async function publicarTiendaEnCanal(
 }
 
 // =====================================================
-// PUBLICACIÓN MANUAL /TIENDA
+// /TIENDA MANUAL
 // =====================================================
 
 async function publicarTiendaManual(
@@ -1614,14 +1971,14 @@ async function publicarTiendaManual(
             `[RUST STORE] Publicando ${items.length} artículos...`
         );
 
-        // Primer mensaje: respuesta del comando
+        // Primer artículo
         await interaction.editReply(
             crearMensajeItem(
                 items[0]
             )
         );
 
-        // Resto: mensajes normales
+        // Resto
         for (
             let i = 1;
             i < items.length;
@@ -1661,7 +2018,7 @@ async function publicarTiendaManual(
 }
 
 // =====================================================
-// FIRMA DE LA TIENDA
+// FIRMA
 // =====================================================
 
 function generarFirmaTienda(
@@ -1689,14 +2046,16 @@ function generarFirmaTienda(
 }
 
 // =====================================================
-// REVISIÓN AUTOMÁTICA
+// AUTOMÁTICO
 // =====================================================
 
 async function revisarTiendaAutomatica(
     client
 ) {
 
-    if (tiendaRevisando) {
+    if (
+        tiendaRevisando
+    ) {
 
         console.log(
             "[RUST STORE] Ya hay una revisión en curso. Saltando..."
@@ -1705,7 +2064,8 @@ async function revisarTiendaAutomatica(
         return;
     }
 
-    tiendaRevisando = true;
+    tiendaRevisando =
+        true;
 
     try {
 
@@ -1738,10 +2098,15 @@ async function revisarTiendaAutomatica(
 
         const configs =
             await ServerConfig.find({
-                rustStoreEnabled: true,
+                rustStoreEnabled:
+                    true,
+
                 rustStoreChannelId: {
-                    $exists: true,
-                    $ne: null
+                    $exists:
+                        true,
+
+                    $ne:
+                        null
                 }
             });
 
@@ -1810,7 +2175,7 @@ async function revisarTiendaAutomatica(
                 }
 
                 // =========================================
-                // TIENDA SIN CAMBIOS
+                // SIN CAMBIOS
                 // =========================================
 
                 if (
@@ -1848,7 +2213,6 @@ async function revisarTiendaAutomatica(
                     continue;
                 }
 
-                // Guardar firma SOLO después de publicar
                 config.rustStoreLastSignature =
                     firmaActual;
 
@@ -1876,7 +2240,8 @@ async function revisarTiendaAutomatica(
 
     } finally {
 
-        tiendaRevisando = false;
+        tiendaRevisando =
+            false;
     }
 }
 
@@ -1896,18 +2261,16 @@ function iniciarTiendaAutomatica(
         `[RUST STORE] Intervalo: ${CHECK_INTERVAL / 60000} minutos`
     );
 
-    // Primera comprobación
     revisarTiendaAutomatica(
         client
     ).catch(
         error =>
             console.error(
-                "[RUST STORE] Error en primera revisión:",
+                "[RUST STORE] Error primera revisión:",
                 error
             )
     );
 
-    // Revisiones periódicas
     setInterval(
         () => {
 
@@ -1916,7 +2279,7 @@ function iniciarTiendaAutomatica(
             ).catch(
                 error =>
                     console.error(
-                        "[RUST STORE] Error en revisión automática:",
+                        "[RUST STORE] Error revisión automática:",
                         error
                     )
             );
