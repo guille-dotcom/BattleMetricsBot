@@ -8,21 +8,52 @@ const BASE_URL = "https://steamhistory.net/id";
 
 const REQUEST_TIMEOUT = 20000;
 
+// =====================================================
+// HEADERS
+// =====================================================
+
 const HEADERS = {
     "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
 
     "Accept":
-        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
 
     "Accept-Language":
-        "en-US,en;q=0.9",
+        "es-CL,es;q=0.9,en-US;q=0.8,en;q=0.7",
+
+    "Accept-Encoding":
+        "gzip, deflate, br",
 
     "Cache-Control":
         "no-cache",
 
     "Pragma":
-        "no-cache"
+        "no-cache",
+
+    "Sec-Ch-Ua":
+        '"Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"',
+
+    "Sec-Ch-Ua-Mobile":
+        "?0",
+
+    "Sec-Ch-Ua-Platform":
+        '"Windows"',
+
+    "Sec-Fetch-Dest":
+        "document",
+
+    "Sec-Fetch-Mode":
+        "navigate",
+
+    "Sec-Fetch-Site":
+        "none",
+
+    "Sec-Fetch-User":
+        "?1",
+
+    "Upgrade-Insecure-Requests":
+        "1"
 };
 
 // =====================================================
@@ -30,15 +61,20 @@ const HEADERS = {
 // =====================================================
 
 function decodeJsString(text) {
+    if (!text) {
+        return "";
+    }
+
     try {
         return JSON.parse(`"${text}"`);
     } catch {
-        return String(text || "")
+        return String(text)
             .replace(/\\"/g, '"')
             .replace(/\\\\/g, "\\")
             .replace(/\\n/g, "\n")
             .replace(/\\r/g, "\r")
-            .replace(/\\t/g, "\t");
+            .replace(/\\t/g, "\t")
+            .trim();
     }
 }
 
@@ -72,106 +108,209 @@ function convertirTimestamp(timestamp) {
 }
 
 // =====================================================
-// EXTRAER HISTORIAL DE NOMBRES
+// BUSCAR BLOQUE PERSONA
+// =====================================================
+
+function localizarPersona(html) {
+    if (!html) {
+        return null;
+    }
+
+    const patrones = [
+
+        // Formato normal
+        /["']?historic["']?\s*:\s*\{\s*["']?persona["']?\s*:\s*\[/i,
+
+        // Por si viene escapado
+        /\\"historic\\"\s*:\s*\{\s*\\"persona\\"\s*:\s*\[/i,
+
+        // Variante Svelte serializada
+        /historic\s*:\s*\{\s*persona\s*:\s*\[/i
+    ];
+
+    for (const regex of patrones) {
+
+        const match = regex.exec(html);
+
+        if (match) {
+
+            console.log(
+                "✅ SteamHistory: encontrado bloque historic.persona"
+            );
+
+            return {
+                index:
+                    match.index +
+                    match[0].length
+            };
+        }
+    }
+
+    return null;
+}
+
+// =====================================================
+// EXTRAER HISTORIAL
 // =====================================================
 
 function extraerPersonaHistory(html) {
+
     const resultado = [];
 
     if (!html) {
         return resultado;
     }
 
-    // Busca:
-    //
-    // historic: {
-    //     persona: [...]
-    // }
+    const persona =
+        localizarPersona(html);
 
-    const historicRegex =
-        /["']?historic["']?\s*:\s*\{\s*["']?persona["']?\s*:\s*\[/i;
+    if (!persona) {
 
-    const historicMatch =
-        historicRegex.exec(html);
-
-    if (!historicMatch) {
         console.log(
-            "⚠️ SteamHistory: no se encontró userdata.historic.persona"
+            "⚠️ SteamHistory: no se encontró historic.persona"
+        );
+
+        // DEBUG CONTROLADO
+        console.log(
+            `📄 SteamHistory: HTML recibido: ${html.length} caracteres`
         );
 
         return resultado;
     }
 
     const inicio =
-        historicMatch.index +
-        historicMatch[0].length;
+        persona.index;
 
     const resto =
         html.substring(inicio);
 
-    // El historial persona termina antes de realName
+    // =================================================
+    // LOCALIZAR FINAL DEL ARRAY
+    // =================================================
 
-    const finMatch =
-        resto.search(
-            /\]\s*,\s*["']?realName["']?\s*:/
-        );
+    let fin = -1;
+
+    const finales = [
+
+        /\]\s*,\s*["']?realName["']?\s*:/i,
+
+        /\]\s*,\s*["']?realname["']?\s*:/i,
+
+        /\]\s*,\s*realName\s*:/i,
+
+        /\]\s*,\s*realname\s*:/i
+    ];
+
+    for (const regex of finales) {
+
+        const match =
+            regex.exec(resto);
+
+        if (match) {
+
+            fin =
+                match.index;
+
+            break;
+        }
+    }
 
     const bloque =
-        finMatch !== -1
-            ? resto.substring(0, finMatch)
-            : resto.substring(0, 200000);
+        fin !== -1
+            ? resto.substring(0, fin)
+            : resto.substring(0, 250000);
 
     if (!bloque) {
         return resultado;
     }
 
-    // Extraer:
+    console.log(
+        `📄 SteamHistory: bloque persona ${bloque.length} caracteres`
+    );
 
-    // Name
-    // Timestamp
-    // Estimated
-    // Hidden
+    // =================================================
+    // EXTRAER OBJETOS
+    // =================================================
 
-    const itemRegex =
-        /["']?Name["']?\s*:\s*"((?:\\.|[^"\\])*)"\s*,\s*["']?Timestamp["']?\s*:\s*(\d+)(?:\s*,\s*["']?Estimated["']?\s*:\s*(\d+))?(?:\s*,\s*["']?Hidden["']?\s*:\s*(\d+))?/g;
+    const patrones = [
 
-    let match;
+        // Formato:
+        // Name: "...", Timestamp: 123
+        /["']?Name["']?\s*:\s*"((?:\\.|[^"\\])*)"\s*,\s*["']?Timestamp["']?\s*:\s*(\d+)(?:\s*,\s*["']?Estimated["']?\s*:\s*(\d+))?(?:\s*,\s*["']?Hidden["']?\s*:\s*(\d+))?/g,
 
-    while (
-        (match = itemRegex.exec(bloque)) !== null
-    ) {
-        const nombre =
-            limpiarNombre(
-                decodeJsString(match[1])
-            );
+        // Formato con comillas escapadas
+        /\\"Name\\"\s*:\s*\\"((?:\\.|[^"\\])*)\\"\s*,\s*\\"Timestamp\\"\s*:\s*(\d+)(?:\s*,\s*\\"Estimated\\"\s*:\s*(\d+))?(?:\s*,\s*\\"Hidden\\"\s*:\s*(\d+))?/g
+    ];
 
-        const timestamp =
-            Number(match[2]);
+    for (const itemRegex of patrones) {
 
-        const estimated =
-            Number(match[3] || 0);
+        let match;
 
-        const hidden =
-            Number(match[4] || 0);
+        while (
+            (match =
+                itemRegex.exec(
+                    bloque
+                )) !== null
+        ) {
 
-        if (!nombre) {
-            continue;
+            const nombre =
+                limpiarNombre(
+                    decodeJsString(
+                        match[1]
+                    )
+                );
+
+            const timestamp =
+                Number(match[2]);
+
+            const estimated =
+                Number(
+                    match[3] || 0
+                );
+
+            const hidden =
+                Number(
+                    match[4] || 0
+                );
+
+            if (!nombre) {
+                continue;
+            }
+
+            if (
+                !Number.isFinite(
+                    timestamp
+                )
+            ) {
+                continue;
+            }
+
+            const fecha =
+                convertirTimestamp(
+                    timestamp
+                );
+
+            resultado.push({
+                name:
+                    nombre,
+
+                timestamp:
+                    timestamp,
+
+                date:
+                    fecha,
+
+                estimated:
+                    estimated,
+
+                hidden:
+                    hidden
+            });
         }
-
-        const fecha =
-            convertirTimestamp(timestamp);
-
-        resultado.push({
-            name: nombre,
-            timestamp,
-            date: fecha,
-            estimated,
-            hidden
-        });
     }
 
     // =================================================
-    // ORDENAR MÁS RECIENTE → MÁS ANTIGUO
+    // ORDENAR
     // =================================================
 
     resultado.sort(
@@ -181,14 +320,37 @@ function extraerPersonaHistory(html) {
     );
 
     // =================================================
-    // ELIMINAR DUPLICADOS CONSECUTIVOS
+    // ELIMINAR DUPLICADOS
     // =================================================
 
     const limpio = [];
 
+    const vistos = new Set();
+
     for (const item of resultado) {
+
+        const key =
+            `${item.name.toLowerCase()}_${item.timestamp}`;
+
+        if (vistos.has(key)) {
+            continue;
+        }
+
+        vistos.add(key);
+
+        limpio.push(item);
+    }
+
+    // =================================================
+    // ELIMINAR NOMBRES CONSECUTIVOS IGUALES
+    // =================================================
+
+    const final = [];
+
+    for (const item of limpio) {
+
         const anterior =
-            limpio[limpio.length - 1];
+            final[final.length - 1];
 
         if (
             anterior &&
@@ -198,10 +360,10 @@ function extraerPersonaHistory(html) {
             continue;
         }
 
-        limpio.push(item);
+        final.push(item);
     }
 
-    return limpio;
+    return final;
 }
 
 // =====================================================
@@ -209,10 +371,14 @@ function extraerPersonaHistory(html) {
 // =====================================================
 
 async function getSteamHistory(steamId64) {
+
     if (
         !steamId64 ||
-        !/^\d{17}$/.test(String(steamId64))
+        !/^\d{17}$/.test(
+            String(steamId64)
+        )
     ) {
+
         throw new Error(
             "SteamID64 inválido para SteamHistory.net."
         );
@@ -222,6 +388,7 @@ async function getSteamHistory(steamId64) {
         `${BASE_URL}/${steamId64}`;
 
     try {
+
         console.log(
             `📜 SteamHistory: consultando ${steamId64}`
         );
@@ -236,6 +403,9 @@ async function getSteamHistory(steamId64) {
                     headers:
                         HEADERS,
 
+                    maxRedirects:
+                        5,
+
                     validateStatus:
                         status =>
                             status >= 200 &&
@@ -248,9 +418,18 @@ async function getSteamHistory(steamId64) {
                 response.data || ""
             );
 
+        console.log(
+            `📄 SteamHistory: HTTP ${response.status}`
+        );
+
+        console.log(
+            `📄 SteamHistory: respuesta ${html.length} caracteres`
+        );
+
         if (!html) {
+
             console.log(
-                "⚠️ SteamHistory: respuesta HTML vacía."
+                "⚠️ SteamHistory: respuesta vacía."
             );
 
             return {
@@ -276,11 +455,22 @@ async function getSteamHistory(steamId64) {
         };
 
     } catch (error) {
+
         console.error(
             "❌ Error consultando SteamHistory.net:",
             error.response?.status ||
+            error.code ||
             error.message
         );
+
+        if (
+            error.response?.status
+        ) {
+
+            console.error(
+                `❌ SteamHistory HTTP ${error.response.status}`
+            );
+        }
 
         return {
             steamId64,
