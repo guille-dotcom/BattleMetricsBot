@@ -55,10 +55,6 @@ async function getSteamIDData(input) {
             }
         );
 
-        // ==========================================
-        // MOSTRAR RESPUESTA COMPLETA
-        // ==========================================
-
         console.log("==============================================");
         console.log("RESPUESTA DE STEAMID.UK");
         console.log("==============================================");
@@ -86,6 +82,91 @@ async function getSteamIDData(input) {
                 "SteamID.uk rechazó la solicitud."
             );
         }
+
+        // ==========================================
+        // PRUEBA PLUGIN.PHP
+        // ==========================================
+        //
+        // NO afecta al resultado principal.
+        // Solo consulta el endpoint utilizado
+        // por el plugin público de SteamID.uk.
+        //
+        // El plugin utiliza:
+        //
+        // api        = API Key
+        // player     = SteamID64
+        // serverport = puerto del servidor
+        //
+        // ==========================================
+
+        console.log("");
+        console.log("==============================================");
+        console.log("PRUEBA STEAMID.UK PLUGIN.PHP");
+        console.log("==============================================");
+
+        try {
+
+            const pluginResponse = await axios.get(
+                "https://steamidapi.uk/plugin.php",
+                {
+                    params: {
+                        api: apiKey,
+                        player: input,
+                        serverport: "28015"
+                    },
+
+                    timeout: 15000,
+
+                    headers: {
+                        "User-Agent":
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+                        "Accept":
+                            "application/json, text/plain, */*"
+                    }
+                }
+            );
+
+            console.log("STATUS PLUGIN:", pluginResponse.status);
+
+            console.log("----------------------------------------------");
+            console.log("RESPUESTA COMPLETA PLUGIN.PHP");
+            console.log("----------------------------------------------");
+
+            console.log(
+                typeof pluginResponse.data === "string"
+                    ? pluginResponse.data
+                    : JSON.stringify(
+                        pluginResponse.data,
+                        null,
+                        2
+                    )
+            );
+
+            console.log("----------------------------------------------");
+            console.log("FIN PLUGIN.PHP");
+            console.log("==============================================");
+
+        } catch (pluginError) {
+
+            console.error(
+                "❌ ERROR PLUGIN.PHP:"
+            );
+
+            console.error(
+                pluginError.response?.status ||
+                pluginError.message
+            );
+
+            console.error(
+                pluginError.response?.data || ""
+            );
+
+            console.log("==============================================");
+        }
+
+        // ==========================================
+        // DEVOLVER API PRINCIPAL
+        // ==========================================
 
         return response.data;
 
