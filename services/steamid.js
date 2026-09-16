@@ -1,137 +1,514 @@
-const axios = require("axios");
+const {
+    SlashCommandBuilder,
+    EmbedBuilder
+} = require("discord.js");
+
+const {
+    getSteamIDData
+} = require("../services/steamid.js");
 
 // =====================================================
-// STEAMID.UK
-// API GLOBAL PARA TODOS LOS SERVIDORES DE DISCORD
+// UTILIDADES
 // =====================================================
 
-async function getSteamIDData(input) {
+function escaparTexto(texto) {
 
-    const apiKey = process.env.STEAMID_API_KEY;
-    const myId = process.env.STEAMID_MYID;
+    return String(texto || "")
+        .replace(/\\/g, "\\\\")
+        .replace(/`/g, "\\`");
+}
 
-    // ==========================================
-    // COMPROBAR VARIABLES DE ENTORNO
-    // ==========================================
+function estadoBan(valor) {
 
-    if (!apiKey) {
-        throw new Error(
-            "Falta la variable de entorno STEAMID_API_KEY."
-        );
-    }
+    return String(valor) === "1"
+        ? "🔴 Sí"
+        : "🟢 No";
+}
 
-    if (!myId) {
-        throw new Error(
-            "Falta la variable de entorno STEAMID_MYID."
-        );
-    }
+function obtenerNumero(valor) {
 
-    // ==========================================
-    // VALIDAR INPUT
-    // ==========================================
+    const numero =
+        Number(valor);
 
-    if (!input || !/^\d{17}$/.test(input)) {
-        throw new Error(
-            "El SteamID introducido no es válido."
-        );
-    }
-
-    // ==========================================
-    // CONSULTAR API STEAMID.UK
-    // ==========================================
-
-    try {
-
-        const response = await axios.get(
-            "https://steamidapi.uk/v2/steamid.php",
-            {
-                params: {
-                    myid: myId,
-                    apikey: apiKey,
-                    input: input
-                },
-
-                timeout: 15000
-            }
-        );
-
-        // ==========================================
-        // MOSTRAR RESPUESTA COMPLETA EN LOG
-        // ==========================================
-
-        console.log(
-            "=============================================="
-        );
-
-        console.log(
-            "RESPUESTA DE STEAMID.UK"
-        );
-
-        console.log(
-            "=============================================="
-        );
-
-        console.log(
-            JSON.stringify(
-                response.data,
-                null,
-                2
-            )
-        );
-
-        console.log(
-            "=============================================="
-        );
-
-        // ==========================================
-        // COMPROBAR RESPUESTA
-        // ==========================================
-
-        if (!response.data) {
-
-            throw new Error(
-                "SteamID.uk devolvió una respuesta vacía."
-            );
-        }
-
-        if (!response.data.auth) {
-
-            throw new Error(
-                "SteamID.uk devolvió una respuesta inválida."
-            );
-        }
-
-        if (
-            response.data.auth.auth !== "ok"
-        ) {
-
-            throw new Error(
-                "SteamID.uk rechazó la solicitud."
-            );
-        }
-
-        // ==========================================
-        // DEVOLVER RESPUESTA ORIGINAL
-        // ==========================================
-
-        return response.data;
-
-    } catch (error) {
-
-        console.error(
-            "❌ Error en SteamID.uk API:",
-            error.response?.data ||
-            error.message
-        );
-
-        throw error;
-    }
+    return Number.isFinite(numero)
+        ? numero
+        : 0;
 }
 
 // =====================================================
-// EXPORT
+// COMANDO /STEAMID
 // =====================================================
 
 module.exports = {
-    getSteamIDData
+
+    data:
+        new SlashCommandBuilder()
+
+            .setName("steamid")
+
+            .setDescription(
+                "Consulta información de un SteamID64"
+            )
+
+            .addStringOption(
+                option =>
+                    option
+
+                        .setName("steamid")
+
+                        .setDescription(
+                            "SteamID64 del jugador"
+                        )
+
+                        .setRequired(true)
+            ),
+
+    async execute(interaction) {
+
+        await interaction.deferReply();
+
+        const steamId =
+            interaction.options
+                .getString("steamid")
+                .trim();
+
+        // ==========================================
+        // VALIDAR STEAMID64
+        // ==========================================
+
+        if (
+            !/^\d{17}$/.test(steamId)
+        ) {
+
+            return await interaction.editReply(
+                "❌ Debes introducir un SteamID64 válido de 17 números."
+            );
+        }
+
+        console.log(
+            "🎯 Ejecutando /steamid"
+        );
+
+        console.log(
+            `🆔 SteamID64: ${steamId}`
+        );
+
+        console.log(
+            "=============================================="
+        );
+
+        // ==========================================
+        // URLS
+        // ==========================================
+
+        const steamProfileUrl =
+            `https://steamcommunity.com/profiles/${steamId}`;
+
+        const steamIdUkUrl =
+            `https://steamid.uk/profile/${steamId}`;
+
+        const steamHistoryUrl =
+            `https://steamhistory.net/id/${steamId}`;
+
+        // ==========================================
+        // CONSULTAR STEAMID.UK
+        // ==========================================
+
+        let data;
+
+        try {
+
+            data =
+                await getSteamIDData(
+                    steamId
+                );
+
+        } catch (error) {
+
+            console.error(
+                "❌ Error SteamID.uk:",
+                error.message
+            );
+
+            return await interaction.editReply(
+                "❌ No se pudo obtener la información desde SteamID.uk."
+            );
+        }
+
+        // ==========================================
+        // SECCIONES DE LA API
+        // ==========================================
+
+        const profile =
+            data?.profile || {};
+
+        const bans =
+            data?.profile_bans || {};
+
+        const steamidData =
+            data?.steamid_data || {};
+
+        // ==========================================
+        // IDENTIFICADORES
+        // ==========================================
+
+        const steam2 =
+            profile?.steamid ||
+            "No disponible";
+
+        const steam3 =
+            profile?.steam3 ||
+            "No disponible";
+
+        const csgoFriend =
+            profile?.csgofriend ||
+            "No disponible";
+
+        // ==========================================
+        // BANS
+        // ==========================================
+
+        const vac =
+            bans?.vac || "0";
+
+        const gameBans =
+            obtenerNumero(
+                bans?.amount_game_bans
+            );
+
+        const tradeBan =
+            bans?.tradeban || "0";
+
+        const communityBan =
+            bans?.communityban || "0";
+
+        const steamIdBan =
+            bans?.steamid_ban || "0";
+
+        const rustHackReport =
+            bans?.rusthackreport || "0";
+
+        // ==========================================
+        // AMIGOS
+        // ==========================================
+
+        const amigos =
+            obtenerNumero(
+                steamidData?.friend_count
+            );
+
+        const amigosVac =
+            obtenerNumero(
+                steamidData?.vac_banned_friends
+            );
+
+        const amigosGameBan =
+            obtenerNumero(
+                steamidData?.game_banned_friends
+            );
+
+        const amigosTradeBan =
+            obtenerNumero(
+                steamidData?.trade_banned_friends
+            );
+
+        const amigosCommunityBan =
+            obtenerNumero(
+                steamidData?.community_banned_friends
+            );
+
+        // ==========================================
+        // CREAR EMBED
+        // ==========================================
+
+        const embed =
+            new EmbedBuilder()
+
+                .setTitle(
+                    "🔎 Información SteamID"
+                )
+
+                .setColor(
+                    "#57F287"
+                );
+
+        // ==========================================
+        // IDENTIFICADORES
+        // ==========================================
+
+        embed.addFields({
+
+            name:
+                "🆔 SteamID64",
+
+            value:
+                `\`${steamId}\``,
+
+            inline:
+                false
+
+        });
+
+        embed.addFields({
+
+            name:
+                "Steam2",
+
+            value:
+                `\`${escaparTexto(steam2)}\``,
+
+            inline:
+                false
+
+        });
+
+        embed.addFields({
+
+            name:
+                "Steam3",
+
+            value:
+                `\`${escaparTexto(steam3)}\``,
+
+            inline:
+                false
+
+        });
+
+        embed.addFields({
+
+            name:
+                "CSGO Friend ID",
+
+            value:
+                `\`${escaparTexto(csgoFriend)}\``,
+
+            inline:
+                false
+
+        });
+
+        // ==========================================
+        // PERFILES
+        // ==========================================
+
+        embed.addFields({
+
+            name:
+                "🔗 Perfil SteamID.uk",
+
+            value:
+                `[Abrir perfil](${steamIdUkUrl})`,
+
+            inline:
+                true
+
+        });
+
+        embed.addFields({
+
+            name:
+                "🎮 Perfil de Steam",
+
+            value:
+                `[Abrir perfil](${steamProfileUrl})`,
+
+            inline:
+                true
+
+        });
+
+        embed.addFields({
+
+            name:
+                "📜 SteamHistory",
+
+            value:
+                `[Ver historial completo](${steamHistoryUrl})`,
+
+            inline:
+                true
+
+        });
+
+        // ==========================================
+        // BANS
+        // ==========================================
+
+        embed.addFields({
+
+            name:
+                "🛡️ VAC",
+
+            value:
+                estadoBan(vac),
+
+            inline:
+                true
+
+        });
+
+        embed.addFields({
+
+            name:
+                "🔨 Game Bans",
+
+            value:
+                `\`${gameBans}\``,
+
+            inline:
+                true
+
+        });
+
+        embed.addFields({
+
+            name:
+                "🚫 Trade Ban",
+
+            value:
+                estadoBan(tradeBan),
+
+            inline:
+                true
+
+        });
+
+        embed.addFields({
+
+            name:
+                "🏛️ Community Ban",
+
+            value:
+                estadoBan(communityBan),
+
+            inline:
+                true
+
+        });
+
+        embed.addFields({
+
+            name:
+                "🆔 SteamID Ban",
+
+            value:
+                estadoBan(steamIdBan),
+
+            inline:
+                true
+
+        });
+
+        embed.addFields({
+
+            name:
+                "🦀 RustHackReport",
+
+            value:
+                estadoBan(rustHackReport),
+
+            inline:
+                true
+
+        });
+
+        // ==========================================
+        // AMIGOS
+        // ==========================================
+
+        embed.addFields({
+
+            name:
+                "👥 Amigos",
+
+            value:
+                `\`${amigos}\``,
+
+            inline:
+                true
+
+        });
+
+        embed.addFields({
+
+            name:
+                "👤 Amigos con VAC",
+
+            value:
+                `\`${amigosVac}\``,
+
+            inline:
+                true
+
+        });
+
+        embed.addFields({
+
+            name:
+                "⚠️ Amigos con Game Ban",
+
+            value:
+                `\`${amigosGameBan}\``,
+
+            inline:
+                true
+
+        });
+
+        embed.addFields({
+
+            name:
+                "🚫 Amigos con Trade Ban",
+
+            value:
+                `\`${amigosTradeBan}\``,
+
+            inline:
+                true
+
+        });
+
+        embed.addFields({
+
+            name:
+                "🏛️ Amigos con Community Ban",
+
+            value:
+                `\`${amigosCommunityBan}\``,
+
+            inline:
+                true
+
+        });
+
+        // ==========================================
+        // FOOTER
+        // ==========================================
+
+        embed
+
+            .setTimestamp()
+
+            .setFooter({
+                text:
+                    "RustLogix • SteamID.uk • SteamHistory.net"
+            });
+
+        // ==========================================
+        // RESPUESTA
+        // ==========================================
+
+        console.log(
+            "✅ /steamid terminado"
+        );
+
+        return await interaction.editReply({
+
+            embeds: [
+                embed
+            ]
+
+        });
+    }
 };
