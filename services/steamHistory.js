@@ -9,15 +9,15 @@ const BASE_URL = "https://steamhistory.net/id";
 const REQUEST_TIMEOUT = 20000;
 
 // =====================================================
-// HEADERS BASE
+// HEADERS
 // =====================================================
 
-const BASE_HEADERS = {
+const HEADERS = {
     "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
 
     "Accept":
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "application/json,text/plain,*/*",
 
     "Accept-Language":
         "es-CL,es;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -28,8 +28,8 @@ const BASE_HEADERS = {
     "Pragma":
         "no-cache",
 
-    "Upgrade-Insecure-Requests":
-        "1",
+    "Referer":
+        "https://steamhistory.net/",
 
     "Sec-Ch-Ua":
         '"Chromium";v="140", "Google Chrome";v="140", "Not=A?Brand";v="24"',
@@ -41,36 +41,27 @@ const BASE_HEADERS = {
         '"Windows"',
 
     "Sec-Fetch-Dest":
-        "document",
+        "empty",
 
     "Sec-Fetch-Mode":
-        "navigate",
-
-    "Sec-Fetch-User":
-        "?1",
+        "cors",
 
     "Sec-Fetch-Site":
-        "none"
+        "same-origin"
 };
 
 // =====================================================
-// DECODIFICAR STRING JAVASCRIPT
+// DECODIFICAR STRING
 // =====================================================
 
 function decodeJsString(text) {
-
     if (!text) {
         return "";
     }
 
     try {
-
-        return JSON.parse(
-            `"${text}"`
-        );
-
+        return JSON.parse(`"${text}"`);
     } catch {
-
         return String(text)
             .replace(/\\"/g, '"')
             .replace(/\\\\/g, "\\")
@@ -86,7 +77,6 @@ function decodeJsString(text) {
 // =====================================================
 
 function limpiarNombre(nombre) {
-
     return String(nombre || "")
         .replace(/<[^>]+>/g, "")
         .replace(/&amp;/gi, "&")
@@ -102,170 +92,508 @@ function limpiarNombre(nombre) {
 // =====================================================
 
 function convertirTimestamp(timestamp) {
+    const numero = Number(timestamp);
 
-    const numero =
+    if (!Number.isFinite(numero) || numero <= 0) {
+        return null;
+    }
+
+    return new Date(numero * 1000);
+}
+
+// =====================================================
+// AÑADIR NOMBRE
+// =====================================================
+
+function agregarNombre(resultado, item) {
+    if (!item) {
+        return;
+    }
+
+    let nombre = null;
+    let timestamp = null;
+    let estimated = 0;
+    let hidden = 0;
+
+    // ================================================
+    // FORMATO NORMAL
+    // ================================================
+
+    if (typeof item === "object") {
+        nombre =
+            item.Name ??
+            item.name ??
+            item.personaName ??
+            item.personaname ??
+            null;
+
+        timestamp =
+            item.Timestamp ??
+            item.timestamp ??
+            item.TimeStamp ??
+            null;
+
+        estimated =
+            Number(
+                item.Estimated ??
+                item.estimated ??
+                0
+            );
+
+        hidden =
+            Number(
+                item.Hidden ??
+                item.hidden ??
+                0
+            );
+    }
+
+    // ================================================
+    // FORMATO ARRAY
+    // ================================================
+
+    if (
+        Array.isArray(item)
+    ) {
+        nombre =
+            item[0] ??
+            item.Name ??
+            item.name ??
+            null;
+
+        timestamp =
+            item[1] ??
+            item.Timestamp ??
+            item.timestamp ??
+            null;
+
+        estimated =
+            Number(
+                item[2] ??
+                0
+            );
+
+        hidden =
+            Number(
+                item[3] ??
+                0
+            );
+    }
+
+    if (!nombre) {
+        return;
+    }
+
+    const nombreLimpio =
+        limpiarNombre(nombre);
+
+    if (!nombreLimpio) {
+        return;
+    }
+
+    const numeroTimestamp =
         Number(timestamp);
 
     if (
-        !Number.isFinite(numero) ||
-        numero <= 0
+        !Number.isFinite(
+            numeroTimestamp
+        )
     ) {
-        return null;
+        return;
     }
 
-    return new Date(
-        numero * 1000
-    );
+    resultado.push({
+        name:
+            nombreLimpio,
+
+        timestamp:
+            numeroTimestamp,
+
+        date:
+            convertirTimestamp(
+                numeroTimestamp
+            ),
+
+        estimated,
+
+        hidden
+    });
 }
 
 // =====================================================
-// LOCALIZAR HISTORIC.PERSONA
+// BUSCAR PERSONA RECURSIVAMENTE
 // =====================================================
 
-function localizarPersona(html) {
-
-    if (!html) {
-        return null;
+function buscarPersona(
+    objeto,
+    resultado,
+    profundidad = 0
+) {
+    if (
+        objeto === null ||
+        objeto === undefined
+    ) {
+        return;
     }
 
-    const patrones = [
+    if (profundidad > 20) {
+        return;
+    }
 
-        /["']?historic["']?\s*:\s*\{\s*["']?persona["']?\s*:\s*\[/i,
+    // ================================================
+    // ARRAY
+    // ================================================
 
-        /\\"historic\\"\s*:\s*\{\s*\\"persona\\"\s*:\s*\[/i,
-
-        /historic\s*:\s*\{\s*persona\s*:\s*\[/i
-    ];
-
-    for (
-        const regex of patrones
+    if (
+        Array.isArray(objeto)
     ) {
 
-        const match =
-            regex.exec(html);
+        // Si parece ser el array persona
+        // intentamos interpretar sus elementos.
 
-        if (match) {
+        for (
+            const item of objeto
+        ) {
 
-            console.log(
-                "✅ SteamHistory: encontrado historic.persona"
+            if (
+                item &&
+                typeof item === "object" &&
+                !Array.isArray(item)
+            ) {
+
+                const tieneNombre =
+                    item.Name !== undefined ||
+                    item.name !== undefined;
+
+                const tieneTimestamp =
+                    item.Timestamp !== undefined ||
+                    item.timestamp !== undefined;
+
+                if (
+                    tieneNombre &&
+                    tieneTimestamp
+                ) {
+
+                    agregarNombre(
+                        resultado,
+                        item
+                    );
+
+                    continue;
+                }
+            }
+
+            buscarPersona(
+                item,
+                resultado,
+                profundidad + 1
             );
+        }
 
-            return (
-                match.index +
-                match[0].length
+        return;
+    }
+
+    // ================================================
+    // OBJETO
+    // ================================================
+
+    if (
+        typeof objeto !== "object"
+    ) {
+        return;
+    }
+
+    // ================================================
+    // ENCONTRAMOS historic
+    // ================================================
+
+    if (
+        objeto.historic &&
+        typeof objeto.historic === "object"
+    ) {
+
+        const historic =
+            objeto.historic;
+
+        if (
+            Array.isArray(
+                historic.persona
+            )
+        ) {
+
+            for (
+                const item of historic.persona
+            ) {
+
+                agregarNombre(
+                    resultado,
+                    item
+                );
+            }
+        }
+    }
+
+    // ================================================
+    // ENCONTRAMOS persona DIRECTAMENTE
+    // ================================================
+
+    if (
+        Array.isArray(
+            objeto.persona
+        )
+    ) {
+
+        for (
+            const item of objeto.persona
+        ) {
+
+            agregarNombre(
+                resultado,
+                item
             );
         }
     }
 
-    return null;
+    // ================================================
+    // RECORRER TODO
+    // ================================================
+
+    for (
+        const [clave, valor]
+        of Object.entries(objeto)
+    ) {
+
+        if (
+            clave === "historic" ||
+            clave === "persona"
+        ) {
+            continue;
+        }
+
+        if (
+            valor &&
+            typeof valor === "object"
+        ) {
+
+            buscarPersona(
+                valor,
+                resultado,
+                profundidad + 1
+            );
+        }
+    }
 }
 
 // =====================================================
-// EXTRAER HISTORIAL
+// EXTRAER DESDE JSON
 // =====================================================
 
-function extraerPersonaHistory(html) {
+function extraerDesdeJson(data) {
 
     const resultado = [];
 
-    if (!html) {
+    if (!data) {
         return resultado;
     }
-
-    const inicio =
-        localizarPersona(html);
-
-    if (
-        inicio === null ||
-        inicio === undefined
-    ) {
-
-        console.log(
-            "⚠️ SteamHistory: no se encontró historic.persona"
-        );
-
-        return resultado;
-    }
-
-    const resto =
-        html.substring(
-            inicio
-        );
 
     // =================================================
-    // BUSCAR FIN DEL ARRAY
+    // CASO DIRECTO
     // =================================================
 
-    let fin = -1;
-
-    const finales = [
-
-        /\]\s*,\s*["']?realName["']?\s*:/i,
-
-        /\]\s*,\s*["']?realname["']?\s*:/i,
-
-        /\]\s*,\s*realName\s*:/i,
-
-        /\]\s*,\s*realname\s*:/i
-    ];
-
-    for (
-        const regex of finales
-    ) {
-
-        const match =
-            regex.exec(resto);
-
-        if (match) {
-
-            fin =
-                match.index;
-
-            break;
-        }
-    }
-
-    const bloque =
-        fin !== -1
-            ? resto.substring(
-                0,
-                fin
-            )
-            : resto.substring(
-                0,
-                300000
-            );
-
-    if (!bloque) {
-        return resultado;
-    }
-
-    console.log(
-        `📄 SteamHistory: bloque persona ${bloque.length} caracteres`
+    buscarPersona(
+        data,
+        resultado
     );
 
     // =================================================
-    // EXTRAER ITEMS
+    // CASO SVELTEKIT SERIALIZADO
     // =================================================
 
-    const patrones = [
+    if (
+        data.nodes &&
+        Array.isArray(data.nodes)
+    ) {
 
-        /["']?Name["']?\s*:\s*"((?:\\.|[^"\\])*)"\s*,\s*["']?Timestamp["']?\s*:\s*(\d+)(?:\s*,\s*["']?Estimated["']?\s*:\s*(\d+))?(?:\s*,\s*["']?Hidden["']?\s*:\s*(\d+))?/g,
+        for (
+            const node of data.nodes
+        ) {
 
-        /\\"Name\\"\s*:\s*\\"((?:\\.|[^"\\])*)\\"\s*,\s*\\"Timestamp\\"\s*:\s*(\d+)(?:\s*,\s*\\"Estimated\\"\s*:\s*(\d+))?(?:\s*,\s*\\"Hidden\\"\s*:\s*(\d+))?/g
-    ];
+            if (
+                node &&
+                node.data
+            ) {
+
+                buscarPersona(
+                    node.data,
+                    resultado
+                );
+            }
+        }
+    }
+
+    // =================================================
+    // ELIMINAR DUPLICADOS
+    // =================================================
+
+    const vistos =
+        new Set();
+
+    const limpio = [];
 
     for (
-        const itemRegex of patrones
+        const item of resultado
     ) {
+
+        const key =
+            `${item.name.toLowerCase()}_${item.timestamp}`;
+
+        if (
+            vistos.has(key)
+        ) {
+            continue;
+        }
+
+        vistos.add(key);
+
+        limpio.push(
+            item
+        );
+    }
+
+    // =================================================
+    // ORDENAR
+    // =================================================
+
+    limpio.sort(
+        (a, b) =>
+            Number(b.timestamp) -
+            Number(a.timestamp)
+    );
+
+    // =================================================
+    // DUPLICADOS CONSECUTIVOS
+    // =================================================
+
+    const final = [];
+
+    for (
+        const item of limpio
+    ) {
+
+        const anterior =
+            final[
+                final.length - 1
+            ];
+
+        if (
+            anterior &&
+            anterior.name.toLowerCase() ===
+                item.name.toLowerCase()
+        ) {
+            continue;
+        }
+
+        final.push(
+            item
+        );
+    }
+
+    return final;
+}
+
+// =====================================================
+// EXTRAER DESDE TEXTO JSON / SVELTEKIT
+// =====================================================
+
+function extraerDesdeTexto(texto) {
+
+    if (!texto) {
+        return [];
+    }
+
+    const resultado = [];
+
+    // =================================================
+    // 1. INTENTAR JSON NORMAL
+    // =================================================
+
+    try {
+
+        const json =
+            JSON.parse(texto);
+
+        const nombres =
+            extraerDesdeJson(
+                json
+            );
+
+        if (
+            nombres.length > 0
+        ) {
+            return nombres;
+        }
+
+    } catch {
+        // Puede ser JSON Lines / SvelteKit
+    }
+
+    // =================================================
+    // 2. JSON LINES
+    // =================================================
+
+    const lineas =
+        String(texto)
+            .split(/\r?\n/)
+            .map(
+                linea =>
+                    linea.trim()
+            )
+            .filter(Boolean);
+
+    for (
+        const linea of lineas
+    ) {
+
+        try {
+
+            const json =
+                JSON.parse(
+                    linea
+                );
+
+            const nombres =
+                extraerDesdeJson(
+                    json
+                );
+
+            resultado.push(
+                ...nombres
+            );
+
+        } catch {
+            // Continuar
+        }
+    }
+
+    // =================================================
+    // 3. BUSCAR historic.persona
+    //    DIRECTAMENTE EN EL TEXTO
+    // =================================================
+
+    if (
+        resultado.length === 0
+    ) {
+
+        const regex =
+            /["']?Name["']?\s*:\s*"((?:\\.|[^"\\])*)"\s*,\s*["']?Timestamp["']?\s*:\s*(\d+)(?:\s*,\s*["']?Estimated["']?\s*:\s*(\d+))?(?:\s*,\s*["']?Hidden["']?\s*:\s*(\d+))?/g;
 
         let match;
 
         while (
             (
                 match =
-                    itemRegex.exec(
-                        bloque
+                    regex.exec(
+                        texto
                     )
             ) !== null
         ) {
@@ -282,21 +610,8 @@ function extraerPersonaHistory(html) {
                     match[2]
                 );
 
-            const estimated =
-                Number(
-                    match[3] || 0
-                );
-
-            const hidden =
-                Number(
-                    match[4] || 0
-                );
-
-            if (!nombre) {
-                continue;
-            }
-
             if (
+                !nombre ||
                 !Number.isFinite(
                     timestamp
                 )
@@ -318,122 +633,250 @@ function extraerPersonaHistory(html) {
                     ),
 
                 estimated:
-                    estimated,
+                    Number(
+                        match[3] || 0
+                    ),
 
                 hidden:
-                    hidden
+                    Number(
+                        match[4] || 0
+                    )
             });
         }
     }
 
     // =================================================
-    // ORDENAR
+    // LIMPIAR
     // =================================================
-
-    resultado.sort(
-        (a, b) =>
-            Number(b.timestamp) -
-            Number(a.timestamp)
-    );
-
-    // =================================================
-    // ELIMINAR DUPLICADOS EXACTOS
-    // =================================================
-
-    const sinDuplicados = [];
 
     const vistos =
         new Set();
+
+    const limpio = [];
 
     for (
         const item of resultado
     ) {
 
-        const clave =
+        const key =
             `${item.name.toLowerCase()}_${item.timestamp}`;
 
         if (
-            vistos.has(
-                clave
-            )
+            vistos.has(key)
         ) {
             continue;
         }
 
-        vistos.add(
-            clave
-        );
+        vistos.add(key);
 
-        sinDuplicados.push(
+        limpio.push(
             item
         );
     }
 
-    // =================================================
-    // ELIMINAR REPETICIONES CONSECUTIVAS
-    // =================================================
+    limpio.sort(
+        (a, b) =>
+            Number(b.timestamp) -
+            Number(a.timestamp)
+    );
 
-    const final = [];
-
-    for (
-        const item of sinDuplicados
-    ) {
-
-        const anterior =
-            final[
-                final.length - 1
-            ];
-
-        if (
-            anterior &&
-            anterior.name.toLowerCase() ===
-                item.name.toLowerCase()
-        ) {
-
-            continue;
-        }
-
-        final.push(
-            item
-        );
-    }
-
-    return final;
+    return limpio;
 }
 
 // =====================================================
-// REALIZAR PETICIÓN
+// CONSULTAR __DATA.JSON
 // =====================================================
 
-async function realizarPeticion(
-    url,
-    headers
+async function consultarDataJson(
+    steamId64
 ) {
 
-    return axios.get(
-        url,
-        {
-            timeout:
-                REQUEST_TIMEOUT,
+    const urls = [
 
-            headers,
+        // =================================================
+        // FORMATO PRINCIPAL
+        // =================================================
 
-            maxRedirects:
-                5,
+        `${BASE_URL}/${steamId64}/__data.json?x-sveltekit-invalidated=011`,
 
-            decompress:
-                true,
+        // =================================================
+        // FORMATO ALTERNATIVO
+        // =================================================
 
-            validateStatus:
-                status =>
-                    status >= 200 &&
-                    status < 400
+        `${BASE_URL}/${steamId64}/__data.json`
+    ];
+
+    for (
+        let i = 0;
+        i < urls.length;
+        i++
+    ) {
+
+        const url =
+            urls[i];
+
+        console.log(
+            `🌐 SteamHistory __data.json: intento ${i + 1}/${urls.length}`
+        );
+
+        console.log(
+            `🔗 ${url}`
+        );
+
+        try {
+
+            const response =
+                await axios.get(
+                    url,
+                    {
+                        timeout:
+                            REQUEST_TIMEOUT,
+
+                        headers:
+                            HEADERS,
+
+                        maxRedirects:
+                            5,
+
+                        decompress:
+                            true,
+
+                        validateStatus:
+                            () => true
+                    }
+                );
+
+            const status =
+                response.status;
+
+            const data =
+                response.data;
+
+            console.log(
+                `📡 SteamHistory __data.json HTTP ${status}`
+            );
+
+            // =================================================
+            // 403
+            // =================================================
+
+            if (
+                status === 403
+            ) {
+
+                console.log(
+                    "🚫 SteamHistory __data.json también devuelve 403."
+                );
+
+                continue;
+            }
+
+            // =================================================
+            // NO OK
+            // =================================================
+
+            if (
+                status < 200 ||
+                status >= 400
+            ) {
+
+                console.log(
+                    `⚠️ SteamHistory __data.json respondió ${status}`
+                );
+
+                continue;
+            }
+
+            // =================================================
+            // PROCESAR
+            // =================================================
+
+            const nombres =
+                typeof data === "string"
+                    ? extraerDesdeTexto(
+                        data
+                    )
+                    : extraerDesdeJson(
+                        data
+                    );
+
+            console.log(
+                `📜 SteamHistory __data.json: ${nombres.length} nombre(s) encontrados`
+            );
+
+            if (
+                nombres.length > 0
+            ) {
+
+                return {
+
+                    success:
+                        true,
+
+                    url,
+
+                    names:
+                        nombres
+                };
+            }
+
+            console.log(
+                "⚠️ __data.json respondió correctamente, pero no encontramos historic.persona."
+            );
+
+            // =================================================
+            // DEBUG CONTROLADO
+            // =================================================
+
+            if (
+                typeof data === "string"
+            ) {
+
+                console.log(
+                    `📄 Tamaño respuesta: ${data.length} caracteres`
+                );
+
+            } else {
+
+                try {
+
+                    const texto =
+                        JSON.stringify(
+                            data
+                        );
+
+                    console.log(
+                        `📄 Tamaño JSON: ${texto.length} caracteres`
+                    );
+
+                } catch {
+                    // Ignorar
+                }
+            }
+
+        } catch (error) {
+
+            console.error(
+                "❌ Error __data.json:",
+                error.response?.status ||
+                error.code ||
+                error.message
+            );
         }
-    );
+    }
+
+    return {
+
+        success:
+            false,
+
+        names:
+            []
+    };
 }
 
 // =====================================================
-// OBTENER HISTORIAL
+// FUNCIÓN PRINCIPAL
 // =====================================================
 
 async function getSteamHistory(
@@ -452,161 +895,143 @@ async function getSteamHistory(
         );
     }
 
-    const urls = [
-
-        // =============================================
-        // INTENTO 1
-        // =============================================
-
-        `${BASE_URL}/${steamId64}`,
-
-        // =============================================
-        // INTENTO 2
-        // =============================================
-
-        `${BASE_URL}/${steamId64}/`
-    ];
-
     console.log(
-        `📜 SteamHistory: consultando ${steamId64}`
+        `📜 SteamHistory: consultando ${steamId64} mediante __data.json`
     );
 
-    for (
-        let i = 0;
-        i < urls.length;
-        i++
+    // =================================================
+    // INTENTO PRINCIPAL
+    // =================================================
+
+    const resultado =
+        await consultarDataJson(
+            steamId64
+        );
+
+    if (
+        resultado.success
     ) {
 
-        const url =
-            urls[i];
-
         console.log(
-            `🌐 SteamHistory: intento ${i + 1}/${urls.length}`
+            `✅ SteamHistory: historial obtenido mediante __data.json`
         );
 
+        return {
+
+            steamId64,
+
+            url:
+                resultado.url,
+
+            names:
+                resultado.names
+        };
+    }
+
+    // =================================================
+    // FALLBACK
+    // =================================================
+    //
+    // Si __data.json falla, hacemos una última
+    // petición a la página HTML.
+    //
+    // Esto permite que siga funcionando si
+    // __data.json está protegido pero la página
+    // normal vuelve a estar disponible.
+    // =================================================
+
+    console.log(
+        "🔄 SteamHistory: __data.json no funcionó. Probando página HTML como fallback..."
+    );
+
+    const htmlUrl =
+        `${BASE_URL}/${steamId64}`;
+
+    try {
+
+        const response =
+            await axios.get(
+                htmlUrl,
+                {
+                    timeout:
+                        REQUEST_TIMEOUT,
+
+                    headers: {
+                        ...HEADERS,
+
+                        "Accept":
+                            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+
+                        "Sec-Fetch-Dest":
+                            "document",
+
+                        "Sec-Fetch-Mode":
+                            "navigate",
+
+                        "Sec-Fetch-User":
+                            "?1"
+                    },
+
+                    maxRedirects:
+                        5,
+
+                    decompress:
+                        true,
+
+                    validateStatus:
+                        () => true
+                }
+            );
+
         console.log(
-            `🔗 ${url}`
+            `📡 SteamHistory HTML HTTP ${response.status}`
         );
 
-        try {
-
-            const headers = {
-
-                ...BASE_HEADERS,
-
-                "Referer":
-                    "https://steamhistory.net/",
-
-                "Origin":
-                    "https://steamhistory.net/"
-            };
-
-            const response =
-                await realizarPeticion(
-                    url,
-                    headers
-                );
+        if (
+            response.status === 200
+        ) {
 
             const html =
                 String(
                     response.data || ""
                 );
 
+            const names =
+                extraerDesdeTexto(
+                    html
+                );
+
             console.log(
-                `📄 SteamHistory: HTTP ${response.status}`
+                `📜 SteamHistory HTML: ${names.length} nombre(s) encontrados`
             );
 
-            console.log(
-                `📄 SteamHistory: respuesta ${html.length} caracteres`
-            );
+            return {
 
-            if (
-                response.status === 200 &&
-                html.length > 0
-            ) {
+                steamId64,
 
-                const names =
-                    extraerPersonaHistory(
-                        html
-                    );
+                url:
+                    htmlUrl,
 
-                console.log(
-                    `📜 SteamHistory: ${names.length} nombre(s) encontrados`
-                );
-
-                if (
-                    names.length > 0
-                ) {
-
-                    return {
-
-                        steamId64,
-
-                        url,
-
-                        names
-                    };
-                }
-
-                console.log(
-                    "⚠️ SteamHistory: página obtenida pero no se pudo extraer el historial."
-                );
-
-                // No seguimos haciendo peticiones
-                // si ya conseguimos la página.
-
-                return {
-
-                    steamId64,
-
-                    url,
-
-                    names: []
-                };
-            }
-
-        } catch (error) {
-
-            const status =
-                error.response?.status;
-
-            console.error(
-                `❌ SteamHistory intento ${i + 1}:`,
-                status ||
-                error.code ||
-                error.message
-            );
-
-            if (
-                status === 403
-            ) {
-
-                console.log(
-                    "🚫 SteamHistory: el servidor rechazó la petición con HTTP 403."
-                );
-            }
-
-            // Si no es el último intento,
-            // probamos la siguiente URL.
-
-            if (
-                i <
-                urls.length - 1
-            ) {
-
-                console.log(
-                    "🔄 SteamHistory: probando estrategia alternativa..."
-                );
-            }
+                names
+            };
         }
+
+    } catch (error) {
+
+        console.error(
+            "❌ SteamHistory HTML:",
+            error.response?.status ||
+            error.code ||
+            error.message
+        );
     }
 
     // =================================================
-    // TODOS LOS INTENTOS FALLARON
+    // SIN RESULTADOS
     // =================================================
 
     console.error(
-        `❌ SteamHistory: no fue posible obtener ${steamId64}`
+        `❌ SteamHistory: no fue posible obtener historial para ${steamId64}`
     );
 
     return {
@@ -616,7 +1041,8 @@ async function getSteamHistory(
         url:
             `${BASE_URL}/${steamId64}`,
 
-        names: []
+        names:
+            []
     };
 }
 
@@ -628,5 +1054,6 @@ module.exports = {
 
     getSteamHistory,
 
-    extraerPersonaHistory
+    extraerPersonaHistory:
+        extraerDesdeTexto
 };
