@@ -318,7 +318,7 @@ module.exports = {
         embed.addFields({
 
             name:
-                "📜 SteamHistory",
+                "📜 Historial de nombres",
 
             value:
                 `[Ver historial completo](${steamHistoryUrl})`,
