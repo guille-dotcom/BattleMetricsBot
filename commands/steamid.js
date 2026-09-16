@@ -36,7 +36,7 @@ function obtenerNumero(valor) {
 }
 
 // =====================================================
-// COMANDO /STEAMID
+// COMANDO
 // =====================================================
 
 module.exports = {
@@ -53,13 +53,10 @@ module.exports = {
             .addStringOption(
                 option =>
                     option
-
                         .setName("steamid")
-
                         .setDescription(
                             "SteamID64 del jugador"
                         )
-
                         .setRequired(true)
             ),
 
@@ -73,7 +70,7 @@ module.exports = {
                 .trim();
 
         // ==========================================
-        // VALIDAR STEAMID64
+        // VALIDAR
         // ==========================================
 
         if (
@@ -111,7 +108,7 @@ module.exports = {
             `https://steamhistory.net/id/${steamId}`;
 
         // ==========================================
-        // CONSULTAR STEAMID.UK
+        // STEAMID.UK
         // ==========================================
 
         let data;
@@ -136,7 +133,7 @@ module.exports = {
         }
 
         // ==========================================
-        // SECCIONES DE LA API
+        // SECCIONES API
         // ==========================================
 
         const profile =
@@ -218,7 +215,7 @@ module.exports = {
             );
 
         // ==========================================
-        // CREAR EMBED
+        // EMBED
         // ==========================================
 
         const embed =
@@ -233,7 +230,7 @@ module.exports = {
                 );
 
         // ==========================================
-        // IDENTIFICADORES
+        // STEAM IDS
         // ==========================================
 
         embed.addFields({
@@ -487,9 +484,7 @@ module.exports = {
         // ==========================================
 
         embed
-
             .setTimestamp()
-
             .setFooter({
                 text:
                     "RustLogix • SteamID.uk • SteamHistory.net"
