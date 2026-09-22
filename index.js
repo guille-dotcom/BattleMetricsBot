@@ -885,6 +885,118 @@ client.on(
             }
 
             // =================================================
+            // PAGINACIÓN DE TRACKERS
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "trackers_pagina_"
+                )
+            ) {
+
+                try {
+
+                    const pagina =
+                        parseInt(
+                            interaction.customId.replace(
+                                "trackers_pagina_",
+                                ""
+                            ),
+                            10
+                        );
+
+                    if (
+                        Number.isNaN(
+                            pagina
+                        )
+                    ) {
+
+                        return interaction.reply({
+
+                            content:
+                                "❌ Página inválida.",
+
+                            ephemeral:
+                                true
+
+                        });
+
+                    }
+
+                    const comandoTrackers =
+                        client.commands.get(
+                            "trackers-activos"
+                        );
+
+                    if (
+                        !comandoTrackers ||
+                        typeof comandoTrackers.mostrarPagina !==
+                            "function"
+                    ) {
+
+                        console.error(
+                            "❌ No se encontró mostrarPagina en /trackers-activos."
+                        );
+
+                        return interaction.reply({
+
+                            content:
+                                "❌ El sistema de paginación de trackers no está disponible.",
+
+                            ephemeral:
+                                true
+
+                        });
+
+                    }
+
+                    await comandoTrackers.mostrarPagina(
+                        interaction,
+                        pagina
+                    );
+
+                } catch (error) {
+
+                    console.error(
+                        "❌ Error cambiando página de trackers:",
+                        error
+                    );
+
+                    try {
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+
+                                content:
+                                    "❌ Ocurrió un error al cambiar de página.",
+
+                                ephemeral:
+                                    true
+
+                            });
+
+                        }
+
+                    } catch (replyError) {
+
+                        console.error(
+                            "❌ Error respondiendo paginación:",
+                            replyError.message
+                        );
+
+                    }
+
+                }
+
+                return;
+
+            }
+
+            // =================================================
             // ELIMINAR TRACKER
             // =================================================
 
@@ -928,6 +1040,107 @@ client.on(
 
                     }
 
+                    console.log(
+                        `🗑️ Tracker eliminado por botón: ${trackerEliminado.nombre || id}`
+                    );
+
+                    // =================================================
+                    // ACTUALIZAR AUTOMÁTICAMENTE LA MISMA PÁGINA
+                    // =================================================
+
+                    const comandoTrackers =
+                        client.commands.get(
+                            "trackers-activos"
+                        );
+
+                    if (
+                        comandoTrackers &&
+                        typeof comandoTrackers.mostrarPagina ===
+                            "function"
+                    ) {
+
+                        // Intentamos averiguar la página actual
+                        // leyendo el botón de página deshabilitado.
+                        let paginaActual =
+                            1;
+
+                        try {
+
+                            const filas =
+                                interaction.message.components || [];
+
+                            for (
+                                const fila
+                                of filas
+                            ) {
+
+                                const componentes =
+                                    fila.components || [];
+
+                                for (
+                                    const componente
+                                    of componentes
+                                ) {
+
+                                    const customId =
+                                        componente.customId;
+
+                                    const label =
+                                        componente.label;
+
+                                    if (
+                                        customId ===
+                                            "trackers_pagina_actual" &&
+                                        label
+                                    ) {
+
+                                        const match =
+                                            String(label).match(
+                                                /Página\s+(\d+)\s*\/\s*(\d+)/i
+                                            );
+
+                                        if (
+                                            match
+                                        ) {
+
+                                            paginaActual =
+                                                parseInt(
+                                                    match[1],
+                                                    10
+                                                );
+
+                                        }
+
+                                    }
+
+                                }
+
+                            }
+
+                        } catch (errorPagina) {
+
+                            console.log(
+                                "⚠️ No se pudo detectar la página actual, usando página 1."
+                            );
+
+                            paginaActual =
+                                1;
+
+                        }
+
+                        await comandoTrackers.mostrarPagina(
+                            interaction,
+                            paginaActual
+                        );
+
+                        return;
+
+                    }
+
+                    // =================================================
+                    // FALLBACK
+                    // =================================================
+
                     return interaction.update({
 
                         content:
@@ -946,17 +1159,37 @@ client.on(
                         error
                     );
 
-                    return interaction.reply({
+                    try {
 
-                        content:
-                            "❌ Ocurrió un error al intentar eliminar el tracker.",
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
 
-                        ephemeral:
-                            true
+                            return interaction.reply({
 
-                    });
+                                content:
+                                    "❌ Ocurrió un error al intentar eliminar el tracker.",
+
+                                ephemeral:
+                                    true
+
+                            });
+
+                        }
+
+                    } catch (replyError) {
+
+                        console.error(
+                            "❌ Error respondiendo eliminación de tracker:",
+                            replyError.message
+                        );
+
+                    }
 
                 }
+
+                return;
 
             }
 
