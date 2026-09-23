@@ -135,7 +135,7 @@ function crearEmbed(giveaway) {
                 name: "📋 Información",
                 value:
                     "Puedes entrar y salir del giveaway cuando quieras.\n" +
-                    "Al finalizar se elegirán los ganadores automáticamente.",
+                    "Al finalizar se elegirá el o los ganadores automáticamente.",
                 inline: false
             })
             .setFooter({
@@ -482,8 +482,10 @@ function iniciarCollector(
                             `giveaway_participar_${giveaway.messageId}`
                         ) {
 
-                            // IMPORTANTE:
-                            // responder a Discord ANTES de MongoDB
+                            // ==================================
+                            // RESPONDER INMEDIATAMENTE
+                            // ==================================
+
                             await buttonInteraction.deferReply({
                                 flags:
                                     MessageFlags.Ephemeral
@@ -498,9 +500,9 @@ function iniciarCollector(
                                         usuarioId
                                     );
 
-                            // ------------------------------
+                            // ==================================
                             // SALIR
-                            // ------------------------------
+                            // ==================================
 
                             if (indice !== -1) {
 
@@ -535,9 +537,9 @@ function iniciarCollector(
 
                             }
 
-                            // ------------------------------
+                            // ==================================
                             // ENTRAR
-                            // ------------------------------
+                            // ==================================
 
                             else {
 
@@ -582,11 +584,18 @@ function iniciarCollector(
                             `giveaway_cerrar_${giveaway.messageId}`
                         ) {
 
-                            // Responder inmediatamente
+                            // ==================================
+                            // RESPONDER INMEDIATAMENTE
+                            // ==================================
+
                             await buttonInteraction.deferReply({
                                 flags:
                                     MessageFlags.Ephemeral
                             });
+
+                            // ==================================
+                            // COMPROBAR CREADOR
+                            // ==================================
 
                             if (
                                 buttonInteraction.user.id !==
@@ -598,6 +607,10 @@ function iniciarCollector(
                                         "❌ Solo quien creó el giveaway puede finalizarlo."
                                 });
                             }
+
+                            // ==================================
+                            // FINALIZAR
+                            // ==================================
 
                             collector.stop(
                                 "manual"
@@ -620,11 +633,18 @@ function iniciarCollector(
                             `giveaway_reroll_${giveaway.messageId}`
                         ) {
 
-                            // Responder inmediatamente
+                            // ==================================
+                            // RESPONDER INMEDIATAMENTE
+                            // ==================================
+
                             await buttonInteraction.deferReply({
                                 flags:
                                     MessageFlags.Ephemeral
                             });
+
+                            // ==================================
+                            // COMPROBAR CREADOR
+                            // ==================================
 
                             if (
                                 buttonInteraction.user.id !==
@@ -637,9 +657,9 @@ function iniciarCollector(
                                 });
                             }
 
-                            // ------------------------------
+                            // ==================================
                             // PARTICIPANTES DISPONIBLES
-                            // ------------------------------
+                            // ==================================
 
                             const candidatos =
                                 giveaway.participantes
@@ -659,6 +679,10 @@ function iniciarCollector(
                                         "❌ No quedan participantes disponibles para elegir otro ganador."
                                 });
                             }
+
+                            // ==================================
+                            // ELEGIR NUEVO GANADOR
+                            // ==================================
 
                             const nuevoGanador =
                                 elegirGanadores(
@@ -718,7 +742,6 @@ function iniciarCollector(
                                     MessageFlags.Ephemeral
                             }).catch(() => {});
                         }
-
                     }
                 }
             );
@@ -881,7 +904,7 @@ module.exports = {
             }
 
             // ==========================================
-            // CREAR DOCUMENTO INICIAL
+            // FECHAS
             // ==========================================
 
             const fechaInicio =
@@ -892,6 +915,10 @@ module.exports = {
                     Date.now() + duracion
                 );
 
+            // ==========================================
+            // CREAR DOCUMENTO
+            // ==========================================
+
             const giveaway =
                 new Giveaway({
 
@@ -901,6 +928,9 @@ module.exports = {
                     channelId:
                         interaction.channel.id,
 
+                    // ID temporal.
+                    // Se reemplaza inmediatamente
+                    // por el ID real del mensaje.
                     messageId:
                         interaction.id,
 
@@ -955,6 +985,26 @@ module.exports = {
                 mensaje.id;
 
             await giveaway.save();
+
+            // ==========================================
+            // IMPORTANTE:
+            // ACTUALIZAR LOS BOTONES CON EL ID REAL
+            // ==========================================
+
+            await mensaje.edit({
+
+                embeds: [
+                    crearEmbed(
+                        giveaway
+                    )
+                ],
+
+                components:
+                    crearBotones(
+                        giveaway
+                    )
+
+            });
 
             // ==========================================
             // INICIAR COLLECTOR
