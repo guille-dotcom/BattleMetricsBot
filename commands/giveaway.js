@@ -279,6 +279,7 @@ async function finalizarGiveaway(
                 .catch(() => null);
 
         if (!canal) {
+
             console.log(
                 `[GIVEAWAY] Canal no encontrado: ${giveaway.channelId}`
             );
@@ -287,6 +288,10 @@ async function finalizarGiveaway(
             giveaway.finalizado = true;
 
             await giveaway.save();
+
+            collectorsActivos.delete(
+                giveaway.messageId
+            );
 
             return;
         }
@@ -329,10 +334,12 @@ async function finalizarGiveaway(
                         giveaway
                     )
             }).catch(error => {
+
                 console.error(
                     "[GIVEAWAY] Error actualizando mensaje:",
                     error
                 );
+
             });
         }
 
@@ -431,6 +438,11 @@ function iniciarCollector(
                     .catch(() => null);
 
             if (!mensaje) {
+
+                console.log(
+                    `[GIVEAWAY] No se encontró el mensaje ${giveaway.messageId}`
+                );
+
                 return;
             }
 
@@ -442,6 +454,10 @@ function iniciarCollector(
             collectorsActivos.set(
                 giveaway.messageId,
                 collector
+            );
+
+            console.log(
+                `[GIVEAWAY] Collector iniciado: ${giveaway.messageId}`
             );
 
             // ========================================
@@ -466,6 +482,13 @@ function iniciarCollector(
                             `giveaway_participar_${giveaway.messageId}`
                         ) {
 
+                            // IMPORTANTE:
+                            // responder a Discord ANTES de MongoDB
+                            await buttonInteraction.deferReply({
+                                flags:
+                                    MessageFlags.Ephemeral
+                            });
+
                             const usuarioId =
                                 buttonInteraction.user.id;
 
@@ -489,12 +512,26 @@ function iniciarCollector(
 
                                 await giveaway.save();
 
-                                await buttonInteraction.reply({
-                                    content:
-                                        "❌ Has salido del giveaway.",
-                                    flags:
-                                        MessageFlags.Ephemeral
+                                await mensaje.edit({
+                                    embeds: [
+                                        crearEmbed(
+                                            giveaway
+                                        )
+                                    ],
+                                    components:
+                                        crearBotones(
+                                            giveaway
+                                        )
                                 });
+
+                                await buttonInteraction.editReply({
+                                    content:
+                                        "❌ Has salido del giveaway."
+                                });
+
+                                console.log(
+                                    `[GIVEAWAY] ${usuarioId} salió: ${giveaway.messageId}`
+                                );
 
                             }
 
@@ -511,29 +548,27 @@ function iniciarCollector(
 
                                 await giveaway.save();
 
-                                await buttonInteraction.reply({
-                                    content:
-                                        "🎉 ¡Ya estás participando!",
-                                    flags:
-                                        MessageFlags.Ephemeral
+                                await mensaje.edit({
+                                    embeds: [
+                                        crearEmbed(
+                                            giveaway
+                                        )
+                                    ],
+                                    components:
+                                        crearBotones(
+                                            giveaway
+                                        )
                                 });
+
+                                await buttonInteraction.editReply({
+                                    content:
+                                        "🎉 ¡Ya estás participando!"
+                                });
+
+                                console.log(
+                                    `[GIVEAWAY] ${usuarioId} participó: ${giveaway.messageId}`
+                                );
                             }
-
-                            // ------------------------------
-                            // ACTUALIZAR CONTADOR
-                            // ------------------------------
-
-                            await mensaje.edit({
-                                embeds: [
-                                    crearEmbed(
-                                        giveaway
-                                    )
-                                ],
-                                components:
-                                    crearBotones(
-                                        giveaway
-                                    )
-                            });
 
                             return;
                         }
@@ -547,24 +582,31 @@ function iniciarCollector(
                             `giveaway_cerrar_${giveaway.messageId}`
                         ) {
 
+                            // Responder inmediatamente
+                            await buttonInteraction.deferReply({
+                                flags:
+                                    MessageFlags.Ephemeral
+                            });
+
                             if (
                                 buttonInteraction.user.id !==
                                 giveaway.creadorId
                             ) {
 
-                                return buttonInteraction.reply({
+                                return await buttonInteraction.editReply({
                                     content:
-                                        "❌ Solo quien creó el giveaway puede finalizarlo.",
-                                    flags:
-                                        MessageFlags.Ephemeral
+                                        "❌ Solo quien creó el giveaway puede finalizarlo."
                                 });
                             }
-
-                            await buttonInteraction.deferUpdate();
 
                             collector.stop(
                                 "manual"
                             );
+
+                            await buttonInteraction.editReply({
+                                content:
+                                    "🔒 Giveaway finalizado. Se están eligiendo los ganadores..."
+                            });
 
                             return;
                         }
@@ -578,16 +620,20 @@ function iniciarCollector(
                             `giveaway_reroll_${giveaway.messageId}`
                         ) {
 
+                            // Responder inmediatamente
+                            await buttonInteraction.deferReply({
+                                flags:
+                                    MessageFlags.Ephemeral
+                            });
+
                             if (
                                 buttonInteraction.user.id !==
                                 giveaway.creadorId
                             ) {
 
-                                return buttonInteraction.reply({
+                                return await buttonInteraction.editReply({
                                     content:
-                                        "❌ Solo quien creó el giveaway puede elegir un nuevo ganador.",
-                                    flags:
-                                        MessageFlags.Ephemeral
+                                        "❌ Solo quien creó el giveaway puede elegir un nuevo ganador."
                                 });
                             }
 
@@ -608,11 +654,9 @@ function iniciarCollector(
                                 candidatos.length === 0
                             ) {
 
-                                return buttonInteraction.reply({
+                                return await buttonInteraction.editReply({
                                     content:
-                                        "❌ No quedan participantes disponibles para elegir otro ganador.",
-                                    flags:
-                                        MessageFlags.Ephemeral
+                                        "❌ No quedan participantes disponibles para elegir otro ganador."
                                 });
                             }
 
@@ -628,11 +672,6 @@ function iniciarCollector(
 
                             await giveaway.save();
 
-                            await buttonInteraction.reply({
-                                content:
-                                    `🔄 Nuevo ganador seleccionado: <@${nuevoGanador}>`,
-                            });
-
                             await mensaje.edit({
                                 embeds: [
                                     crearEmbed(
@@ -643,6 +682,11 @@ function iniciarCollector(
                                     crearBotonesFinalizados(
                                         giveaway
                                     )
+                            });
+
+                            await buttonInteraction.editReply({
+                                content:
+                                    `🔄 Nuevo ganador seleccionado: <@${nuevoGanador}>`
                             });
 
                             await canal.send({
@@ -674,6 +718,7 @@ function iniciarCollector(
                                     MessageFlags.Ephemeral
                             }).catch(() => {});
                         }
+
                     }
                 }
             );
@@ -847,12 +892,9 @@ module.exports = {
                     Date.now() + duracion
                 );
 
-            // ==========================================
-            // CREAR GIVEAWAY TEMPORAL
-            // ==========================================
-
             const giveaway =
                 new Giveaway({
+
                     guildId:
                         interaction.guild.id,
 
@@ -880,6 +922,7 @@ module.exports = {
                     activo: true,
 
                     finalizado: false
+
                 });
 
             // ==========================================
@@ -887,15 +930,18 @@ module.exports = {
             // ==========================================
 
             await interaction.reply({
+
                 embeds: [
                     crearEmbed(
                         giveaway
                     )
                 ],
+
                 components:
                     crearBotones(
                         giveaway
                     )
+
             });
 
             const mensaje =
