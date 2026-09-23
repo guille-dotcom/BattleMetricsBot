@@ -3,20 +3,31 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
-    ButtonStyle
+    ButtonStyle,
+    MessageFlags
 } = require("discord.js");
+
+const Giveaway = require("../models/GiveawaySchema");
 
 // =====================================================
 // CONFIGURACIÓN
 // =====================================================
 
-const DURACION_MAXIMA = 7 * 24 * 60 * 60 * 1000;
+const DURACION_MAXIMA =
+    7 * 24 * 60 * 60 * 1000;
+
+// =====================================================
+// MAPA DE COLLECTORS
+// =====================================================
+
+const collectorsActivos = new Map();
 
 // =====================================================
 // PARSEAR DURACIÓN
 // =====================================================
 
 function parsearDuracion(texto) {
+
     if (!texto) return null;
 
     const match = texto
@@ -26,7 +37,9 @@ function parsearDuracion(texto) {
 
     if (!match) return null;
 
-    const cantidad = parseInt(match[1], 10);
+    const cantidad =
+        parseInt(match[1], 10);
+
     const unidad = match[2];
 
     if (!cantidad || cantidad <= 0) {
@@ -51,49 +64,16 @@ function parsearDuracion(texto) {
 }
 
 // =====================================================
-// FORMATEAR DURACIÓN
-// =====================================================
-
-function formatearDuracion(ms) {
-    const segundos = Math.floor(ms / 1000);
-
-    const dias = Math.floor(segundos / 86400);
-    const horas = Math.floor(
-        (segundos % 86400) / 3600
-    );
-    const minutos = Math.floor(
-        (segundos % 3600) / 60
-    );
-    const segs = segundos % 60;
-
-    const partes = [];
-
-    if (dias > 0) {
-        partes.push(`${dias}d`);
-    }
-
-    if (horas > 0) {
-        partes.push(`${horas}h`);
-    }
-
-    if (minutos > 0) {
-        partes.push(`${minutos}m`);
-    }
-
-    if (segs > 0 && dias === 0 && horas === 0) {
-        partes.push(`${segs}s`);
-    }
-
-    return partes.join(" ") || "0s";
-}
-
-// =====================================================
 // ELEGIR GANADORES
 // =====================================================
 
-function elegirGanadores(participantes, cantidad) {
+function elegirGanadores(
+    participantes,
+    cantidad
+) {
 
     const copia = [...participantes];
+
     const ganadores = [];
 
     while (
@@ -116,6 +96,665 @@ function elegirGanadores(participantes, cantidad) {
 }
 
 // =====================================================
+// CREAR EMBED
+// =====================================================
+
+function crearEmbed(giveaway) {
+
+    const fechaFinal =
+        Math.floor(
+            new Date(
+                giveaway.fechaFinal
+            ).getTime() / 1000
+        );
+
+    // ================================================
+    // GIVEAWAY ACTIVO
+    // ================================================
+
+    if (
+        giveaway.activo &&
+        !giveaway.finalizado
+    ) {
+
+        return new EmbedBuilder()
+            .setTitle("🎉 GIVEAWAY")
+            .setDescription(
+                `🎁 **Premio:** ${giveaway.premio}\n\n` +
+
+                `👑 **Ganadores:** ${giveaway.ganadorCantidad}\n` +
+
+                `👥 **Participantes:** ${giveaway.participantes.length}\n\n` +
+
+                `⏰ **Termina:** <t:${fechaFinal}:R>\n\n` +
+
+                `🎉 Pulsa **Participar** para entrar al sorteo.`
+            )
+            .setColor(0xffc107)
+            .addFields({
+                name: "📋 Información",
+                value:
+                    "Puedes entrar y salir del giveaway cuando quieras.\n" +
+                    "Al finalizar se elegirán los ganadores automáticamente.",
+                inline: false
+            })
+            .setFooter({
+                text: "RustLogix • Giveaway"
+            })
+            .setTimestamp();
+    }
+
+    // ================================================
+    // GIVEAWAY FINALIZADO
+    // ================================================
+
+    let textoGanadores =
+        "❌ No hubo suficientes participantes.";
+
+    if (
+        giveaway.ganadores &&
+        giveaway.ganadores.length > 0
+    ) {
+
+        textoGanadores =
+            giveaway.ganadores
+                .map(
+                    id => `🎉 <@${id}>`
+                )
+                .join("\n");
+    }
+
+    return new EmbedBuilder()
+        .setTitle("🏆 GIVEAWAY FINALIZADO")
+        .setDescription(
+            `🎁 **Premio:** ${giveaway.premio}\n\n` +
+
+            `👥 **Participantes:** ${giveaway.participantes.length}\n\n` +
+
+            `🏆 **Ganador${giveaway.ganadores.length > 1 ? "es" : ""}:**\n` +
+
+            textoGanadores
+        )
+        .setColor(0x57f287)
+        .setFooter({
+            text: "RustLogix • Giveaway"
+        })
+        .setTimestamp();
+}
+
+// =====================================================
+// BOTONES ACTIVOS
+// =====================================================
+
+function crearBotones(giveaway) {
+
+    const fila =
+        new ActionRowBuilder()
+            .addComponents(
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `giveaway_participar_${giveaway.messageId}`
+                    )
+                    .setLabel("Participar")
+                    .setEmoji("🎉")
+                    .setStyle(
+                        ButtonStyle.Success
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `giveaway_cerrar_${giveaway.messageId}`
+                    )
+                    .setLabel("Finalizar")
+                    .setEmoji("🔒")
+                    .setStyle(
+                        ButtonStyle.Danger
+                    )
+            );
+
+    return [fila];
+}
+
+// =====================================================
+// BOTONES FINALIZADOS
+// =====================================================
+
+function crearBotonesFinalizados(
+    giveaway
+) {
+
+    const fila =
+        new ActionRowBuilder()
+            .addComponents(
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `giveaway_finalizado_${giveaway.messageId}`
+                    )
+                    .setLabel(
+                        "Giveaway finalizado"
+                    )
+                    .setEmoji("🔒")
+                    .setStyle(
+                        ButtonStyle.Secondary
+                    )
+                    .setDisabled(true),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `giveaway_reroll_${giveaway.messageId}`
+                    )
+                    .setLabel("Nuevo ganador")
+                    .setEmoji("🔄")
+                    .setStyle(
+                        ButtonStyle.Primary
+                    )
+            );
+
+    return [fila];
+}
+
+// =====================================================
+// FINALIZAR GIVEAWAY
+// =====================================================
+
+async function finalizarGiveaway(
+    client,
+    giveaway
+) {
+
+    if (
+        !giveaway ||
+        giveaway.finalizado
+    ) {
+        return;
+    }
+
+    try {
+
+        const canal =
+            await client.channels
+                .fetch(giveaway.channelId)
+                .catch(() => null);
+
+        if (!canal) {
+            console.log(
+                `[GIVEAWAY] Canal no encontrado: ${giveaway.channelId}`
+            );
+
+            giveaway.activo = false;
+            giveaway.finalizado = true;
+
+            await giveaway.save();
+
+            return;
+        }
+
+        const mensaje =
+            await canal.messages
+                .fetch(giveaway.messageId)
+                .catch(() => null);
+
+        // ============================================
+        // ELEGIR GANADORES
+        // ============================================
+
+        const ganadores =
+            elegirGanadores(
+                giveaway.participantes,
+                giveaway.ganadorCantidad
+            );
+
+        giveaway.ganadores =
+            ganadores;
+
+        giveaway.activo = false;
+        giveaway.finalizado = true;
+
+        await giveaway.save();
+
+        // ============================================
+        // ACTUALIZAR MENSAJE
+        // ============================================
+
+        if (mensaje) {
+
+            await mensaje.edit({
+                embeds: [
+                    crearEmbed(giveaway)
+                ],
+                components:
+                    crearBotonesFinalizados(
+                        giveaway
+                    )
+            }).catch(error => {
+                console.error(
+                    "[GIVEAWAY] Error actualizando mensaje:",
+                    error
+                );
+            });
+        }
+
+        // ============================================
+        // ANUNCIAR GANADORES
+        // ============================================
+
+        if (
+            ganadores.length > 0
+        ) {
+
+            const menciones =
+                ganadores
+                    .map(
+                        id => `<@${id}>`
+                    )
+                    .join(", ");
+
+            await canal.send({
+                content:
+                    `🎉 **GIVEAWAY FINALIZADO**\n\n` +
+                    `🎁 Premio: **${giveaway.premio}**\n` +
+                    `🏆 Ganador${ganadores.length > 1 ? "es" : ""}: ${menciones}`
+            });
+
+        } else {
+
+            await canal.send({
+                content:
+                    `❌ El giveaway de **${giveaway.premio}** terminó sin participantes.`
+            });
+        }
+
+        collectorsActivos.delete(
+            giveaway.messageId
+        );
+
+        console.log(
+            `[GIVEAWAY] Finalizado: ${giveaway.messageId}`
+        );
+
+    } catch (error) {
+
+        console.error(
+            "[GIVEAWAY] Error finalizando:",
+            error
+        );
+    }
+}
+
+// =====================================================
+// INICIAR COLLECTOR
+// =====================================================
+
+function iniciarCollector(
+    client,
+    giveaway
+) {
+
+    if (
+        collectorsActivos.has(
+            giveaway.messageId
+        )
+    ) {
+        return;
+    }
+
+    const tiempoRestante =
+        new Date(
+            giveaway.fechaFinal
+        ).getTime() - Date.now();
+
+    if (tiempoRestante <= 0) {
+
+        finalizarGiveaway(
+            client,
+            giveaway
+        );
+
+        return;
+    }
+
+    // ================================================
+    // BUSCAR MENSAJE
+    // ================================================
+
+    client.channels
+        .fetch(giveaway.channelId)
+        .then(async canal => {
+
+            if (!canal) return;
+
+            const mensaje =
+                await canal.messages
+                    .fetch(giveaway.messageId)
+                    .catch(() => null);
+
+            if (!mensaje) {
+                return;
+            }
+
+            const collector =
+                mensaje.createMessageComponentCollector({
+                    time: tiempoRestante
+                });
+
+            collectorsActivos.set(
+                giveaway.messageId,
+                collector
+            );
+
+            // ========================================
+            // BOTONES
+            // ========================================
+
+            collector.on(
+                "collect",
+                async buttonInteraction => {
+
+                    try {
+
+                        const customId =
+                            buttonInteraction.customId;
+
+                        // ==================================
+                        // PARTICIPAR
+                        // ==================================
+
+                        if (
+                            customId ===
+                            `giveaway_participar_${giveaway.messageId}`
+                        ) {
+
+                            const usuarioId =
+                                buttonInteraction.user.id;
+
+                            const indice =
+                                giveaway.participantes
+                                    .indexOf(
+                                        usuarioId
+                                    );
+
+                            // ------------------------------
+                            // SALIR
+                            // ------------------------------
+
+                            if (indice !== -1) {
+
+                                giveaway.participantes
+                                    .splice(
+                                        indice,
+                                        1
+                                    );
+
+                                await giveaway.save();
+
+                                await buttonInteraction.reply({
+                                    content:
+                                        "❌ Has salido del giveaway.",
+                                    flags:
+                                        MessageFlags.Ephemeral
+                                });
+
+                            }
+
+                            // ------------------------------
+                            // ENTRAR
+                            // ------------------------------
+
+                            else {
+
+                                giveaway.participantes
+                                    .push(
+                                        usuarioId
+                                    );
+
+                                await giveaway.save();
+
+                                await buttonInteraction.reply({
+                                    content:
+                                        "🎉 ¡Ya estás participando!",
+                                    flags:
+                                        MessageFlags.Ephemeral
+                                });
+                            }
+
+                            // ------------------------------
+                            // ACTUALIZAR CONTADOR
+                            // ------------------------------
+
+                            await mensaje.edit({
+                                embeds: [
+                                    crearEmbed(
+                                        giveaway
+                                    )
+                                ],
+                                components:
+                                    crearBotones(
+                                        giveaway
+                                    )
+                            });
+
+                            return;
+                        }
+
+                        // ==================================
+                        // FINALIZAR
+                        // ==================================
+
+                        if (
+                            customId ===
+                            `giveaway_cerrar_${giveaway.messageId}`
+                        ) {
+
+                            if (
+                                buttonInteraction.user.id !==
+                                giveaway.creadorId
+                            ) {
+
+                                return buttonInteraction.reply({
+                                    content:
+                                        "❌ Solo quien creó el giveaway puede finalizarlo.",
+                                    flags:
+                                        MessageFlags.Ephemeral
+                                });
+                            }
+
+                            await buttonInteraction.deferUpdate();
+
+                            collector.stop(
+                                "manual"
+                            );
+
+                            return;
+                        }
+
+                        // ==================================
+                        // REROLL
+                        // ==================================
+
+                        if (
+                            customId ===
+                            `giveaway_reroll_${giveaway.messageId}`
+                        ) {
+
+                            if (
+                                buttonInteraction.user.id !==
+                                giveaway.creadorId
+                            ) {
+
+                                return buttonInteraction.reply({
+                                    content:
+                                        "❌ Solo quien creó el giveaway puede elegir un nuevo ganador.",
+                                    flags:
+                                        MessageFlags.Ephemeral
+                                });
+                            }
+
+                            // ------------------------------
+                            // PARTICIPANTES DISPONIBLES
+                            // ------------------------------
+
+                            const candidatos =
+                                giveaway.participantes
+                                    .filter(
+                                        id =>
+                                            !giveaway.ganadores.includes(
+                                                id
+                                            )
+                                    );
+
+                            if (
+                                candidatos.length === 0
+                            ) {
+
+                                return buttonInteraction.reply({
+                                    content:
+                                        "❌ No quedan participantes disponibles para elegir otro ganador.",
+                                    flags:
+                                        MessageFlags.Ephemeral
+                                });
+                            }
+
+                            const nuevoGanador =
+                                elegirGanadores(
+                                    candidatos,
+                                    1
+                                )[0];
+
+                            giveaway.ganadores = [
+                                nuevoGanador
+                            ];
+
+                            await giveaway.save();
+
+                            await buttonInteraction.reply({
+                                content:
+                                    `🔄 Nuevo ganador seleccionado: <@${nuevoGanador}>`,
+                            });
+
+                            await mensaje.edit({
+                                embeds: [
+                                    crearEmbed(
+                                        giveaway
+                                    )
+                                ],
+                                components:
+                                    crearBotonesFinalizados(
+                                        giveaway
+                                    )
+                            });
+
+                            await canal.send({
+                                content:
+                                    `🔄 **NUEVO GANADOR**\n\n` +
+                                    `🎁 Premio: **${giveaway.premio}**\n` +
+                                    `🏆 Ganador: <@${nuevoGanador}>`
+                            });
+
+                            return;
+                        }
+
+                    } catch (error) {
+
+                        console.error(
+                            "[GIVEAWAY] Error procesando botón:",
+                            error
+                        );
+
+                        if (
+                            !buttonInteraction.replied &&
+                            !buttonInteraction.deferred
+                        ) {
+
+                            await buttonInteraction.reply({
+                                content:
+                                    "❌ Ocurrió un error.",
+                                flags:
+                                    MessageFlags.Ephemeral
+                            }).catch(() => {});
+                        }
+                    }
+                }
+            );
+
+            // ========================================
+            // TERMINAR COLLECTOR
+            // ========================================
+
+            collector.on(
+                "end",
+                async () => {
+
+                    collectorsActivos.delete(
+                        giveaway.messageId
+                    );
+
+                    const actualizado =
+                        await Giveaway.findById(
+                            giveaway._id
+                        );
+
+                    if (
+                        !actualizado ||
+                        actualizado.finalizado
+                    ) {
+                        return;
+                    }
+
+                    await finalizarGiveaway(
+                        client,
+                        actualizado
+                    );
+                }
+            );
+
+        })
+        .catch(error => {
+
+            console.error(
+                "[GIVEAWAY] Error iniciando collector:",
+                error
+            );
+        });
+}
+
+// =====================================================
+// INICIAR GIVEAWAYS DESPUÉS DE REINICIO
+// =====================================================
+
+async function iniciarGiveaways(client) {
+
+    try {
+
+        const giveaways =
+            await Giveaway.find({
+                activo: true,
+                finalizado: false
+            });
+
+        console.log(
+            `[GIVEAWAY] ${giveaways.length} giveaway(s) activo(s) encontrados.`
+        );
+
+        for (const giveaway of giveaways) {
+
+            iniciarCollector(
+                client,
+                giveaway
+            );
+        }
+
+    } catch (error) {
+
+        console.error(
+            "[GIVEAWAY] Error recuperando giveaways:",
+            error
+        );
+    }
+}
+
+// =====================================================
 // COMANDO
 // =====================================================
 
@@ -123,12 +762,16 @@ module.exports = {
 
     data: new SlashCommandBuilder()
         .setName("giveaway")
-        .setDescription("Crea un sorteo")
+        .setDescription(
+            "Crea un sorteo"
+        )
 
         .addStringOption(option =>
             option
                 .setName("premio")
-                .setDescription("Premio del giveaway")
+                .setDescription(
+                    "Premio del giveaway"
+                )
                 .setRequired(true)
         )
 
@@ -136,7 +779,7 @@ module.exports = {
             option
                 .setName("duracion")
                 .setDescription(
-                    "Duración: 30s, 10m, 1h, 2d, etc."
+                    "Ejemplo: 30s, 10m, 1h, 2d"
                 )
                 .setRequired(true)
         )
@@ -166,19 +809,19 @@ module.exports = {
                     "duracion"
                 );
 
-            const cantidadGanadores =
+            const ganadorCantidad =
                 interaction.options.getInteger(
                     "ganadores"
                 ) || 1;
+
+            // ==========================================
+            // VALIDAR DURACIÓN
+            // ==========================================
 
             const duracion =
                 parsearDuracion(
                     duracionTexto
                 );
-
-            // ==========================================
-            // VALIDAR DURACIÓN
-            // ==========================================
 
             if (!duracion) {
 
@@ -187,407 +830,97 @@ module.exports = {
                         "❌ Duración inválida.\n\n" +
                         "Ejemplos: `30s`, `10m`, `1h`, `2d`\n" +
                         "Máximo: `7d`.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
             // ==========================================
-            // DATOS DEL GIVEAWAY
+            // CREAR DOCUMENTO INICIAL
             // ==========================================
 
-            const participantes =
-                new Set();
+            const fechaInicio =
+                new Date();
 
             const fechaFinal =
-                Date.now() + duracion;
-
-            const giveawayId =
-                interaction.id;
-
-            let finalizado = false;
+                new Date(
+                    Date.now() + duracion
+                );
 
             // ==========================================
-            // CREAR EMBED
+            // CREAR GIVEAWAY TEMPORAL
             // ==========================================
 
-            const crearEmbed = (
-                cerrado = false,
-                ganadoresFinales = []
-            ) => {
+            const giveaway =
+                new Giveaway({
+                    guildId:
+                        interaction.guild.id,
 
-                let descripcion = "";
+                    channelId:
+                        interaction.channel.id,
 
-                if (!cerrado) {
+                    messageId:
+                        interaction.id,
 
-                    descripcion =
-                        `🎁 **Premio:** ${premio}\n\n` +
+                    creadorId:
+                        interaction.user.id,
 
-                        `👑 **Ganadores:** ${cantidadGanadores}\n` +
+                    premio,
 
-                        `👥 **Participantes:** ${participantes.size}\n\n` +
+                    ganadorCantidad,
 
-                        `⏰ **Termina:** <t:${Math.floor(
-                            fechaFinal / 1000
-                        )}:R>\n\n` +
+                    participantes: [],
 
-                        `🎉 Pulsa el botón de abajo para participar.`;
+                    ganadores: [],
 
-                } else {
+                    fechaInicio,
 
-                    descripcion =
-                        `🎁 **Premio:** ${premio}\n\n` +
+                    fechaFinal,
 
-                        `👑 **Ganadores:** ${cantidadGanadores}\n` +
+                    activo: true,
 
-                        `👥 **Participantes:** ${participantes.size}\n\n`;
-
-                    if (
-                        ganadoresFinales.length > 0
-                    ) {
-
-                        descripcion +=
-                            `🏆 **GANADOR${ganadoresFinales.length > 1 ? "ES" : ""}**\n\n`;
-
-                        ganadoresFinales.forEach(
-                            id => {
-                                descripcion +=
-                                    `🎉 <@${id}>\n`;
-                            }
-                        );
-
-                    } else {
-
-                        descripcion +=
-                            "❌ No hubo suficientes participantes.";
-                    }
-                }
-
-                return new EmbedBuilder()
-                    .setTitle(
-                        cerrado
-                            ? "🏆 GIVEAWAY FINALIZADO"
-                            : "🎉 GIVEAWAY"
-                    )
-                    .setDescription(
-                        descripcion
-                    )
-                    .setColor(
-                        cerrado
-                            ? 0x57f287
-                            : 0xffc107
-                    )
-                    .setFooter({
-                        text:
-                            `Creado por ${interaction.user.tag}`
-                    })
-                    .setTimestamp();
-            };
+                    finalizado: false
+                });
 
             // ==========================================
-            // BOTÓN PARTICIPAR
-            // ==========================================
-
-            const crearBotones = (
-                desactivado = false
-            ) => {
-
-                const fila =
-                    new ActionRowBuilder()
-                        .addComponents(
-
-                            new ButtonBuilder()
-                                .setCustomId(
-                                    `giveaway_participar_${giveawayId}`
-                                )
-                                .setLabel(
-                                    "Participar"
-                                )
-                                .setEmoji("🎉")
-                                .setStyle(
-                                    ButtonStyle.Success
-                                )
-                                .setDisabled(
-                                    desactivado
-                                ),
-
-                            new ButtonBuilder()
-                                .setCustomId(
-                                    `giveaway_cerrar_${giveawayId}`
-                                )
-                                .setLabel(
-                                    "Finalizar"
-                                )
-                                .setEmoji("🔒")
-                                .setStyle(
-                                    ButtonStyle.Danger
-                                )
-                                .setDisabled(
-                                    desactivado
-                                )
-                        );
-
-                return [fila];
-            };
-
-            // ==========================================
-            // PUBLICAR
+            // PUBLICAR MENSAJE
             // ==========================================
 
             await interaction.reply({
                 embeds: [
-                    crearEmbed()
+                    crearEmbed(
+                        giveaway
+                    )
                 ],
-                components: [
-                    ...crearBotones()
-                ]
+                components:
+                    crearBotones(
+                        giveaway
+                    )
             });
 
             const mensaje =
                 await interaction.fetchReply();
 
             // ==========================================
-            // COLLECTOR
+            // GUARDAR MESSAGE ID REAL
             // ==========================================
 
-            const collector =
-                mensaje.createMessageComponentCollector({
-                    time: duracion
-                });
+            giveaway.messageId =
+                mensaje.id;
+
+            await giveaway.save();
 
             // ==========================================
-            // BOTONES
+            // INICIAR COLLECTOR
             // ==========================================
 
-            collector.on(
-                "collect",
-                async buttonInteraction => {
-
-                    try {
-
-                        // ==================================
-                        // PARTICIPAR
-                        // ==================================
-
-                        if (
-                            buttonInteraction.customId ===
-                            `giveaway_participar_${giveawayId}`
-                        ) {
-
-                            const usuarioId =
-                                buttonInteraction.user.id;
-
-                            // ------------------------------
-                            // YA ESTÁ PARTICIPANDO
-                            // ------------------------------
-
-                            if (
-                                participantes.has(
-                                    usuarioId
-                                )
-                            ) {
-
-                                participantes.delete(
-                                    usuarioId
-                                );
-
-                                await buttonInteraction.reply({
-                                    content:
-                                        "❌ Has salido del giveaway.",
-                                    ephemeral: true
-                                });
-
-                            } else {
-
-                                participantes.add(
-                                    usuarioId
-                                );
-
-                                await buttonInteraction.reply({
-                                    content:
-                                        "🎉 ¡Ya estás participando!",
-                                    ephemeral: true
-                                });
-                            }
-
-                            // ------------------------------
-                            // ACTUALIZAR CONTADOR
-                            // ------------------------------
-
-                            await interaction.editReply({
-                                embeds: [
-                                    crearEmbed()
-                                ],
-                                components: [
-                                    ...crearBotones()
-                                ]
-                            });
-
-                            return;
-                        }
-
-                        // ==================================
-                        // FINALIZAR MANUALMENTE
-                        // ==================================
-
-                        if (
-                            buttonInteraction.customId ===
-                            `giveaway_cerrar_${giveawayId}`
-                        ) {
-
-                            if (
-                                buttonInteraction.user.id !==
-                                interaction.user.id
-                            ) {
-
-                                return buttonInteraction.reply({
-                                    content:
-                                        "❌ Solo quien creó el giveaway puede finalizarlo.",
-                                    ephemeral: true
-                                });
-                            }
-
-                            collector.stop(
-                                "manual"
-                            );
-
-                            return;
-                        }
-
-                    } catch (error) {
-
-                        console.error(
-                            "[GIVEAWAY] Error procesando botón:",
-                            error
-                        );
-
-                        if (
-                            !buttonInteraction.replied &&
-                            !buttonInteraction.deferred
-                        ) {
-
-                            await buttonInteraction.reply({
-                                content:
-                                    "❌ Ocurrió un error.",
-                                ephemeral: true
-                            }).catch(() => {});
-                        }
-                    }
-                }
+            iniciarCollector(
+                interaction.client,
+                giveaway
             );
 
-            // ==========================================
-            // FINALIZAR
-            // ==========================================
-
-            collector.on(
-                "end",
-                async (_, motivo) => {
-
-                    if (finalizado) {
-                        return;
-                    }
-
-                    finalizado = true;
-
-                    try {
-
-                        // ------------------------------
-                        // ELEGIR GANADORES
-                        // ------------------------------
-
-                        const listaParticipantes =
-                            [...participantes];
-
-                        const ganadores =
-                            elegirGanadores(
-                                listaParticipantes,
-                                cantidadGanadores
-                            );
-
-                        // ------------------------------
-                        // ACTUALIZAR MENSAJE
-                        // ------------------------------
-
-                        const botonesFinales =
-                            new ActionRowBuilder()
-                                .addComponents(
-
-                                    new ButtonBuilder()
-                                        .setCustomId(
-                                            `giveaway_finalizado_${giveawayId}`
-                                        )
-                                        .setLabel(
-                                            "Giveaway finalizado"
-                                        )
-                                        .setEmoji("🔒")
-                                        .setStyle(
-                                            ButtonStyle.Secondary
-                                        )
-                                        .setDisabled(true),
-
-                                    new ButtonBuilder()
-                                        .setCustomId(
-                                            `giveaway_reroll_${giveawayId}`
-                                        )
-                                        .setLabel(
-                                            "Nuevo ganador"
-                                        )
-                                        .setEmoji("🔄")
-                                        .setStyle(
-                                            ButtonStyle.Primary
-                                        )
-                                );
-
-                        await interaction.editReply({
-                            embeds: [
-                                crearEmbed(
-                                    true,
-                                    ganadores
-                                )
-                            ],
-                            components: [
-                                botonesFinales
-                            ]
-                        });
-
-                        // ------------------------------
-                        // MENCIÓN GANADORES
-                        // ------------------------------
-
-                        if (
-                            ganadores.length > 0
-                        ) {
-
-                            const menciones =
-                                ganadores
-                                    .map(
-                                        id =>
-                                            `<@${id}>`
-                                    )
-                                    .join(", ");
-
-                            await interaction.channel.send({
-                                content:
-                                    `🎉 ¡Felicidades ${menciones}!\n` +
-                                    `🏆 Has ganado **${premio}**!`
-                            });
-
-                        } else {
-
-                            await interaction.channel.send({
-                                content:
-                                    `❌ El giveaway de **${premio}** terminó sin participantes.`
-                            });
-                        }
-
-                    } catch (error) {
-
-                        console.error(
-                            "[GIVEAWAY] Error finalizando:",
-                            error
-                        );
-                    }
-                }
+            console.log(
+                `[GIVEAWAY] Creado: ${premio} | ${mensaje.id}`
             );
 
         } catch (error) {
@@ -602,18 +935,22 @@ module.exports = {
                 interaction.replied
             ) {
 
-                await interaction.editReply(
-                    "❌ Error creando el giveaway."
-                ).catch(() => {});
+                await interaction.editReply({
+                    content:
+                        "❌ Error creando el giveaway."
+                }).catch(() => {});
 
             } else {
 
                 await interaction.reply({
                     content:
                         "❌ Error creando el giveaway.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 }).catch(() => {});
             }
         }
-    }
+    },
+
+    iniciarGiveaways
 };
