@@ -561,7 +561,7 @@ async function revisarTrackers(client) {
 
                     await canal.send({
                         content:
-                            `🔔 **${tracker.nombre} volvió a entrar al servidor configurado**`,
+                            `🔔 **${tracker.nombre} volvió a entrar al servidor **`,
                         embeds: [
                             crearEmbedOnline(
                                 status,
@@ -595,7 +595,7 @@ async function revisarTrackers(client) {
 
                     await canal.send({
                         content:
-                            `🔔 **${tracker.nombre} volvió a entrar al servidor configurado**`,
+                            `🔔 **${tracker.nombre} Regreso al servidor **`,
                         embeds: [
                             crearEmbedOnline(
                                 status,
