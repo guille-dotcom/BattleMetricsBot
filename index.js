@@ -50,16 +50,13 @@ const PORT =
 const server =
     http.createServer(
         (req, res) => {
-
             res.writeHead(
                 200,
                 {
                     "Content-Type":
                         "text/plain",
-
                     "Content-Length":
                         "2",
-
                     "Connection":
                         "close"
                 }
@@ -73,11 +70,9 @@ server.listen(
     PORT,
     "0.0.0.0",
     () => {
-
         console.log(
             `🌐 Servidor web activo en puerto ${PORT}`
         );
-
     }
 );
 
@@ -87,13 +82,11 @@ server.listen(
 
 const client =
     new Client({
-
         intents: [
             GatewayIntentBits.Guilds,
             GatewayIntentBits.GuildMembers,
             GatewayIntentBits.GuildPresences
         ]
-
     });
 
 // ======================
@@ -103,7 +96,6 @@ const client =
 client.on(
     "debug",
     info => {
-
         const texto =
             String(info);
 
@@ -124,7 +116,6 @@ client.on(
             "🔧 DISCORD DEBUG:",
             texto
         );
-
     }
 );
 
@@ -135,12 +126,10 @@ client.on(
 client.on(
     "warn",
     info => {
-
         console.log(
             "⚠️ DISCORD WARN:",
             info
         );
-
     }
 );
 
@@ -151,11 +140,9 @@ client.on(
 client.on(
     "shardReady",
     id => {
-
         console.log(
             `🟢 SHARD ${id} CONECTADO`
         );
-
     }
 );
 
@@ -166,12 +153,10 @@ client.on(
 client.on(
     "shardError",
     error => {
-
         console.error(
             "❌ ERROR SHARD DISCORD:",
             error
         );
-
     }
 );
 
@@ -182,12 +167,10 @@ client.on(
 client.on(
     "shardDisconnect",
     (event, id) => {
-
         console.error(
             `🔴 SHARD ${id} DESCONECTADO:`,
             event
         );
-
     }
 );
 
@@ -198,11 +181,9 @@ client.on(
 client.on(
     "shardReconnecting",
     id => {
-
         console.log(
             `🔄 SHARD ${id} INTENTANDO RECONEXIÓN...`
         );
-
     }
 );
 
@@ -213,11 +194,9 @@ client.on(
 client.on(
     "invalidated",
     () => {
-
         console.error(
             "❌ SESIÓN DE DISCORD INVALIDADA"
         );
-
     }
 );
 
@@ -228,12 +207,10 @@ client.on(
 client.on(
     "error",
     error => {
-
         console.error(
             "❌ ERROR DISCORD:",
             error
         );
-
     }
 );
 
@@ -270,9 +247,7 @@ for (
     const file
     of commandFiles
 ) {
-
     try {
-
         const command =
             require(
                 `./commands/${file}`
@@ -282,7 +257,6 @@ for (
             "data" in command &&
             "execute" in command
         ) {
-
             client.commands.set(
                 command.data.name,
                 command
@@ -295,22 +269,16 @@ for (
             console.log(
                 `✅ Comando cargado: ${command.data.name}`
             );
-
         } else {
-
             console.log(
                 `⚠️ El comando en ${file} le falta la propiedad 'data' o 'execute'.`
             );
-
         }
-
     } catch (error) {
-
         console.log(
             `❌ Error cargando comando ${file}:`,
             error.message
         );
-
     }
 }
 
@@ -363,7 +331,6 @@ client.once(
                 "❌ Error al registrar comandos:",
                 error
             );
-
         }
 
         // ======================
@@ -378,6 +345,7 @@ client.once(
                     "online",
 
                 activities: [
+
                     {
                         name:
                             "chivando siempre 👀",
@@ -385,6 +353,7 @@ client.once(
                         type:
                             0
                     }
+
                 ]
 
             });
@@ -399,7 +368,6 @@ client.once(
                 "⚠️ Error presencia:",
                 error.message
             );
-
         }
 
         // ======================
@@ -429,7 +397,6 @@ client.once(
                 "❌ Error revisión inicial tracker:",
                 error.message
             );
-
         }
 
         // ======================
@@ -448,7 +415,6 @@ client.once(
                     );
 
                     return;
-
                 }
 
                 trackerRevisando =
@@ -471,7 +437,6 @@ client.once(
 
                     trackerRevisando =
                         false;
-
                 }
 
             },
@@ -502,7 +467,6 @@ client.once(
                 "❌ Error iniciando tienda Rust automática:",
                 error
             );
-
         }
 
         // ======================
@@ -529,9 +493,42 @@ client.once(
                 "❌ Error iniciando planilla automática:",
                 error
             );
-
         }
 
+        // ======================
+        // GIVEAWAYS AUTOMÁTICOS
+        // ======================
+
+        try {
+
+            const comandoGiveaway =
+                client.commands.get(
+                    "giveaway"
+                );
+
+            if (
+                comandoGiveaway &&
+                typeof comandoGiveaway.iniciarGiveaways ===
+                    "function"
+            ) {
+
+                await comandoGiveaway.iniciarGiveaways(
+                    client
+                );
+
+                console.log(
+                    "🎁 Sistema de Giveaways recuperado correctamente."
+                );
+
+            }
+
+        } catch (error) {
+
+            console.error(
+                "❌ Error recuperando Giveaways:",
+                error
+            );
+        }
     }
 );
 
@@ -584,36 +581,39 @@ Ejecuta:
 
 para configurar el servidor de Rust que utilizará el bot.
 
-
 Después podrás usar:
 
 🖥️ **Comandos del servidor**
+
 ⏱️ \`/horas\`
+
 🏆 \`/ranking\`
 
-
 🎯 **Sistema Tracker**
+
 🎮 \`/tracker\`
+
 📋 \`/trackers-activos\`
 
-
 🔎 **Consultas BattleMetrics**
+
 🔎 \`/horasbm\`
 
-
 💣 **Raid Calculator**
+
 💣 \`/raid\`
 
-
 🛒 **Tienda Rust**
+
 🛒 \`/configurar-tienda\`
 
-
 📊 **Planilla**
-📋 \`/planilla\`
-⚙️ \`/setcanalplanilla\`
-🔗 \`/verplanilla\`
 
+📋 \`/planilla\`
+
+⚙️ \`/setcanalplanilla\`
+
+🔗 \`/verplanilla\`
 
 📚 Usa:
 
@@ -631,13 +631,11 @@ para ver todos los comandos disponibles.`,
 
                             timestamp:
                                 new Date()
-
                         }
 
                     ]
 
                 });
-
             }
 
         } catch (error) {
@@ -646,9 +644,7 @@ para ver todos los comandos disponibles.`,
                 "❌ Error enviando bienvenida:",
                 error.message
             );
-
         }
-
     }
 );
 
@@ -690,9 +686,7 @@ client.on(
                     if (
                         manejado
                     ) {
-
                         return;
-
                     }
 
                 } catch (error) {
@@ -716,9 +710,7 @@ client.on(
 
                                 ephemeral:
                                     true
-
                             });
-
                         }
 
                     } catch (replyError) {
@@ -727,15 +719,11 @@ client.on(
                             "❌ Error respondiendo interacción Steam:",
                             replyError.message
                         );
-
                     }
 
                     return;
-
                 }
-
             }
-
         }
 
         // =====================================================
@@ -756,9 +744,7 @@ client.on(
                 typeof command.autocomplete !==
                     "function"
             ) {
-
                 return;
-
             }
 
             try {
@@ -773,7 +759,6 @@ client.on(
                     `❌ Error en autocompletado para /${interaction.commandName}:`,
                     error
                 );
-
             }
 
             return;
@@ -786,6 +771,195 @@ client.on(
         if (
             interaction.isButton()
         ) {
+
+            // =================================================
+            // GIVEAWAY - FINALIZAR
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "giveaway_cerrar_"
+                )
+            ) {
+
+                try {
+
+                    const comandoGiveaway =
+                        client.commands.get(
+                            "giveaway"
+                        );
+
+                    if (
+                        !comandoGiveaway ||
+                        typeof comandoGiveaway.procesarFinalizar !==
+                            "function"
+                    ) {
+
+                        return interaction.reply({
+
+                            content:
+                                "❌ El sistema de Giveaways no está disponible.",
+
+                            ephemeral:
+                                true
+                        });
+                    }
+
+                    await comandoGiveaway.procesarFinalizar(
+                        interaction
+                    );
+
+                } catch (error) {
+
+                    console.error(
+                        "❌ Error finalizando Giveaway:",
+                        error
+                    );
+
+                    try {
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+
+                                content:
+                                    "❌ Ocurrió un error al finalizar el Giveaway.",
+
+                                ephemeral:
+                                    true
+                            });
+
+                        }
+
+                    } catch (replyError) {
+
+                        console.error(
+                            "❌ Error respondiendo Finalizar Giveaway:",
+                            replyError.message
+                        );
+                    }
+                }
+
+                return;
+            }
+
+            // =================================================
+            // GIVEAWAY - NUEVO GANADOR
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "giveaway_reroll_"
+                )
+            ) {
+
+                try {
+
+                    const comandoGiveaway =
+                        client.commands.get(
+                            "giveaway"
+                        );
+
+                    if (
+                        !comandoGiveaway ||
+                        typeof comandoGiveaway.procesarReroll !==
+                            "function"
+                    ) {
+
+                        return interaction.reply({
+
+                            content:
+                                "❌ El sistema de Giveaways no está disponible.",
+
+                            ephemeral:
+                                true
+                        });
+                    }
+
+                    await comandoGiveaway.procesarReroll(
+                        interaction
+                    );
+
+                } catch (error) {
+
+                    console.error(
+                        "❌ Error haciendo reroll del Giveaway:",
+                        error
+                    );
+
+                    try {
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+
+                                content:
+                                    "❌ Ocurrió un error al elegir un nuevo ganador.",
+
+                                ephemeral:
+                                    true
+                            });
+
+                        }
+
+                    } catch (replyError) {
+
+                        console.error(
+                            "❌ Error respondiendo Reroll Giveaway:",
+                            replyError.message
+                        );
+                    }
+                }
+
+                return;
+            }
+
+            // =================================================
+            // GIVEAWAY - PARTICIPAR
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "giveaway_participar_"
+                )
+            ) {
+
+                try {
+
+                    const comandoGiveaway =
+                        client.commands.get(
+                            "giveaway"
+                        );
+
+                    if (
+                        comandoGiveaway &&
+                        typeof comandoGiveaway.procesarParticipacion ===
+                            "function"
+                    ) {
+
+                        await comandoGiveaway.procesarParticipacion(
+                            interaction
+                        );
+
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        "❌ Error participando en Giveaway:",
+                        error
+                    );
+
+                }
+
+                return;
+            }
 
             // =================================================
             // BOTONES RAID
@@ -830,13 +1004,10 @@ client.on(
 
                                 ephemeral:
                                     true
-
                             });
-
                         }
 
                         return;
-
                     }
 
                     await comandoRaid.manejarBotonRaid(
@@ -864,9 +1035,7 @@ client.on(
 
                                 ephemeral:
                                     true
-
                             });
-
                         }
 
                     } catch (err) {
@@ -875,13 +1044,10 @@ client.on(
                             "❌ Error respondiendo botón /raid:",
                             err.message
                         );
-
                     }
-
                 }
 
                 return;
-
             }
 
             // =================================================
@@ -918,9 +1084,7 @@ client.on(
 
                             ephemeral:
                                 true
-
                         });
-
                     }
 
                     const comandoTrackers =
@@ -945,9 +1109,7 @@ client.on(
 
                             ephemeral:
                                 true
-
                         });
-
                     }
 
                     await comandoTrackers.mostrarPagina(
@@ -976,9 +1138,7 @@ client.on(
 
                                 ephemeral:
                                     true
-
                             });
-
                         }
 
                     } catch (replyError) {
@@ -987,13 +1147,10 @@ client.on(
                             "❌ Error respondiendo paginación:",
                             replyError.message
                         );
-
                     }
-
                 }
 
                 return;
-
             }
 
             // =================================================
@@ -1035,18 +1192,12 @@ client.on(
 
                             ephemeral:
                                 true
-
                         });
-
                     }
 
                     console.log(
                         `🗑️ Tracker eliminado por botón: ${trackerEliminado.nombre || id}`
                     );
-
-                    // =================================================
-                    // ACTUALIZAR AUTOMÁTICAMENTE LA MISMA PÁGINA
-                    // =================================================
 
                     const comandoTrackers =
                         client.commands.get(
@@ -1059,8 +1210,6 @@ client.on(
                             "function"
                     ) {
 
-                        // Intentamos averiguar la página actual
-                        // leyendo el botón de página deshabilitado.
                         let paginaActual =
                             1;
 
@@ -1108,13 +1257,9 @@ client.on(
                                                     match[1],
                                                     10
                                                 );
-
                                         }
-
                                     }
-
                                 }
-
                             }
 
                         } catch (errorPagina) {
@@ -1125,7 +1270,6 @@ client.on(
 
                             paginaActual =
                                 1;
-
                         }
 
                         await comandoTrackers.mostrarPagina(
@@ -1134,12 +1278,7 @@ client.on(
                         );
 
                         return;
-
                     }
-
-                    // =================================================
-                    // FALLBACK
-                    // =================================================
 
                     return interaction.update({
 
@@ -1149,7 +1288,6 @@ client.on(
                         embeds: [],
 
                         components: []
-
                     });
 
                 } catch (error) {
@@ -1173,9 +1311,7 @@ client.on(
 
                                 ephemeral:
                                     true
-
                             });
-
                         }
 
                     } catch (replyError) {
@@ -1184,13 +1320,10 @@ client.on(
                             "❌ Error respondiendo eliminación de tracker:",
                             replyError.message
                         );
-
                     }
-
                 }
 
                 return;
-
             }
 
             return;
@@ -1220,9 +1353,7 @@ client.on(
                 return await comandoConfigTienda.manejarSelectMenu(
                     interaction
                 );
-
             }
-
         }
 
         // =====================================================
@@ -1250,9 +1381,7 @@ client.on(
                 return await comandoConfigTienda.manejarModal(
                     interaction
                 );
-
             }
-
         }
 
         // =====================================================
@@ -1262,9 +1391,7 @@ client.on(
         if (
             !interaction.isChatInputCommand()
         ) {
-
             return;
-
         }
 
         const command =
@@ -1279,7 +1406,6 @@ client.on(
             );
 
             return;
-
         }
 
         try {
@@ -1317,7 +1443,6 @@ client.on(
 
                         content:
                             errorMsg
-
                     });
 
                 } else {
@@ -1329,9 +1454,7 @@ client.on(
 
                         ephemeral:
                             true
-
                     });
-
                 }
 
             } catch (err) {
@@ -1340,11 +1463,8 @@ client.on(
                     "ERROR RESPONDIENDO DISCORD:",
                     err.message
                 );
-
             }
-
         }
-
     }
 );
 
@@ -1360,7 +1480,6 @@ process.on(
             "❌ Unhandled Promise:",
             reason
         );
-
     }
 );
 
@@ -1372,7 +1491,6 @@ process.on(
             "❌ Uncaught Exception:",
             error
         );
-
     }
 );
 
@@ -1422,7 +1540,6 @@ async function iniciarBot() {
                                     resolve();
                                 }
                             );
-
                         }
                     );
 
@@ -1437,7 +1554,6 @@ async function iniciarBot() {
                         request.destroy();
 
                         resolve();
-
                     }
                 );
 
@@ -1451,10 +1567,8 @@ async function iniciarBot() {
                         );
 
                         resolve();
-
                     }
                 );
-
             }
         );
 
@@ -1473,7 +1587,6 @@ async function iniciarBot() {
             throw new Error(
                 "❌ La variable TOKEN no existe en las variables de entorno."
             );
-
         }
 
         console.log(
@@ -1501,7 +1614,6 @@ async function iniciarBot() {
                         },
                         60000
                     );
-
                 }
             );
 
@@ -1525,9 +1637,7 @@ async function iniciarBot() {
         );
 
         process.exit(1);
-
     }
-
 }
 
 // ======================
