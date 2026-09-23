@@ -6,7 +6,11 @@ const {
 } = require("discord.js");
 
 const Tracker = require("../models/TrackerSchema");
-const { getBattleMetricsPlayerStatus } = require("./battlemetricsSearch");
+const ServerConfig = require("../models/ServerConfig");
+
+const {
+    getBattleMetricsPlayerStatus
+} = require("./battlemetricsSearch");
 
 // =====================================================
 // OBTENER ID DE BATTLEMETRICS
@@ -15,13 +19,17 @@ const { getBattleMetricsPlayerStatus } = require("./battlemetricsSearch");
 function obtenerBattleMetricsId(texto) {
     if (!texto) return null;
 
-    texto = texto.trim();
+    texto = String(texto).trim();
 
+    // Si ya es un ID
     if (/^\d+$/.test(texto)) {
         return texto;
     }
 
-    const match = texto.match(/battlemetrics\.com\/players\/(\d+)/i);
+    // Si es un link de BattleMetrics
+    const match = texto.match(
+        /battlemetrics\.com\/players\/(\d+)/i
+    );
 
     if (match) {
         return match[1];
@@ -34,19 +42,24 @@ function obtenerBattleMetricsId(texto) {
 // FORMATO DE TIEMPO
 // =====================================================
 
-function formatoTiempo(inicio) {
-    if (!inicio) return "00h 00m";
+function formatoTiempo(ms) {
+    if (!ms || ms < 0) return "0m";
 
-    const minutos = Math.floor(
-        (Date.now() - new Date(inicio).getTime()) / 60000
-    );
+    const segundos = Math.floor(ms / 1000);
 
-    const horas = Math.floor(minutos / 60);
-    const minutosRestantes = minutos % 60;
+    const dias = Math.floor(segundos / 86400);
+    const horas = Math.floor((segundos % 86400) / 3600);
+    const minutos = Math.floor((segundos % 3600) / 60);
 
-    return `${horas.toString().padStart(2, "0")}h ${minutosRestantes
-        .toString()
-        .padStart(2, "0")}m`;
+    const partes = [];
+
+    if (dias > 0) partes.push(`${dias}d`);
+    if (horas > 0) partes.push(`${horas}h`);
+    if (minutos > 0 || partes.length === 0) {
+        partes.push(`${minutos}m`);
+    }
+
+    return partes.join(" ");
 }
 
 // =====================================================
@@ -56,125 +69,210 @@ function formatoTiempo(inicio) {
 function crearBotonBattleMetrics(battlemetricsId) {
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setLabel("Ver perfil BattleMetrics")
+            .setLabel("BattleMetrics")
             .setStyle(ButtonStyle.Link)
             .setURL(
                 `https://www.battlemetrics.com/players/${battlemetricsId}`
             )
-            .setEmoji("🔗")
     );
 }
 
 // =====================================================
-// EMBED ONLINE
+// OBTENER SERVIDOR CONFIGURADO
 // =====================================================
 
-function crearEmbedOnline(status, tracker, servidorActual) {
-    const serverToShow =
-        servidorActual ||
-        status.server ||
-        "Desconocido";
+async function obtenerServidorConfigurado(guildId) {
+    try {
+        const config = await ServerConfig.findOne({ guildId });
 
-    let tiempoMostrado = status.jugando;
+        if (!config || !config.battleMetricsServerId) {
+            return null;
+        }
 
-    if (!tiempoMostrado || tiempoMostrado === "0m") {
-        tiempoMostrado = formatoTiempo(
-            tracker.inicioSesion || new Date()
+        return String(config.battleMetricsServerId);
+    } catch (error) {
+        console.error(
+            "[TRACKER] Error obteniendo servidor configurado:",
+            error
         );
+
+        return null;
     }
+}
+
+// =====================================================
+// CREAR EMBED ONLINE
+// =====================================================
+
+function crearEmbedOnline(
+    status,
+    tracker,
+    servidorConfigurado
+) {
+    const servidorActual =
+        status?.server ||
+        "Servidor desconocido";
+
+    const tiempoJugando =
+        status?.jugando ||
+        "0m";
+
+    const esServidorConfigurado =
+        status?.serverId &&
+        servidorConfigurado &&
+        String(status.serverId) === String(servidorConfigurado);
 
     return new EmbedBuilder()
-        .setAuthor({
-            name: "RustLogix • BattleMetrics Tracker"
-        })
         .setTitle("🟢 JUGADOR ONLINE")
         .setDescription(
-            `**${status.name || tracker.nombre}** está actualmente conectado a un servidor.`
+            `**${status?.name || tracker.nombre}** está actualmente conectado al servidor configurado.`
         )
-        .setColor(0x57F287)
+        .setColor(0x00ff00)
         .addFields(
             {
                 name: "👤 Jugador",
-                value: `**${status.name || tracker.nombre}**`,
+                value: `\`${status?.name || tracker.nombre}\``,
+                inline: false
+            },
+            {
+                name: "🎮 Servidor",
+                value: servidorActual,
+                inline: false
+            },
+            {
+                name: "⏱ Jugando",
+                value: tiempoJugando,
+                inline: true
+            },
+            {
+                name: "📡 Estado",
+                value: esServidorConfigurado
+                    ? "🟢 ONLINE"
+                    : "🟡 OTRO SERVIDOR",
+                inline: true
+            },
+            {
+                name: "🎯 Tracker",
+                value: "Activo",
+                inline: true
+            }
+        )
+        .setTimestamp()
+        .setFooter({
+            text: "RustLogix"
+        });
+}
+
+// =====================================================
+// CREAR EMBED OTRO SERVIDOR
+// =====================================================
+
+function crearEmbedOtroServidor(
+    status,
+    tracker,
+    servidorConfigurado
+) {
+    const servidorActual =
+        status?.server ||
+        "Servidor desconocido";
+
+    return new EmbedBuilder()
+        .setTitle("🟡 ESTÁ EN OTRO SERVIDOR")
+        .setDescription(
+            `**${status?.name || tracker.nombre}** está conectado, pero no está en el servidor configurado.`
+        )
+        .setColor(0xffff00)
+        .addFields(
+            {
+                name: "👤 Jugador",
+                value: `\`${status?.name || tracker.nombre}\``,
                 inline: false
             },
             {
                 name: "🎮 Servidor actual",
-                value: `\`${serverToShow}\``,
+                value: servidorActual,
                 inline: false
             },
             {
-                name: "⏱️ Tiempo jugando",
-                value: `\`${tiempoMostrado}\``,
+                name: "🆔 Servidor actual",
+                value: status?.serverId
+                    ? `\`${status.serverId}\``
+                    : "Desconocido",
+                inline: true
+            },
+            {
+                name: "🎯 Servidor configurado",
+                value: `\`${servidorConfigurado || "No configurado"}\``,
+                inline: true
+            },
+            {
+                name: "⏱ Jugando",
+                value: status?.jugando || "0m",
                 inline: true
             },
             {
                 name: "📡 Estado",
-                value: "🟢 **ONLINE**",
+                value: "🟡 OTRO SERVIDOR",
                 inline: true
             },
             {
-                name: "👁️ Tracker",
-                value: "🟢 **Activo**",
+                name: "🎯 Tracker",
+                value: "Activo",
                 inline: true
             }
         )
+        .setTimestamp()
         .setFooter({
-            text: "RustLogix • Tracker activo"
-        })
-        .setTimestamp();
+            text: "RustLogix"
+        });
 }
 
 // =====================================================
-// EMBED OFFLINE
+// CREAR EMBED OFFLINE
 // =====================================================
 
-function crearEmbedOffline(tracker, tiempo, ultimoServidor) {
-    const serverToShow =
-        ultimoServidor ||
-        tracker.ultimoServidor ||
-        "Desconocido";
-
+function crearEmbedOffline(
+    tracker,
+    tiempo,
+    ultimoServidor
+) {
     return new EmbedBuilder()
-        .setAuthor({
-            name: "RustLogix • BattleMetrics Tracker"
-        })
         .setTitle("🔴 JUGADOR OFFLINE")
         .setDescription(
-            `**${tracker.nombre}** ha salido del servidor.`
+            `**${tracker.nombre}** ha salido del servidor configurado.`
         )
-        .setColor(0xED4245)
+        .setColor(0xff0000)
         .addFields(
             {
                 name: "👤 Jugador",
-                value: `**${tracker.nombre}**`,
+                value: `\`${tracker.nombre}\``,
                 inline: false
             },
             {
                 name: "🎮 Último servidor",
-                value: `\`${serverToShow}\``,
+                value: ultimoServidor || "Desconocido",
                 inline: false
             },
             {
-                name: "⏱️ Tiempo de sesión",
-                value: `\`${tiempo}\``,
+                name: "⏱ Tiempo de sesión",
+                value: tiempo || "0m",
                 inline: true
             },
             {
                 name: "📡 Estado",
-                value: "🔴 **OFFLINE**",
+                value: "🔴 OFFLINE",
                 inline: true
             },
             {
-                name: "👁️ Tracker",
-                value: "🟢 **Activo**",
+                name: "🎯 Tracker",
+                value: "Activo",
                 inline: true
             }
         )
+        .setTimestamp()
         .setFooter({
-            text: "RustLogix • Esperando próxima conexión"
-        })
-        .setTimestamp();
+            text: "RustLogix"
+        });
 }
 
 // =====================================================
@@ -183,67 +281,112 @@ function crearEmbedOffline(tracker, tiempo, ultimoServidor) {
 
 async function registrarTracker({
     battlemetricsId,
-    nombre = "Desconocido",
+    nombre,
     canalId,
     guildId,
-    registradoPor
+    registradoPor,
+    estadoForzado,
+    inicioSesionForzado,
+    servidorForzado,
+    serverIdForzado
 }) {
+    const ahora = new Date();
+
+    const expiresAt = new Date(
+        ahora.getTime() + 24 * 60 * 60 * 1000
+    );
+
+    // -------------------------------------------------
+    // Obtener servidor configurado
+    // -------------------------------------------------
+
+    const servidorConfigurado =
+        await obtenerServidorConfigurado(guildId);
+
+    // -------------------------------------------------
+    // Consultar estado actual
+    // -------------------------------------------------
+
+    let status = null;
+
     try {
-        const fechaExpiracion = new Date(
-            Date.now() + 24 * 60 * 60 * 1000
-        );
-
-        const status =
-            await getBattleMetricsPlayerStatus(battlemetricsId);
-
-        const esOnline =
-            status &&
-            status.online === true;
-
-        const nuevoTracker =
-            await Tracker.findOneAndUpdate(
-                {
-                    battlemetricsId,
-                    guildId
-                },
-                {
-                    battlemetricsId,
-                    nombre: status?.name || nombre,
-                    canalId,
-                    guildId,
-                    registradoPor,
-                    createdAt: new Date(),
-                    expiresAt: fechaExpiracion,
-                    ultimoEstado: esOnline
-                        ? "online"
-                        : "offline",
-                    inicioSesion: esOnline
-                        ? new Date()
-                        : null,
-                    ultimoServidor: esOnline
-                        ? status?.server || "Desconocido"
-                        : null,
-                    ultimoServerId: esOnline
-                        ? status?.serverId || null
-                        : null
-                },
-                {
-                    upsert: true,
-                    returnDocument: "after",
-                    setDefaultsOnInsert: true
-                }
+        status =
+            await getBattleMetricsPlayerStatus(
+                battlemetricsId
             );
-
-        return nuevoTracker;
-
     } catch (error) {
         console.error(
-            "ERROR REGISTRANDO TRACKER EN MONGO:",
+            `[TRACKER] Error consultando ${battlemetricsId}:`,
             error
         );
-
-        throw error;
     }
+
+    // -------------------------------------------------
+    // Determinar estado actual
+    // -------------------------------------------------
+
+    const estaOnline =
+        status &&
+        status.online === true;
+
+    const serverIdActual =
+        status?.serverId
+            ? String(status.serverId)
+            : null;
+
+    const estaEnServidorConfigurado =
+        estaOnline &&
+        servidorConfigurado &&
+        serverIdActual &&
+        serverIdActual === String(servidorConfigurado);
+
+    let estadoInicial;
+
+    if (estadoForzado) {
+        estadoInicial = estadoForzado;
+    } else if (estaEnServidorConfigurado) {
+        estadoInicial = "online";
+    } else if (estaOnline) {
+        estadoInicial = "otro_servidor";
+    } else {
+        estadoInicial = "offline";
+    }
+
+    const inicioSesion =
+        inicioSesionForzado !== undefined
+            ? inicioSesionForzado
+            : estaEnServidorConfigurado
+                ? ahora
+                : null;
+
+    const ultimoServidor =
+        servidorForzado !== undefined
+            ? servidorForzado
+            : status?.server || null;
+
+    const ultimoServerId =
+        serverIdForzado !== undefined
+            ? serverIdForzado
+            : serverIdActual;
+
+    // -------------------------------------------------
+    // Crear tracker
+    // -------------------------------------------------
+
+    const tracker = await Tracker.create({
+        battlemetricsId,
+        nombre,
+        canalId,
+        guildId,
+        registradoPor,
+        ultimoEstado: estadoInicial,
+        inicioSesion,
+        ultimoServidor,
+        ultimoServerId,
+        expiresAt
+    });
+
+    return tracker;
 }
 
 // =====================================================
@@ -254,16 +397,24 @@ async function revisarTrackers(client) {
     try {
         const trackers = await Tracker.find({});
 
+        if (!trackers.length) {
+            return;
+        }
+
         for (const tracker of trackers) {
 
-            // =================================================
+            // ==========================================
             // EXPIRACIÓN
-            // =================================================
+            // ==========================================
 
             if (
-                new Date() >
-                new Date(tracker.expiresAt)
+                tracker.expiresAt &&
+                new Date() >= tracker.expiresAt
             ) {
+                console.log(
+                    `[TRACKER] Expirado: ${tracker.nombre} (${tracker.battlemetricsId})`
+                );
+
                 await Tracker.deleteOne({
                     _id: tracker._id
                 });
@@ -271,105 +422,151 @@ async function revisarTrackers(client) {
                 continue;
             }
 
-            // =================================================
-            // CONSULTAR BATTLEMETRICS
-            // =================================================
+            // ==========================================
+            // OBTENER SERVIDOR CONFIGURADO
+            // ==========================================
 
-            const status =
-                await getBattleMetricsPlayerStatus(
-                    tracker.battlemetricsId
+            const servidorConfigurado =
+                await obtenerServidorConfigurado(
+                    tracker.guildId
                 );
 
-            if (!status) continue;
-
-            // =================================================
-            // CANAL
-            // =================================================
-
-            let canal;
-
-            try {
-                canal = await client.channels.fetch(
-                    tracker.canalId
+            if (!servidorConfigurado) {
+                console.log(
+                    `[TRACKER] No hay servidor configurado para guild ${tracker.guildId}`
                 );
-            } catch (e) {
+
                 continue;
             }
 
-            if (!canal) continue;
+            // ==========================================
+            // CONSULTAR BATTLEMETRICS
+            // ==========================================
 
-            const estaOnlineAhora =
+            let status = null;
+
+            try {
+                status =
+                    await getBattleMetricsPlayerStatus(
+                        tracker.battlemetricsId
+                    );
+            } catch (error) {
+                console.error(
+                    `[TRACKER] Error consultando ${tracker.nombre}:`,
+                    error
+                );
+
+                continue;
+            }
+
+            // ==========================================
+            // CANAL
+            // ==========================================
+
+            const canal =
+                await client.channels
+                    .fetch(tracker.canalId)
+                    .catch(() => null);
+
+            if (!canal) {
+                console.log(
+                    `[TRACKER] Canal no encontrado para ${tracker.nombre}`
+                );
+
+                continue;
+            }
+
+            // ==========================================
+            // ESTADO ACTUAL
+            // ==========================================
+
+            const estaOnline =
+                status &&
                 status.online === true;
 
-            // =================================================
+            const serverIdActual =
+                status?.serverId
+                    ? String(status.serverId)
+                    : null;
+
+            const estaEnServidorConfigurado =
+                estaOnline &&
+                serverIdActual &&
+                serverIdActual ===
+                    String(servidorConfigurado);
+
+            // ==========================================
             // ESTADO DESCONOCIDO
-            // =================================================
+            // ==========================================
 
-            if (
-                tracker.ultimoEstado ===
-                "desconocido"
-            ) {
-                tracker.ultimoEstado =
-                    estaOnlineAhora
-                        ? "online"
-                        : "offline";
+            if (!tracker.ultimoEstado ||
+                tracker.ultimoEstado === "desconocido") {
 
-                tracker.inicioSesion =
-                    estaOnlineAhora
-                        ? new Date()
-                        : null;
+                if (estaEnServidorConfigurado) {
 
-                tracker.ultimoServidor =
-                    estaOnlineAhora
-                        ? status.server ||
-                          "Desconocido"
-                        : tracker.ultimoServidor;
+                    tracker.ultimoEstado = "online";
 
-                tracker.ultimoServerId =
-                    estaOnlineAhora
-                        ? status.serverId
-                        : null;
+                    tracker.inicioSesion =
+                        tracker.inicioSesion ||
+                        new Date();
+
+                    tracker.ultimoServidor =
+                        status.server || null;
+
+                    tracker.ultimoServerId =
+                        serverIdActual;
+
+                } else if (estaOnline) {
+
+                    tracker.ultimoEstado =
+                        "otro_servidor";
+
+                    tracker.inicioSesion = null;
+
+                    tracker.ultimoServidor =
+                        status.server || null;
+
+                    tracker.ultimoServerId =
+                        serverIdActual;
+
+                } else {
+
+                    tracker.ultimoEstado =
+                        "offline";
+
+                    tracker.inicioSesion = null;
+
+                    tracker.ultimoServerId = null;
+                }
 
                 await tracker.save();
 
                 continue;
             }
 
-            // =================================================
-            // JUGADOR ONLINE
-            // =================================================
+            // ==========================================
+            // 1. ESTÁ EN EL SERVIDOR CONFIGURADO
+            // ==========================================
 
-            if (estaOnlineAhora) {
+            if (estaEnServidorConfigurado) {
 
-                // =============================================
-                // VOLVIÓ A ENTRAR
-                // =============================================
+                // --------------------------------------
+                // VOLVIÓ DESDE OFFLINE
+                // --------------------------------------
 
                 if (
                     tracker.ultimoEstado ===
                     "offline"
                 ) {
-                    tracker.ultimoEstado =
-                        "online";
-
-                    tracker.inicioSesion =
-                        new Date();
-
-                    tracker.ultimoServidor =
-                        status.server ||
-                        "Desconocido";
-
-                    tracker.ultimoServerId =
-                        status.serverId;
 
                     await canal.send({
                         content:
-                            `🔔 **${status.name || tracker.nombre} volvió a entrar al servidor**`,
+                            `🔔 **${tracker.nombre} volvió a entrar al servidor configurado**`,
                         embeds: [
                             crearEmbedOnline(
                                 status,
                                 tracker,
-                                status.server
+                                servidorConfigurado
                             )
                         ],
                         components: [
@@ -379,172 +576,286 @@ async function revisarTrackers(client) {
                         ]
                     });
 
-                // =============================================
-                // SIGUE ONLINE
-                // =============================================
+                    tracker.ultimoEstado =
+                        "online";
 
-                } else if (
+                    tracker.inicioSesion =
+                        new Date();
+
+                }
+
+                // --------------------------------------
+                // VOLVIÓ DESDE OTRO SERVIDOR
+                // --------------------------------------
+
+                else if (
+                    tracker.ultimoEstado ===
+                    "otro_servidor"
+                ) {
+
+                    await canal.send({
+                        content:
+                            `🔔 **${tracker.nombre} volvió a entrar al servidor configurado**`,
+                        embeds: [
+                            crearEmbedOnline(
+                                status,
+                                tracker,
+                                servidorConfigurado
+                            )
+                        ],
+                        components: [
+                            crearBotonBattleMetrics(
+                                tracker.battlemetricsId
+                            )
+                        ]
+                    });
+
+                    tracker.ultimoEstado =
+                        "online";
+
+                    tracker.inicioSesion =
+                        new Date();
+                }
+
+                // --------------------------------------
+                // SIGUE ONLINE
+                // --------------------------------------
+
+                else if (
                     tracker.ultimoEstado ===
                     "online"
                 ) {
 
-                    // =========================================
-                    // CAMBIO DE SERVIDOR
-                    // =========================================
+                    tracker.ultimoEstado =
+                        "online";
 
-                    if (
-                        status.serverId &&
-                        tracker.ultimoServerId &&
-                        status.serverId !==
-                            tracker.ultimoServerId
-                    ) {
-                        const viejoServer =
-                            tracker.ultimoServidor;
-
-                        tracker.ultimoServidor =
-                            status.server ||
-                            "Desconocido";
-
-                        tracker.ultimoServerId =
-                            status.serverId;
-
+                    if (!tracker.inicioSesion) {
                         tracker.inicioSesion =
                             new Date();
-
-                        const embedCambio =
-                            new EmbedBuilder()
-                                .setAuthor({
-                                    name: "RustLogix • BattleMetrics Tracker"
-                                })
-                                .setTitle(
-                                    "🔀 CAMBIO DE SERVIDOR"
-                                )
-                                .setDescription(
-                                    `**${status.name || tracker.nombre}** ha cambiado de servidor.`
-                                )
-                                .setColor(0xFEE75C)
-                                .addFields(
-                                    {
-                                        name: "👤 Jugador",
-                                        value:
-                                            `**${status.name || tracker.nombre}**`,
-                                        inline: false
-                                    },
-                                    {
-                                        name: "📤 Servidor anterior",
-                                        value:
-                                            `\`${viejoServer || "Desconocido"}\``,
-                                        inline: false
-                                    },
-                                    {
-                                        name: "📥 Servidor actual",
-                                        value:
-                                            `\`${tracker.ultimoServidor}\``,
-                                        inline: false
-                                    },
-                                    {
-                                        name: "⏱️ Nueva sesión",
-                                        value:
-                                            "`00h 00m`",
-                                        inline: true
-                                    },
-                                    {
-                                        name: "📡 Estado",
-                                        value:
-                                            "🟢 **ONLINE**",
-                                        inline: true
-                                    },
-                                    {
-                                        name: "👁️ Tracker",
-                                        value:
-                                            "🟢 **Activo**",
-                                        inline: true
-                                    }
-                                )
-                                .setFooter({
-                                    text: "RustLogix • Tracker activo"
-                                })
-                                .setTimestamp();
-
-                        await canal.send({
-                            content:
-                                `🔀 **${status.name || tracker.nombre} cambió de servidor**`,
-                            embeds: [embedCambio],
-                            components: [
-                                crearBotonBattleMetrics(
-                                    tracker.battlemetricsId
-                                )
-                            ]
-                        });
-
-                    // =========================================
-                    // ACTUALIZAR DATOS
-                    // =========================================
-
-                    } else if (
-                        status.server &&
-                        status.server !==
-                            "Desconocido"
-                    ) {
-                        tracker.ultimoServidor =
-                            status.server;
-
-                        tracker.ultimoServerId =
-                            status.serverId;
                     }
                 }
 
-            // =================================================
-            // JUGADOR OFFLINE
-            // =================================================
-
-            } else if (
-                !estaOnlineAhora &&
-                tracker.ultimoEstado ===
-                    "online"
-            ) {
-                const tiempoJugado =
-                    formatoTiempo(
-                        tracker.inicioSesion
-                    );
-
-                const servidorDondeEstaba =
-                    tracker.ultimoServidor ||
-                    "Desconocido";
-
-                tracker.ultimoEstado =
-                    "offline";
-
-                tracker.inicioSesion =
-                    null;
+                tracker.ultimoServidor =
+                    status.server || null;
 
                 tracker.ultimoServerId =
-                    null;
+                    serverIdActual;
 
-                await canal.send({
-                    content:
-                        `🔔 **${tracker.nombre} salió del servidor**`,
-                    embeds: [
-                        crearEmbedOffline(
-                            tracker,
-                            tiempoJugado,
-                            servidorDondeEstaba
-                        )
-                    ],
-                    components: [
-                        crearBotonBattleMetrics(
-                            tracker.battlemetricsId
-                        )
-                    ]
-                });
+                await tracker.save();
+
+                continue;
             }
 
-            await tracker.save();
+            // ==========================================
+            // 2. ESTÁ ONLINE PERO EN OTRO SERVIDOR
+            // ==========================================
+
+            if (estaOnline && !estaEnServidorConfigurado) {
+
+                // --------------------------------------
+                // VIENE DEL SERVIDOR CONFIGURADO
+                // --------------------------------------
+
+                if (
+                    tracker.ultimoEstado ===
+                    "online"
+                ) {
+
+                    const tiempoSesion =
+                        tracker.inicioSesion
+                            ? formatoTiempo(
+                                Date.now() -
+                                tracker.inicioSesion.getTime()
+                            )
+                            : "0m";
+
+                    await canal.send({
+                        content:
+                            `🔔 **${tracker.nombre} está en otro servidor**`,
+                        embeds: [
+                            crearEmbedOtroServidor(
+                                status,
+                                tracker,
+                                servidorConfigurado
+                            )
+                        ],
+                        components: [
+                            crearBotonBattleMetrics(
+                                tracker.battlemetricsId
+                            )
+                        ]
+                    });
+
+                    tracker.ultimoEstado =
+                        "otro_servidor";
+
+                    tracker.inicioSesion = null;
+                }
+
+                // --------------------------------------
+                // YA ESTABA EN OTRO SERVIDOR
+                // --------------------------------------
+
+                else if (
+                    tracker.ultimoEstado ===
+                    "otro_servidor"
+                ) {
+
+                    // Si cambió de servidor externo,
+                    // actualizamos los datos pero NO
+                    // mandamos una alerta de "volvió".
+
+                    if (
+                        tracker.ultimoServerId !==
+                        serverIdActual
+                    ) {
+
+                        tracker.ultimoServidor =
+                            status.server || null;
+
+                        tracker.ultimoServerId =
+                            serverIdActual;
+                    }
+                }
+
+                // --------------------------------------
+                // OFFLINE -> OTRO SERVIDOR
+                // --------------------------------------
+
+                else if (
+                    tracker.ultimoEstado ===
+                    "offline"
+                ) {
+
+                    await canal.send({
+                        content:
+                            `🔔 **${tracker.nombre} está en otro servidor**`,
+                        embeds: [
+                            crearEmbedOtroServidor(
+                                status,
+                                tracker,
+                                servidorConfigurado
+                            )
+                        ],
+                        components: [
+                            crearBotonBattleMetrics(
+                                tracker.battlemetricsId
+                            )
+                        ]
+                    });
+
+                    tracker.ultimoEstado =
+                        "otro_servidor";
+
+                    tracker.inicioSesion = null;
+                }
+
+                tracker.ultimoServidor =
+                    status.server || null;
+
+                tracker.ultimoServerId =
+                    serverIdActual;
+
+                await tracker.save();
+
+                continue;
+            }
+
+            // ==========================================
+            // 3. ESTÁ COMPLETAMENTE OFFLINE
+            // ==========================================
+
+            if (!estaOnline) {
+
+                // --------------------------------------
+                // SALIÓ DEL SERVIDOR CONFIGURADO
+                // --------------------------------------
+
+                if (
+                    tracker.ultimoEstado ===
+                    "online"
+                ) {
+
+                    const tiempoSesion =
+                        tracker.inicioSesion
+                            ? formatoTiempo(
+                                Date.now() -
+                                tracker.inicioSesion.getTime()
+                            )
+                            : "0m";
+
+                    await canal.send({
+                        content:
+                            `🔔 **${tracker.nombre} salió del servidor configurado**`,
+                        embeds: [
+                            crearEmbedOffline(
+                                tracker,
+                                tiempoSesion,
+                                tracker.ultimoServidor
+                            )
+                        ],
+                        components: [
+                            crearBotonBattleMetrics(
+                                tracker.battlemetricsId
+                            )
+                        ]
+                    });
+
+                    tracker.ultimoEstado =
+                        "offline";
+
+                    tracker.inicioSesion =
+                        null;
+
+                    tracker.ultimoServerId =
+                        null;
+                }
+
+                // --------------------------------------
+                // YA ESTABA OFFLINE
+                // --------------------------------------
+
+                else if (
+                    tracker.ultimoEstado ===
+                    "offline"
+                ) {
+
+                    tracker.ultimoEstado =
+                        "offline";
+
+                    tracker.ultimoServerId =
+                        null;
+                }
+
+                // --------------------------------------
+                // ESTABA EN OTRO SERVIDOR Y
+                // AHORA ESTÁ OFFLINE
+                // --------------------------------------
+
+                else if (
+                    tracker.ultimoEstado ===
+                    "otro_servidor"
+                ) {
+
+                    tracker.ultimoEstado =
+                        "offline";
+
+                    tracker.inicioSesion =
+                        null;
+
+                    tracker.ultimoServerId =
+                        null;
+                }
+
+                await tracker.save();
+
+                continue;
+            }
         }
 
     } catch (error) {
         console.error(
-            "ERROR EN REVISAR TRACKERS:",
+            "[TRACKER] Error general revisando trackers:",
             error
         );
     }
