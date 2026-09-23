@@ -114,10 +114,6 @@ function crearEmbed(giveaway) {
             ).getTime() / 1000
         );
 
-    // ================================================
-    // GIVEAWAY ACTIVO
-    // ================================================
-
     if (
         giveaway.activo &&
         !giveaway.finalizado
@@ -127,13 +123,9 @@ function crearEmbed(giveaway) {
             .setTitle("🎉 GIVEAWAY")
             .setDescription(
                 `🎁 **Premio:** ${giveaway.premio}\n\n` +
-
                 `👑 **Ganadores:** ${giveaway.ganadorCantidad}\n` +
-
                 `👥 **Participantes:** ${giveaway.participantes.length}\n\n` +
-
                 `⏰ **Termina:** <t:${fechaFinal}:R>\n\n` +
-
                 `🎉 Pulsa **Participar** para entrar al sorteo.`
             )
             .setColor(0xffc107)
@@ -149,10 +141,6 @@ function crearEmbed(giveaway) {
             })
             .setTimestamp();
     }
-
-    // ================================================
-    // GIVEAWAY FINALIZADO
-    // ================================================
 
     let textoGanadores =
         "❌ No hubo suficientes participantes.";
@@ -174,11 +162,8 @@ function crearEmbed(giveaway) {
         .setTitle("🏆 GIVEAWAY FINALIZADO")
         .setDescription(
             `🎁 **Premio:** ${giveaway.premio}\n\n` +
-
             `👥 **Participantes:** ${giveaway.participantes.length}\n\n` +
-
             `🏆 **Ganador${giveaway.ganadores.length > 1 ? "es" : ""}:**\n` +
-
             textoGanadores
         )
         .setColor(0x57f287)
@@ -197,7 +182,6 @@ function crearBotones(giveaway) {
     const fila =
         new ActionRowBuilder()
             .addComponents(
-
                 new ButtonBuilder()
                     .setCustomId(
                         `giveaway_participar_${giveaway.messageId}`
@@ -207,7 +191,6 @@ function crearBotones(giveaway) {
                     .setStyle(
                         ButtonStyle.Success
                     )
-
             );
 
     return [fila];
@@ -224,7 +207,6 @@ function crearPanelCreadorActivo(
     const fila =
         new ActionRowBuilder()
             .addComponents(
-
                 new ButtonBuilder()
                     .setCustomId(
                         `giveaway_cerrar_${giveaway.messageId}`
@@ -234,7 +216,6 @@ function crearPanelCreadorActivo(
                     .setStyle(
                         ButtonStyle.Danger
                     )
-
             );
 
     return [fila];
@@ -251,7 +232,6 @@ function crearPanelCreadorFinalizado(
     const fila =
         new ActionRowBuilder()
             .addComponents(
-
                 new ButtonBuilder()
                     .setCustomId(
                         `giveaway_reroll_${giveaway.messageId}`
@@ -261,7 +241,6 @@ function crearPanelCreadorFinalizado(
                     .setStyle(
                         ButtonStyle.Primary
                     )
-
             );
 
     return [fila];
@@ -284,11 +263,8 @@ function crearEmbedPanelCreador(
             .setTitle("🔧 Control del Giveaway")
             .setDescription(
                 `🎁 **Premio:** ${giveaway.premio}\n\n` +
-
                 `👥 **Participantes:** ${giveaway.participantes.length}\n\n` +
-
                 `🔒 Este panel solo lo puede utilizar el creador del giveaway.\n\n` +
-
                 `Pulsa **Finalizar** si quieres terminar el sorteo antes de tiempo.`
             )
             .setColor(0x5865f2)
@@ -302,11 +278,8 @@ function crearEmbedPanelCreador(
         .setTitle("🔧 Control del Giveaway")
         .setDescription(
             `🎁 **Premio:** ${giveaway.premio}\n\n` +
-
             `👥 **Participantes:** ${giveaway.participantes.length}\n\n` +
-
             `🏆 **Ganador${giveaway.ganadores.length > 1 ? "es" : ""}:**\n` +
-
             (
                 giveaway.ganadores.length > 0
                     ? giveaway.ganadores
@@ -314,7 +287,6 @@ function crearEmbedPanelCreador(
                         .join("\n")
                     : "❌ Ninguno"
             ) +
-
             `\n\n🔄 Puedes elegir un nuevo ganador con el botón de abajo.`
         )
         .setColor(0x57f287)
@@ -348,35 +320,29 @@ async function actualizarPanelCreador(
         ) {
 
             await panel.edit({
-
                 embeds: [
                     crearEmbedPanelCreador(
                         giveaway
                     )
                 ],
-
                 components:
                     crearPanelCreadorFinalizado(
                         giveaway
                     )
-
             });
 
         } else {
 
             await panel.edit({
-
                 embeds: [
                     crearEmbedPanelCreador(
                         giveaway
                     )
                 ],
-
                 components:
                     crearPanelCreadorActivo(
                         giveaway
                     )
-
             });
         }
 
@@ -386,6 +352,86 @@ async function actualizarPanelCreador(
             "[GIVEAWAY] No se pudo actualizar el panel privado:",
             error.message
         );
+    }
+}
+
+// =====================================================
+// REPARAR MENSAJE DE GIVEAWAY
+// =====================================================
+
+async function repararMensajeGiveaway(
+    client,
+    giveaway
+) {
+
+    if (
+        !giveaway ||
+        giveaway.finalizado ||
+        !giveaway.activo
+    ) {
+        return false;
+    }
+
+    try {
+
+        const canal =
+            await client.channels
+                .fetch(
+                    giveaway.channelId
+                )
+                .catch(() => null);
+
+        if (!canal) {
+
+            console.log(
+                `[GIVEAWAY] No se pudo reparar: canal ${giveaway.channelId} no encontrado.`
+            );
+
+            return false;
+        }
+
+        const mensaje =
+            await canal.messages
+                .fetch(
+                    giveaway.messageId
+                )
+                .catch(() => null);
+
+        if (!mensaje) {
+
+            console.log(
+                `[GIVEAWAY] No se pudo reparar: mensaje ${giveaway.messageId} no encontrado.`
+            );
+
+            return false;
+        }
+
+        await mensaje.edit({
+            embeds: [
+                crearEmbed(
+                    giveaway
+                )
+            ],
+            components:
+                crearBotones(
+                    giveaway
+                )
+        });
+
+        console.log(
+            `[GIVEAWAY] Mensaje reparado: ${giveaway.messageId} | participantes: ${giveaway.participantes.length}`
+        );
+
+        return true;
+
+    } catch (error) {
+
+        console.error(
+            `[GIVEAWAY] Error reparando ${giveaway.messageId}:`,
+            error.message
+        );
+
+        return false;
     }
 }
 
@@ -435,10 +481,6 @@ async function finalizarGiveaway(
                 .fetch(giveaway.messageId)
                 .catch(() => null);
 
-        // ============================================
-        // ELEGIR GANADORES
-        // ============================================
-
         const ganadores =
             elegirGanadores(
                 giveaway.participantes,
@@ -453,46 +495,27 @@ async function finalizarGiveaway(
 
         await giveaway.save();
 
-        // ============================================
-        // ACTUALIZAR MENSAJE PÚBLICO
-        // ============================================
-
         if (mensaje) {
 
             await mensaje.edit({
-
                 embeds: [
                     crearEmbed(
                         giveaway
                     )
                 ],
-
-                // IMPORTANTE:
-                // El mensaje público NO muestra
-                // Finalizar ni Reroll.
                 components: []
-
             }).catch(error => {
 
                 console.error(
                     "[GIVEAWAY] Error actualizando mensaje:",
                     error
                 );
-
             });
         }
-
-        // ============================================
-        // ACTUALIZAR PANEL PRIVADO DEL CREADOR
-        // ============================================
 
         await actualizarPanelCreador(
             giveaway
         );
-
-        // ============================================
-        // ANUNCIAR GANADORES
-        // ============================================
 
         if (
             ganadores.length > 0
@@ -506,21 +529,17 @@ async function finalizarGiveaway(
                     .join(", ");
 
             await canal.send({
-
                 content:
                     `🎉 **GIVEAWAY FINALIZADO**\n\n` +
                     `🎁 Premio: **${giveaway.premio}**\n` +
                     `🏆 Ganador${ganadores.length > 1 ? "es" : ""}: ${menciones}`
-
             });
 
         } else {
 
             await canal.send({
-
                 content:
                     `❌ El giveaway de **${giveaway.premio}** terminó sin participantes.`
-
             });
         }
 
@@ -612,10 +631,6 @@ async function procesarParticipacion(
                     .catch(() => null)
                 : null;
 
-        // ============================================
-        // SALIR
-        // ============================================
-
         if (
             indice !== -1
         ) {
@@ -630,18 +645,15 @@ async function procesarParticipacion(
             if (mensaje) {
 
                 await mensaje.edit({
-
                     embeds: [
                         crearEmbed(
                             giveaway
                         )
                     ],
-
                     components:
                         crearBotones(
                             giveaway
                         )
-
                 }).catch(() => {});
             }
 
@@ -661,10 +673,6 @@ async function procesarParticipacion(
             return;
         }
 
-        // ============================================
-        // ENTRAR
-        // ============================================
-
         giveaway.participantes.push(
             usuarioId
         );
@@ -674,18 +682,15 @@ async function procesarParticipacion(
         if (mensaje) {
 
             await mensaje.edit({
-
                 embeds: [
                     crearEmbed(
                         giveaway
                     )
                 ],
-
                 components:
                     crearBotones(
                         giveaway
                     )
-
             }).catch(() => {});
         }
 
@@ -751,10 +756,6 @@ async function procesarFinalizar(
                     "❌ Este giveaway ya no existe."
             });
         }
-
-        // ============================================
-        // SEGURIDAD
-        // ============================================
 
         if (
             buttonInteraction.user.id !==
@@ -842,10 +843,6 @@ async function procesarReroll(
             });
         }
 
-        // ============================================
-        // SEGURIDAD
-        // ============================================
-
         if (
             buttonInteraction.user.id !==
             giveaway.creadorId
@@ -867,10 +864,6 @@ async function procesarReroll(
             });
         }
 
-        // ============================================
-        // BUSCAR CANDIDATOS
-        // ============================================
-
         const candidatos =
             giveaway.participantes.filter(
                 id =>
@@ -889,29 +882,17 @@ async function procesarReroll(
             });
         }
 
-        // ============================================
-        // ELEGIR NUEVO GANADOR
-        // ============================================
-
         const nuevoGanador =
             elegirGanadores(
                 candidatos,
                 1
             )[0];
 
-        // ============================================
-        // GUARDAR NUEVO GANADOR
-        // ============================================
-
         giveaway.ganadores = [
             nuevoGanador
         ];
 
         await giveaway.save();
-
-        // ============================================
-        // ACTUALIZAR MENSAJE PÚBLICO
-        // ============================================
 
         const canal =
             await buttonInteraction.client.channels
@@ -932,41 +913,30 @@ async function procesarReroll(
             if (mensaje) {
 
                 await mensaje.edit({
-
                     embeds: [
                         crearEmbed(
                             giveaway
                         )
                     ],
-
                     components: []
-
                 }).catch(() => {});
             }
 
             await canal.send({
-
                 content:
                     `🔄 **NUEVO GANADOR**\n\n` +
                     `🎁 Premio: **${giveaway.premio}**\n` +
                     `🏆 Nuevo ganador: <@${nuevoGanador}>`
-
             });
         }
-
-        // ============================================
-        // ACTUALIZAR PANEL PRIVADO
-        // ============================================
 
         await actualizarPanelCreador(
             giveaway
         );
 
         await buttonInteraction.editReply({
-
             content:
                 `🔄 Nuevo ganador seleccionado: <@${nuevoGanador}>`
-
         });
 
         console.log(
@@ -981,10 +951,8 @@ async function procesarReroll(
         );
 
         await buttonInteraction.editReply({
-
             content:
                 "❌ Ocurrió un error al elegir un nuevo ganador."
-
         }).catch(() => {});
     }
 }
@@ -1063,10 +1031,6 @@ function iniciarCollector(
                     `[GIVEAWAY] Collector iniciado: ${giveaway.messageId}`
                 );
 
-                // ========================================
-                // BOTONES PÚBLICOS
-                // ========================================
-
                 collector.on(
                     "collect",
                     async buttonInteraction => {
@@ -1093,10 +1057,6 @@ function iniciarCollector(
                         }
                     }
                 );
-
-                // ========================================
-                // TERMINAR COLLECTOR
-                // ========================================
 
                 collector.on(
                     "end",
@@ -1167,10 +1127,6 @@ function iniciarCollectorPanelCreador(
                 const customId =
                     buttonInteraction.customId;
 
-                // ==================================
-                // FINALIZAR
-                // ==================================
-
                 if (
                     customId ===
                     `giveaway_cerrar_${giveaway.messageId}`
@@ -1182,10 +1138,6 @@ function iniciarCollectorPanelCreador(
 
                     return;
                 }
-
-                // ==================================
-                // REROLL
-                // ==================================
 
                 if (
                     customId ===
@@ -1212,13 +1164,10 @@ function iniciarCollectorPanelCreador(
                 ) {
 
                     await buttonInteraction.reply({
-
                         content:
                             "❌ Ocurrió un error.",
-
                         flags:
                             MessageFlags.Ephemeral
-
                     }).catch(() => {});
                 }
             }
@@ -1250,6 +1199,19 @@ async function iniciarGiveaways(
             const giveaway
             of giveaways
         ) {
+
+            // ==========================================
+            // REPARAR MENSAJE Y BOTÓN
+            // ==========================================
+
+            await repararMensajeGiveaway(
+                client,
+                giveaway
+            );
+
+            // ==========================================
+            // INICIAR COLLECTOR
+            // ==========================================
 
             iniciarCollector(
                 client,
@@ -1334,10 +1296,6 @@ module.exports = {
                     "ganadores"
                 ) || 1;
 
-            // ==========================================
-            // VALIDAR DURACIÓN
-            // ==========================================
-
             const duracion =
                 parsearDuracion(
                     duracionTexto
@@ -1357,10 +1315,6 @@ module.exports = {
                 });
             }
 
-            // ==========================================
-            // FECHAS
-            // ==========================================
-
             const fechaInicio =
                 new Date();
 
@@ -1368,10 +1322,6 @@ module.exports = {
                 new Date(
                     Date.now() + duracion
                 );
-
-            // ==========================================
-            // CREAR DOCUMENTO
-            // ==========================================
 
             const giveaway =
                 new Giveaway({
@@ -1406,10 +1356,6 @@ module.exports = {
 
                 });
 
-            // ==========================================
-            // PUBLICAR GIVEAWAY PÚBLICO
-            // ==========================================
-
             await interaction.reply({
 
                 embeds: [
@@ -1418,7 +1364,6 @@ module.exports = {
                     )
                 ],
 
-                // SOLO PARTICIPAR
                 components:
                     crearBotones(
                         giveaway
@@ -1429,18 +1374,10 @@ module.exports = {
             const mensaje =
                 await interaction.fetchReply();
 
-            // ==========================================
-            // GUARDAR MESSAGE ID REAL
-            // ==========================================
-
             giveaway.messageId =
                 mensaje.id;
 
             await giveaway.save();
-
-            // ==========================================
-            // ACTUALIZAR BOTÓN CON ID REAL
-            // ==========================================
 
             await mensaje.edit({
 
@@ -1457,18 +1394,10 @@ module.exports = {
 
             });
 
-            // ==========================================
-            // INICIAR COLLECTOR PÚBLICO
-            // ==========================================
-
             iniciarCollector(
                 interaction.client,
                 giveaway
             );
-
-            // ==========================================
-            // PANEL PRIVADO DEL CREADOR
-            // ==========================================
 
             const panel =
                 await interaction.followUp({
@@ -1489,18 +1418,10 @@ module.exports = {
 
                 });
 
-            // ==========================================
-            // GUARDAR PANEL EN MEMORIA
-            // ==========================================
-
             panelesCreador.set(
                 giveaway.messageId,
                 panel
             );
-
-            // ==========================================
-            // INICIAR COLLECTOR DEL PANEL
-            // ==========================================
 
             iniciarCollectorPanelCreador(
                 panel,
