@@ -27,8 +27,11 @@ function validarConfiguracion() {
 }
 
 /**
- * Headers para Twitch Helix.
+ * ============================================================
+ * HEADERS TWITCH
+ * ============================================================
  */
+
 function getHeaders(accessToken) {
     validarConfiguracion();
 
@@ -141,17 +144,23 @@ async function obtenerJuegoRust(accessToken) {
             }
         );
 
-        const juegos = respuesta.data?.data || [];
+        const juegos =
+            respuesta.data?.data || [];
 
         if (!juegos.length) {
-            console.log("⚠️ Twitch no devolvió el juego Rust.");
+            console.log(
+                "⚠️ Twitch no devolvió el juego Rust."
+            );
+
             return null;
         }
 
-        const rust = juegos.find(
-            juego =>
-                String(juego.name).toLowerCase() === "rust"
-        );
+        const rust =
+            juegos.find(
+                juego =>
+                    String(juego.name).toLowerCase() ===
+                    "rust"
+            );
 
         if (rust) {
             console.log(
@@ -266,7 +275,10 @@ async function obtenerTwitchAppToken() {
         return twitchAppToken;
     }
 
-    if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) {
+    if (
+        !TWITCH_CLIENT_ID ||
+        !TWITCH_CLIENT_SECRET
+    ) {
         console.warn(
             "⚠️ No están configurados TWITCH_CLIENT_ID/TWITCH_CLIENT_SECRET."
         );
@@ -281,18 +293,23 @@ async function obtenerTwitchAppToken() {
             {
                 params: {
                     client_id: TWITCH_CLIENT_ID,
-                    client_secret: TWITCH_CLIENT_SECRET,
-                    grant_type: "client_credentials"
+                    client_secret:
+                        TWITCH_CLIENT_SECRET,
+                    grant_type:
+                        "client_credentials"
                 },
                 timeout: 15000
             }
         );
 
         twitchAppToken =
-            respuesta.data?.access_token || null;
+            respuesta.data?.access_token ||
+            null;
 
         const expiresIn =
-            Number(respuesta.data?.expires_in || 0);
+            Number(
+                respuesta.data?.expires_in || 0
+            );
 
         twitchAppTokenExpiresAt =
             Date.now() +
@@ -351,10 +368,15 @@ async function obtenerStreamersOnline(logins = []) {
         await obtenerTwitchAppToken();
 
     if (!appToken) {
+        console.warn(
+            "⚠️ No se pudo obtener token de aplicación. Los streamers aparecerán offline."
+        );
+
         return new Set();
     }
 
-    const online = new Set();
+    const online =
+        new Set();
 
     try {
         for (
@@ -368,33 +390,42 @@ async function obtenerStreamersOnline(logins = []) {
                     i + 100
                 );
 
-            const params = new URLSearchParams();
+            const params =
+                new URLSearchParams();
 
-            for (const login of lote) {
+            for (
+                const login of lote
+            ) {
                 params.append(
                     "user_login",
                     login
                 );
             }
 
-            const respuesta = await axios.get(
-                "https://api.twitch.tv/helix/streams",
-                {
-                    params,
-                    headers: {
-                        "Client-ID": TWITCH_CLIENT_ID,
-                        "Authorization":
-                            `Bearer ${appToken}`
-                    },
-                    timeout: 15000
-                }
-            );
+            const respuesta =
+                await axios.get(
+                    "https://api.twitch.tv/helix/streams",
+                    {
+                        params,
+                        headers: {
+                            "Client-ID":
+                                TWITCH_CLIENT_ID,
+                            "Authorization":
+                                `Bearer ${appToken}`
+                        },
+                        timeout: 15000
+                    }
+                );
 
             const streams =
                 respuesta.data?.data || [];
 
-            for (const stream of streams) {
-                if (stream.user_login) {
+            for (
+                const stream of streams
+            ) {
+                if (
+                    stream.user_login
+                ) {
                     online.add(
                         String(
                             stream.user_login
@@ -437,6 +468,7 @@ function decodificarHtml(texto = "") {
         .replace(/&gt;/gi, ">")
         .replace(/&#x27;/gi, "'")
         .replace(/&#x2F;/gi, "/")
+        .replace(/&#160;/gi, " ")
         .trim();
 }
 
@@ -444,6 +476,8 @@ function limpiarHtml(texto = "") {
     return decodificarHtml(
         String(texto)
             .replace(/<br\s*\/?>/gi, "\n")
+            .replace(/<script[\s\S]*?<\/script>/gi, " ")
+            .replace(/<style[\s\S]*?<\/style>/gi, " ")
             .replace(/<[^>]+>/g, " ")
             .replace(/\s+/g, " ")
             .trim()
@@ -459,6 +493,361 @@ function normalizarLogin(nombre = "") {
 
 /**
  * ============================================================
+ * EXTRAER STREAMERS + RECOMPENSAS
+ *
+ * La estructura real de Facepunch es:
+ *
+ * streamer
+ * streamer
+ * recompensa
+ * tiempo
+ *
+ * streamer
+ * recompensa
+ * tiempo
+ *
+ * Por eso procesamos el HTML en orden.
+ * ============================================================
+ */
+
+function extraerStreamerDrops(html) {
+    const resultados = [];
+
+    /**
+     * Primero obtenemos los enlaces Twitch en orden.
+     */
+    const regexEnlaces =
+        /<a\b[^>]*href=["']https?:\/\/(?:www\.)?twitch\.tv\/([^"'?#\/]+)[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi;
+
+    const enlaces = [];
+
+    let match;
+
+    while (
+        (match =
+            regexEnlaces.exec(html)) !== null
+    ) {
+        const login =
+            normalizarLogin(
+                match[1]
+            );
+
+        if (!login) {
+            continue;
+        }
+
+        const displayName =
+            limpiarHtml(
+                match[2]
+            ) || match[1];
+
+        enlaces.push({
+            login,
+            displayName,
+            index:
+                match.index
+        });
+    }
+
+    /**
+     * Los enlaces de Rust streams / Twitch Drops
+     * aparecen también en otras partes de la página.
+     *
+     * Nos quedamos únicamente con los streamers que
+     * están después de "Streamer Drops".
+     */
+    const indiceStreamerDrops =
+        html.search(
+            /Streamer Drops/i
+        );
+
+    if (
+        indiceStreamerDrops === -1
+    ) {
+        return [];
+    }
+
+    const indiceFinal =
+        html.search(
+            /Drops Metrics/i
+        );
+
+    const inicio =
+        indiceStreamerDrops;
+
+    const fin =
+        indiceFinal !== -1
+            ? indiceFinal
+            : html.length;
+
+    const bloque =
+        html.slice(
+            inicio,
+            fin
+        );
+
+    /**
+     * Enlaces Twitch dentro exclusivamente
+     * del bloque Streamer Drops.
+     */
+    const regexStreamer =
+        /<a\b[^>]*href=["']https?:\/\/(?:www\.)?twitch\.tv\/([^"'?#\/]+)[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi;
+
+    const streamers =
+        [];
+
+    while (
+        (match =
+            regexStreamer.exec(
+                bloque
+            )) !== null
+    ) {
+        const login =
+            normalizarLogin(
+                match[1]
+            );
+
+        if (!login) {
+            continue;
+        }
+
+        const displayName =
+            limpiarHtml(
+                match[2]
+            ) || match[1];
+
+        streamers.push({
+            login,
+            displayName,
+            index:
+                match.index
+        });
+    }
+
+    /**
+     * Eliminamos duplicados consecutivos.
+     */
+    const streamersUnicos =
+        [];
+
+    for (
+        const streamer of streamers
+    ) {
+        const anterior =
+            streamersUnicos[
+                streamersUnicos.length - 1
+            ];
+
+        if (
+            anterior &&
+            anterior.login ===
+                streamer.login
+        ) {
+            continue;
+        }
+
+        streamersUnicos.push(
+            streamer
+        );
+    }
+
+    /**
+     * Quitamos la parte de HTML y trabajamos
+     * con texto manteniendo posiciones aproximadas.
+     *
+     * Buscamos cada recompensa en el HTML y tomamos
+     * los streamers inmediatamente anteriores.
+     */
+
+    const nombresRecompensas =
+        [
+            "Rocket Launcher",
+            "Assault Rifle",
+            "Semi-automatic Rifle",
+            "Double Barrel Shotgun",
+            "Boonie Hat",
+            "Small Backpack",
+            "Furnace",
+            "Wooden Door",
+            "Large Wood Box",
+            "Salvaged Sword",
+            "Garage Door",
+            "Locker",
+            "Metal Facemask",
+            "Metal Chestplate",
+            "Vagabond Jacket",
+            "Tactical Gloves"
+        ];
+
+    /**
+     * Creamos una lista de posiciones de recompensas
+     * directamente sobre el bloque HTML.
+     */
+    const recompensasEncontradas =
+        [];
+
+    for (
+        const nombre of nombresRecompensas
+    ) {
+        const regex =
+            new RegExp(
+                escapeRegExp(nombre),
+                "i"
+            );
+
+        const resultado =
+            regex.exec(
+                bloque
+            );
+
+        if (!resultado) {
+            continue;
+        }
+
+        recompensasEncontradas.push({
+            nombre,
+            index:
+                resultado.index
+        });
+    }
+
+    /**
+     * Orden correcto según la página.
+     */
+    recompensasEncontradas.sort(
+        (a, b) =>
+            a.index - b.index
+    );
+
+    /**
+     * Para cada recompensa:
+     *
+     * - buscamos los enlaces Twitch anteriores
+     * - ignoramos streamers que estén demasiado lejos
+     * - tomamos como máximo los streamers que aparecen
+     *   desde la recompensa anterior hasta ésta.
+     *
+     * La página actual coloca 1 o 2 streamers por drop.
+     */
+    for (
+        let i = 0;
+        i < recompensasEncontradas.length;
+        i++
+    ) {
+        const recompensa =
+            recompensasEncontradas[i];
+
+        const anterior =
+            i > 0
+                ? recompensasEncontradas[
+                    i - 1
+                ]
+                : null;
+
+        const limiteInicio =
+            anterior
+                ? anterior.index
+                : 0;
+
+        const limiteFin =
+            recompensa.index;
+
+        const canales =
+            streamersUnicos.filter(
+                streamer =>
+                    streamer.index >=
+                        limiteInicio &&
+                    streamer.index <
+                        limiteFin
+            );
+
+        /**
+         * Normalmente hay 1 o 2 canales.
+         */
+        const canalesFinales =
+            canales.slice(
+                Math.max(
+                    0,
+                    canales.length - 2
+                )
+            );
+
+        /**
+         * Horas:
+         * buscamos "1 Hour", "2 Hours", etc.
+         * después de la recompensa.
+         */
+        const textoPosterior =
+            limpiarHtml(
+                bloque.slice(
+                    recompensa.index,
+                    Math.min(
+                        bloque.length,
+                        recompensa.index +
+                            800
+                    )
+                )
+            );
+
+        const horasMatch =
+            textoPosterior.match(
+                /\b(\d+)\s+Hours?\b/i
+            );
+
+        const horas =
+            horasMatch
+                ? Number(
+                    horasMatch[1]
+                )
+                : 1;
+
+        if (
+            canalesFinales.length
+        ) {
+            resultados.push({
+                nombre:
+                    recompensa.nombre,
+                horas,
+                canales:
+                    canalesFinales
+                        .map(
+                            canal => ({
+                                login:
+                                    canal.login,
+                                displayName:
+                                    canal.displayName
+                            })
+                        )
+            });
+        }
+    }
+
+    /**
+     * Si el algoritmo anterior no encuentra algo,
+     * utilizamos un parser alternativo basado en el
+     * texto visible de la página.
+     */
+    if (
+        resultados.length <
+        recompensasEncontradas.length
+    ) {
+        console.log(
+            `⚠️ Parser principal encontró ${resultados.length}/${recompensasEncontradas.length} streamer drops.`
+        );
+    }
+
+    return resultados;
+}
+
+function escapeRegExp(texto) {
+    return String(texto).replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+    );
+}
+
+/**
+ * ============================================================
  * OBTENER DROPS DESDE FACEPUNCH
  * ============================================================
  */
@@ -469,19 +858,24 @@ async function obtenerDropsFacepunch() {
             "🌐 Consultando Drops actuales de Facepunch..."
         );
 
-        const respuesta = await axios.get(
-            FACEPUNCH_DROPS_URL,
-            {
-                timeout: 20000,
-                headers: {
-                    "User-Agent":
-                        "RustLogix/1.0 Twitch Drops"
+        const respuesta =
+            await axios.get(
+                FACEPUNCH_DROPS_URL,
+                {
+                    timeout: 20000,
+                    headers: {
+                        "User-Agent":
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/154 Safari/537.36",
+                        Accept:
+                            "text/html,application/xhtml+xml"
+                    }
                 }
-            }
-        );
+            );
 
         const html =
-            String(respuesta.data || "");
+            String(
+                respuesta.data || ""
+            );
 
         if (!html) {
             throw new Error(
@@ -500,34 +894,113 @@ async function obtenerDropsFacepunch() {
 
         const campaignMatch =
             html.match(
-                /Twitch Drops[^<]{0,100}/i
+                /<h1[^>]*>([\s\S]*?)<\/h1>/i
             );
 
         if (campaignMatch) {
-            campaignName =
+            const posibleNombre =
                 limpiarHtml(
-                    campaignMatch[0]
+                    campaignMatch[1]
                 );
+
+            if (
+                posibleNombre &&
+                !/^Drops Metrics$/i.test(
+                    posibleNombre
+                )
+            ) {
+                campaignName =
+                    posibleNombre;
+            }
         }
 
-        let fechaInicio = null;
-        let fechaFin = null;
+        /**
+         * ========================================================
+         * NOMBRE DE CAMPAÑA REAL
+         * ========================================================
+         *
+         * En la página actual aparece:
+         *
+         * Twitch Drops Round 53 Hosted by Rustoria
+         * Rust Isles
+         */
 
-        const fechas =
-            html.match(
-                /([A-Z][a-z]+\s+\d{1,2},\s+\d{4}[^<]{0,80})\s*-\s*([A-Z][a-z]+\s+\d{1,2},\s+\d{4}[^<]{0,80})/i
+        const textoPagina =
+            limpiarHtml(html);
+
+        const campaignTextoMatch =
+            textoPagina.match(
+                /(Twitch Drops[^]{0,120}?)(?=Rust Isles|General Drops)/i
             );
 
-        if (fechas) {
+        if (
+            campaignTextoMatch
+        ) {
+            const texto =
+                campaignTextoMatch[1]
+                    .replace(
+                        /\s+/g,
+                        " "
+                    )
+                    .trim();
+
+            if (
+                texto.toLowerCase()
+                    .includes(
+                        "twitch drops"
+                    )
+            ) {
+                campaignName =
+                    texto;
+            }
+        }
+
+        /**
+         * ========================================================
+         * SUBTÍTULO / TEMA
+         * ========================================================
+         */
+
+        let campaignTheme =
+            null;
+
+        const rustIslesMatch =
+            textoPagina.match(
+                /(Rust Isles)/i
+            );
+
+        if (
+            rustIslesMatch
+        ) {
+            campaignTheme =
+                rustIslesMatch[1];
+        }
+
+        /**
+         * ========================================================
+         * FECHAS
+         * ========================================================
+         */
+
+        let fechaInicio =
+            null;
+
+        let fechaFin =
+            null;
+
+        const fechaMatch =
+            textoPagina.match(
+                /([A-Z][a-z]+\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s+[AP]M\s+UTC)\s*-\s*([A-Z][a-z]+\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s+[AP]M\s+UTC)/i
+            );
+
+        if (
+            fechaMatch
+        ) {
             fechaInicio =
-                limpiarHtml(
-                    fechas[1]
-                );
+                fechaMatch[1];
 
             fechaFin =
-                limpiarHtml(
-                    fechas[2]
-                );
+                fechaMatch[2];
         }
 
         /**
@@ -536,54 +1009,41 @@ async function obtenerDropsFacepunch() {
          * ========================================================
          */
 
-        const generalDrops = [];
+        const generalDrops =
+            [];
 
-        const nombresGenerales = [
-            "Large Wood Box",
-            "Auto Turret",
-            "Small Box",
-            "Pants",
-            "Work Boots",
-            "Hoodie"
-        ];
+        const generalNombres =
+            [
+                "Large Wood Box",
+                "Auto Turret",
+                "Small Box",
+                "Pants",
+                "Work Boots",
+                "Hoodie"
+            ];
 
-        const bloqueGeneralMatch =
-            html.match(
-                /General Drops([\s\S]*?)(?:Streamer Drops|$)/i
-            );
-
-        if (bloqueGeneralMatch) {
-            const textoGeneral =
-                limpiarHtml(
-                    bloqueGeneralMatch[1]
+        for (
+            const nombre of generalNombres
+        ) {
+            const regex =
+                new RegExp(
+                    `${escapeRegExp(nombre)}\\s+(\\d+)\\s+Hours?`,
+                    "i"
                 );
 
-            for (
-                const nombre of nombresGenerales
-            ) {
-                const regex =
-                    new RegExp(
-                        `${nombre.replace(
-                            /[.*+?^${}()|[\]\\]/g,
-                            "\\$&"
-                        )}\\s+(\\d+)\\s+Hours?`,
-                        "i"
-                    );
+            const match =
+                textoPagina.match(
+                    regex
+                );
 
-                const match =
-                    textoGeneral.match(
-                        regex
-                    );
-
-                if (match) {
-                    generalDrops.push({
-                        nombre,
-                        horas:
-                            Number(
-                                match[1]
-                            )
-                    });
-                }
+            if (match) {
+                generalDrops.push({
+                    nombre,
+                    horas:
+                        Number(
+                            match[1]
+                        )
+                });
             }
         }
 
@@ -593,198 +1053,10 @@ async function obtenerDropsFacepunch() {
          * ========================================================
          */
 
-        const streamerDrops = [];
-
-        const bloqueStreamerMatch =
-            html.match(
-                /Streamer Drops([\s\S]*)/i
+        const streamerDrops =
+            extraerStreamerDrops(
+                html
             );
-
-        if (bloqueStreamerMatch) {
-            const bloqueStreamer =
-                bloqueStreamerMatch[1];
-
-            const participantes = [];
-
-            const patron =
-                /href=["']https?:\/\/(?:www\.)?twitch\.tv\/([^"'?#\/]+)[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi;
-
-            let match;
-
-            while (
-                (match =
-                    patron.exec(
-                        bloqueStreamer
-                    )) !== null
-            ) {
-                const login =
-                    normalizarLogin(
-                        match[1]
-                    );
-
-                const displayName =
-                    limpiarHtml(
-                        match[2]
-                    ) ||
-                    match[1];
-
-                if (!login) {
-                    continue;
-                }
-
-                participantes.push({
-                    login,
-                    displayName
-                });
-            }
-
-            /**
-             * Eliminamos duplicados.
-             */
-            const participantesUnicos =
-                [];
-
-            for (
-                const participante of participantes
-            ) {
-                if (
-                    !participantesUnicos.some(
-                        x =>
-                            x.login ===
-                            participante.login
-                    )
-                ) {
-                    participantesUnicos.push(
-                        participante
-                    );
-                }
-            }
-
-            /**
-             * Buscamos recompensas y duración.
-             */
-            const textoStreamer =
-                limpiarHtml(
-                    bloqueStreamer
-                );
-
-            const recompensasConocidas = [
-                "Rocket Launcher",
-                "Assault Rifle",
-                "Semi-automatic Rifle",
-                "Double Barrel Shotgun",
-                "Boonie Hat",
-                "Small Backpack",
-                "Furnace",
-                "Wooden Door",
-                "Large Wood Box",
-                "Salvaged Sword",
-                "Garage Door",
-                "Locker",
-                "Metal Facemask",
-                "Metal Chestplate",
-                "Vagabond Jacket",
-                "Tactical Gloves"
-            ];
-
-            /**
-             * Para cada recompensa buscamos su posición
-             * en el HTML y los streamers que aparecen
-             * alrededor de ella.
-             */
-            for (
-                const recompensa of recompensasConocidas
-            ) {
-                const indice =
-                    textoStreamer
-                        .toLowerCase()
-                        .indexOf(
-                            recompensa.toLowerCase()
-                        );
-
-                if (indice === -1) {
-                    continue;
-                }
-
-                const antes =
-                    textoStreamer.slice(
-                        Math.max(
-                            0,
-                            indice - 500
-                        ),
-                        indice
-                    );
-
-                const despues =
-                    textoStreamer.slice(
-                        indice,
-                        Math.min(
-                            textoStreamer.length,
-                            indice + 300
-                        )
-                    );
-
-                const contexto =
-                    `${antes} ${despues}`;
-
-                const canales = [];
-
-                for (
-                    const participante of participantesUnicos
-                ) {
-                    const login =
-                        participante.login;
-
-                    const aparece =
-                        contexto
-                            .toLowerCase()
-                            .includes(
-                                login
-                            );
-
-                    if (
-                        aparece &&
-                        !canales.some(
-                            x =>
-                                x.login ===
-                                login
-                        )
-                    ) {
-                        canales.push({
-                            login,
-                            displayName:
-                                participante.displayName
-                        });
-                    }
-                }
-
-                /**
-                 * Buscamos duración cercana.
-                 */
-                const duracionMatch =
-                    contexto.match(
-                        /(\d+)\s+Hours?/i
-                    );
-
-                const horas =
-                    duracionMatch
-                        ? Number(
-                            duracionMatch[1]
-                        )
-                        : 1;
-
-                if (
-                    canales.length
-                ) {
-                    streamerDrops.push({
-                        nombre:
-                            recompensa,
-                        horas,
-                        canales
-                    });
-                }
-            }
-        }
 
         /**
          * ========================================================
@@ -792,7 +1064,8 @@ async function obtenerDropsFacepunch() {
          * ========================================================
          */
 
-        const logins = [];
+        const logins =
+            [];
 
         for (
             const drop of streamerDrops
@@ -837,19 +1110,25 @@ async function obtenerDropsFacepunch() {
         console.log(
             `🟢 Streamer Drops con al menos un canal online: ${
                 streamerDrops.filter(
-                    x => x.online
+                    drop =>
+                        drop.online
                 ).length
             }`
         );
 
         return {
             campaignName,
+            campaignTheme,
             fechaInicio,
             fechaFin,
             generalDrops,
             streamerDrops,
             onlineCount:
                 online.size,
+            totalStreamers:
+                new Set(
+                    logins
+                ).size,
             actualizado:
                 new Date()
         };
@@ -858,20 +1137,29 @@ async function obtenerDropsFacepunch() {
         console.error(
             "❌ Error obteniendo Drops desde Facepunch:",
             error.response?.status,
-            error.response?.data || error.message
+            error.response?.data ||
+                error.message
         );
 
         return {
             campaignName:
                 "Twitch Drops",
-            fechaInicio: null,
-            fechaFin: null,
+            campaignTheme:
+                null,
+            fechaInicio:
+                null,
+            fechaFin:
+                null,
             generalDrops: [],
             streamerDrops: [],
-            onlineCount: 0,
+            onlineCount:
+                0,
+            totalStreamers:
+                0,
             actualizado:
                 new Date(),
-            error: true
+            error:
+                true
         };
     }
 }
@@ -886,11 +1174,15 @@ function formatearHoras(horas) {
     const numero =
         Number(horas);
 
-    if (!Number.isFinite(numero)) {
+    if (
+        !Number.isFinite(numero)
+    ) {
         return "?";
     }
 
-    if (numero === 1) {
+    if (
+        numero === 1
+    ) {
         return "1 hora";
     }
 
@@ -899,36 +1191,91 @@ function formatearHoras(horas) {
 
 /**
  * ============================================================
- * EMBED FACEPUNCH
+ * FORMATEAR CANALES
  * ============================================================
  */
 
-function crearEmbedFacepunchDrops(datos) {
+function formatearCanales(
+    canales = []
+) {
+    return canales
+        .map(
+            canal => {
+                const estado =
+                    canal.online
+                        ? "🟢"
+                        : "⚫";
+
+                return (
+                    `${estado} [${canal.displayName}](https://www.twitch.tv/${canal.login})`
+                );
+            }
+        )
+        .join(" • ");
+}
+
+/**
+ * ============================================================
+ * EMBED
+ * ============================================================
+ */
+
+function crearEmbedFacepunchDrops(
+    datos
+) {
     const embed =
         new EmbedBuilder()
             .setColor(0x9146ff)
             .setTitle(
                 "🎁 Rust Twitch Drops"
-            )
-            .setDescription(
-                `**${datos.campaignName}**\n` +
-                (
-                    datos.fechaFin
-                        ? `⏰ Termina: **${datos.fechaFin}**`
-                        : "⏰ Fecha de finalización no disponible"
-                )
             );
 
     /**
      * ========================================================
-     * DROPS GENERALES
+     * CAMPAÑA
+     * ========================================================
+     */
+
+    let descripcion =
+        `**${datos.campaignName}**`;
+
+    if (
+        datos.campaignTheme
+    ) {
+        descripcion +=
+            `\n🏝️ **${datos.campaignTheme}**`;
+    }
+
+    if (
+        datos.fechaInicio &&
+        datos.fechaFin
+    ) {
+        descripcion +=
+            `\n⏰ ${datos.fechaInicio} → ${datos.fechaFin}`;
+    } else if (
+        datos.fechaFin
+    ) {
+        descripcion +=
+            `\n⏰ Termina: **${datos.fechaFin}**`;
+    } else {
+        descripcion +=
+            "\n⏰ Fecha de finalización no disponible";
+    }
+
+    embed.setDescription(
+        descripcion
+    );
+
+    /**
+     * ========================================================
+     * GENERAL DROPS
      * ========================================================
      */
 
     if (
         datos.generalDrops.length
     ) {
-        const textoGenerales =
+        const texto =
             datos.generalDrops
                 .map(
                     drop =>
@@ -940,150 +1287,112 @@ function crearEmbedFacepunchDrops(datos) {
             name:
                 `📦 Drops Generales (${datos.generalDrops.length})`,
             value:
-                textoGenerales.slice(
+                texto.slice(
                     0,
                     1024
                 ),
-            inline: false
+            inline:
+                false
         });
     }
 
     /**
      * ========================================================
-     * STREAMER DROPS ONLINE
+     * STREAMER DROPS
      * ========================================================
      */
 
-    const onlineDrops =
-        datos.streamerDrops.filter(
-            drop =>
-                drop.canales.some(
-                    canal =>
-                        canal.online
-                )
-        );
-
     if (
-        onlineDrops.length
-    ) {
-        const textoOnline =
-            onlineDrops
-                .map(
-                    drop => {
-                        const canales =
-                            drop.canales
-                                .filter(
-                                    canal =>
-                                        canal.online
-                                )
-                                .map(
-                                    canal =>
-                                        `🟢 [${canal.displayName}](https://www.twitch.tv/${canal.login})`
-                                )
-                                .join(" • ");
-
-                        return (
-                            `🎯 **${drop.nombre}** — ${formatearHoras(drop.horas)}\n` +
-                            `${canales}`
-                        );
-                    }
-                )
-                .join("\n\n");
-
-        embed.addFields({
-            name:
-                `🟢 STREAMER DROPS ONLINE (${onlineDrops.length})`,
-            value:
-                textoOnline.slice(
-                    0,
-                    1024
-                ),
-            inline: false
-        });
-    }
-
-    /**
-     * ========================================================
-     * STREAMER DROPS OFFLINE
-     * ========================================================
-     */
-
-    const offlineDrops =
-        datos.streamerDrops.filter(
-            drop =>
-                !drop.online
-        );
-
-    if (
-        offlineDrops.length
+        datos.streamerDrops.length
     ) {
         const bloques =
-            offlineDrops.map(
+            datos.streamerDrops.map(
                 drop => {
                     const canales =
-                        drop.canales
-                            .map(
-                                canal =>
-                                    `⚫ [${canal.displayName}](https://www.twitch.tv/${canal.login})`
-                            )
-                            .join(" • ");
+                        formatearCanales(
+                            drop.canales
+                        );
 
                     return (
                         `🎯 **${drop.nombre}** — ${formatearHoras(drop.horas)}\n` +
-                        `${canales}`
+                        canales
                     );
                 }
             );
 
+        /**
+         * Discord permite máximo 1024 caracteres
+         * por field.
+         */
         let parte =
             "";
+
         let numeroParte =
             1;
 
         for (
             const bloque of bloques
         ) {
+            const nuevoTexto =
+                parte
+                    ? `${parte}\n\n${bloque}`
+                    : bloque;
+
             if (
-                parte &&
-                (
-                    parte.length +
-                    bloque.length +
-                    2
-                ) > 1000
+                nuevoTexto.length >
+                1000
             ) {
                 embed.addFields({
                     name:
                         numeroParte === 1
-                            ? "⚫ STREAMER DROPS OFFLINE"
-                            : "⚫ STREAMER DROPS OFFLINE (cont.)",
+                            ? `🎯 Streamer Drops (${datos.streamerDrops.length})`
+                            : "🎯 Streamer Drops (cont.)",
                     value:
                         parte,
-                    inline: false
+                    inline:
+                        false
                 });
 
                 numeroParte++;
+
                 parte =
                     bloque;
             } else {
                 parte =
-                    parte
-                        ? `${parte}\n\n${bloque}`
-                        : bloque;
+                    nuevoTexto;
             }
         }
 
-        if (parte) {
+        if (
+            parte
+        ) {
             embed.addFields({
                 name:
                     numeroParte === 1
-                        ? "⚫ STREAMER DROPS OFFLINE"
-                        : "⚫ STREAMER DROPS OFFLINE (cont.)",
+                        ? `🎯 Streamer Drops (${datos.streamerDrops.length})`
+                        : "🎯 Streamer Drops (cont.)",
                 value:
                     parte,
-                inline: false
+                inline:
+                    false
             });
         }
     }
+
+    /**
+     * ========================================================
+     * ESTADO ONLINE
+     * ========================================================
+     */
+
+    embed.addFields({
+        name:
+            "📡 Estado de los canales",
+        value:
+            `🟢 ${datos.onlineCount} streamer(s) online de ${datos.totalStreamers}.`,
+        inline:
+            false
+    });
 
     /**
      * ========================================================
@@ -1097,7 +1406,8 @@ function crearEmbedFacepunchDrops(datos) {
         value:
             "Los Drops generales cuentan viendo streams de Rust con Drops Enabled. " +
             "Los Streamer Drops requieren ver al streamer indicado.",
-        inline: false
+        inline:
+            false
     });
 
     embed.addFields({
@@ -1106,22 +1416,24 @@ function crearEmbedFacepunchDrops(datos) {
         value:
             "Twitch solo cuenta un canal activo a la vez. " +
             "Ver varios canales simultáneamente no acelera el progreso.",
-        inline: false
+        inline:
+            false
     });
 
     embed.addFields({
         name:
             "⏱️ Progreso",
         value:
-            "El progreso individual de Twitch no está disponible mediante esta página. " +
-            "Puedes verlo en tu Twitch Drops Inventory.",
-        inline: false
+            "El progreso individual no se puede consultar desde la API utilizada por RustLogix. " +
+            "Puedes verlo directamente en tu Twitch Drops Inventory.",
+        inline:
+            false
     });
 
     embed
         .setFooter({
             text:
-                "RustLogix • Datos de Facepunch + Twitch"
+                "RustLogix • Facepunch + Twitch"
         })
         .setTimestamp(
             datos.actualizado
@@ -1152,14 +1464,22 @@ async function obtenerRustDrops(
 
     if (!cuenta) {
         return {
-            vinculada: false,
-            tokenValido: false,
-            cuenta: null,
-            juego: null,
-            drops: [],
-            claimed: [],
-            fulfilled: [],
-            facepunch: null
+            vinculada:
+                false,
+            tokenValido:
+                false,
+            cuenta:
+                null,
+            juego:
+                null,
+            drops:
+                [],
+            claimed:
+                [],
+            fulfilled:
+                [],
+            facepunch:
+                null
         };
     }
 
@@ -1170,22 +1490,30 @@ async function obtenerRustDrops(
 
     if (!tokenInfo) {
         return {
-            vinculada: true,
-            tokenValido: false,
+            vinculada:
+                true,
+            tokenValido:
+                false,
             cuenta:
                 cuenta.twitchDisplayName ||
                 cuenta.twitchLogin,
-            juego: null,
-            drops: [],
-            claimed: [],
-            fulfilled: [],
-            facepunch: null
+            juego:
+                null,
+            drops:
+                [],
+            claimed:
+                [],
+            fulfilled:
+                [],
+            facepunch:
+                null
         };
     }
 
     if (
         tokenInfo.client_id &&
-        tokenInfo.client_id !== TWITCH_CLIENT_ID
+        tokenInfo.client_id !==
+            TWITCH_CLIENT_ID
     ) {
         console.error(
             "❌ EL TOKEN DE TWITCH PERTENECE A OTRO CLIENT ID."
@@ -1193,14 +1521,17 @@ async function obtenerRustDrops(
     }
 
     /**
-     * Los Drops activos vienen directamente de Facepunch.
+     * Los Drops activos se obtienen directamente
+     * de Facepunch.
      */
     const facepunch =
         await obtenerDropsFacepunch();
 
     return {
-        vinculada: true,
-        tokenValido: true,
+        vinculada:
+            true,
+        tokenValido:
+            true,
 
         cuenta:
             cuenta.twitchDisplayName ||
@@ -1213,14 +1544,20 @@ async function obtenerRustDrops(
             cuenta.twitchUserId,
 
         juego: {
-            id: "263490",
-            name: "Rust"
+            id:
+                "263490",
+            name:
+                "Rust"
         },
 
-        drops: [],
-        claimed: [],
-        fulfilled: [],
-        total: 0,
+        drops:
+            [],
+        claimed:
+            [],
+        fulfilled:
+            [],
+        total:
+            0,
 
         facepunch
     };
@@ -1235,9 +1572,13 @@ async function obtenerRustDrops(
 function crearEmbedRustDrops(
     resultado
 ) {
-    if (!resultado.vinculada) {
+    if (
+        !resultado.vinculada
+    ) {
         return new EmbedBuilder()
-            .setColor(0xed4245)
+            .setColor(
+                0xed4245
+            )
             .setTitle(
                 "🎁 Rust Drops"
             )
@@ -1251,9 +1592,13 @@ function crearEmbedRustDrops(
             });
     }
 
-    if (!resultado.tokenValido) {
+    if (
+        !resultado.tokenValido
+    ) {
         return new EmbedBuilder()
-            .setColor(0xfee75c)
+            .setColor(
+                0xfee75c
+            )
             .setTitle(
                 "🎁 Rust Drops"
             )
@@ -1274,7 +1619,9 @@ function crearEmbedRustDrops(
         resultado.facepunch.error
     ) {
         return new EmbedBuilder()
-            .setColor(0xed4245)
+            .setColor(
+                0xed4245
+            )
             .setTitle(
                 "🎁 Rust Drops"
             )
@@ -1316,15 +1663,18 @@ async function obtenerRustDropsEmbed(
 
 /**
  * ============================================================
- * COMPATIBILIDAD CON EL SISTEMA ANTERIOR
+ * COMPATIBILIDAD CON SISTEMA ANTERIOR
  * ============================================================
  */
 
 function separarEntitlements(
     entitlements = []
 ) {
-    const claimed = [];
-    const fulfilled = [];
+    const claimed =
+        [];
+
+    const fulfilled =
+        [];
 
     for (
         const entitlement of entitlements
@@ -1357,19 +1707,26 @@ function separarEntitlements(
 function ordenarPorFecha(
     entitlements = []
 ) {
-    return [...entitlements].sort(
+    return [
+        ...entitlements
+    ].sort(
         (a, b) => {
             const fechaA =
                 new Date(
-                    a.timestamp || 0
+                    a.timestamp ||
+                        0
                 ).getTime();
 
             const fechaB =
                 new Date(
-                    b.timestamp || 0
+                    b.timestamp ||
+                        0
                 ).getTime();
 
-            return fechaB - fechaA;
+            return (
+                fechaB -
+                fechaA
+            );
         }
     );
 }
@@ -1384,8 +1741,10 @@ async function obtenerRustEntitlements(
 
     if (!rust) {
         return {
-            juego: null,
-            entitlements: []
+            juego:
+                null,
+            entitlements:
+                []
         };
     }
 
@@ -1396,7 +1755,8 @@ async function obtenerRustEntitlements(
         );
 
     return {
-        juego: rust,
+        juego:
+            rust,
         entitlements
     };
 }
