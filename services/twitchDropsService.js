@@ -1,5 +1,3 @@
-// services/twitchDropsService.js
-
 const axios = require("axios");
 const { EmbedBuilder } = require("discord.js");
 
@@ -7,11 +5,12 @@ const TwitchAccount = require("../models/TwitchAccount");
 
 const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
 
-/**
- * ============================================================
- * CONFIGURACIÓN
- * ============================================================
- */
+const INVENTORY_HASHES = [
+    "e7197a7e03be13e423118005966d097a2f44045b3642bfdb70820e01c8129fd6",
+    "d86775d0ef16a63a33ad52e80eaff963b2d5b72fada7c991504a57496e1d8e4b"
+];
+
+const GQL_URL = "https://gql.twitch.tv/gql";
 
 function validarConfiguracion() {
     if (!TWITCH_CLIENT_ID) {
@@ -19,378 +18,285 @@ function validarConfiguracion() {
     }
 }
 
-/**
- * Headers para Twitch Helix.
- */
-function getHeaders(accessToken) {
+function obtenerHeaders(accessToken) {
     validarConfiguracion();
 
     if (!accessToken) {
-        throw new Error("No se recibió un access token de Twitch.");
+        throw new Error("No se recibió el access token de Twitch.");
     }
 
     return {
         "Client-ID": TWITCH_CLIENT_ID,
-        "Authorization": `Bearer ${accessToken}`,
-        "Content-Type": "application/json"
+        "Authorization": `OAuth ${accessToken}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json"
     };
 }
 
-/**
- * ============================================================
- * VALIDAR TOKEN
- * ============================================================
- */
-
-async function validarToken(accessToken) {
-    try {
-        const respuesta = await axios.get(
-            "https://id.twitch.tv/oauth2/validate",
-            {
-                headers: {
-                    Authorization: `OAuth ${accessToken}`
-                },
-                timeout: 10000
-            }
-        );
-
-        return respuesta.data || null;
-
-    } catch (error) {
-        console.error(
-            "❌ Error validando token Twitch:",
-            error.response?.status,
-            error.response?.data || error.message
-        );
-
-        return null;
-    }
-}
-
-/**
- * ============================================================
- * OBTENER JUEGO RUST
- * ============================================================
- */
-
-async function obtenerJuegoRust(accessToken) {
-    try {
-        const respuesta = await axios.get(
-            "https://api.twitch.tv/helix/games",
-            {
-                params: {
-                    name: "Rust"
-                },
-                headers: getHeaders(accessToken),
-                timeout: 15000
-            }
-        );
-
-        const juegos = respuesta.data?.data || [];
-
-        if (!juegos.length) {
-            console.log("⚠️ Twitch no devolvió el juego Rust.");
-            return null;
-        }
-
-        const rust = juegos.find(
-            juego =>
-                String(juego.name).toLowerCase() === "rust"
-        );
-
-        return rust || juegos[0];
-
-    } catch (error) {
-        console.error(
-            "❌ Error obteniendo Rust desde Twitch:",
-            error.response?.status,
-            error.response?.data || error.message
-        );
-
-        return null;
-    }
-}
-
-/**
- * ============================================================
- * OBTENER ENTITLEMENTS DE DROPS
- * ============================================================
- *
- * Twitch no ofrece una API Helix pública para listar campañas
- * activas de Drops.
- *
- * Lo que sí ofrece oficialmente es:
- *
- * GET /helix/entitlements/drops
- *
- * Este endpoint permite consultar los Drops/entitlements
- * concedidos a un usuario y filtrarlos por game_id.
- *
- * ============================================================
- */
-
-async function obtenerEntitlementsDrops(
-    accessToken,
-    gameId = null,
-    fulfillmentStatus = null
-) {
-    const todos = [];
-    let cursor = null;
-
-    try {
-        do {
-            const params = {
-                first: 1000
-            };
-
-            if (gameId) {
-                params.game_id = gameId;
-            }
-
-            if (fulfillmentStatus) {
-                params.fulfillment_status =
-                    fulfillmentStatus;
-            }
-
-            if (cursor) {
-                params.after = cursor;
-            }
-
-            const respuesta = await axios.get(
-                "https://api.twitch.tv/helix/entitlements/drops",
-                {
-                    params,
-                    headers: getHeaders(accessToken),
-                    timeout: 15000
+async function consultarInventory(accessToken, hash) {
+    const body = [
+        {
+            operationName: "Inventory",
+            variables: {
+                fetchRewardCampaigns: true
+            },
+            extensions: {
+                persistedQuery: {
+                    version: 1,
+                    sha256Hash: hash
                 }
+            }
+        }
+    ];
+
+    const respuesta = await axios.post(
+        GQL_URL,
+        body,
+        {
+            headers: obtenerHeaders(accessToken),
+            timeout: 20000,
+            validateStatus: () => true
+        }
+    );
+
+    if (respuesta.status < 200 || respuesta.status >= 300) {
+        throw new Error(
+            `Twitch GraphQL respondió HTTP ${respuesta.status}: ` +
+            JSON.stringify(respuesta.data)
+        );
+    }
+
+    const item = Array.isArray(respuesta.data)
+        ? respuesta.data[0]
+        : respuesta.data;
+
+    if (item?.errors?.length) {
+        throw new Error(
+            `Twitch GraphQL devolvió errores: ${JSON.stringify(item.errors)}`
+        );
+    }
+
+    return item?.data?.currentUser?.inventory || null;
+}
+
+async function obtenerInventory(accessToken) {
+    let ultimoError = null;
+
+    for (const hash of INVENTORY_HASHES) {
+        try {
+            const inventory = await consultarInventory(
+                accessToken,
+                hash
             );
 
-            const datos =
-                respuesta.data?.data || [];
+            if (inventory) {
+                console.log(
+                    `🎁 Twitch Inventory obtenido correctamente ` +
+                    `(hash ${hash.slice(0, 8)}...)`
+                );
 
-            todos.push(...datos);
+                return inventory;
+            }
+        } catch (error) {
+            ultimoError = error;
 
-            cursor =
-                respuesta.data?.pagination?.cursor ||
-                null;
+            console.log(
+                `⚠️ Falló Twitch Inventory con hash ${hash.slice(0, 8)}...`
+            );
 
-        } while (cursor);
-
-        return todos;
-
-    } catch (error) {
-        console.error(
-            "❌ Error obteniendo entitlements Twitch Drops:",
-            error.response?.status,
-            error.response?.data || error.message
-        );
-
-        return [];
-    }
-}
-
-/**
- * ============================================================
- * OBTENER DROPS DE RUST
- * ============================================================
- */
-
-async function obtenerRustEntitlements(accessToken) {
-    const rust = await obtenerJuegoRust(accessToken);
-
-    if (!rust) {
-        return {
-            juego: null,
-            entitlements: []
-        };
-    }
-
-    const entitlements =
-        await obtenerEntitlementsDrops(
-            accessToken,
-            rust.id
-        );
-
-    return {
-        juego: rust,
-        entitlements
-    };
-}
-
-/**
- * ============================================================
- * SEPARAR ESTADOS
- * ============================================================
- */
-
-function separarEntitlements(entitlements = []) {
-    const claimed = [];
-    const fulfilled = [];
-
-    for (const entitlement of entitlements) {
-        if (
-            entitlement.fulfillment_status ===
-            "CLAIMED"
-        ) {
-            claimed.push(entitlement);
-        }
-
-        if (
-            entitlement.fulfillment_status ===
-            "FULFILLED"
-        ) {
-            fulfilled.push(entitlement);
+            console.log(
+                error.response?.data ||
+                error.message
+            );
         }
     }
 
-    return {
-        claimed,
-        fulfilled
-    };
-}
-
-/**
- * ============================================================
- * ORDENAR POR FECHA
- * ============================================================
- */
-
-function ordenarPorFecha(entitlements = []) {
-    return [...entitlements].sort(
-        (a, b) => {
-            const fechaA =
-                new Date(a.timestamp || 0).getTime();
-
-            const fechaB =
-                new Date(b.timestamp || 0).getTime();
-
-            return fechaB - fechaA;
-        }
+    throw (
+        ultimoError ||
+        new Error("Twitch no devolvió el inventario.")
     );
 }
 
-/**
- * ============================================================
- * OBTENER INFORMACIÓN COMPLETA DE RUST DROPS
- * ============================================================
- */
+function obtenerCampañasEnCurso(inventory) {
+    return Array.isArray(inventory?.dropCampaignsInProgress)
+        ? inventory.dropCampaignsInProgress
+        : [];
+}
 
-async function obtenerRustDrops(discordUserId) {
+function convertirDrop(drop) {
+    const actual = Number(
+        drop?.self?.currentMinutesWatched || 0
+    );
+
+    const requerido = Number(
+        drop?.requiredMinutesWatched || 0
+    );
+
+    const porcentaje = requerido > 0
+        ? Math.min(
+            100,
+            Math.floor((actual / requerido) * 100)
+        )
+        : 0;
+
+    const recompensas = Array.isArray(drop?.benefitEdges)
+        ? drop.benefitEdges
+            .map(edge => edge?.benefit)
+            .filter(Boolean)
+            .map(benefit => ({
+                id: benefit.id || null,
+                nombre: benefit.name || "Recompensa",
+                imagen: benefit.imageAssetURL || null
+            }))
+        : [];
+
+    return {
+        id: drop?.id || null,
+        nombre: drop?.name || "Drop",
+        actual,
+        requerido,
+        porcentaje,
+        reclamado: Boolean(drop?.self?.isClaimed),
+        dropInstanceID: drop?.self?.dropInstanceID || null,
+        precondicionesCumplidas: Boolean(
+            drop?.self?.hasPreconditionsMet
+        ),
+        inicio: drop?.startAt || null,
+        fin: drop?.endAt || null,
+        recompensas
+    };
+}
+
+function convertirCampaña(campaña) {
+    const drops = Array.isArray(campaña?.timeBasedDrops)
+        ? campaña.timeBasedDrops.map(convertirDrop)
+        : [];
+
+    return {
+        id: campaña?.id || null,
+        nombre: campaña?.name || "Campaña de Drops",
+        juego: campaña?.game?.name || "Desconocido",
+        juegoId: campaña?.game?.id || null,
+        imagenJuego: campaña?.game?.boxArtURL || null,
+        imagen: campaña?.imageURL || null,
+        detailsURL: campaña?.detailsURL || null,
+        accountLinkURL: campaña?.accountLinkURL || null,
+        inicio: campaña?.startAt || null,
+        fin: campaña?.endAt || null,
+        estado: campaña?.status || "ACTIVE",
+        drops
+    };
+}
+
+function filtrarCampañasRust(campañas) {
+    return campañas.filter(campaña => {
+        const juego = String(
+            campaña?.game?.name || ""
+        ).toLowerCase();
+
+        return juego === "rust";
+    });
+}
+
+async function obtenerCuentaTwitch(discordUserId) {
     if (!discordUserId) {
-        throw new Error(
-            "Falta el Discord User ID."
-        );
+        throw new Error("Falta el Discord User ID.");
     }
 
-    const cuenta =
-        await TwitchAccount.findOne({
-            discordUserId
-        });
+    const cuenta = await TwitchAccount.findOne({
+        discordUserId
+    });
 
-    /**
-     * No hay cuenta vinculada.
-     */
+    return cuenta;
+}
+
+async function obtenerRustDrops(discordUserId) {
+    const cuenta = await obtenerCuentaTwitch(
+        discordUserId
+    );
+
     if (!cuenta) {
         return {
             vinculada: false,
             tokenValido: false,
             cuenta: null,
-            juego: null,
-            drops: [],
-            claimed: [],
-            fulfilled: []
+            campañas: [],
+            inventory: null
         };
     }
 
-    /**
-     * Validar token.
-     */
-    const tokenInfo =
-        await validarToken(
+    let inventory;
+
+    try {
+        inventory = await obtenerInventory(
             cuenta.accessToken
         );
+    } catch (error) {
+        console.error(
+            "❌ Error obteniendo Twitch Inventory:",
+            error.response?.data ||
+            error.message
+        );
 
-    if (!tokenInfo) {
         return {
             vinculada: true,
             tokenValido: false,
             cuenta:
                 cuenta.twitchDisplayName ||
                 cuenta.twitchLogin,
-            juego: null,
-            drops: [],
-            claimed: [],
-            fulfilled: []
+            twitchLogin: cuenta.twitchLogin,
+            twitchUserId: cuenta.twitchUserId,
+            campañas: [],
+            inventory: null,
+            error: error.message
         };
     }
 
-    /**
-     * Obtener Rust + entitlements.
-     */
-    const resultado =
-        await obtenerRustEntitlements(
-            cuenta.accessToken
-        );
+    const campañasEnCurso =
+        obtenerCampañasEnCurso(inventory);
 
-    const separados =
-        separarEntitlements(
-            resultado.entitlements
-        );
-
-    const dropsOrdenados =
-        ordenarPorFecha(
-            resultado.entitlements
-        );
+    const campañasRust =
+        filtrarCampañasRust(campañasEnCurso)
+            .map(convertirCampaña);
 
     return {
         vinculada: true,
-
         tokenValido: true,
-
         cuenta:
             cuenta.twitchDisplayName ||
             cuenta.twitchLogin,
-
-        twitchLogin:
-            cuenta.twitchLogin,
-
-        twitchUserId:
-            cuenta.twitchUserId,
-
-        juego: resultado.juego,
-
-        drops: dropsOrdenados,
-
-        claimed:
-            ordenarPorFecha(
-                separados.claimed
-            ),
-
-        fulfilled:
-            ordenarPorFecha(
-                separados.fulfilled
-            ),
-
-        total:
-            resultado.entitlements.length
+        twitchLogin: cuenta.twitchLogin,
+        twitchUserId: cuenta.twitchUserId,
+        campañas: campañasRust,
+        inventory
     };
 }
 
-/**
- * ============================================================
- * FORMATEAR FECHA
- * ============================================================
- */
+function formatearMinutos(minutos) {
+    const total = Number(minutos) || 0;
+
+    const horas = Math.floor(total / 60);
+    const mins = total % 60;
+
+    if (horas > 0 && mins > 0) {
+        return `${horas} h ${mins} min`;
+    }
+
+    if (horas > 0) {
+        return `${horas} h`;
+    }
+
+    return `${mins} min`;
+}
 
 function formatearFecha(fecha) {
     if (!fecha) {
         return "Desconocida";
     }
 
-    const timestamp =
-        Math.floor(
-            new Date(fecha).getTime() / 1000
-        );
+    const timestamp = Math.floor(
+        new Date(fecha).getTime() / 1000
+    );
 
     if (!Number.isFinite(timestamp)) {
         return "Desconocida";
@@ -399,16 +305,67 @@ function formatearFecha(fecha) {
     return `<t:${timestamp}:f>`;
 }
 
-/**
- * ============================================================
- * CREAR EMBED
- * ============================================================
- */
+function crearBarraProgreso(porcentaje) {
+    const valor = Math.max(
+        0,
+        Math.min(100, Number(porcentaje) || 0)
+    );
+
+    const totalBloques = 10;
+
+    const llenos = Math.round(
+        (valor / 100) * totalBloques
+    );
+
+    const vacios = totalBloques - llenos;
+
+    return (
+        "🟩".repeat(llenos) +
+        "⬜".repeat(vacios)
+    );
+}
+
+function formatearDrop(drop) {
+    const recompensa =
+        drop.recompensas?.[0]?.nombre ||
+        drop.nombre ||
+        "Recompensa";
+
+    const porcentaje = drop.porcentaje;
+
+    const estado = drop.reclamado
+        ? "🟢"
+        : porcentaje >= 100
+            ? "🟡"
+            : "⚪";
+
+    return (
+        `${estado} **${recompensa}** — ` +
+        `${formatearMinutos(drop.requerido)}`
+    );
+}
+
+function obtenerDropActivo(campaña) {
+    if (!campaña?.drops?.length) {
+        return null;
+    }
+
+    const pendientes = campaña.drops
+        .filter(drop => !drop.reclamado)
+        .sort((a, b) => {
+            return a.requerido - b.requerido;
+        });
+
+    if (!pendientes.length) {
+        return null;
+    }
+
+    return pendientes.find(
+        drop => drop.actual < drop.requerido
+    ) || pendientes[pendientes.length - 1];
+}
 
 function crearEmbedRustDrops(resultado) {
-    /**
-     * Cuenta no vinculada.
-     */
     if (!resultado.vinculada) {
         return new EmbedBuilder()
             .setColor(0xed4245)
@@ -422,34 +379,15 @@ function crearEmbedRustDrops(resultado) {
             });
     }
 
-    /**
-     * Token inválido.
-     */
     if (!resultado.tokenValido) {
         return new EmbedBuilder()
             .setColor(0xfee75c)
             .setTitle("🎁 Rust Drops")
             .setDescription(
-                `Cuenta vinculada: **${resultado.cuenta}**\n\n` +
-                "⚠️ La sesión de Twitch no pudo validarse.\n\n" +
-                "Prueba nuevamente con **/drops estado** o vuelve a vincular la cuenta."
-            )
-            .setFooter({
-                text: "RustLogix • Twitch Drops"
-            })
-            .setTimestamp();
-    }
-
-    /**
-     * No se encontró Rust.
-     */
-    if (!resultado.juego) {
-        return new EmbedBuilder()
-            .setColor(0xfee75c)
-            .setTitle("🎁 Rust Drops")
-            .setDescription(
                 `Cuenta Twitch: **${resultado.cuenta}**\n\n` +
-                "No se pudo identificar el juego Rust en Twitch."
+                "⚠️ No pude consultar el inventario de Drops de Twitch.\n\n" +
+                "La sesión OAuth puede haber expirado o Twitch puede " +
+                "haber cambiado su consulta interna de Drops."
             )
             .setFooter({
                 text: "RustLogix • Twitch Drops"
@@ -457,168 +395,111 @@ function crearEmbedRustDrops(resultado) {
             .setTimestamp();
     }
 
-    /**
-     * No hay entitlements.
-     */
-    if (!resultado.drops.length) {
+    if (!resultado.campañas.length) {
         return new EmbedBuilder()
             .setColor(0x9146ff)
             .setTitle("🎁 Rust Drops")
             .setDescription(
                 `Cuenta Twitch: **${resultado.cuenta}**\n\n` +
-                "No se encontraron entitlements de Drops de Rust asociados a esta cuenta."
+                "No tienes campañas de Drops de **Rust** con progreso actualmente."
             )
-            .addFields({
-                name: "ℹ️ Importante",
-                value:
-                    "Esto consulta los Drops que Twitch ha concedido a tu cuenta. " +
-                    "No representa una lista de campañas activas ni el progreso de minutos vistos."
-            })
             .setFooter({
                 text: "RustLogix • Twitch Drops"
             })
             .setTimestamp();
     }
 
-    /**
-     * Último Drop.
-     */
-    const ultimoDrop =
-        resultado.drops[0];
-
     const embed = new EmbedBuilder()
         .setColor(0x9146ff)
         .setTitle("🎁 Rust Drops")
         .setDescription(
-            `Cuenta Twitch: **${resultado.cuenta}**\n\n` +
-            `🎮 Juego: **${resultado.juego.name}**`
+            `Cuenta Twitch: **${resultado.cuenta}**`
         )
-        .addFields(
-            {
-                name: "📦 Total de Drops",
-                value:
-                    `**${resultado.total}**`,
-                inline: true
-            },
-            {
-                name: "🟡 Reclamados",
-                value:
-                    `**${resultado.claimed.length}**`,
-                inline: true
-            },
-            {
-                name: "🟢 Completados",
-                value:
-                    `**${resultado.fulfilled.length}**`,
-                inline: true
-            }
-        );
-
-    /**
-     * Último entitlement.
-     */
-    embed.addFields({
-        name: "🎁 Último Drop registrado",
-        value:
-            `**ID:** \`${ultimoDrop.id}\`\n` +
-            `**Benefit:** \`${ultimoDrop.benefit_id}\`\n` +
-            `**Estado:** ${
-                ultimoDrop.fulfillment_status ===
-                "FULFILLED"
-                    ? "🟢 FULFILLED"
-                    : "🟡 CLAIMED"
-            }\n` +
-            `**Fecha:** ${formatearFecha(
-                ultimoDrop.timestamp
-            )}`,
-        inline: false
-    });
-
-    /**
-     * Mostrar algunos Drops recientes.
-     */
-    const recientes =
-        resultado.drops.slice(0, 5);
-
-    if (recientes.length) {
-        const textoRecientes =
-            recientes
-                .map(
-                    (drop, index) => {
-                        const estado =
-                            drop.fulfillment_status ===
-                            "FULFILLED"
-                                ? "🟢"
-                                : "🟡";
-
-                        return (
-                            `${index + 1}. ${estado} ` +
-                            `\`${drop.benefit_id}\` — ` +
-                            `${formatearFecha(
-                                drop.timestamp
-                            )}`
-                        );
-                    }
-                )
-                .join("\n");
-
-        embed.addFields({
-            name: "📋 Drops recientes",
-            value: textoRecientes,
-            inline: false
-        });
-    }
-
-    embed.addFields({
-        name: "⚠️ Sobre el progreso",
-        value:
-            "Twitch no proporciona mediante este endpoint el contador de minutos vistos de una campaña. " +
-            "Por eso RustLogix todavía no puede mostrar algo como `40/60 minutos` usando únicamente la API oficial.",
-        inline: false
-    });
-
-    embed
         .setFooter({
             text: "RustLogix • Twitch Drops"
         })
         .setTimestamp();
 
+    for (const campaña of resultado.campañas) {
+        const activo = obtenerDropActivo(campaña);
+
+        let texto =
+            `📅 Finaliza: ${formatearFecha(campaña.fin)}\n`;
+
+        if (activo) {
+            texto +=
+                `\n🎯 **Progreso actual**\n` +
+                `${crearBarraProgreso(activo.porcentaje)} ` +
+                `**${activo.porcentaje}%**\n` +
+                `⏱️ ${formatearMinutos(activo.actual)} / ` +
+                `${formatearMinutos(activo.requerido)}\n` +
+                `🎁 ${activo.recompensas?.[0]?.nombre || activo.nombre}`;
+
+            if (activo.actual < activo.requerido) {
+                const faltan =
+                    activo.requerido - activo.actual;
+
+                texto +=
+                    `\n⌛ Faltan aproximadamente **${formatearMinutos(faltan)}**`;
+            }
+        }
+
+        if (campaña.detailsURL) {
+            texto +=
+                `\n\n🔗 [Ver campaña en Twitch](${campaña.detailsURL})`;
+        }
+
+        embed.addFields({
+            name: `🎮 ${campaña.nombre}`,
+            value: texto,
+            inline: false
+        });
+
+        const dropsTexto = campaña.drops
+            .map(formatearDrop)
+            .join("\n");
+
+        if (dropsTexto) {
+            embed.addFields({
+                name: "🎁 Recompensas",
+                value: dropsTexto.slice(0, 1024),
+                inline: false
+            });
+        }
+
+        if (
+            activo?.recompensas?.[0]?.imagen
+        ) {
+            embed.setThumbnail(
+                activo.recompensas[0].imagen
+            );
+        } else if (campaña.imagen) {
+            embed.setThumbnail(
+                campaña.imagen
+            );
+        }
+    }
+
     return embed;
 }
 
-/**
- * ============================================================
- * FUNCIÓN PRINCIPAL PARA /drops rust
- * ============================================================
- */
-
-async function obtenerRustDropsEmbed(
-    discordUserId
-) {
+async function obtenerRustDropsEmbed(discordUserId) {
     const resultado =
-        await obtenerRustDrops(
-            discordUserId
-        );
+        await obtenerRustDrops(discordUserId);
 
-    return crearEmbedRustDrops(
-        resultado
-    );
+    return crearEmbedRustDrops(resultado);
 }
 
-/**
- * ============================================================
- * EXPORTS
- * ============================================================
- */
-
 module.exports = {
-    validarToken,
-    obtenerJuegoRust,
-    obtenerEntitlementsDrops,
-    obtenerRustEntitlements,
-    separarEntitlements,
-    ordenarPorFecha,
+    obtenerInventory,
+    obtenerCampañasEnCurso,
     obtenerRustDrops,
     crearEmbedRustDrops,
-    obtenerRustDropsEmbed
+    obtenerRustDropsEmbed,
+    convertirDrop,
+    convertirCampaña,
+    filtrarCampañasRust,
+    formatearMinutos,
+    formatearFecha,
+    crearBarraProgreso
 };
