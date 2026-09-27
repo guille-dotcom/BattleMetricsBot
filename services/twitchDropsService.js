@@ -772,6 +772,22 @@ function limpiarUrlImagen(
         return null;
     }
 
+    resultado =
+        resultado
+            .replace(
+                /^url\(\s*/i,
+                ""
+            )
+            .replace(
+                /\s*\)$/i,
+                ""
+            )
+            .replace(
+                /^["']|["']$/g,
+                ""
+            )
+            .trim();
+
     if (
         resultado.startsWith("//")
     ) {
@@ -820,11 +836,50 @@ function esImagenValida(
         return false;
     }
 
+    /*
+     * Estas rutas/nombres corresponden normalmente a
+     * imágenes de usuario, canales o elementos de Twitch.
+     * Nunca deben utilizarse como imagen de un Drop.
+     */
+    const bloqueadas = [
+
+        "logo",
+
+        "favicon",
+
+        "avatar",
+
+        "profile_image",
+
+        "profileimage",
+
+        "channel_image",
+
+        "channelimage",
+
+        "user_image",
+
+        "userimage",
+
+        "banner",
+
+        "offline",
+
+        "twitch.tv",
+
+        "static-cdn.jtvnw.net",
+
+        "twitch-facepunch"
+
+    ];
+
     if (
-        valor.includes("logo") ||
-        valor.includes("favicon") ||
-        valor.includes("avatar") ||
-        valor.includes("twitch-facepunch")
+        bloqueadas.some(
+            termino =>
+                valor.includes(
+                    termino
+                )
+        )
     ) {
 
         return false;
@@ -832,7 +887,7 @@ function esImagenValida(
     }
 
     return (
-        /\.(png|jpg|jpeg|webp)(\?|$)/i.test(
+        /\.(png|jpg|jpeg|webp|gif)(\?|$)/i.test(
             valor
         ) ||
         valor.includes(
@@ -853,24 +908,57 @@ function esImagenValida(
 
 // ============================================================
 // EXTRAER IMAGEN CERCANA
+//
+// CAMBIO IMPORTANTE:
+//
+// Facepunch coloca dentro de la misma zona:
+//
+//   STREAMER
+//   STREAMER
+//   DROP
+//   HORAS
+//
+// Por eso buscar simplemente "la imagen más cercana"
+// puede devolver el avatar del streamer.
+//
+// Ahora:
+//
+//   - Se detectan todas las imágenes.
+//   - Se eliminan explícitamente imágenes de Twitch/usuarios.
+//   - Se prioriza /economy/image/.
+//   - Para Streamer Drops se exige una imagen que parezca
+//     realmente una imagen de item.
+//   - Si no existe, devuelve null en vez de utilizar
+//     el avatar del streamer.
 // ============================================================
 
 function extraerImagenCercana(
     bloque,
     index,
-    nombreDrop
+    nombreDrop,
+    soloImagenDeItem = false
 ) {
+
+    if (
+        !bloque ||
+        typeof bloque !== "string" ||
+        typeof index !== "number"
+    ) {
+
+        return null;
+
+    }
 
     const inicio =
         Math.max(
             0,
-            index - 1800
+            index - 2500
         );
 
     const fin =
         Math.min(
             bloque.length,
-            index + 1800
+            index + 3500
         );
 
     const zona =
@@ -879,96 +967,465 @@ function extraerImagenCercana(
             fin
         );
 
-    const imagenes = [];
+    const candidatas = [];
 
-    const regexImagen =
-        /<img\b[^>]*?(?:src|data-src|data-original)=["']([^"']+)["'][^>]*>/gi;
+    function agregarCandidata(
+        rawUrl,
+        posicion,
+        tipo = "unknown"
+    ) {
+
+        const url =
+            limpiarUrlImagen(
+                rawUrl
+            );
+
+        if (
+            !url ||
+            !esImagenValida(url)
+        ) {
+
+            return;
+
+        }
+
+        const lower =
+            url.toLowerCase();
+
+        /*
+         * ========================================================
+         * DESCARTAR IMÁGENES DE STREAMERS
+         * ========================================================
+         */
+
+        const esStreamer =
+            lower.includes(
+                "twitch.tv"
+            ) ||
+            lower.includes(
+                "static-cdn.jtvnw.net"
+            ) ||
+            lower.includes(
+                "profile_image"
+            ) ||
+            lower.includes(
+                "profileimage"
+            ) ||
+            lower.includes(
+                "avatar"
+            ) ||
+            lower.includes(
+                "channel_image"
+            ) ||
+            lower.includes(
+                "channelimage"
+            ) ||
+            lower.includes(
+                "user_image"
+            ) ||
+            lower.includes(
+                "userimage"
+            ) ||
+            lower.includes(
+                "logo"
+            ) ||
+            lower.includes(
+                "banner"
+            ) ||
+            lower.includes(
+                "offline"
+            );
+
+        if (esStreamer) {
+            return;
+        }
+
+        /*
+         * ========================================================
+         * IDENTIFICAR IMAGEN DE ITEM
+         * ========================================================
+         */
+
+        const esEconomy =
+            lower.includes(
+                "/economy/image/"
+            ) ||
+            lower.includes(
+                "economy/image"
+            );
+
+        const esSteam =
+            lower.includes(
+                "steamstatic"
+            ) ||
+            lower.includes(
+                "community.fastly"
+            ) ||
+            lower.includes(
+                "community.cloudflare"
+            ) ||
+            lower.includes(
+                "steamusercontent"
+            );
+
+        const esFacepunch =
+            lower.includes(
+                "files.facepunch.com"
+            );
+
+        const distancia =
+            Math.abs(
+                (
+                    inicio +
+                    posicion
+                ) -
+                index
+            );
+
+        candidatas.push({
+
+            url,
+
+            distancia,
+
+            esEconomy,
+
+            esSteam,
+
+            esFacepunch,
+
+            tipo
+
+        });
+
+    }
+
+    // ========================================================
+    // IMG SRC
+    // ========================================================
+
+    const regexImg =
+        /<img\b[^>]*?(?:src|data-src|data-original|data-image|data-lazy-src)\s*=\s*["']([^"']+)["'][^>]*>/gi;
 
     let match;
 
     while (
-        (match =
-            regexImagen.exec(
-                zona
-            )) !== null
+        (
+            match =
+                regexImg.exec(
+                    zona
+                )
+        ) !== null
     ) {
 
-        const url =
-            limpiarUrlImagen(
-                match[1]
-            );
-
-        if (
-            url &&
-            esImagenValida(url)
-        ) {
-
-            imagenes.push(
-                url
-            );
-
-        }
+        agregarCandidata(
+            match[1],
+            match.index,
+            "img"
+        );
 
     }
 
-    const regexUrl =
-        /https?:\/\/[^"'()\s<>]+/gi;
+    // ========================================================
+    // SRCSET
+    // ========================================================
+
+    const regexSrcset =
+        /\b(?:srcset|data-srcset)\s*=\s*["']([^"']+)["']/gi;
 
     while (
-        (match =
-            regexUrl.exec(
-                zona
-            )) !== null
+        (
+            match =
+                regexSrcset.exec(
+                    zona
+                )
+        ) !== null
     ) {
 
-        const url =
-            limpiarUrlImagen(
-                match[0]
-            );
+        const valores =
+            match[1]
+                .split(",")
+                .map(
+                    valor =>
+                        valor.trim()
+                )
+                .filter(Boolean);
 
-        if (
-            url &&
-            esImagenValida(url)
+        for (
+            const valor
+            of valores
         ) {
 
-            imagenes.push(
-                url
+            const partes =
+                valor.split(
+                    /\s+/
+                );
+
+            agregarCandidata(
+                partes[0],
+                match.index,
+                "srcset"
             );
 
         }
 
     }
 
+    // ========================================================
+    // BACKGROUND IMAGE
+    // ========================================================
+
+    const regexBackground =
+        /background-image\s*:\s*url\(\s*["']?([^"')]+)["']?\s*\)/gi;
+
+    while (
+        (
+            match =
+                regexBackground.exec(
+                    zona
+                )
+        ) !== null
+    ) {
+
+        agregarCandidata(
+            match[1],
+            match.index,
+            "background"
+        );
+
+    }
+
+    // ========================================================
+    // URLs DIRECTAS
+    // ========================================================
+
+    const regexUrl =
+        /https?:\/\/[^"'()<>\s]+/gi;
+
+    while (
+        (
+            match =
+                regexUrl.exec(
+                    zona
+                )
+        ) !== null
+    ) {
+
+        agregarCandidata(
+            match[0],
+            match.index,
+            "url"
+        );
+
+    }
+
+    if (
+        !candidatas.length
+    ) {
+
+        console.log(
+            `⚠️ No se encontró imagen válida para ${nombreDrop}.`
+        );
+
+        return null;
+
+    }
+
+    // ========================================================
+    // ELIMINAR DUPLICADOS
+    // ========================================================
+
     const unicas =
+        new Map();
+
+    for (
+        const candidata
+        of candidatas
+    ) {
+
+        const existente =
+            unicas.get(
+                candidata.url
+            );
+
+        if (
+            !existente ||
+            candidata.distancia <
+                existente.distancia
+        ) {
+
+            unicas.set(
+                candidata.url,
+                candidata
+            );
+
+        }
+
+    }
+
+    const lista =
         [
-            ...new Set(
-                imagenes
-            )
+            ...unicas.values()
         ];
 
+    // ========================================================
+    // STREAMER DROPS
+    //
+    // AQUÍ SOMOS ESTRICTOS.
+    //
+    // Primero /economy/image/
+    // Luego Steam/Facepunch.
+    // Si no hay ninguna -> null.
+    // ========================================================
+
+    if (
+        soloImagenDeItem
+    ) {
+
+        const imagenesDeItem =
+            lista.filter(
+                candidata =>
+                    candidata.esEconomy ||
+                    candidata.esSteam ||
+                    candidata.esFacepunch
+            );
+
+        if (
+            !imagenesDeItem.length
+        ) {
+
+            console.log(
+                `⚠️ No se encontró imagen de ITEM para Streamer Drop "${nombreDrop}". No se utilizará el avatar del streamer.`
+            );
+
+            return null;
+
+        }
+
+        imagenesDeItem.sort(
+            (a, b) => {
+
+                // 1. Economy image
+                if (
+                    a.esEconomy !==
+                    b.esEconomy
+                ) {
+
+                    return a.esEconomy
+                        ? -1
+                        : 1;
+
+                }
+
+                // 2. Steam
+                if (
+                    a.esSteam !==
+                    b.esSteam
+                ) {
+
+                    return a.esSteam
+                        ? -1
+                        : 1;
+
+                }
+
+                // 3. Facepunch
+                if (
+                    a.esFacepunch !==
+                    b.esFacepunch
+                ) {
+
+                    return a.esFacepunch
+                        ? -1
+                        : 1;
+
+                }
+
+                // 4. Cercanía al nombre del Drop
+                return (
+                    a.distancia -
+                    b.distancia
+                );
+
+            }
+        );
+
+        const preferida =
+            imagenesDeItem[0]?.url ||
+            null;
+
+        if (
+            preferida
+        ) {
+
+            console.log(
+                `🖼️ Imagen de ITEM encontrada para ${nombreDrop}: ${preferida}`
+            );
+
+        }
+
+        return preferida;
+
+    }
+
+    // ========================================================
+    // GENERAL DROPS
+    //
+    // Mantenemos el comportamiento flexible, pero siempre
+    // damos prioridad a imágenes reales de items.
+    // ========================================================
+
+    lista.sort(
+        (a, b) => {
+
+            if (
+                a.esEconomy !==
+                b.esEconomy
+            ) {
+
+                return a.esEconomy
+                    ? -1
+                    : 1;
+
+            }
+
+            if (
+                a.esSteam !==
+                b.esSteam
+            ) {
+
+                return a.esSteam
+                    ? -1
+                    : 1;
+
+            }
+
+            if (
+                a.esFacepunch !==
+                b.esFacepunch
+            ) {
+
+                return a.esFacepunch
+                    ? -1
+                    : 1;
+
+            }
+
+            return (
+                a.distancia -
+                b.distancia
+            );
+
+        }
+    );
+
     const preferida =
-        unicas.find(
-            url =>
-                url.includes(
-                    "/economy/image/"
-                )
-        ) ||
-        unicas.find(
-            url =>
-                url.includes(
-                    "steamstatic"
-                ) ||
-                url.includes(
-                    "fastly"
-                ) ||
-                url.includes(
-                    "cloudflare"
-                )
-        ) ||
-        unicas[0] ||
+        lista[0]?.url ||
         null;
 
-    if (preferida) {
+    if (
+        preferida
+    ) {
 
         console.log(
             `🖼️ Imagen encontrada para ${nombreDrop}: ${preferida}`
@@ -1030,10 +1487,12 @@ function extraerStreamerDrops(
     let match;
 
     while (
-        (match =
-            regexTwitch.exec(
-                bloque
-            )) !== null
+        (
+            match =
+                regexTwitch.exec(
+                    bloque
+                )
+        ) !== null
     ) {
 
         const login =
@@ -1140,6 +1599,7 @@ function extraerStreamerDrops(
         }
 
         elementos.push({
+
             tipo:
                 "streamer",
 
@@ -1149,6 +1609,7 @@ function extraerStreamerDrops(
 
             index:
                 match.index
+
         });
 
     }
@@ -1215,11 +1676,21 @@ function extraerStreamerDrops(
             continue;
         }
 
+        /*
+         * IMPORTANTE:
+         *
+         * Streamer Drop = true
+         *
+         * Esto evita que el extractor utilice el avatar
+         * del streamer como imagen del reward.
+         */
+
         const imagen =
             extraerImagenCercana(
                 bloque,
                 resultado.index,
-                nombre
+                nombre,
+                true
             );
 
         elementos.push({
@@ -1285,6 +1756,7 @@ function extraerStreamerDrops(
                 .slice(-2)
                 .map(
                     streamer => ({
+
                         login:
                             streamer.login,
 
@@ -1293,6 +1765,7 @@ function extraerStreamerDrops(
 
                         online:
                             false
+
                     })
                 );
 
@@ -1415,7 +1888,8 @@ function extraerGeneralDrops(
                 extraerImagenCercana(
                     html,
                     htmlMatch.index,
-                    nombre
+                    nombre,
+                    false
                 );
 
         }
@@ -1821,10 +2295,12 @@ function crearEmbedIndividual(
         embed.addFields({
             name:
                 "🎥 Streamer(s)",
+
             value:
                 formatearCanales(
                     drop.canales
                 ),
+
             inline:
                 false
         });
@@ -1874,6 +2350,7 @@ function crearEmbedsDrops(
     ) {
 
         drops.push({
+
             tipo:
                 "general",
 
@@ -1889,6 +2366,7 @@ function crearEmbedsDrops(
 
             canales:
                 []
+
         });
 
     }
@@ -1900,6 +2378,7 @@ function crearEmbedsDrops(
     ) {
 
         drops.push({
+
             tipo:
                 "streamer",
 
@@ -1917,6 +2396,7 @@ function crearEmbedsDrops(
                 (drop.canales ||
                     []).map(
                     canal => ({
+
                         login:
                             canal.login,
 
@@ -1925,8 +2405,10 @@ function crearEmbedsDrops(
 
                         online:
                             !!canal.online
+
                     })
                 )
+
         });
 
     }
@@ -2002,6 +2484,7 @@ function crearEmbedFacepunchDrops(
     if (general) {
 
         embed.addFields({
+
             name:
                 `📦 Drops Generales (${datos.generalDrops.length})`,
 
@@ -2013,6 +2496,7 @@ function crearEmbedFacepunchDrops(
 
             inline:
                 false
+
         });
 
     }
@@ -2028,6 +2512,7 @@ function crearEmbedFacepunchDrops(
     if (streamer) {
 
         embed.addFields({
+
             name:
                 `🎯 Streamer Drops (${datos.streamerDrops.length})`,
 
@@ -2039,11 +2524,13 @@ function crearEmbedFacepunchDrops(
 
             inline:
                 false
+
         });
 
     }
 
     embed.addFields({
+
         name:
             "📡 Estado de los canales",
 
@@ -2052,9 +2539,11 @@ function crearEmbedFacepunchDrops(
 
         inline:
             false
+
     });
 
     embed.addFields({
+
         name:
             "ℹ️ Cómo conseguirlos",
 
@@ -2063,9 +2552,11 @@ function crearEmbedFacepunchDrops(
 
         inline:
             false
+
     });
 
     embed.addFields({
+
         name:
             "⚠️ Importante",
 
@@ -2074,9 +2565,11 @@ function crearEmbedFacepunchDrops(
 
         inline:
             false
+
     });
 
     embed.addFields({
+
         name:
             "⏱️ Progreso",
 
@@ -2085,11 +2578,14 @@ function crearEmbedFacepunchDrops(
 
         inline:
             false
+
     });
 
     embed.setFooter({
+
         text:
             "RustLogix • Facepunch + Twitch"
+
     });
 
     embed.setTimestamp(
@@ -2124,6 +2620,7 @@ async function obtenerRustDrops(
     if (!cuenta) {
 
         return {
+
             vinculada:
                 false,
 
@@ -2147,6 +2644,7 @@ async function obtenerRustDrops(
 
             facepunch:
                 null
+
         };
 
     }
@@ -2208,11 +2706,13 @@ async function obtenerRustDrops(
             cuenta.twitchUserId,
 
         juego: {
+
             id:
                 "263490",
 
             name:
                 "Rust"
+
         },
 
         drops:
@@ -2256,8 +2756,10 @@ function crearEmbedRustDrops(
                 "No tienes una cuenta de Twitch vinculada.\n\nUsa **/drops vincular** para conectar tu cuenta."
             )
             .setFooter({
+
                 text:
                     "RustLogix • Twitch Drops"
+
             });
 
     }
@@ -2277,8 +2779,10 @@ function crearEmbedRustDrops(
                 `Cuenta vinculada: **${resultado.cuenta}**\n\n⚠️ La sesión de Twitch no pudo validarse.\n\nPrueba nuevamente con **/drops estado** o vuelve a vincular la cuenta.`
             )
             .setFooter({
+
                 text:
                     "RustLogix • Twitch Drops"
+
             })
             .setTimestamp();
 
@@ -2300,8 +2804,10 @@ function crearEmbedRustDrops(
                 `Cuenta Twitch: **${resultado.cuenta}**\n\n❌ No se pudieron obtener los Drops actuales desde Facepunch.\n\nInténtalo nuevamente en unos segundos.`
             )
             .setFooter({
+
                 text:
                     "RustLogix • Twitch Drops"
+
             })
             .setTimestamp();
 
@@ -2373,8 +2879,11 @@ function separarEntitlements(
     }
 
     return {
+
         claimed,
+
         fulfilled
+
     };
 
 }
@@ -2430,11 +2939,13 @@ async function obtenerRustEntitlements(
     if (!rust) {
 
         return {
+
             juego:
                 null,
 
             entitlements:
                 []
+
         };
 
     }
@@ -2446,10 +2957,12 @@ async function obtenerRustEntitlements(
         );
 
     return {
+
         juego:
             rust,
 
         entitlements
+
     };
 
 }
@@ -2463,14 +2976,23 @@ function crearCampaignKey(
 ) {
 
     const drops = [
+
         ...(datos.generalDrops || []),
+
         ...(datos.streamerDrops || [])
+
     ];
+
+    /*
+     * IMPORTANTE:
+     * La imagen NO forma parte de la campaignKey.
+     */
 
     const texto =
         JSON.stringify(
             drops.map(
                 drop => ({
+
                     tipo:
                         drop.tipo ||
                         (
@@ -2485,22 +3007,24 @@ function crearCampaignKey(
                     horas:
                         drop.horas,
 
-                    imagen:
-                        drop.imagen ||
-                        null,
-
                     canales:
                         (drop.canales || [])
                             .map(
                                 canal =>
-                                    canal.login
+                                    String(
+                                        canal.login ||
+                                            ""
+                                    )
+                                        .toLowerCase()
                             )
                             .sort()
+
                 })
             )
         );
 
     return [
+
         datos.campaignName ||
             "",
 
@@ -2514,6 +3038,7 @@ function crearCampaignKey(
             "",
 
         texto
+
     ].join("|");
 
 }
@@ -2581,6 +3106,7 @@ function convertirDatosAGuardado(
                 (drop.canales || [])
                     .map(
                         canal => ({
+
                             login:
                                 canal.login,
 
@@ -2589,6 +3115,7 @@ function convertirDatosAGuardado(
 
                             online:
                                 !!canal.online
+
                         })
                     )
 
@@ -2597,6 +3124,94 @@ function convertirDatosAGuardado(
     }
 
     return drops;
+
+}
+
+// ============================================================
+// OBTENER FECHA DE ÚLTIMA REVISIÓN
+// ============================================================
+
+function obtenerFechaRevision(
+    monitor
+) {
+
+    return (
+        monitor.lastCheckedAt ||
+        monitor.ultimaRevision ||
+        new Date()
+    );
+
+}
+
+// ============================================================
+// GUARDAR FECHA DE REVISIÓN
+// ============================================================
+
+function establecerFechaRevision(
+    monitor,
+    fecha = new Date()
+) {
+
+    monitor.lastCheckedAt =
+        fecha;
+
+    if (
+        Object.prototype.hasOwnProperty.call(
+            monitor,
+            "ultimaRevision"
+        )
+    ) {
+
+        monitor.ultimaRevision =
+            fecha;
+
+    }
+
+}
+
+// ============================================================
+// OBTENER CREADOR DEL MONITOR
+// ============================================================
+
+function obtenerCreador(
+    monitor
+) {
+
+    return (
+        monitor.createdBy ||
+        monitor.creadoPor ||
+        null
+    );
+
+}
+
+// ============================================================
+// GUARDAR CREADOR
+// ============================================================
+
+function establecerCreador(
+    monitor,
+    userId
+) {
+
+    if (!userId) {
+        return;
+    }
+
+    monitor.createdBy =
+        userId;
+
+    if (
+        Object.prototype.hasOwnProperty.call(
+            monitor,
+            "creadoPor"
+        )
+    ) {
+
+        monitor.creadoPor =
+            userId;
+
+    }
 
 }
 
@@ -2630,8 +3245,9 @@ function datosDesdeMonitor(
             null,
 
         actualizado:
-            monitor.ultimaRevision ||
-            new Date(),
+            obtenerFechaRevision(
+                monitor
+            ),
 
         generalDrops:
             drops
@@ -2708,6 +3324,152 @@ function datosDesdeMonitor(
 }
 
 // ============================================================
+// EDITAR MENSAJES DEL MONITOR
+// ============================================================
+
+async function editarMensajesMonitor(
+    channel,
+    monitor
+) {
+
+    if (
+        !channel ||
+        !monitor
+    ) {
+
+        return false;
+
+    }
+
+    const datos =
+        datosDesdeMonitor(
+            monitor
+        );
+
+    const embeds =
+        crearEmbedsDrops(
+            datos
+        );
+
+    if (!embeds.length) {
+
+        console.warn(
+            `⚠️ El monitor ${monitor._id} no tiene embeds para actualizar.`
+        );
+
+        return false;
+
+    }
+
+    const messageIds =
+        Array.isArray(
+            monitor.messageIds
+        )
+            ? monitor.messageIds
+            : [];
+
+    let todosCorrectos =
+        true;
+
+    for (
+        let i = 0;
+        i < messageIds.length;
+        i++
+    ) {
+
+        const messageId =
+            messageIds[i];
+
+        try {
+
+            const mensaje =
+                await channel.messages.fetch(
+                    messageId
+                );
+
+            const grupo =
+                embeds.slice(
+                    i * 10,
+                    i * 10 + 10
+                );
+
+            if (!grupo.length) {
+                continue;
+            }
+
+            await mensaje.edit({
+
+                embeds:
+                    grupo
+
+            });
+
+        } catch (error) {
+
+            todosCorrectos =
+                false;
+
+            console.log(
+                `⚠️ No se pudo editar mensaje Drops ${messageId}: ${error.message}`
+            );
+
+        }
+
+    }
+
+    return todosCorrectos;
+
+}
+
+// ============================================================
+// BORRAR MENSAJES DEL MONITOR
+// ============================================================
+
+async function eliminarMensajesMonitor(
+    channel,
+    monitor
+) {
+
+    if (
+        !channel ||
+        !monitor
+    ) {
+
+        return;
+
+    }
+
+    for (
+        const messageId
+        of monitor.messageIds || []
+    ) {
+
+        try {
+
+            const mensaje =
+                await channel.messages.fetch(
+                    messageId
+                );
+
+            await mensaje.delete();
+
+            console.log(
+                `🗑️ Mensaje Drops eliminado: ${messageId}`
+            );
+
+        } catch (error) {
+
+            console.log(
+                `ℹ️ Mensaje Drops ${messageId} ya no estaba disponible.`
+            );
+
+        }
+
+    }
+
+}
+
+// ============================================================
 // PUBLICAR / ACTUALIZAR MONITOR
 // ============================================================
 
@@ -2748,6 +3510,11 @@ async function publicarDropsEnCanal(
             datos
         );
 
+    const cantidadMensajesNueva =
+        Math.ceil(
+            embeds.length / 10
+        );
+
     let monitor =
         monitorExistente;
 
@@ -2763,11 +3530,6 @@ async function publicarDropsEnCanal(
             monitor.messageIds?.length ||
             0;
 
-        const cantidadNueva =
-            Math.ceil(
-                embeds.length / 10
-            );
-
         const mismaCampana =
             monitor.campaignKey ===
             campaignKey;
@@ -2775,10 +3537,13 @@ async function publicarDropsEnCanal(
         if (
             mismaCampana &&
             cantidadAnterior ===
-                cantidadNueva
+                cantidadMensajesNueva
         ) {
 
             const mensajes = [];
+
+            let todosEncontrados =
+                true;
 
             for (
                 const messageId
@@ -2798,8 +3563,11 @@ async function publicarDropsEnCanal(
 
                 } catch (error) {
 
+                    todosEncontrados =
+                        false;
+
                     console.log(
-                        `⚠️ No se pudo recuperar mensaje Drops ${messageId}.`
+                        `⚠️ No se pudo recuperar mensaje Drops ${messageId}: ${error.message}`
                     );
 
                 }
@@ -2807,8 +3575,9 @@ async function publicarDropsEnCanal(
             }
 
             if (
+                todosEncontrados &&
                 mensajes.length ===
-                monitor.messageIds.length
+                    monitor.messageIds.length
             ) {
 
                 for (
@@ -2827,8 +3596,10 @@ async function publicarDropsEnCanal(
                         );
 
                     await mensajes[i].edit({
+
                         embeds:
                             grupo
+
                     });
 
                 }
@@ -2850,11 +3621,20 @@ async function publicarDropsEnCanal(
                         datos
                     );
 
-                monitor.ultimaRevision =
-                    new Date();
+                establecerFechaRevision(
+                    monitor
+                );
 
                 monitor.active =
                     true;
+
+                establecerCreador(
+                    monitor,
+                    creadoPor ||
+                        obtenerCreador(
+                            monitor
+                        )
+                );
 
                 await monitor.save();
 
@@ -2868,31 +3648,14 @@ async function publicarDropsEnCanal(
 
         }
 
-        // ====================================================
-        // SI CAMBIÓ LA CAMPAÑA O FALTAN MENSAJES
-        // ====================================================
+        console.log(
+            `♻️ Reconstruyendo mensajes Twitch Drops en ${channel.id}.`
+        );
 
-        for (
-            const messageId
-            of monitor.messageIds ||
-            []
-        ) {
-
-            try {
-
-                const mensaje =
-                    await channel.messages.fetch(
-                        messageId
-                    );
-
-                await mensaje.delete();
-
-            } catch (error) {
-
-                // El mensaje ya no existe.
-            }
-
-        }
+        await eliminarMensajesMonitor(
+            channel,
+            monitor
+        );
 
     }
 
@@ -2916,8 +3679,10 @@ async function publicarDropsEnCanal(
 
         const mensaje =
             await channel.send({
+
                 embeds:
                     grupo
+
             });
 
         messageIds.push(
@@ -2945,10 +3710,13 @@ async function publicarDropsEnCanal(
         monitor.channelId =
             channel.id;
 
-        monitor.creadoPor =
-            creadoPor;
-
     }
+
+    monitor.guildId =
+        channel.guild.id;
+
+    monitor.channelId =
+        channel.id;
 
     monitor.messageIds =
         messageIds;
@@ -2973,16 +3741,29 @@ async function publicarDropsEnCanal(
             datos
         );
 
-    monitor.ultimaRevision =
-        new Date();
+    establecerFechaRevision(
+        monitor
+    );
 
     monitor.active =
         true;
+
+    establecerCreador(
+        monitor,
+        creadoPor ||
+            obtenerCreador(
+                monitor
+            )
+    );
 
     await monitor.save();
 
     console.log(
         `💾 Monitor Twitch Drops guardado para ${channel.guild.name} / #${channel.name}`
+    );
+
+    console.log(
+        `💾 ${messageIds.length} mensaje(s) guardado(s) en MongoDB.`
     );
 
     return monitor;
@@ -3007,11 +3788,13 @@ async function publicarRustDrops(
     ) {
 
         return {
+
             ok:
                 false,
 
             motivo:
                 "NO_VINCULADA"
+
         };
 
     }
@@ -3021,11 +3804,13 @@ async function publicarRustDrops(
     ) {
 
         return {
+
             ok:
                 false,
 
             motivo:
                 "TOKEN_INVALIDO"
+
         };
 
     }
@@ -3036,11 +3821,13 @@ async function publicarRustDrops(
     ) {
 
         return {
+
             ok:
                 false,
 
             motivo:
                 "FACEPUNCH_ERROR"
+
         };
 
     }
@@ -3050,11 +3837,29 @@ async function publicarRustDrops(
     ) {
 
         return {
+
             ok:
                 false,
 
             motivo:
                 "CANAL_INVALIDO"
+
+        };
+
+    }
+
+    if (
+        !interaction.guildId
+    ) {
+
+        return {
+
+            ok:
+                false,
+
+            motivo:
+                "SOLO_SERVIDOR"
+
         };
 
     }
@@ -3064,22 +3869,33 @@ async function publicarRustDrops(
 
     let monitor =
         await RustDropsMonitor.findOne({
+
             guildId:
                 interaction.guildId,
 
             channelId:
-                channel.id
+                channel.id,
+
+            active:
+                true
+
         });
 
     monitor =
         await publicarDropsEnCanal(
+
             channel,
+
             resultado.facepunch,
+
             monitor,
+
             interaction.user.id
+
         );
 
     return {
+
         ok:
             true,
 
@@ -3090,12 +3906,13 @@ async function publicarRustDrops(
 
         cantidadMensajes:
             monitor.messageIds.length
+
     };
 
 }
 
 // ============================================================
-// REVISAR MONITORES
+// REVISAR MONITORES AUTOMÁTICOS
 // ============================================================
 
 async function revisarDropsAutomaticos(
@@ -3121,13 +3938,19 @@ async function revisarDropsAutomaticos(
 
         const monitores =
             await RustDropsMonitor.find({
+
                 active:
                     true
+
             });
 
         if (
             !monitores.length
         ) {
+
+            console.log(
+                "🎁 No hay monitores Twitch Drops activos."
+            );
 
             return;
 
@@ -3153,6 +3976,15 @@ async function revisarDropsAutomaticos(
 
         }
 
+        const campaignKey =
+            crearCampaignKey(
+                datos
+            );
+
+        // ========================================================
+        // REVISAR CADA MONITOR
+        // ========================================================
+
         for (
             const monitor
             of monitores
@@ -3160,19 +3992,47 @@ async function revisarDropsAutomaticos(
 
             try {
 
-                const guild =
-                    await client.guilds.fetch(
-                        monitor.guildId
+                let guild;
+
+                try {
+
+                    guild =
+                        await client.guilds.fetch(
+                            monitor.guildId
+                        );
+
+                } catch (error) {
+
+                    console.log(
+                        `⚠️ No se pudo obtener guild ${monitor.guildId}: ${error.message}`
                     );
+
+                    continue;
+
+                }
 
                 if (!guild) {
                     continue;
                 }
 
-                const channel =
-                    await guild.channels.fetch(
-                        monitor.channelId
+                let channel;
+
+                try {
+
+                    channel =
+                        await guild.channels.fetch(
+                            monitor.channelId
+                        );
+
+                } catch (error) {
+
+                    console.log(
+                        `⚠️ No se pudo obtener canal ${monitor.channelId}: ${error.message}`
                     );
+
+                    continue;
+
+                }
 
                 if (
                     !channel ||
@@ -3188,11 +4048,6 @@ async function revisarDropsAutomaticos(
 
                 }
 
-                const campaignKey =
-                    crearCampaignKey(
-                        datos
-                    );
-
                 // ==================================================
                 // CAMPAÑA CAMBIÓ
                 // ==================================================
@@ -3207,10 +4062,17 @@ async function revisarDropsAutomaticos(
                     );
 
                     await publicarDropsEnCanal(
+
                         channel,
+
                         datos,
+
                         monitor,
-                        monitor.creadoPor
+
+                        obtenerCreador(
+                            monitor
+                        )
+
                     );
 
                     continue;
@@ -3218,7 +4080,7 @@ async function revisarDropsAutomaticos(
                 }
 
                 // ==================================================
-                // ACTUALIZAR ESTADOS
+                // ACTUALIZAR SOLO ESTADOS
                 // ==================================================
 
                 const estadosActuales =
@@ -3237,8 +4099,14 @@ async function revisarDropsAutomaticos(
                     ) {
 
                         estadosActuales.set(
-                            canal.login,
+
+                            String(
+                                canal.login ||
+                                    ""
+                            ).toLowerCase(),
+
                             !!canal.online
+
                         );
 
                     }
@@ -3257,7 +4125,9 @@ async function revisarDropsAutomaticos(
                         drop.tipo !==
                         "streamer"
                     ) {
+
                         continue;
+
                     }
 
                     for (
@@ -3265,17 +4135,26 @@ async function revisarDropsAutomaticos(
                         of drop.canales
                     ) {
 
-                        const nuevoEstado =
-                            estadosActuales.get(
-                                canal.login
-                            );
+                        const login =
+                            String(
+                                canal.login ||
+                                    ""
+                            ).toLowerCase();
 
                         if (
-                            typeof nuevoEstado !==
-                            "boolean"
+                            !estadosActuales.has(
+                                login
+                            )
                         ) {
+
                             continue;
+
                         }
+
+                        const nuevoEstado =
+                            estadosActuales.get(
+                                login
+                            );
 
                         if (
                             !!canal.online !==
@@ -3283,7 +4162,9 @@ async function revisarDropsAutomaticos(
                         ) {
 
                             console.log(
+
                                 `📡 ${canal.displayName}: ${canal.online ? "ONLINE" : "OFFLINE"} → ${nuevoEstado ? "ONLINE" : "OFFLINE"}`
+
                             );
 
                             canal.online =
@@ -3298,63 +4179,38 @@ async function revisarDropsAutomaticos(
 
                 }
 
-                monitor.ultimaRevision =
-                    new Date();
+                establecerFechaRevision(
+                    monitor
+                );
+
+                // ==================================================
+                // EDITAR MENSAJES SI CAMBIÓ ONLINE/OFFLINE
+                // ==================================================
 
                 if (
                     huboCambios
                 ) {
 
                     console.log(
-                        `🔄 Actualizando embeds Twitch Drops en ${guild.name}.`
+                        `🔄 Actualizando estados Twitch Drops en ${guild.name}.`
                     );
 
-                    const datosMonitor =
-                        datosDesdeMonitor(
+                    const actualizado =
+                        await editarMensajesMonitor(
+
+                            channel,
+
                             monitor
+
                         );
 
-                    const embeds =
-                        crearEmbedsDrops(
-                            datosMonitor
-                        );
-
-                    for (
-                        let i = 0;
-                        i <
-                        monitor.messageIds.length;
-                        i++
+                    if (
+                        !actualizado
                     ) {
 
-                        const messageId =
-                            monitor.messageIds[i];
-
-                        try {
-
-                            const mensaje =
-                                await channel.messages.fetch(
-                                    messageId
-                                );
-
-                            const grupo =
-                                embeds.slice(
-                                    i * 10,
-                                    i * 10 + 10
-                                );
-
-                            await mensaje.edit({
-                                embeds:
-                                    grupo
-                            });
-
-                        } catch (error) {
-
-                            console.log(
-                                `⚠️ No se pudo editar mensaje Drops ${messageId}:`,
-                                error.message
-                            );
-
-                        }
+                        console.log(
+                            `⚠️ Algunos mensajes del monitor ${monitor._id} no pudieron actualizarse.`
+                        );
 
                     }
 
@@ -3365,8 +4221,11 @@ async function revisarDropsAutomaticos(
             } catch (error) {
 
                 console.error(
+
                     `❌ Error revisando monitor Drops ${monitor.guildId}/${monitor.channelId}:`,
+
                     error.message
+
                 );
 
             }
@@ -3403,6 +4262,16 @@ function iniciarDropsAutomaticos(
 
         console.log(
             "⚠️ Sistema automático Twitch Drops ya estaba iniciado."
+        );
+
+        return;
+
+    }
+
+    if (!client) {
+
+        console.error(
+            "❌ No se puede iniciar Twitch Drops automático: falta el cliente Discord."
         );
 
         return;
