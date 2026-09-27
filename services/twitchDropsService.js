@@ -28,11 +28,23 @@ const FACEPUNCH_DROPS_URL =
 const INTERVALO_DROPS =
     60 * 1000;
 
+// Si una cuenta tiene un token inválido,
+// no volvemos a consultar Twitch cada minuto.
+// Se vuelve a intentar después de 10 minutos.
+const INTERVALO_TOKEN_INVALIDO =
+    10 * 60 * 1000;
+
 let twitchAppToken = null;
 let twitchAppTokenExpiresAt = 0;
 
 let dropsRevisando = false;
 let dropsAutomaticosIniciados = false;
+
+// Cache de tokens inválidos.
+// key = discordUserId
+// value = timestamp de la última detección 401
+const tokensInvalidos =
+    new Map();
 
 // ============================================================
 // CONFIGURACIÓN
@@ -82,10 +94,151 @@ function getHeaders(accessToken) {
 }
 
 // ============================================================
+// MARCAR TOKEN COMO INVÁLIDO
+// ============================================================
+
+function marcarTokenInvalido(
+    cuenta
+) {
+
+    if (!cuenta) {
+
+        return;
+
+    }
+
+    const key =
+        String(
+            cuenta.discordUserId ||
+                cuenta.twitchUserId ||
+                cuenta.twitchLogin ||
+                ""
+        );
+
+    if (!key) {
+
+        return;
+
+    }
+
+    tokensInvalidos.set(
+        key,
+        Date.now()
+    );
+
+}
+
+// ============================================================
+// COMPROBAR SI EL TOKEN ESTÁ EN COOLDOWN
+// ============================================================
+
+function tokenEstaEnCooldown(
+    cuenta
+) {
+
+    if (!cuenta) {
+
+        return false;
+
+    }
+
+    const key =
+        String(
+            cuenta.discordUserId ||
+                cuenta.twitchUserId ||
+                cuenta.twitchLogin ||
+                ""
+        );
+
+    if (!key) {
+
+        return false;
+
+    }
+
+    const ultimaFecha =
+        tokensInvalidos.get(
+            key
+        );
+
+    if (!ultimaFecha) {
+
+        return false;
+
+    }
+
+    const transcurrido =
+        Date.now() -
+        ultimaFecha;
+
+    if (
+        transcurrido >=
+        INTERVALO_TOKEN_INVALIDO
+    ) {
+
+        tokensInvalidos.delete(
+            key
+        );
+
+        return false;
+
+    }
+
+    return true;
+
+}
+
+// ============================================================
+// LIMPIAR TOKEN INVÁLIDO DEL CACHE
+// ============================================================
+
+function limpiarTokenInvalido(
+    cuenta
+) {
+
+    if (!cuenta) {
+
+        return;
+
+    }
+
+    const key =
+        String(
+            cuenta.discordUserId ||
+                cuenta.twitchUserId ||
+                cuenta.twitchLogin ||
+                ""
+        );
+
+    if (!key) {
+
+        return;
+
+    }
+
+    tokensInvalidos.delete(
+        key
+    );
+
+}
+
+// ============================================================
 // VALIDAR TOKEN DEL USUARIO
 // ============================================================
 
-async function validarToken(accessToken) {
+async function validarToken(
+    accessToken
+) {
+
+    if (!accessToken) {
+
+        console.error(
+            "❌ No existe access token de Twitch."
+        );
+
+        return null;
+
+    }
 
     try {
 
@@ -100,13 +253,15 @@ async function validarToken(accessToken) {
 
                     },
 
-                    timeout: 10000
+                    timeout:
+                        10000
 
                 }
             );
 
         const datos =
-            respuesta.data || null;
+            respuesta.data ||
+            null;
 
         if (datos) {
 
@@ -139,7 +294,9 @@ async function validarToken(accessToken) {
 
             console.log(
                 "🔎 Scopes del token:",
-                Array.isArray(datos.scopes)
+                Array.isArray(
+                    datos.scopes
+                )
                     ? datos.scopes.join(", ") ||
                         "NINGUNO"
                     : "NO DEVUELTO"
@@ -179,12 +336,36 @@ async function validarToken(accessToken) {
 
     } catch (error) {
 
-        console.error(
-            "❌ Error validando token Twitch:",
-            error.response?.status,
-            error.response?.data ||
-                error.message
-        );
+        const status =
+            error.response?.status;
+
+        const data =
+            error.response?.data;
+
+        if (
+            status === 401
+        ) {
+
+            console.error(
+                "❌ Token Twitch inválido o expirado (401)."
+            );
+
+            console.error(
+                "❌ Twitch respondió:",
+                data ||
+                    error.message
+            );
+
+        } else {
+
+            console.error(
+                "❌ Error validando token Twitch:",
+                status,
+                data ||
+                    error.message
+            );
+
+        }
 
         return null;
 
@@ -196,7 +377,9 @@ async function validarToken(accessToken) {
 // OBTENER JUEGO RUST
 // ============================================================
 
-async function obtenerJuegoRust(accessToken) {
+async function obtenerJuegoRust(
+    accessToken
+) {
 
     try {
 
@@ -216,7 +399,8 @@ async function obtenerJuegoRust(accessToken) {
                             accessToken
                         ),
 
-                    timeout: 15000
+                    timeout:
+                        15000
 
                 }
             );
@@ -342,7 +526,8 @@ async function obtenerEntitlementsDrops(
                                 accessToken
                             ),
 
-                        timeout: 15000
+                        timeout:
+                            15000
 
                     }
                 );
@@ -376,7 +561,7 @@ async function obtenerEntitlementsDrops(
                 error.message
         );
 
-        return [];
+        throw error;
 
     }
 
@@ -431,7 +616,8 @@ async function obtenerTwitchAppToken() {
 
                     },
 
-                    timeout: 15000
+                    timeout:
+                        15000
 
                 }
             );
@@ -473,8 +659,11 @@ async function obtenerTwitchAppToken() {
                 error.message
         );
 
-        twitchAppToken = null;
-        twitchAppTokenExpiresAt = 0;
+        twitchAppToken =
+            null;
+
+        twitchAppTokenExpiresAt =
+            0;
 
         return null;
 
@@ -484,6 +673,7 @@ async function obtenerTwitchAppToken() {
 
 // ============================================================
 // COMPROBAR STREAMERS ONLINE
+// SOLO RUST
 // ============================================================
 
 async function obtenerStreamersOnline(
@@ -524,10 +714,6 @@ async function obtenerStreamersOnline(
         return new Set();
 
     }
-
-    // ========================================================
-    // OBTENER ID OFICIAL DE RUST
-    // ========================================================
 
     const rustGame =
         await obtenerJuegoRust(
@@ -599,7 +785,8 @@ async function obtenerStreamersOnline(
                                 appToken
                             ),
 
-                        timeout: 15000
+                        timeout:
+                            15000
 
                     }
                 );
@@ -635,16 +822,15 @@ async function obtenerStreamersOnline(
                         .trim()
                         .toLowerCase();
 
-                // ==================================================
-                // SOLO CUENTA RUST
-                // ==================================================
-
                 const estaEnRust =
-                    gameId === rustGameId ||
-                    gameName === "rust";
+                    gameId ===
+                        rustGameId ||
+                    gameName ===
+                        "rust";
 
                 if (
-                    stream.type === "live" &&
+                    stream.type ===
+                        "live" &&
                     estaEnRust
                 ) {
 
@@ -700,15 +886,42 @@ function decodificarHtml(
 ) {
 
     return String(texto)
-        .replace(/&amp;/gi, "&")
-        .replace(/&quot;/gi, '"')
-        .replace(/&#39;/gi, "'")
-        .replace(/&apos;/gi, "'")
-        .replace(/&lt;/gi, "<")
-        .replace(/&gt;/gi, ">")
-        .replace(/&#x27;/gi, "'")
-        .replace(/&#x2F;/gi, "/")
-        .replace(/&#160;/gi, " ")
+        .replace(
+            /&amp;/gi,
+            "&"
+        )
+        .replace(
+            /&quot;/gi,
+            '"'
+        )
+        .replace(
+            /&#39;/gi,
+            "'"
+        )
+        .replace(
+            /&apos;/gi,
+            "'"
+        )
+        .replace(
+            /&lt;/gi,
+            "<"
+        )
+        .replace(
+            /&gt;/gi,
+            ">"
+        )
+        .replace(
+            /&#x27;/gi,
+            "'"
+        )
+        .replace(
+            /&#x2F;/gi,
+            "/"
+        )
+        .replace(
+            /&#160;/gi,
+            " "
+        )
         .trim();
 
 }
@@ -946,10 +1159,18 @@ function esImagenValida(
         /\.(png|jpg|jpeg|webp|gif)(\?|$)/i.test(
             valor
         ) ||
-        valor.includes("/image/") ||
-        valor.includes("steamstatic") ||
-        valor.includes("fastly") ||
-        valor.includes("cloudflare")
+        valor.includes(
+            "/image/"
+        ) ||
+        valor.includes(
+            "steamstatic"
+        ) ||
+        valor.includes(
+            "fastly"
+        ) ||
+        valor.includes(
+            "cloudflare"
+        )
     );
 
 }
@@ -967,8 +1188,10 @@ function extraerImagenCercana(
 
     if (
         !bloque ||
-        typeof bloque !== "string" ||
-        typeof index !== "number"
+        typeof bloque !==
+            "string" ||
+        typeof index !==
+            "number"
     ) {
 
         return null;
@@ -1008,7 +1231,9 @@ function extraerImagenCercana(
 
         if (
             !url ||
-            !esImagenValida(url)
+            !esImagenValida(
+                url
+            )
         ) {
 
             return;
@@ -1019,37 +1244,77 @@ function extraerImagenCercana(
             url.toLowerCase();
 
         const esStreamer =
-            lower.includes("twitch.tv") ||
-            lower.includes("static-cdn.jtvnw.net") ||
-            lower.includes("profile_image") ||
-            lower.includes("profileimage") ||
-            lower.includes("avatar") ||
-            lower.includes("channel_image") ||
-            lower.includes("channelimage") ||
-            lower.includes("user_image") ||
-            lower.includes("userimage") ||
-            lower.includes("logo") ||
-            lower.includes("banner") ||
-            lower.includes("offline");
+            lower.includes(
+                "twitch.tv"
+            ) ||
+            lower.includes(
+                "static-cdn.jtvnw.net"
+            ) ||
+            lower.includes(
+                "profile_image"
+            ) ||
+            lower.includes(
+                "profileimage"
+            ) ||
+            lower.includes(
+                "avatar"
+            ) ||
+            lower.includes(
+                "channel_image"
+            ) ||
+            lower.includes(
+                "channelimage"
+            ) ||
+            lower.includes(
+                "user_image"
+            ) ||
+            lower.includes(
+                "userimage"
+            ) ||
+            lower.includes(
+                "logo"
+            ) ||
+            lower.includes(
+                "banner"
+            ) ||
+            lower.includes(
+                "offline"
+            );
 
-        if (esStreamer) {
+        if (
+            esStreamer
+        ) {
 
             return;
 
         }
 
         const esEconomy =
-            lower.includes("/economy/image/") ||
-            lower.includes("economy/image");
+            lower.includes(
+                "/economy/image/"
+            ) ||
+            lower.includes(
+                "economy/image"
+            );
 
         const esSteam =
-            lower.includes("steamstatic") ||
-            lower.includes("community.fastly") ||
-            lower.includes("community.cloudflare") ||
-            lower.includes("steamusercontent");
+            lower.includes(
+                "steamstatic"
+            ) ||
+            lower.includes(
+                "community.fastly"
+            ) ||
+            lower.includes(
+                "community.cloudflare"
+            ) ||
+            lower.includes(
+                "steamusercontent"
+            );
 
         const esFacepunch =
-            lower.includes("files.facepunch.com");
+            lower.includes(
+                "files.facepunch.com"
+            );
 
         const distancia =
             Math.abs(
@@ -1063,10 +1328,15 @@ function extraerImagenCercana(
         candidatas.push({
 
             url,
+
             distancia,
+
             esEconomy,
+
             esSteam,
+
             esFacepunch,
+
             tipo
 
         });
@@ -1444,29 +1714,74 @@ function extraerStreamerDrops(
 
         const nombresConocidos = {
 
-            geega: "GEEGA",
-            ledoo: "LEDOO",
-            blooprint: "Blooprint",
-            hjune: "hJune",
-            hutnik: "Hutnik",
-            disguisedtoast: "DisguisedToast",
-            peterpark: "peterpark",
-            fuslie: "fuslie",
-            sven: "Sven",
-            abe: "Abe",
-            esfandtv: "EsfandTV",
-            xchocobars: "xChocoBars",
-            ironmouse: "ironmouse",
-            willneff: "willneff",
-            foolish: "Foolish",
-            tinakitten: "TinaKitten",
-            cyr: "CYR",
-            mrwobblestwitch: "mrwobblestwitch",
-            aceu: "aceu",
-            zchum: "ZChum",
-            fancyorb: "FancyOrb",
-            itsryanhiga: "itsRyanHiga",
-            welyn: "Welyn"
+            geega:
+                "GEEGA",
+
+            ledoo:
+                "LEDOO",
+
+            blooprint:
+                "Blooprint",
+
+            hjune:
+                "hJune",
+
+            hutnik:
+                "Hutnik",
+
+            disguisedtoast:
+                "DisguisedToast",
+
+            peterpark:
+                "peterpark",
+
+            fuslie:
+                "fuslie",
+
+            sven:
+                "Sven",
+
+            abe:
+                "Abe",
+
+            esfandtv:
+                "EsfandTV",
+
+            xchocobars:
+                "xChocoBars",
+
+            ironmouse:
+                "ironmouse",
+
+            willneff:
+                "willneff",
+
+            foolish:
+                "Foolish",
+
+            tinakitten:
+                "TinaKitten",
+
+            cyr:
+                "CYR",
+
+            mrwobblestwitch:
+                "mrwobblestwitch",
+
+            aceu:
+                "aceu",
+
+            zchum:
+                "ZChum",
+
+            fancyorb:
+                "FancyOrb",
+
+            itsryanhiga:
+                "itsRyanHiga",
+
+            welyn:
+                "Welyn"
 
         };
 
@@ -1568,10 +1883,12 @@ function extraerStreamerDrops(
 
     elementos.sort(
         (a, b) =>
-            a.index - b.index
+            a.index -
+            b.index
     );
 
-    let streamersPendientes = [];
+    let streamersPendientes =
+        [];
 
     for (
         const elemento
@@ -1673,7 +1990,8 @@ function extraerStreamerDrops(
 
         }
 
-        streamersPendientes = [];
+        streamersPendientes =
+            [];
 
     }
 
@@ -1736,7 +2054,8 @@ function extraerGeneralDrops(
                 html
             );
 
-        let imagen = null;
+        let imagen =
+            null;
 
         if (htmlMatch) {
 
@@ -1808,12 +2127,15 @@ function convertirFechaCampanaAISO(
 
         }
 
-        // Facepunch entrega las fechas en UTC.
-        // Se convierten a GMT-3 fijo.
         const fechaGMT3 =
             new Date(
                 fecha.getTime() -
-                (3 * 60 * 60 * 1000)
+                (
+                    3 *
+                    60 *
+                    60 *
+                    1000
+                )
             );
 
         return (
@@ -1868,7 +2190,12 @@ function formatearFechaCampana(
         const fechaGMT3 =
             new Date(
                 fecha.getTime() -
-                (3 * 60 * 60 * 1000)
+                (
+                    3 *
+                    60 *
+                    60 *
+                    1000
+                )
             );
 
         const meses = [
@@ -2003,7 +2330,8 @@ function crearEncabezadoCampana(
             datos.fechaFin
         );
 
-    let texto = "";
+    let texto =
+        "";
 
     if (activa) {
 
@@ -2106,10 +2434,6 @@ async function obtenerDropsFacepunch() {
                 html
             );
 
-        // ========================================================
-        // CAMPAÑA
-        // ========================================================
-
         let campaignName =
             "Twitch Drops";
 
@@ -2130,10 +2454,6 @@ async function obtenerDropsFacepunch() {
 
         }
 
-        // ========================================================
-        // TEMA
-        // ========================================================
-
         let campaignTheme =
             null;
 
@@ -2149,12 +2469,11 @@ async function obtenerDropsFacepunch() {
 
         }
 
-        // ========================================================
-        // FECHAS
-        // ========================================================
+        let fechaInicio =
+            null;
 
-        let fechaInicio = null;
-        let fechaFin = null;
+        let fechaFin =
+            null;
 
         const fechaMatch =
             textoPagina.match(
@@ -2179,28 +2498,16 @@ async function obtenerDropsFacepunch() {
 
         }
 
-        // ========================================================
-        // GENERAL
-        // ========================================================
-
         const generalDrops =
             extraerGeneralDrops(
                 html,
                 textoPagina
             );
 
-        // ========================================================
-        // STREAMER
-        // ========================================================
-
         const streamerDrops =
             extraerStreamerDrops(
                 html
             );
-
-        // ========================================================
-        // ESTADOS
-        // ========================================================
 
         const logins = [];
 
@@ -2211,7 +2518,8 @@ async function obtenerDropsFacepunch() {
 
             for (
                 const canal
-                of drop.canales || []
+                of drop.canales ||
+                []
             ) {
 
                 logins.push(
@@ -2234,7 +2542,8 @@ async function obtenerDropsFacepunch() {
 
             for (
                 const canal
-                of drop.canales || []
+                of drop.canales ||
+                []
             ) {
 
                 canal.online =
@@ -2247,7 +2556,10 @@ async function obtenerDropsFacepunch() {
             }
 
             drop.online =
-                drop.canales.some(
+                (
+                    drop.canales ||
+                    []
+                ).some(
                     canal =>
                         canal.online
                 );
@@ -2368,7 +2680,9 @@ function formatearHoras(
 ) {
 
     const numero =
-        Number(horas);
+        Number(
+            horas
+        );
 
     if (
         !Number.isFinite(
@@ -2381,7 +2695,8 @@ function formatearHoras(
     }
 
     if (
-        numero === 1
+        numero ===
+        1
     ) {
 
         return "1 hora";
@@ -2563,8 +2878,10 @@ function crearEmbedsDrops(
                 null,
 
             canales:
-                (drop.canales ||
-                    []).map(
+                (
+                    drop.canales ||
+                    []
+                ).map(
                     canal => ({
 
                         login:
@@ -2606,10 +2923,6 @@ function crearGruposMensajesDrops(
     const generalEmbeds = [];
     const streamerEmbeds = [];
 
-    // ========================================================
-    // GENERALES
-    // ========================================================
-
     for (
         const drop
         of datos.generalDrops ||
@@ -2648,10 +2961,6 @@ function crearGruposMensajesDrops(
 
     }
 
-    // ========================================================
-    // STREAMERS
-    // ========================================================
-
     for (
         const drop
         of datos.streamerDrops ||
@@ -2678,8 +2987,10 @@ function crearGruposMensajesDrops(
                         null,
 
                     canales:
-                        (drop.canales ||
-                            []).map(
+                        (
+                            drop.canales ||
+                            []
+                        ).map(
                             canal => ({
 
                                 login:
@@ -2704,10 +3015,6 @@ function crearGruposMensajesDrops(
 
     }
 
-    // ========================================================
-    // MENSAJE GENERAL
-    // ========================================================
-
     if (
         generalEmbeds.length
     ) {
@@ -2731,10 +3038,6 @@ function crearGruposMensajesDrops(
         });
 
     }
-
-    // ========================================================
-    // MENSAJES STREAMER
-    // ========================================================
 
     for (
         let i = 0;
@@ -2790,12 +3093,17 @@ function crearEmbedFacepunchDrops(
         );
 
     const general =
-        (datos.generalDrops || [])
+        (
+            datos.generalDrops ||
+            []
+        )
             .map(
                 drop =>
                     `📦 **${drop.nombre}** — ${formatearHoras(drop.horas)}`
             )
-            .join("\n");
+            .join(
+                "\n"
+            );
 
     if (general) {
 
@@ -2818,12 +3126,17 @@ function crearEmbedFacepunchDrops(
     }
 
     const streamer =
-        (datos.streamerDrops || [])
+        (
+            datos.streamerDrops ||
+            []
+        )
             .map(
                 drop =>
                     `🎯 **${drop.nombre}** — ${formatearHoras(drop.horas)}\n${formatearCanales(drop.canales)}`
             )
-            .join("\n\n");
+            .join(
+                "\n\n"
+            );
 
     if (streamer) {
 
@@ -2934,7 +3247,9 @@ async function obtenerRustDrops(
 
     const cuenta =
         await TwitchAccount.findOne({
+
             discordUserId
+
         });
 
     if (!cuenta) {
@@ -2976,6 +3291,10 @@ async function obtenerRustDrops(
 
     if (!tokenInfo) {
 
+        marcarTokenInvalido(
+            cuenta
+        );
+
         return {
 
             vinculada:
@@ -2987,6 +3306,12 @@ async function obtenerRustDrops(
             cuenta:
                 cuenta.twitchDisplayName ||
                 cuenta.twitchLogin,
+
+            twitchLogin:
+                cuenta.twitchLogin,
+
+            twitchUserId:
+                cuenta.twitchUserId,
 
             drops:
                 [],
@@ -3003,6 +3328,10 @@ async function obtenerRustDrops(
         };
 
     }
+
+    limpiarTokenInvalido(
+        cuenta
+    );
 
     const facepunch =
         await obtenerDropsFacepunch();
@@ -3096,7 +3425,7 @@ function crearEmbedRustDrops(
                 "🎁 Rust Drops"
             )
             .setDescription(
-                `Cuenta vinculada: **${resultado.cuenta}**\n\n⚠️ La sesión de Twitch no pudo validarse.\n\nPrueba nuevamente con **/drops estado** o vuelve a vincular la cuenta.`
+                `Cuenta vinculada: **${resultado.cuenta}**\n\n⚠️ El token de Twitch ha caducado o ya no es válido.\n\nVuelve a vincular tu cuenta con **/drops vincular** para obtener un nuevo token.`
             )
             .setFooter({
 
@@ -3296,9 +3625,11 @@ function crearCampaignKey(
 
     const drops = [
 
-        ...(datos.generalDrops || []),
+        ...(datos.generalDrops ||
+            []),
 
-        ...(datos.streamerDrops || [])
+        ...(datos.streamerDrops ||
+            [])
 
     ];
 
@@ -3322,7 +3653,10 @@ function crearCampaignKey(
                         drop.horas,
 
                     canales:
-                        (drop.canales || [])
+                        (
+                            drop.canales ||
+                            []
+                        )
                             .map(
                                 canal =>
                                     String(
@@ -3353,7 +3687,9 @@ function crearCampaignKey(
 
         texto
 
-    ].join("|");
+    ].join(
+        "|"
+    );
 
 }
 
@@ -3417,7 +3753,10 @@ function convertirDatosAGuardado(
                 null,
 
             canales:
-                (drop.canales || [])
+                (
+                    drop.canales ||
+                    []
+                )
                     .map(
                         canal => ({
 
@@ -3549,7 +3888,8 @@ function datosDesdeMonitor(
 
         for (
             const canal
-            of drop.canales || []
+            of drop.canales ||
+            []
         ) {
 
             const login =
@@ -3713,7 +4053,8 @@ async function editarMensajesMonitor(
             await mensaje.edit({
 
                 content:
-                    grupo.content || "",
+                    grupo.content ||
+                    "",
 
                 embeds:
                     grupo.embeds
@@ -3757,7 +4098,8 @@ async function eliminarMensajesMonitor(
 
     for (
         const messageId
-        of monitor.messageIds || []
+        of monitor.messageIds ||
+        []
     ) {
 
         try {
@@ -3851,7 +4193,8 @@ async function publicarDropsEnCanal(
         ) {
 
             const mensajes = [];
-            let todosEncontrados = true;
+            let todosEncontrados =
+                true;
 
             for (
                 const messageId
@@ -3965,10 +4308,6 @@ async function publicarDropsEnCanal(
 
     }
 
-    // ========================================================
-    // PUBLICAR MENSAJES NUEVOS
-    // ========================================================
-
     const messageIds = [];
 
     for (
@@ -4001,10 +4340,6 @@ async function publicarDropsEnCanal(
         );
 
     }
-
-    // ========================================================
-    // GUARDAR MONITOR
-    // ========================================================
 
     if (!monitor) {
 
@@ -4248,12 +4583,11 @@ function obtenerClaveEntitlement(
             "",
 
         entitlement.timestamp ||
-            "",
-
-        entitlement.fulfillment_status ||
             ""
 
-    ].join("|");
+    ].join(
+        "|"
+    );
 
 }
 
@@ -4276,7 +4610,7 @@ function obtenerDropsEstado(
 
     if (
         typeof cuenta.dropsEstado !==
-        "object" ||
+            "object" ||
         Array.isArray(
             cuenta.dropsEstado
         )
@@ -4554,12 +4888,45 @@ async function revisarEntitlementsCuenta(
 
     }
 
+    // ========================================================
+    // EVITAR MARTILLEAR TWITCH CON TOKEN INVÁLIDO
+    // ========================================================
+
+    if (
+        tokenEstaEnCooldown(
+            cuenta
+        )
+    ) {
+
+        console.log(
+            `⏳ Token inválido de ${cuenta.twitchLogin || cuenta.twitchUserId} en cooldown. Se volverá a comprobar más adelante.`
+        );
+
+        return {
+
+            revisado:
+                false,
+
+            notificados:
+                0,
+
+            tokenInvalido:
+                true
+
+        };
+
+    }
+
     const tokenInfo =
         await validarToken(
             cuenta.accessToken
         );
 
     if (!tokenInfo) {
+
+        marcarTokenInvalido(
+            cuenta
+        );
 
         console.warn(
             `⚠️ No se pudieron revisar los Drops de ${cuenta.twitchLogin || cuenta.twitchUserId}: token inválido.`
@@ -4571,11 +4938,19 @@ async function revisarEntitlementsCuenta(
                 false,
 
             notificados:
-                0
+                0,
+
+            tokenInvalido:
+                true
 
         };
 
     }
+
+    // El token volvió a funcionar.
+    limpiarTokenInvalido(
+        cuenta
+    );
 
     const resultado =
         await obtenerRustEntitlements(
@@ -4636,16 +5011,6 @@ async function revisarEntitlementsCuenta(
     let cambios =
         false;
 
-    // ========================================================
-    // PRIMERA CARGA
-    //
-    // Si encontramos un FULFILLED que nunca habíamos visto,
-    // lo guardamos pero NO mandamos DM.
-    //
-    // Así evitamos que al instalar esta función el usuario
-    // reciba de golpe todos los Drops antiguos.
-    // ========================================================
-
     for (
         const entitlement
         of entitlements
@@ -4671,6 +5036,10 @@ async function revisarEntitlementsCuenta(
                     ""
             ).toUpperCase();
 
+        // ====================================================
+        // PRIMERA VEZ QUE VEMOS EL ENTITLEMENT
+        // ====================================================
+
         if (
             !estadoAnterior
         ) {
@@ -4687,6 +5056,9 @@ async function revisarEntitlementsCuenta(
                 timestamp:
                     entitlement.timestamp ||
                     null,
+
+                notified:
+                    false,
 
                 updatedAt:
                     new Date().toISOString()
@@ -4706,19 +5078,26 @@ async function revisarEntitlementsCuenta(
 
         const estadoAnteriorTexto =
             typeof estadoAnterior ===
-            "string"
+                "string"
                 ? estadoAnterior
                 : estadoAnterior.status;
 
+        const yaNotificado =
+            typeof estadoAnterior ===
+                "object" &&
+            estadoAnterior.notified ===
+                true;
+
         // ====================================================
-        // DETECTAR CLAIMED -> FULFILLED
+        // DETECTAR CUALQUIER CAMBIO A FULFILLED
         // ====================================================
 
         if (
             estadoAnteriorTexto !==
                 "FULFILLED" &&
             estadoActual ===
-                "FULFILLED"
+                "FULFILLED" &&
+            !yaNotificado
         ) {
 
             console.log(
@@ -4764,12 +5143,6 @@ async function revisarEntitlementsCuenta(
                     true;
 
             } else {
-
-                // Guardamos igualmente el estado,
-                // pero NO como notificado.
-                //
-                // Si el DM falla temporalmente, la siguiente
-                // revisión puede volver a intentarlo.
 
                 estados[clave] = {
 
@@ -4846,19 +5219,7 @@ async function revisarEntitlementsCuenta(
     cuenta.ultimaRevisionDrops =
         new Date();
 
-    if (
-        cambios
-    ) {
-
-        await cuenta.save();
-
-    } else {
-
-        // Aunque no haya cambios de estado,
-        // actualizamos la fecha de revisión.
-        await cuenta.save();
-
-    }
+    await cuenta.save();
 
     return {
 
@@ -4933,18 +5294,39 @@ async function revisarEntitlementsAutomaticos(
 
             } catch (error) {
 
-                console.error(
-                    `❌ Error revisando entitlements de ${cuenta.twitchLogin || cuenta.twitchUserId}:`,
-                    error.response?.status ||
-                        error.message
-                );
+                const status =
+                    error.response?.status;
+
+                if (
+                    status ===
+                    401
+                ) {
+
+                    marcarTokenInvalido(
+                        cuenta
+                    );
+
+                    console.warn(
+                        `⚠️ Token inválido de ${cuenta.twitchLogin || cuenta.twitchUserId}.`
+                    );
+
+                } else {
+
+                    console.error(
+                        `❌ Error revisando entitlements de ${cuenta.twitchLogin || cuenta.twitchUserId}:`,
+                        status ||
+                            error.message
+                    );
+
+                }
 
             }
 
         }
 
         if (
-            totalNotificados > 0
+            totalNotificados >
+            0
         ) {
 
             console.log(
@@ -5229,7 +5611,8 @@ async function revisarDropsAutomaticos(
 
                     for (
                         const canal
-                        of drop.canales || []
+                        of drop.canales ||
+                        []
                     ) {
 
                         const login =
@@ -5243,30 +5626,20 @@ async function revisarDropsAutomaticos(
 
                         }
 
-                        // ==================================================
-                        // SI FACEPUNCH DEVUELVE EL STREAMER:
-                        // USAMOS SU ESTADO ACTUAL.
+                        // Si el streamer está en la respuesta,
+                        // usamos su estado real.
                         //
-                        // SI NO LO DEVUELVE:
-                        // NO dejamos un 🟢 antiguo permanentemente.
-                        // Lo ponemos offline si tenemos datos de streamers.
-                        // ==================================================
+                        // Si no aparece, lo consideramos OFFLINE.
+                        // Esto evita que un 🟢 antiguo quede permanente.
 
-                        let nuevoEstado =
-                            false;
-
-                        if (
+                        const nuevoEstado =
                             estadosActuales.has(
                                 login
                             )
-                        ) {
-
-                            nuevoEstado =
-                                estadosActuales.get(
+                                ? !!estadosActuales.get(
                                     login
-                                );
-
-                        }
+                                )
+                                : false;
 
                         if (
                             !!canal.online !==
@@ -5472,6 +5845,8 @@ module.exports = {
     publicarRustDrops,
 
     revisarDropsAutomaticos,
+
+    revisarEntitlementsAutomaticos,
 
     iniciarDropsAutomaticos
 
