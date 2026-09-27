@@ -268,7 +268,6 @@ async function obtenerEntitlementsDrops(
 ) {
 
     const todos = [];
-
     let cursor = null;
 
     try {
@@ -603,42 +602,15 @@ function decodificarHtml(
 ) {
 
     return String(texto)
-        .replace(
-            /&amp;/gi,
-            "&"
-        )
-        .replace(
-            /&quot;/gi,
-            '"'
-        )
-        .replace(
-            /&#39;/gi,
-            "'"
-        )
-        .replace(
-            /&apos;/gi,
-            "'"
-        )
-        .replace(
-            /&lt;/gi,
-            "<"
-        )
-        .replace(
-            /&gt;/gi,
-            ">"
-        )
-        .replace(
-            /&#x27;/gi,
-            "'"
-        )
-        .replace(
-            /&#x2F;/gi,
-            "/"
-        )
-        .replace(
-            /&#160;/gi,
-            " "
-        )
+        .replace(/&amp;/gi, "&")
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/&apos;/gi, "'")
+        .replace(/&lt;/gi, "<")
+        .replace(/&gt;/gi, ">")
+        .replace(/&#x27;/gi, "'")
+        .replace(/&#x2F;/gi, "/")
+        .replace(/&#160;/gi, " ")
         .trim();
 
 }
@@ -836,39 +808,21 @@ function esImagenValida(
         return false;
     }
 
-    /*
-     * Estas rutas/nombres corresponden normalmente a
-     * imágenes de usuario, canales o elementos de Twitch.
-     * Nunca deben utilizarse como imagen de un Drop.
-     */
     const bloqueadas = [
 
         "logo",
-
         "favicon",
-
         "avatar",
-
         "profile_image",
-
         "profileimage",
-
         "channel_image",
-
         "channelimage",
-
         "user_image",
-
         "userimage",
-
         "banner",
-
         "offline",
-
         "twitch.tv",
-
         "static-cdn.jtvnw.net",
-
         "twitch-facepunch"
 
     ];
@@ -890,46 +844,16 @@ function esImagenValida(
         /\.(png|jpg|jpeg|webp|gif)(\?|$)/i.test(
             valor
         ) ||
-        valor.includes(
-            "/image/"
-        ) ||
-        valor.includes(
-            "steamstatic"
-        ) ||
-        valor.includes(
-            "fastly"
-        ) ||
-        valor.includes(
-            "cloudflare"
-        )
+        valor.includes("/image/") ||
+        valor.includes("steamstatic") ||
+        valor.includes("fastly") ||
+        valor.includes("cloudflare")
     );
 
 }
 
 // ============================================================
 // EXTRAER IMAGEN CERCANA
-//
-// CAMBIO IMPORTANTE:
-//
-// Facepunch coloca dentro de la misma zona:
-//
-//   STREAMER
-//   STREAMER
-//   DROP
-//   HORAS
-//
-// Por eso buscar simplemente "la imagen más cercana"
-// puede devolver el avatar del streamer.
-//
-// Ahora:
-//
-//   - Se detectan todas las imágenes.
-//   - Se eliminan explícitamente imágenes de Twitch/usuarios.
-//   - Se prioriza /economy/image/.
-//   - Para Streamer Drops se exige una imagen que parezca
-//     realmente una imagen de item.
-//   - Si no existe, devuelve null en vez de utilizar
-//     el avatar del streamer.
 // ============================================================
 
 function extraerImagenCercana(
@@ -992,86 +916,36 @@ function extraerImagenCercana(
         const lower =
             url.toLowerCase();
 
-        /*
-         * ========================================================
-         * DESCARTAR IMÁGENES DE STREAMERS
-         * ========================================================
-         */
-
         const esStreamer =
-            lower.includes(
-                "twitch.tv"
-            ) ||
-            lower.includes(
-                "static-cdn.jtvnw.net"
-            ) ||
-            lower.includes(
-                "profile_image"
-            ) ||
-            lower.includes(
-                "profileimage"
-            ) ||
-            lower.includes(
-                "avatar"
-            ) ||
-            lower.includes(
-                "channel_image"
-            ) ||
-            lower.includes(
-                "channelimage"
-            ) ||
-            lower.includes(
-                "user_image"
-            ) ||
-            lower.includes(
-                "userimage"
-            ) ||
-            lower.includes(
-                "logo"
-            ) ||
-            lower.includes(
-                "banner"
-            ) ||
-            lower.includes(
-                "offline"
-            );
+            lower.includes("twitch.tv") ||
+            lower.includes("static-cdn.jtvnw.net") ||
+            lower.includes("profile_image") ||
+            lower.includes("profileimage") ||
+            lower.includes("avatar") ||
+            lower.includes("channel_image") ||
+            lower.includes("channelimage") ||
+            lower.includes("user_image") ||
+            lower.includes("userimage") ||
+            lower.includes("logo") ||
+            lower.includes("banner") ||
+            lower.includes("offline");
 
         if (esStreamer) {
             return;
         }
 
-        /*
-         * ========================================================
-         * IDENTIFICAR IMAGEN DE ITEM
-         * ========================================================
-         */
-
         const esEconomy =
-            lower.includes(
-                "/economy/image/"
-            ) ||
-            lower.includes(
-                "economy/image"
-            );
+            lower.includes("/economy/image/") ||
+            lower.includes("economy/image");
 
         const esSteam =
-            lower.includes(
-                "steamstatic"
-            ) ||
-            lower.includes(
-                "community.fastly"
-            ) ||
-            lower.includes(
-                "community.cloudflare"
-            ) ||
-            lower.includes(
-                "steamusercontent"
-            );
+            lower.includes("steamstatic") ||
+            lower.includes("community.fastly") ||
+            lower.includes("community.cloudflare") ||
+            lower.includes("steamusercontent");
 
         const esFacepunch =
-            lower.includes(
-                "files.facepunch.com"
-            );
+            lower.includes("files.facepunch.com");
 
         const distancia =
             Math.abs(
@@ -1085,24 +959,15 @@ function extraerImagenCercana(
         candidatas.push({
 
             url,
-
             distancia,
-
             esEconomy,
-
             esSteam,
-
             esFacepunch,
-
             tipo
 
         });
 
     }
-
-    // ========================================================
-    // IMG SRC
-    // ========================================================
 
     const regexImg =
         /<img\b[^>]*?(?:src|data-src|data-original|data-image|data-lazy-src)\s*=\s*["']([^"']+)["'][^>]*>/gi;
@@ -1125,10 +990,6 @@ function extraerImagenCercana(
         );
 
     }
-
-    // ========================================================
-    // SRCSET
-    // ========================================================
 
     const regexSrcset =
         /\b(?:srcset|data-srcset)\s*=\s*["']([^"']+)["']/gi;
@@ -1171,10 +1032,6 @@ function extraerImagenCercana(
 
     }
 
-    // ========================================================
-    // BACKGROUND IMAGE
-    // ========================================================
-
     const regexBackground =
         /background-image\s*:\s*url\(\s*["']?([^"')]+)["']?\s*\)/gi;
 
@@ -1194,10 +1051,6 @@ function extraerImagenCercana(
         );
 
     }
-
-    // ========================================================
-    // URLs DIRECTAS
-    // ========================================================
 
     const regexUrl =
         /https?:\/\/[^"'()<>\s]+/gi;
@@ -1230,10 +1083,6 @@ function extraerImagenCercana(
         return null;
 
     }
-
-    // ========================================================
-    // ELIMINAR DUPLICADOS
-    // ========================================================
 
     const unicas =
         new Map();
@@ -1268,16 +1117,6 @@ function extraerImagenCercana(
             ...unicas.values()
         ];
 
-    // ========================================================
-    // STREAMER DROPS
-    //
-    // AQUÍ SOMOS ESTRICTOS.
-    //
-    // Primero /economy/image/
-    // Luego Steam/Facepunch.
-    // Si no hay ninguna -> null.
-    // ========================================================
-
     if (
         soloImagenDeItem
     ) {
@@ -1305,7 +1144,6 @@ function extraerImagenCercana(
         imagenesDeItem.sort(
             (a, b) => {
 
-                // 1. Economy image
                 if (
                     a.esEconomy !==
                     b.esEconomy
@@ -1317,7 +1155,6 @@ function extraerImagenCercana(
 
                 }
 
-                // 2. Steam
                 if (
                     a.esSteam !==
                     b.esSteam
@@ -1329,7 +1166,6 @@ function extraerImagenCercana(
 
                 }
 
-                // 3. Facepunch
                 if (
                     a.esFacepunch !==
                     b.esFacepunch
@@ -1341,7 +1177,6 @@ function extraerImagenCercana(
 
                 }
 
-                // 4. Cercanía al nombre del Drop
                 return (
                     a.distancia -
                     b.distancia
@@ -1354,9 +1189,7 @@ function extraerImagenCercana(
             imagenesDeItem[0]?.url ||
             null;
 
-        if (
-            preferida
-        ) {
+        if (preferida) {
 
             console.log(
                 `🖼️ Imagen de ITEM encontrada para ${nombreDrop}: ${preferida}`
@@ -1367,13 +1200,6 @@ function extraerImagenCercana(
         return preferida;
 
     }
-
-    // ========================================================
-    // GENERAL DROPS
-    //
-    // Mantenemos el comportamiento flexible, pero siempre
-    // damos prioridad a imágenes reales de items.
-    // ========================================================
 
     lista.sort(
         (a, b) => {
@@ -1423,9 +1249,7 @@ function extraerImagenCercana(
         lista[0]?.url ||
         null;
 
-    if (
-        preferida
-    ) {
+    if (preferida) {
 
         console.log(
             `🖼️ Imagen encontrada para ${nombreDrop}: ${preferida}`
@@ -1477,10 +1301,6 @@ function extraerStreamerDrops(
 
     const elementos = [];
 
-    // ========================================================
-    // STREAMERS
-    // ========================================================
-
     const regexTwitch =
         /<a\b[^>]*href=["']https?:\/\/(?:www\.)?twitch\.tv\/([^"'?#/]+)[^>]*>([\s\S]*?)<\/a>/gi;
 
@@ -1516,74 +1336,29 @@ function extraerStreamerDrops(
 
         const nombresConocidos = {
 
-            geega:
-                "GEEGA",
-
-            ledoo:
-                "LEDOO",
-
-            blooprint:
-                "Blooprint",
-
-            hjune:
-                "hJune",
-
-            hutnik:
-                "Hutnik",
-
-            disguisedtoast:
-                "DisguisedToast",
-
-            peterpark:
-                "peterpark",
-
-            fuslie:
-                "fuslie",
-
-            sven:
-                "Sven",
-
-            abe:
-                "Abe",
-
-            esfandtv:
-                "EsfandTV",
-
-            xchocobars:
-                "xChocoBars",
-
-            ironmouse:
-                "ironmouse",
-
-            willneff:
-                "willneff",
-
-            foolish:
-                "Foolish",
-
-            tinakitten:
-                "TinaKitten",
-
-            cyr:
-                "CYR",
-
-            mrwobblestwitch:
-                "mrwobblestwitch",
-
-            aceu:
-                "aceu",
-
-            zchum:
-                "ZChum",
-
-            fancyorb:
-                "FancyOrb",
-
-            itsryanhiga:
-                "itsRyanHiga",
-
-            welyn:
-                "Welyn"
+            geega: "GEEGA",
+            ledoo: "LEDOO",
+            blooprint: "Blooprint",
+            hjune: "hJune",
+            hutnik: "Hutnik",
+            disguisedtoast: "DisguisedToast",
+            peterpark: "peterpark",
+            fuslie: "fuslie",
+            sven: "Sven",
+            abe: "Abe",
+            esfandtv: "EsfandTV",
+            xchocobars: "xChocoBars",
+            ironmouse: "ironmouse",
+            willneff: "willneff",
+            foolish: "Foolish",
+            tinakitten: "TinaKitten",
+            cyr: "CYR",
+            mrwobblestwitch: "mrwobblestwitch",
+            aceu: "aceu",
+            zchum: "ZChum",
+            fancyorb: "FancyOrb",
+            itsryanhiga: "itsRyanHiga",
+            welyn: "Welyn"
 
         };
 
@@ -1614,42 +1389,23 @@ function extraerStreamerDrops(
 
     }
 
-    // ========================================================
-    // RECOMPENSAS
-    // ========================================================
-
     const nombresRecompensas = [
 
         "Rocket Launcher",
-
         "Assault Rifle",
-
         "Semi-automatic Rifle",
-
         "Double Barrel Shotgun",
-
         "Boonie Hat",
-
         "Small Backpack",
-
         "Furnace",
-
         "Wooden Door",
-
         "Large Wood Box",
-
         "Salvaged Sword",
-
         "Garage Door",
-
         "Locker",
-
         "Metal Facemask",
-
         "Metal Chestplate",
-
         "Vagabond Jacket",
-
         "Tactical Gloves"
 
     ];
@@ -1675,15 +1431,6 @@ function extraerStreamerDrops(
         if (!resultado) {
             continue;
         }
-
-        /*
-         * IMPORTANTE:
-         *
-         * Streamer Drop = true
-         *
-         * Esto evita que el extractor utilice el avatar
-         * del streamer como imagen del reward.
-         */
 
         const imagen =
             extraerImagenCercana(
@@ -1836,15 +1583,10 @@ function extraerGeneralDrops(
     const generalNombres = [
 
         "Large Wood Box",
-
         "Auto Turret",
-
         "Small Box",
-
         "Pants",
-
         "Work Boots",
-
         "Hoodie"
 
     ];
@@ -1914,6 +1656,288 @@ function extraerGeneralDrops(
 }
 
 // ============================================================
+// FECHAS DE CAMPAÑA
+// ============================================================
+
+function convertirFechaCampanaAISO(
+    texto
+) {
+
+    if (!texto) {
+        return null;
+    }
+
+    try {
+
+        const limpio =
+            String(texto)
+                .trim()
+                .replace(
+                    /\s+at\s+/i,
+                    " "
+                );
+
+        const fecha =
+            new Date(
+                limpio
+            );
+
+        if (
+            Number.isNaN(
+                fecha.getTime()
+            )
+        ) {
+
+            return null;
+
+        }
+
+        // Facepunch entrega las fechas en UTC.
+        // Las convertimos a GMT-3 fijo.
+        const fechaGMT3 =
+            new Date(
+                fecha.getTime() -
+                (3 * 60 * 60 * 1000)
+            );
+
+        return (
+            fechaGMT3
+                .toISOString()
+                .slice(
+                    0,
+                    16
+                ) +
+            "-03:00"
+        );
+
+    } catch (error) {
+
+        return null;
+
+    }
+
+}
+
+// ============================================================
+// FORMATEAR FECHA PARA DISCORD
+// ============================================================
+
+function formatearFechaCampana(
+    texto
+) {
+
+    if (!texto) {
+        return null;
+    }
+
+    try {
+
+        const fecha =
+            new Date(
+                texto
+            );
+
+        if (
+            Number.isNaN(
+                fecha.getTime()
+            )
+        ) {
+
+            return texto;
+
+        }
+
+        const fechaGMT3 =
+            new Date(
+                fecha.getTime() -
+                (3 * 60 * 60 * 1000)
+            );
+
+        const meses = [
+
+            "enero",
+            "febrero",
+            "marzo",
+            "abril",
+            "mayo",
+            "junio",
+            "julio",
+            "agosto",
+            "septiembre",
+            "octubre",
+            "noviembre",
+            "diciembre"
+
+        ];
+
+        const dia =
+            String(
+                fechaGMT3.getUTCDate()
+            ).padStart(
+                2,
+                "0"
+            );
+
+        const mes =
+            meses[
+                fechaGMT3.getUTCMonth()
+            ];
+
+        const anio =
+            fechaGMT3.getUTCFullYear();
+
+        const horas =
+            String(
+                fechaGMT3.getUTCHours()
+            ).padStart(
+                2,
+                "0"
+            );
+
+        const minutos =
+            String(
+                fechaGMT3.getUTCMinutes()
+            ).padStart(
+                2,
+                "0"
+            );
+
+        return (
+            `${dia} de ${mes} de ${anio} a las ${horas}:${minutos} GMT-3`
+        );
+
+    } catch (error) {
+
+        return String(
+            texto
+        );
+
+    }
+
+}
+
+// ============================================================
+// ESTADO LIVE NOW
+// ============================================================
+
+function campanaEstaActiva(
+    fechaInicio,
+    fechaFin
+) {
+
+    try {
+
+        if (
+            !fechaInicio ||
+            !fechaFin
+        ) {
+
+            return false;
+
+        }
+
+        const inicio =
+            new Date(
+                fechaInicio
+            ).getTime();
+
+        const fin =
+            new Date(
+                fechaFin
+            ).getTime();
+
+        const ahora =
+            Date.now();
+
+        if (
+            Number.isNaN(inicio) ||
+            Number.isNaN(fin)
+        ) {
+
+            return false;
+
+        }
+
+        return (
+            ahora >= inicio &&
+            ahora <= fin
+        );
+
+    } catch (error) {
+
+        return false;
+
+    }
+
+}
+
+// ============================================================
+// CREAR ENCABEZADO DE CAMPAÑA
+// ============================================================
+
+function crearEncabezadoCampana(
+    datos
+) {
+
+    const activa =
+        campanaEstaActiva(
+            datos.fechaInicio,
+            datos.fechaFin
+        );
+
+    let texto = "";
+
+    if (activa) {
+
+        texto +=
+            "🔴 **LIVE NOW**\n";
+
+    }
+
+    texto +=
+        `🎁 **${datos.campaignName || "Twitch Drops"}**`;
+
+    if (
+        datos.campaignTheme
+    ) {
+
+        texto +=
+            `\n🏝️ **${datos.campaignTheme}**`;
+
+    }
+
+    const inicio =
+        formatearFechaCampana(
+            datos.fechaInicio
+        );
+
+    const fin =
+        formatearFechaCampana(
+            datos.fechaFin
+        );
+
+    if (
+        inicio &&
+        fin
+    ) {
+
+        texto +=
+            `\n📅 **${inicio} → ${fin}**`;
+
+    } else if (
+        fin
+    ) {
+
+        texto +=
+            `\n📅 **Termina: ${fin}**`;
+
+    }
+
+    return texto;
+
+}
+
+// ============================================================
 // OBTENER DROPS FACEPUNCH
 // ============================================================
 
@@ -1969,13 +1993,18 @@ async function obtenerDropsFacepunch() {
 
         const campaignMatch =
             textoPagina.match(
-                /(Twitch Drops Round \d+ Hosted by [^]+?)(?=\s+Rust Isles|\s+General Drops)/i
+                /(Twitch Drops Round \d+ Hosted by [\s\S]*?)(?=\s+Rust Isles|\s+General Drops)/i
             );
 
         if (campaignMatch) {
 
             campaignName =
-                campaignMatch[1].trim();
+                campaignMatch[1]
+                    .replace(
+                        /\s+/g,
+                        " "
+                    )
+                    .trim();
 
         }
 
@@ -2007,16 +2036,24 @@ async function obtenerDropsFacepunch() {
 
         const fechaMatch =
             textoPagina.match(
-                /([A-Z][a-z]+\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s+[AP]M\s+UTC)\s*-\s*([A-Z][a-z]+\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s+[AP]M\s+UTC)/i
+                /([A-Z][a-z]+\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s+[AP]M\s+UTC)\s*(?:-|–|—|→)\s*([A-Z][a-z]+\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s+[AP]M\s+UTC)/i
             );
 
         if (fechaMatch) {
 
             fechaInicio =
-                fechaMatch[1];
+                convertirFechaCampanaAISO(
+                    fechaMatch[1]
+                );
 
             fechaFin =
-                fechaMatch[2];
+                convertirFechaCampanaAISO(
+                    fechaMatch[2]
+                );
+
+            console.log(
+                `📅 Campaña GMT-3: ${formatearFechaCampana(fechaInicio)} → ${formatearFechaCampana(fechaFin)}`
+            );
 
         }
 
@@ -2293,6 +2330,7 @@ function crearEmbedIndividual(
     ) {
 
         embed.addFields({
+
             name:
                 "🎥 Streamer(s)",
 
@@ -2303,6 +2341,7 @@ function crearEmbedIndividual(
 
             inline:
                 false
+
         });
 
     }
@@ -2318,10 +2357,12 @@ function crearEmbedIndividual(
     }
 
     embed.setFooter({
+
         text:
             datos.campaignName
                 ? `RustLogix • ${datos.campaignName}`
                 : "RustLogix • Rust Twitch Drops"
+
     });
 
     embed.setTimestamp(
@@ -2424,6 +2465,180 @@ function crearEmbedsDrops(
 }
 
 // ============================================================
+// CREAR GRUPOS DE MENSAJES
+// ============================================================
+
+function crearGruposMensajesDrops(
+    datos
+) {
+
+    const grupos = [];
+
+    const generalEmbeds = [];
+    const streamerEmbeds = [];
+
+    // ========================================================
+    // GENERALES
+    // ========================================================
+
+    for (
+        const drop
+        of datos.generalDrops ||
+        []
+    ) {
+
+        generalEmbeds.push(
+
+            crearEmbedIndividual(
+
+                {
+
+                    tipo:
+                        "general",
+
+                    nombre:
+                        drop.nombre,
+
+                    horas:
+                        drop.horas,
+
+                    imagen:
+                        drop.imagen ||
+                        null,
+
+                    canales:
+                        []
+
+                },
+
+                datos
+
+            )
+
+        );
+
+    }
+
+    // ========================================================
+    // STREAMERS
+    // ========================================================
+
+    for (
+        const drop
+        of datos.streamerDrops ||
+        []
+    ) {
+
+        streamerEmbeds.push(
+
+            crearEmbedIndividual(
+
+                {
+
+                    tipo:
+                        "streamer",
+
+                    nombre:
+                        drop.nombre,
+
+                    horas:
+                        drop.horas,
+
+                    imagen:
+                        drop.imagen ||
+                        null,
+
+                    canales:
+                        (drop.canales ||
+                            []).map(
+                            canal => ({
+
+                                login:
+                                    canal.login,
+
+                                displayName:
+                                    canal.displayName,
+
+                                online:
+                                    !!canal.online
+
+                            })
+                        )
+
+                },
+
+                datos
+
+            )
+
+        );
+
+    }
+
+    // ========================================================
+    // MENSAJE GENERAL
+    // ========================================================
+
+    if (
+        generalEmbeds.length
+    ) {
+
+        grupos.push({
+
+            content:
+                crearEncabezadoCampana(
+                    datos
+                ) +
+                "\n\n" +
+                "📦 **DROPS GENERALES**\n" +
+                "Recompensas disponibles en la campaña general de Rust.",
+
+            embeds:
+                generalEmbeds.slice(
+                    0,
+                    10
+                )
+
+        });
+
+    }
+
+    // ========================================================
+    // MENSAJES STREAMER
+    // ========================================================
+
+    for (
+        let i = 0;
+        i < streamerEmbeds.length;
+        i += 10
+    ) {
+
+        const grupo =
+            streamerEmbeds.slice(
+                i,
+                i + 10
+            );
+
+        grupos.push({
+
+            content:
+                i === 0
+                    ? "🎯 **DROPS DE STREAMERS ESPECÍFICOS**\n" +
+                      "Recompensas exclusivas vinculadas a los streamers indicados."
+                    : "🎯 **DROPS DE STREAMERS ESPECÍFICOS — CONTINUACIÓN**",
+
+            embeds:
+                grupo
+
+        });
+
+    }
+
+    return grupos;
+
+}
+
+// ============================================================
 // CREAR EMBED ANTIGUO / COMPATIBILIDAD
 // ============================================================
 
@@ -2441,37 +2656,9 @@ function crearEmbedFacepunchDrops(
             );
 
     let descripcion =
-        `**${datos.campaignName}**`;
-
-    if (
-        datos.campaignTheme
-    ) {
-
-        descripcion +=
-            `\n🏝️ **${datos.campaignTheme}**`;
-
-    }
-
-    if (
-        datos.fechaInicio &&
-        datos.fechaFin
-    ) {
-
-        descripcion +=
-            `\n⏰ ${datos.fechaInicio} → ${datos.fechaFin}`;
-
-    } else if (
-        datos.fechaFin
-    ) {
-
-        descripcion +=
-            `\n⏰ Termina: **${datos.fechaFin}**`;
-
-    }
-
-    embed.setDescription(
-        descripcion
-    );
+        crearEncabezadoCampana(
+            datos
+        );
 
     const general =
         (datos.generalDrops || [])
@@ -2528,6 +2715,10 @@ function crearEmbedFacepunchDrops(
         });
 
     }
+
+    embed.setDescription(
+        descripcion
+    );
 
     embed.addFields({
 
@@ -2881,7 +3072,6 @@ function separarEntitlements(
     return {
 
         claimed,
-
         fulfilled
 
     };
@@ -2982,11 +3172,6 @@ function crearCampaignKey(
         ...(datos.streamerDrops || [])
 
     ];
-
-    /*
-     * IMPORTANTE:
-     * La imagen NO forma parte de la campaignKey.
-     */
 
     const texto =
         JSON.stringify(
@@ -3346,15 +3531,15 @@ async function editarMensajesMonitor(
             monitor
         );
 
-    const embeds =
-        crearEmbedsDrops(
+    const grupos =
+        crearGruposMensajesDrops(
             datos
         );
 
-    if (!embeds.length) {
+    if (!grupos.length) {
 
         console.warn(
-            `⚠️ El monitor ${monitor._id} no tiene embeds para actualizar.`
+            `⚠️ El monitor ${monitor._id} no tiene mensajes para actualizar.`
         );
 
         return false;
@@ -3370,6 +3555,19 @@ async function editarMensajesMonitor(
 
     let todosCorrectos =
         true;
+
+    if (
+        messageIds.length !==
+        grupos.length
+    ) {
+
+        console.log(
+            `⚠️ El monitor ${monitor._id} necesita reconstrucción: ${messageIds.length} mensaje(s) guardados / ${grupos.length} necesarios.`
+        );
+
+        return false;
+
+    }
 
     for (
         let i = 0;
@@ -3388,19 +3586,15 @@ async function editarMensajesMonitor(
                 );
 
             const grupo =
-                embeds.slice(
-                    i * 10,
-                    i * 10 + 10
-                );
-
-            if (!grupo.length) {
-                continue;
-            }
+                grupos[i];
 
             await mensaje.edit({
 
+                content:
+                    grupo.content || "",
+
                 embeds:
-                    grupo
+                    grupo.embeds
 
             });
 
@@ -3492,12 +3686,12 @@ async function publicarDropsEnCanal(
 
     }
 
-    const embeds =
-        crearEmbedsDrops(
+    const grupos =
+        crearGruposMensajesDrops(
             datos
         );
 
-    if (!embeds.length) {
+    if (!grupos.length) {
 
         throw new Error(
             "Facepunch no devolvió Drops para publicar."
@@ -3511,16 +3705,10 @@ async function publicarDropsEnCanal(
         );
 
     const cantidadMensajesNueva =
-        Math.ceil(
-            embeds.length / 10
-        );
+        grupos.length;
 
     let monitor =
         monitorExistente;
-
-    // ========================================================
-    // SI YA EXISTE MONITOR
-    // ========================================================
 
     if (
         monitor
@@ -3541,9 +3729,7 @@ async function publicarDropsEnCanal(
         ) {
 
             const mensajes = [];
-
-            let todosEncontrados =
-                true;
+            let todosEncontrados = true;
 
             for (
                 const messageId
@@ -3586,19 +3772,17 @@ async function publicarDropsEnCanal(
                     i++
                 ) {
 
-                    const inicio =
-                        i * 10;
-
                     const grupo =
-                        embeds.slice(
-                            inicio,
-                            inicio + 10
-                        );
+                        grupos[i];
 
                     await mensajes[i].edit({
 
+                        content:
+                            grupo.content ||
+                            "",
+
                         embeds:
-                            grupo
+                            grupo.embeds
 
                     });
 
@@ -3667,21 +3851,22 @@ async function publicarDropsEnCanal(
 
     for (
         let i = 0;
-        i < embeds.length;
-        i += 10
+        i < grupos.length;
+        i++
     ) {
 
         const grupo =
-            embeds.slice(
-                i,
-                i + 10
-            );
+            grupos[i];
 
         const mensaje =
             await channel.send({
 
+                content:
+                    grupo.content ||
+                    "",
+
                 embeds:
-                    grupo
+                    grupo.embeds
 
             });
 
@@ -3690,7 +3875,7 @@ async function publicarDropsEnCanal(
         );
 
         console.log(
-            `🎁 Mensaje Drops publicado: ${mensaje.id} (${grupo.length} embeds)`
+            `🎁 Mensaje Drops publicado: ${mensaje.id} (${grupo.embeds.length} embeds)`
         );
 
     }
@@ -3981,10 +4166,6 @@ async function revisarDropsAutomaticos(
                 datos
             );
 
-        // ========================================================
-        // REVISAR CADA MONITOR
-        // ========================================================
-
         for (
             const monitor
             of monitores
@@ -4182,10 +4363,6 @@ async function revisarDropsAutomaticos(
                 establecerFechaRevision(
                     monitor
                 );
-
-                // ==================================================
-                // EDITAR MENSAJES SI CAMBIÓ ONLINE/OFFLINE
-                // ==================================================
 
                 if (
                     huboCambios
