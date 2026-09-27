@@ -36,6 +36,14 @@ const {
 } = require("./services/twitchOAuthService");
 
 // ======================
+// TWITCH DROPS
+// ======================
+
+const {
+    iniciarDropsAutomaticos
+} = require("./services/twitchDropsService");
+
+// ======================
 // TIENDA RUST AUTOMÁTICA
 // ======================
 
@@ -76,6 +84,7 @@ const server =
                     "/twitch/callback"
                 )
             ) {
+
                 try {
 
                     const url =
@@ -317,7 +326,6 @@ body {
     justify-content: center;
     min-height: 100vh;
 }
-
 .box {
     width: min(600px, calc(100% - 40px));
     padding: 40px;
@@ -326,17 +334,14 @@ body {
     text-align: center;
     box-shadow: 0 0 35px rgba(0,0,0,.45);
 }
-
 .icon {
     font-size: 60px;
     margin-bottom: 15px;
 }
-
 h1 {
     color: #9146ff;
     margin-bottom: 15px;
 }
-
 .account {
     display: inline-block;
     padding: 12px 20px;
@@ -345,12 +350,10 @@ h1 {
     margin: 15px 0;
     font-weight: bold;
 }
-
 p {
     color: #cccccc;
     line-height: 1.6;
 }
-
 .success {
     color: #57f287;
     font-weight: bold;
@@ -358,17 +361,12 @@ p {
 </style>
 </head>
 <body>
-
 <div class="box">
-
     <div class="icon">🎉</div>
-
     <h1>¡Twitch vinculado!</h1>
-
     <p class="success">
         La cuenta se vinculó correctamente.
     </p>
-
     <div class="account">
         🟣 ${String(
             twitchUser.display_name ||
@@ -379,17 +377,13 @@ p {
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")}
     </div>
-
     <p>
         Ya puedes cerrar esta ventana y volver a Discord.
     </p>
-
     <p>
         RustLogix ya puede reconocer tu cuenta de Twitch.
     </p>
-
 </div>
-
 </body>
 </html>
                     `);
@@ -493,6 +487,7 @@ p {
             );
 
             res.end("OK");
+
         }
     );
 
@@ -546,13 +541,16 @@ client.on(
             texto.includes("LOGIN RESULT") ||
             texto.includes("token:")
         ) {
+
             return;
+
         }
 
         console.log(
             "🔧 DISCORD DEBUG:",
             texto
         );
+
     }
 );
 
@@ -568,6 +566,7 @@ client.on(
             "⚠️ DISCORD WARN:",
             info
         );
+
     }
 );
 
@@ -582,6 +581,7 @@ client.on(
         console.log(
             `🟢 SHARD ${id} CONECTADO`
         );
+
     }
 );
 
@@ -597,6 +597,7 @@ client.on(
             "❌ ERROR SHARD DISCORD:",
             error
         );
+
     }
 );
 
@@ -612,6 +613,7 @@ client.on(
             `🔴 SHARD ${id} DESCONECTADO:`,
             event
         );
+
     }
 );
 
@@ -626,6 +628,7 @@ client.on(
         console.log(
             `🔄 SHARD ${id} INTENTANDO RECONEXIÓN...`
         );
+
     }
 );
 
@@ -640,6 +643,7 @@ client.on(
         console.error(
             "❌ SESIÓN DE DISCORD INVALIDADA"
         );
+
     }
 );
 
@@ -655,6 +659,7 @@ client.on(
             "❌ ERROR DISCORD:",
             error
         );
+
     }
 );
 
@@ -733,6 +738,7 @@ for (
         );
 
     }
+
 }
 
 // ======================
@@ -796,10 +802,12 @@ client.once(
             await client.user.setPresence({
                 status:
                     "online",
+
                 activities: [
                     {
                         name:
                             "chivando siempre 👀",
+
                         type:
                             0
                     }
@@ -865,6 +873,7 @@ client.once(
                     );
 
                     return;
+
                 }
 
                 trackerRevisando =
@@ -893,6 +902,44 @@ client.once(
             },
             30 * 1000
         );
+
+        // ======================
+        // TWITCH DROPS AUTOMÁTICOS
+        // ======================
+
+        console.log(
+            "🎁 Iniciando sistema automático de Twitch Drops..."
+        );
+
+        try {
+
+            if (
+                typeof iniciarDropsAutomaticos !==
+                "function"
+            ) {
+
+                throw new Error(
+                    "iniciarDropsAutomaticos no está exportada desde twitchDropsService.js"
+                );
+
+            }
+
+            iniciarDropsAutomaticos(
+                client
+            );
+
+            console.log(
+                "🎁 Sistema automático de Twitch Drops iniciado correctamente."
+            );
+
+        } catch (error) {
+
+            console.error(
+                "❌ Error iniciando Twitch Drops automáticos:",
+                error
+            );
+
+        }
 
         // ======================
         // TIENDA RUST AUTOMÁTICA
@@ -1017,7 +1064,6 @@ client.on(
             if (canal) {
 
                 await canal.send({
-
                     embeds: [
                         {
                             title:
@@ -1094,7 +1140,6 @@ para ver todos los comandos disponibles.`,
                                 new Date()
                         }
                     ]
-
                 });
 
             }
@@ -1151,6 +1196,7 @@ client.on(
                     ) {
 
                         return;
+
                     }
 
                 } catch (error) {
@@ -1186,6 +1232,7 @@ client.on(
                     }
 
                     return;
+
                 }
 
             }
@@ -1212,6 +1259,7 @@ client.on(
             ) {
 
                 return;
+
             }
 
             try {
@@ -1230,6 +1278,7 @@ client.on(
             }
 
             return;
+
         }
 
         // =====================================================
@@ -1311,6 +1360,7 @@ client.on(
                 }
 
                 return;
+
             }
 
             // =================================================
@@ -1384,6 +1434,7 @@ client.on(
                 }
 
                 return;
+
             }
 
             // =================================================
@@ -1425,6 +1476,7 @@ client.on(
                 }
 
                 return;
+
             }
 
             // =================================================
@@ -1473,6 +1525,7 @@ client.on(
                         }
 
                         return;
+
                     }
 
                     await comandoRaid.manejarBotonRaid(
@@ -1514,6 +1567,7 @@ client.on(
                 }
 
                 return;
+
             }
 
             // =================================================
@@ -1616,6 +1670,7 @@ client.on(
                 }
 
                 return;
+
             }
 
             // =================================================
@@ -1747,6 +1802,7 @@ client.on(
                         );
 
                         return;
+
                     }
 
                     return interaction.update({
@@ -1791,9 +1847,11 @@ client.on(
                 }
 
                 return;
+
             }
 
             return;
+
         }
 
         // =====================================================
@@ -1864,6 +1922,7 @@ client.on(
         ) {
 
             return;
+
         }
 
         const command =
@@ -1878,6 +1937,7 @@ client.on(
             );
 
             return;
+
         }
 
         try {
