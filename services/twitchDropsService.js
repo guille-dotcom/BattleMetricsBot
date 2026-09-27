@@ -54,7 +54,55 @@ async function validarToken(accessToken) {
             }
         );
 
-        return respuesta.data || null;
+        const datos = respuesta.data || null;
+
+        if (datos) {
+            console.log("🔎 DIAGNÓSTICO TOKEN TWITCH");
+            console.log(
+                "🔎 Client ID configurado:",
+                TWITCH_CLIENT_ID
+            );
+            console.log(
+                "🔎 Client ID del token:",
+                datos.client_id || "NO DEVUELTO"
+            );
+            console.log(
+                "🔎 Usuario del token:",
+                datos.login || "NO DEVUELTO"
+            );
+            console.log(
+                "🔎 User ID del token:",
+                datos.user_id || "NO DEVUELTO"
+            );
+            console.log(
+                "🔎 Scopes del token:",
+                Array.isArray(datos.scopes)
+                    ? datos.scopes.join(", ") || "NINGUNO"
+                    : "NO DEVUELTO"
+            );
+            console.log(
+                "🔎 Expira en:",
+                datos.expires_in ?? "NO DEVUELTO"
+            );
+
+            if (
+                datos.client_id &&
+                datos.client_id !== TWITCH_CLIENT_ID
+            ) {
+                console.error(
+                    "❌ ALERTA: El Client ID del token NO coincide con TWITCH_CLIENT_ID."
+                );
+            } else if (
+                datos.client_id &&
+                datos.client_id === TWITCH_CLIENT_ID
+            ) {
+                console.log(
+                    "✅ El Client ID del token coincide con TWITCH_CLIENT_ID."
+                );
+            }
+        }
+
+        return datos;
 
     } catch (error) {
         console.error(
@@ -98,6 +146,12 @@ async function obtenerJuegoRust(accessToken) {
                 String(juego.name).toLowerCase() === "rust"
         );
 
+        if (rust) {
+            console.log(
+                `🎮 Rust encontrado en Twitch: ${rust.name} (${rust.id})`
+            );
+        }
+
         return rust || juegos[0];
 
     } catch (error) {
@@ -114,18 +168,6 @@ async function obtenerJuegoRust(accessToken) {
 /**
  * ============================================================
  * OBTENER ENTITLEMENTS DE DROPS
- * ============================================================
- *
- * Twitch no ofrece una API Helix pública para listar campañas
- * activas de Drops.
- *
- * Lo que sí ofrece oficialmente es:
- *
- * GET /helix/entitlements/drops
- *
- * Este endpoint permite consultar los Drops/entitlements
- * concedidos a un usuario y filtrarlos por game_id.
- *
  * ============================================================
  */
 
@@ -156,6 +198,16 @@ async function obtenerEntitlementsDrops(
                 params.after = cursor;
             }
 
+            console.log(
+                "🎁 Consultando Twitch Entitlements...",
+                {
+                    game_id: gameId || "todos",
+                    fulfillment_status:
+                        fulfillmentStatus || "todos",
+                    tiene_cursor: !!cursor
+                }
+            );
+
             const respuesta = await axios.get(
                 "https://api.twitch.tv/helix/entitlements/drops",
                 {
@@ -176,6 +228,10 @@ async function obtenerEntitlementsDrops(
 
         } while (cursor);
 
+        console.log(
+            `✅ Twitch devolvió ${todos.length} entitlements.`
+        );
+
         return todos;
 
     } catch (error) {
@@ -184,6 +240,15 @@ async function obtenerEntitlementsDrops(
             error.response?.status,
             error.response?.data || error.message
         );
+
+        if (error.response?.status === 400) {
+            console.error(
+                "🔴 Twitch rechazó la consulta de Entitlements."
+            );
+            console.error(
+                "🔴 Esto puede indicar que el Client ID no está asociado a una organización conocida por Twitch."
+            );
+        }
 
         return [];
     }
@@ -325,6 +390,18 @@ async function obtenerRustDrops(discordUserId) {
     }
 
     /**
+     * Comprobar coincidencia del Client ID.
+     */
+    if (
+        tokenInfo.client_id &&
+        tokenInfo.client_id !== TWITCH_CLIENT_ID
+    ) {
+        console.error(
+            "❌ EL TOKEN DE TWITCH PERTENECE A OTRO CLIENT ID."
+        );
+    }
+
+    /**
      * Obtener Rust + entitlements.
      */
     const resultado =
@@ -406,9 +483,6 @@ function formatearFecha(fecha) {
  */
 
 function crearEmbedRustDrops(resultado) {
-    /**
-     * Cuenta no vinculada.
-     */
     if (!resultado.vinculada) {
         return new EmbedBuilder()
             .setColor(0xed4245)
@@ -422,9 +496,6 @@ function crearEmbedRustDrops(resultado) {
             });
     }
 
-    /**
-     * Token inválido.
-     */
     if (!resultado.tokenValido) {
         return new EmbedBuilder()
             .setColor(0xfee75c)
@@ -440,9 +511,6 @@ function crearEmbedRustDrops(resultado) {
             .setTimestamp();
     }
 
-    /**
-     * No se encontró Rust.
-     */
     if (!resultado.juego) {
         return new EmbedBuilder()
             .setColor(0xfee75c)
@@ -457,9 +525,6 @@ function crearEmbedRustDrops(resultado) {
             .setTimestamp();
     }
 
-    /**
-     * No hay entitlements.
-     */
     if (!resultado.drops.length) {
         return new EmbedBuilder()
             .setColor(0x9146ff)
@@ -480,9 +545,6 @@ function crearEmbedRustDrops(resultado) {
             .setTimestamp();
     }
 
-    /**
-     * Último Drop.
-     */
     const ultimoDrop =
         resultado.drops[0];
 
@@ -514,9 +576,6 @@ function crearEmbedRustDrops(resultado) {
             }
         );
 
-    /**
-     * Último entitlement.
-     */
     embed.addFields({
         name: "🎁 Último Drop registrado",
         value:
@@ -534,9 +593,6 @@ function crearEmbedRustDrops(resultado) {
         inline: false
     });
 
-    /**
-     * Mostrar algunos Drops recientes.
-     */
     const recientes =
         resultado.drops.slice(0, 5);
 
