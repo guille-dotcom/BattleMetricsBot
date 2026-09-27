@@ -138,7 +138,7 @@ async function validarToken(accessToken) {
 
             console.log(
                 "🔎 Expira en:",
-                datos.expires_in ??
+                datos.expires_in ?? 
                     "NO DEVUELTO"
             );
 
@@ -497,6 +497,37 @@ async function obtenerStreamersOnline(
 
     }
 
+    // ========================================================
+    // OBTENER ID OFICIAL DE RUST
+    // ========================================================
+
+    const rustGame =
+        await obtenerJuegoRust(
+            appToken
+        );
+
+    if (
+        !rustGame ||
+        !rustGame.id
+    ) {
+
+        console.warn(
+            "⚠️ No se pudo obtener el ID de Rust desde Twitch. Los streamers aparecerán offline."
+        );
+
+        return new Set();
+
+    }
+
+    const rustGameId =
+        String(
+            rustGame.id
+        );
+
+    console.log(
+        `🎮 Comprobando streams únicamente en Rust (${rustGame.name} / ${rustGameId}).`
+    );
+
     const online =
         new Set();
 
@@ -557,13 +588,57 @@ async function obtenerStreamersOnline(
             ) {
 
                 if (
-                    stream.user_login
+                    !stream.user_login
+                ) {
+
+                    continue;
+
+                }
+
+                const gameId =
+                    String(
+                        stream.game_id ||
+                            ""
+                    );
+
+                const gameName =
+                    String(
+                        stream.game_name ||
+                            ""
+                    )
+                        .trim()
+                        .toLowerCase();
+
+                // ==================================================
+                // IMPORTANTE:
+                // Twitch devuelve únicamente streams activos,
+                // pero nosotros además comprobamos que la categoría
+                // sea específicamente Rust.
+                // ==================================================
+
+                const estaEnRust =
+                    gameId === rustGameId ||
+                    gameName === "rust";
+
+                if (
+                    stream.type === "live" &&
+                    estaEnRust
                 ) {
 
                     online.add(
                         String(
                             stream.user_login
                         ).toLowerCase()
+                    );
+
+                    console.log(
+                        `🟢 ${stream.user_name || stream.user_login} está ONLINE en Rust.`
+                    );
+
+                } else {
+
+                    console.log(
+                        `⚫ ${stream.user_name || stream.user_login} está LIVE pero NO está en Rust (${stream.game_name || "sin categoría"}).`
                     );
 
                 }
@@ -573,7 +648,7 @@ async function obtenerStreamersOnline(
         }
 
         console.log(
-            `🟢 Twitch: ${online.size} streamer(s) online de ${nombres.length} participantes.`
+            `🟢 Twitch: ${online.size} streamer(s) transmitiendo Rust de ${nombres.length} participantes.`
         );
 
         return online;
@@ -581,7 +656,7 @@ async function obtenerStreamersOnline(
     } catch (error) {
 
         console.error(
-            "❌ Error comprobando streamers online:",
+            "❌ Error comprobando streamers online en Rust:",
             error.response?.status,
             error.response?.data ||
                 error.message
@@ -2135,7 +2210,7 @@ async function obtenerDropsFacepunch() {
         );
 
         console.log(
-            `🟢 Streamer Drops con al menos un canal online: ${
+            `🟢 Streamer Drops con al menos un canal online en Rust: ${
                 streamerDrops.filter(
                     drop =>
                         drop.online
@@ -2726,7 +2801,7 @@ function crearEmbedFacepunchDrops(
             "📡 Estado de los canales",
 
         value:
-            `🟢 ${datos.onlineCount} streamer(s) online de ${datos.totalStreamers}.`,
+            `🟢 ${datos.onlineCount} streamer(s) online en Rust de ${datos.totalStreamers}.`,
 
         inline:
             false
@@ -4344,7 +4419,7 @@ async function revisarDropsAutomaticos(
 
                             console.log(
 
-                                `📡 ${canal.displayName}: ${canal.online ? "ONLINE" : "OFFLINE"} → ${nuevoEstado ? "ONLINE" : "OFFLINE"}`
+                                `📡 ${canal.displayName}: ${canal.online ? "ONLINE" : "OFFLINE"} → ${nuevoEstado ? "ONLINE EN RUST" : "OFFLINE / NO RUST"}`
 
                             );
 
