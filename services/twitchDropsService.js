@@ -41,9 +41,11 @@ let dropsAutomaticosIniciados = false;
 function validarConfiguracion() {
 
     if (!TWITCH_CLIENT_ID) {
+
         throw new Error(
             "Falta la variable TWITCH_CLIENT_ID."
         );
+
     }
 
 }
@@ -57,12 +59,15 @@ function getHeaders(accessToken) {
     validarConfiguracion();
 
     if (!accessToken) {
+
         throw new Error(
             "No se recibió un access token de Twitch."
         );
+
     }
 
     return {
+
         "Client-ID":
             TWITCH_CLIENT_ID,
 
@@ -71,6 +76,7 @@ function getHeaders(accessToken) {
 
         "Content-Type":
             "application/json"
+
     };
 
 }
@@ -88,11 +94,14 @@ async function validarToken(accessToken) {
                 "https://id.twitch.tv/oauth2/validate",
                 {
                     headers: {
+
                         Authorization:
                             `OAuth ${accessToken}`
+
                     },
 
                     timeout: 10000
+
                 }
             );
 
@@ -138,7 +147,7 @@ async function validarToken(accessToken) {
 
             console.log(
                 "🔎 Expira en:",
-                datos.expires_in ?? 
+                datos.expires_in ??
                     "NO DEVUELTO"
             );
 
@@ -196,7 +205,10 @@ async function obtenerJuegoRust(accessToken) {
                 "https://api.twitch.tv/helix/games",
                 {
                     params: {
-                        name: "Rust"
+
+                        name:
+                            "Rust"
+
                     },
 
                     headers:
@@ -205,6 +217,7 @@ async function obtenerJuegoRust(accessToken) {
                         ),
 
                     timeout: 15000
+
                 }
             );
 
@@ -275,22 +288,31 @@ async function obtenerEntitlementsDrops(
         do {
 
             const params = {
-                first: 1000
+
+                first:
+                    1000
+
             };
 
             if (gameId) {
+
                 params.game_id =
                     gameId;
+
             }
 
             if (fulfillmentStatus) {
+
                 params.fulfillment_status =
                     fulfillmentStatus;
+
             }
 
             if (cursor) {
+
                 params.after =
                     cursor;
+
             }
 
             console.log(
@@ -321,6 +343,7 @@ async function obtenerEntitlementsDrops(
                             ),
 
                         timeout: 15000
+
                     }
                 );
 
@@ -396,6 +419,7 @@ async function obtenerTwitchAppToken() {
                 null,
                 {
                     params: {
+
                         client_id:
                             TWITCH_CLIENT_ID,
 
@@ -404,9 +428,11 @@ async function obtenerTwitchAppToken() {
 
                         grant_type:
                             "client_credentials"
+
                     },
 
                     timeout: 15000
+
                 }
             );
 
@@ -481,7 +507,9 @@ async function obtenerStreamersOnline(
     ];
 
     if (!nombres.length) {
+
         return new Set();
+
     }
 
     const appToken =
@@ -566,15 +594,13 @@ async function obtenerStreamersOnline(
                     {
                         params,
 
-                        headers: {
-                            "Client-ID":
-                                TWITCH_CLIENT_ID,
-
-                            Authorization:
-                                `Bearer ${appToken}`
-                        },
+                        headers:
+                            getHeaders(
+                                appToken
+                            ),
 
                         timeout: 15000
+
                     }
                 );
 
@@ -610,10 +636,7 @@ async function obtenerStreamersOnline(
                         .toLowerCase();
 
                 // ==================================================
-                // IMPORTANTE:
-                // Twitch devuelve únicamente streams activos,
-                // pero nosotros además comprobamos que la categoría
-                // sea específicamente Rust.
+                // SOLO CUENTA RUST
                 // ==================================================
 
                 const estaEnRust =
@@ -816,7 +839,9 @@ function limpiarUrlImagen(
         ).trim();
 
     if (!resultado) {
+
         return null;
+
     }
 
     resultado =
@@ -880,7 +905,9 @@ function esImagenValida(
             .toLowerCase();
 
     if (!valor) {
+
         return false;
+
     }
 
     const bloqueadas = [
@@ -1006,7 +1033,9 @@ function extraerImagenCercana(
             lower.includes("offline");
 
         if (esStreamer) {
+
             return;
+
         }
 
         const esEconomy =
@@ -1352,7 +1381,9 @@ function extraerStreamerDrops(
         );
 
     if (!inicioMatch) {
+
         return [];
+
     }
 
     const inicio =
@@ -1396,7 +1427,9 @@ function extraerStreamerDrops(
             );
 
         if (!login) {
+
             continue;
+
         }
 
         let displayName =
@@ -1504,7 +1537,9 @@ function extraerStreamerDrops(
             );
 
         if (!resultado) {
+
             continue;
+
         }
 
         const imagen =
@@ -1570,7 +1605,9 @@ function extraerStreamerDrops(
             elemento.tipo !==
             "drop"
         ) {
+
             continue;
+
         }
 
         const canales =
@@ -1683,7 +1720,9 @@ function extraerGeneralDrops(
             );
 
         if (!match) {
+
             continue;
+
         }
 
         const htmlRegex =
@@ -1739,7 +1778,9 @@ function convertirFechaCampanaAISO(
 ) {
 
     if (!texto) {
+
         return null;
+
     }
 
     try {
@@ -1768,7 +1809,7 @@ function convertirFechaCampanaAISO(
         }
 
         // Facepunch entrega las fechas en UTC.
-        // Las convertimos a GMT-3 fijo.
+        // Se convierten a GMT-3 fijo.
         const fechaGMT3 =
             new Date(
                 fecha.getTime() -
@@ -1802,7 +1843,9 @@ function formatearFechaCampana(
 ) {
 
     if (!texto) {
+
         return null;
+
     }
 
     try {
@@ -2028,15 +2071,19 @@ async function obtenerDropsFacepunch() {
             await axios.get(
                 FACEPUNCH_DROPS_URL,
                 {
-                    timeout: 20000,
+                    timeout:
+                        20000,
 
                     headers: {
+
                         "User-Agent":
                             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/154 Safari/537.36",
 
                         Accept:
                             "text/html,application/xhtml+xml"
+
                     }
+
                 }
             );
 
@@ -2164,7 +2211,7 @@ async function obtenerDropsFacepunch() {
 
             for (
                 const canal
-                of drop.canales
+                of drop.canales || []
             ) {
 
                 logins.push(
@@ -2187,12 +2234,14 @@ async function obtenerDropsFacepunch() {
 
             for (
                 const canal
-                of drop.canales
+                of drop.canales || []
             ) {
 
                 canal.online =
                     online.has(
-                        canal.login
+                        normalizarLogin(
+                            canal.login
+                        )
                     );
 
             }
@@ -2250,7 +2299,12 @@ async function obtenerDropsFacepunch() {
 
             totalStreamers:
                 new Set(
-                    logins
+                    logins.map(
+                        login =>
+                            normalizarLogin(
+                                login
+                            )
+                    )
                 ).size,
 
             actualizado:
@@ -3412,20 +3466,8 @@ function establecerFechaRevision(
     fecha = new Date()
 ) {
 
-    monitor.lastCheckedAt =
+    monitor.ultimaRevision =
         fecha;
-
-    if (
-        Object.prototype.hasOwnProperty.call(
-            monitor,
-            "ultimaRevision"
-        )
-    ) {
-
-        monitor.ultimaRevision =
-            fecha;
-
-    }
 
 }
 
@@ -3455,23 +3497,13 @@ function establecerCreador(
 ) {
 
     if (!userId) {
+
         return;
+
     }
 
-    monitor.createdBy =
+    monitor.creadoPor =
         userId;
-
-    if (
-        Object.prototype.hasOwnProperty.call(
-            monitor,
-            "creadoPor"
-        )
-    ) {
-
-        monitor.creadoPor =
-            userId;
-
-    }
 
 }
 
@@ -3484,7 +3516,70 @@ function datosDesdeMonitor(
 ) {
 
     const drops =
-        monitor.drops || [];
+        Array.isArray(
+            monitor.drops
+        )
+            ? monitor.drops
+            : [];
+
+    const streamerDrops =
+        drops.filter(
+            drop =>
+                drop.tipo ===
+                "streamer"
+        );
+
+    const generalDrops =
+        drops.filter(
+            drop =>
+                drop.tipo ===
+                "general"
+        );
+
+    const streamersUnicos =
+        new Set();
+
+    const streamersOnline =
+        new Set();
+
+    for (
+        const drop
+        of streamerDrops
+    ) {
+
+        for (
+            const canal
+            of drop.canales || []
+        ) {
+
+            const login =
+                normalizarLogin(
+                    canal.login
+                );
+
+            if (!login) {
+
+                continue;
+
+            }
+
+            streamersUnicos.add(
+                login
+            );
+
+            if (
+                canal.online
+            ) {
+
+                streamersOnline.add(
+                    login
+                );
+
+            }
+
+        }
+
+    }
 
     return {
 
@@ -3510,74 +3605,26 @@ function datosDesdeMonitor(
             ),
 
         generalDrops:
-            drops
-                .filter(
-                    drop =>
-                        drop.tipo ===
-                        "general"
-                )
-                .map(
-                    drop =>
-                        drop.toObject
-                            ? drop.toObject()
-                            : drop
-                ),
+            generalDrops.map(
+                drop =>
+                    drop.toObject
+                        ? drop.toObject()
+                        : drop
+            ),
 
         streamerDrops:
-            drops
-                .filter(
-                    drop =>
-                        drop.tipo ===
-                        "streamer"
-                )
-                .map(
-                    drop =>
-                        drop.toObject
-                            ? drop.toObject()
-                            : drop
-                ),
+            streamerDrops.map(
+                drop =>
+                    drop.toObject
+                        ? drop.toObject()
+                        : drop
+            ),
 
         onlineCount:
-            drops
-                .filter(
-                    drop =>
-                        drop.tipo ===
-                        "streamer"
-                )
-                .reduce(
-                    (total, drop) =>
-                        total +
-                        (
-                            drop.canales ||
-                            []
-                        ).filter(
-                            canal =>
-                                canal.online
-                        ).length,
-                    0
-                ),
+            streamersOnline.size,
 
         totalStreamers:
-            [
-                ...new Set(
-                    drops
-                        .filter(
-                            drop =>
-                                drop.tipo ===
-                                "streamer"
-                        )
-                        .flatMap(
-                            drop =>
-                                (
-                                    drop.canales ||
-                                    []
-                                ).map(
-                                    canal =>
-                                        canal.login
-                                )
-                        )
-                )
-            ].length
+            streamersUnicos.size
 
     };
 
@@ -4172,6 +4219,758 @@ async function publicarRustDrops(
 }
 
 // ============================================================
+// CREAR IDENTIFICADOR ÚNICO DEL ENTITLEMENT
+// ============================================================
+
+function obtenerClaveEntitlement(
+    entitlement
+) {
+
+    if (!entitlement) {
+
+        return null;
+
+    }
+
+    if (
+        entitlement.id
+    ) {
+
+        return String(
+            entitlement.id
+        );
+
+    }
+
+    return [
+
+        entitlement.benefit_id ||
+            "",
+
+        entitlement.timestamp ||
+            "",
+
+        entitlement.fulfillment_status ||
+            ""
+
+    ].join("|");
+
+}
+
+// ============================================================
+// OBTENER ESTADO GUARDADO DE DROPS
+// ============================================================
+
+function obtenerDropsEstado(
+    cuenta
+) {
+
+    if (
+        !cuenta ||
+        !cuenta.dropsEstado
+    ) {
+
+        return {};
+
+    }
+
+    if (
+        typeof cuenta.dropsEstado !==
+        "object" ||
+        Array.isArray(
+            cuenta.dropsEstado
+        )
+    ) {
+
+        return {};
+
+    }
+
+    return {
+        ...cuenta.dropsEstado
+    };
+
+}
+
+// ============================================================
+// ENVIAR DM DE DROP COMPLETADO
+// ============================================================
+
+async function enviarDMDeDropCompletado(
+    client,
+    cuenta,
+    entitlement
+) {
+
+    if (
+        !client ||
+        !cuenta ||
+        !entitlement
+    ) {
+
+        return false;
+
+    }
+
+    if (
+        cuenta.notificacionesActivas ===
+        false
+    ) {
+
+        console.log(
+            `🔕 Notificaciones desactivadas para ${cuenta.twitchLogin || cuenta.twitchUserId}.`
+        );
+
+        return false;
+
+    }
+
+    if (!cuenta.discordUserId) {
+
+        console.warn(
+            "⚠️ La cuenta Twitch no tiene discordUserId."
+        );
+
+        return false;
+
+    }
+
+    try {
+
+        const usuario =
+            await client.users.fetch(
+                cuenta.discordUserId
+            );
+
+        if (!usuario) {
+
+            console.warn(
+                `⚠️ No se pudo obtener usuario Discord ${cuenta.discordUserId}.`
+            );
+
+            return false;
+
+        }
+
+        const embed =
+            new EmbedBuilder()
+                .setColor(
+                    0x9146ff
+                )
+                .setTitle(
+                    "🎁 ¡Drop de Rust completado!"
+                )
+                .setDescription(
+                    "Tu Drop de Twitch ha llegado al **100%** y Twitch lo ha marcado como **FULFILLED**."
+                )
+                .addFields({
+
+                    name:
+                        "🎮 Juego",
+
+                    value:
+                        "Rust",
+
+                    inline:
+                        true
+
+                })
+                .addFields({
+
+                    name:
+                        "📺 Cuenta Twitch",
+
+                    value:
+                        cuenta.twitchDisplayName ||
+                        cuenta.twitchLogin ||
+                        "Cuenta vinculada",
+
+                    inline:
+                        true
+
+                });
+
+        if (
+            entitlement.benefit_id
+        ) {
+
+            embed.addFields({
+
+                name:
+                    "🆔 Benefit ID",
+
+                value:
+                    String(
+                        entitlement.benefit_id
+                    ),
+
+                inline:
+                    false
+
+            });
+
+        }
+
+        if (
+            entitlement.timestamp
+        ) {
+
+            const fecha =
+                new Date(
+                    entitlement.timestamp
+                );
+
+            if (
+                !Number.isNaN(
+                    fecha.getTime()
+                )
+            ) {
+
+                embed.addFields({
+
+                    name:
+                        "⏰ Completado",
+
+                    value:
+                        `<t:${Math.floor(fecha.getTime() / 1000)}:F>`,
+
+                    inline:
+                        false
+
+                });
+
+            }
+
+        }
+
+        embed.setFooter({
+
+            text:
+                "RustLogix • Twitch Drops"
+
+        });
+
+        embed.setTimestamp();
+
+        await usuario.send({
+
+            embeds: [
+                embed
+            ]
+
+        });
+
+        console.log(
+            `📩 DM enviado a ${cuenta.discordUserId} por Drop completado.`
+        );
+
+        return true;
+
+    } catch (error) {
+
+        console.error(
+            `❌ No se pudo enviar DM de Drop a ${cuenta.discordUserId}:`,
+            error.code ||
+                error.message
+        );
+
+        if (
+            error.code ===
+            50007
+        ) {
+
+            console.warn(
+                `⚠️ El usuario ${cuenta.discordUserId} tiene los DMs cerrados.`
+            );
+
+        }
+
+        return false;
+
+    }
+
+}
+
+// ============================================================
+// REVISAR DROPS DE UNA CUENTA DE TWITCH
+// ============================================================
+
+async function revisarEntitlementsCuenta(
+    client,
+    cuenta
+) {
+
+    if (
+        !client ||
+        !cuenta
+    ) {
+
+        return {
+
+            revisado:
+                false,
+
+            notificados:
+                0
+
+        };
+
+    }
+
+    if (
+        cuenta.notificacionesActivas ===
+        false
+    ) {
+
+        return {
+
+            revisado:
+                false,
+
+            notificados:
+                0
+
+        };
+
+    }
+
+    if (
+        !cuenta.accessToken
+    ) {
+
+        console.warn(
+            `⚠️ La cuenta Twitch ${cuenta.twitchLogin || cuenta.twitchUserId} no tiene accessToken.`
+        );
+
+        return {
+
+            revisado:
+                false,
+
+            notificados:
+                0
+
+        };
+
+    }
+
+    const tokenInfo =
+        await validarToken(
+            cuenta.accessToken
+        );
+
+    if (!tokenInfo) {
+
+        console.warn(
+            `⚠️ No se pudieron revisar los Drops de ${cuenta.twitchLogin || cuenta.twitchUserId}: token inválido.`
+        );
+
+        return {
+
+            revisado:
+                false,
+
+            notificados:
+                0
+
+        };
+
+    }
+
+    const resultado =
+        await obtenerRustEntitlements(
+            cuenta.accessToken
+        );
+
+    if (
+        !resultado ||
+        !resultado.juego
+    ) {
+
+        return {
+
+            revisado:
+                false,
+
+            notificados:
+                0
+
+        };
+
+    }
+
+    const entitlements =
+        Array.isArray(
+            resultado.entitlements
+        )
+            ? resultado.entitlements
+            : [];
+
+    if (!entitlements.length) {
+
+        cuenta.ultimaRevisionDrops =
+            new Date();
+
+        await cuenta.save();
+
+        return {
+
+            revisado:
+                true,
+
+            notificados:
+                0
+
+        };
+
+    }
+
+    const estados =
+        obtenerDropsEstado(
+            cuenta
+        );
+
+    let notificados =
+        0;
+
+    let cambios =
+        false;
+
+    // ========================================================
+    // PRIMERA CARGA
+    //
+    // Si encontramos un FULFILLED que nunca habíamos visto,
+    // lo guardamos pero NO mandamos DM.
+    //
+    // Así evitamos que al instalar esta función el usuario
+    // reciba de golpe todos los Drops antiguos.
+    // ========================================================
+
+    for (
+        const entitlement
+        of entitlements
+    ) {
+
+        const clave =
+            obtenerClaveEntitlement(
+                entitlement
+            );
+
+        if (!clave) {
+
+            continue;
+
+        }
+
+        const estadoAnterior =
+            estados[clave];
+
+        const estadoActual =
+            String(
+                entitlement.fulfillment_status ||
+                    ""
+            ).toUpperCase();
+
+        if (
+            !estadoAnterior
+        ) {
+
+            estados[clave] = {
+
+                status:
+                    estadoActual,
+
+                benefitId:
+                    entitlement.benefit_id ||
+                    null,
+
+                timestamp:
+                    entitlement.timestamp ||
+                    null,
+
+                updatedAt:
+                    new Date().toISOString()
+
+            };
+
+            cambios =
+                true;
+
+            console.log(
+                `📝 Nuevo entitlement registrado para ${cuenta.twitchLogin || cuenta.twitchUserId}: ${estadoActual}`
+            );
+
+            continue;
+
+        }
+
+        const estadoAnteriorTexto =
+            typeof estadoAnterior ===
+            "string"
+                ? estadoAnterior
+                : estadoAnterior.status;
+
+        // ====================================================
+        // DETECTAR CLAIMED -> FULFILLED
+        // ====================================================
+
+        if (
+            estadoAnteriorTexto !==
+                "FULFILLED" &&
+            estadoActual ===
+                "FULFILLED"
+        ) {
+
+            console.log(
+                `💯 Drop completado detectado para ${cuenta.twitchLogin || cuenta.twitchUserId}.`
+            );
+
+            const enviado =
+                await enviarDMDeDropCompletado(
+                    client,
+                    cuenta,
+                    entitlement
+                );
+
+            if (enviado) {
+
+                notificados++;
+
+                estados[clave] = {
+
+                    status:
+                        "FULFILLED",
+
+                    benefitId:
+                        entitlement.benefit_id ||
+                        null,
+
+                    timestamp:
+                        entitlement.timestamp ||
+                        null,
+
+                    notified:
+                        true,
+
+                    notifiedAt:
+                        new Date().toISOString(),
+
+                    updatedAt:
+                        new Date().toISOString()
+
+                };
+
+                cambios =
+                    true;
+
+            } else {
+
+                // Guardamos igualmente el estado,
+                // pero NO como notificado.
+                //
+                // Si el DM falla temporalmente, la siguiente
+                // revisión puede volver a intentarlo.
+
+                estados[clave] = {
+
+                    status:
+                        "FULFILLED",
+
+                    benefitId:
+                        entitlement.benefit_id ||
+                        null,
+
+                    timestamp:
+                        entitlement.timestamp ||
+                        null,
+
+                    notified:
+                        false,
+
+                    updatedAt:
+                        new Date().toISOString()
+
+                };
+
+                cambios =
+                    true;
+
+            }
+
+            continue;
+
+        }
+
+        // ====================================================
+        // ACTUALIZAR ESTADO NORMAL
+        // ====================================================
+
+        if (
+            estadoAnteriorTexto !==
+            estadoActual
+        ) {
+
+            estados[clave] = {
+
+                ...(typeof estadoAnterior ===
+                    "object"
+                    ? estadoAnterior
+                    : {}),
+
+                status:
+                    estadoActual,
+
+                benefitId:
+                    entitlement.benefit_id ||
+                    null,
+
+                timestamp:
+                    entitlement.timestamp ||
+                    null,
+
+                updatedAt:
+                    new Date().toISOString()
+
+            };
+
+            cambios =
+                true;
+
+        }
+
+    }
+
+    cuenta.dropsEstado =
+        estados;
+
+    cuenta.ultimaRevisionDrops =
+        new Date();
+
+    if (
+        cambios
+    ) {
+
+        await cuenta.save();
+
+    } else {
+
+        // Aunque no haya cambios de estado,
+        // actualizamos la fecha de revisión.
+        await cuenta.save();
+
+    }
+
+    return {
+
+        revisado:
+            true,
+
+        notificados
+
+    };
+
+}
+
+// ============================================================
+// REVISAR TODAS LAS CUENTAS DE TWITCH
+// ============================================================
+
+async function revisarEntitlementsAutomaticos(
+    client
+) {
+
+    if (!client) {
+
+        return;
+
+    }
+
+    try {
+
+        const cuentas =
+            await TwitchAccount.find({
+
+                notificacionesActivas:
+                    true
+
+            });
+
+        if (
+            !cuentas.length
+        ) {
+
+            console.log(
+                "🎁 No hay cuentas Twitch con notificaciones activas."
+            );
+
+            return;
+
+        }
+
+        console.log(
+            `🎁 Revisando Drops de ${cuentas.length} cuenta(s) Twitch...`
+        );
+
+        let totalNotificados =
+            0;
+
+        for (
+            const cuenta
+            of cuentas
+        ) {
+
+            try {
+
+                const resultado =
+                    await revisarEntitlementsCuenta(
+                        client,
+                        cuenta
+                    );
+
+                totalNotificados +=
+                    resultado.notificados ||
+                    0;
+
+            } catch (error) {
+
+                console.error(
+                    `❌ Error revisando entitlements de ${cuenta.twitchLogin || cuenta.twitchUserId}:`,
+                    error.response?.status ||
+                        error.message
+                );
+
+            }
+
+        }
+
+        if (
+            totalNotificados > 0
+        ) {
+
+            console.log(
+                `📩 ${totalNotificados} notificación(es) de Drop enviada(s) por DM.`
+            );
+
+        } else {
+
+            console.log(
+                "📩 No hay nuevos Drops completados para notificar."
+            );
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            "❌ Error general revisando entitlements Twitch:",
+            error
+        );
+
+    }
+
+}
+
+// ============================================================
 // REVISAR MONITORES AUTOMÁTICOS
 // ============================================================
 
@@ -4195,6 +4994,31 @@ async function revisarDropsAutomaticos(
         true;
 
     try {
+
+        // ========================================================
+        // PRIMERO:
+        // REVISAR DMS DE DROPS COMPLETADOS
+        // ========================================================
+
+        try {
+
+            await revisarEntitlementsAutomaticos(
+                client
+            );
+
+        } catch (error) {
+
+            console.error(
+                "❌ Error revisando notificaciones de Drops:",
+                error
+            );
+
+        }
+
+        // ========================================================
+        // SEGUNDO:
+        // ACTUALIZAR EMBEDS DE STREAMERS
+        // ========================================================
 
         const monitores =
             await RustDropsMonitor.find({
@@ -4268,7 +5092,9 @@ async function revisarDropsAutomaticos(
                 }
 
                 if (!guild) {
+
                     continue;
+
                 }
 
                 let channel;
@@ -4354,12 +5180,20 @@ async function revisarDropsAutomaticos(
                         []
                     ) {
 
+                        const login =
+                            normalizarLogin(
+                                canal.login
+                            );
+
+                        if (!login) {
+
+                            continue;
+
+                        }
+
                         estadosActuales.set(
 
-                            String(
-                                canal.login ||
-                                    ""
-                            ).toLowerCase(),
+                            login,
 
                             !!canal.online
 
@@ -4372,9 +5206,16 @@ async function revisarDropsAutomaticos(
                 let huboCambios =
                     false;
 
+                const monitorDrops =
+                    Array.isArray(
+                        monitor.drops
+                    )
+                        ? monitor.drops
+                        : [];
+
                 for (
                     const drop
-                    of monitor.drops
+                    of monitorDrops
                 ) {
 
                     if (
@@ -4388,29 +5229,44 @@ async function revisarDropsAutomaticos(
 
                     for (
                         const canal
-                        of drop.canales
+                        of drop.canales || []
                     ) {
 
                         const login =
-                            String(
-                                canal.login ||
-                                    ""
-                            ).toLowerCase();
+                            normalizarLogin(
+                                canal.login
+                            );
 
-                        if (
-                            !estadosActuales.has(
-                                login
-                            )
-                        ) {
+                        if (!login) {
 
                             continue;
 
                         }
 
-                        const nuevoEstado =
-                            estadosActuales.get(
+                        // ==================================================
+                        // SI FACEPUNCH DEVUELVE EL STREAMER:
+                        // USAMOS SU ESTADO ACTUAL.
+                        //
+                        // SI NO LO DEVUELVE:
+                        // NO dejamos un 🟢 antiguo permanentemente.
+                        // Lo ponemos offline si tenemos datos de streamers.
+                        // ==================================================
+
+                        let nuevoEstado =
+                            false;
+
+                        if (
+                            estadosActuales.has(
                                 login
-                            );
+                            )
+                        ) {
+
+                            nuevoEstado =
+                                estadosActuales.get(
+                                    login
+                                );
+
+                        }
 
                         if (
                             !!canal.online !==
