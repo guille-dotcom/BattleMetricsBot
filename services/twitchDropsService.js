@@ -3672,7 +3672,6 @@ function separarEntitlements(
         fulfilled
     };
 }
-
 // ============================================================
 // ORDENAR ENTITLEMENTS
 // ============================================================
@@ -5120,15 +5119,6 @@ async function revisarEntitlementsCuenta(
         const status =
             error.response?.status;
 
-        // ========================================================
-        // ERROR DE ORGANIZACIÓN
-        //
-        // IMPORTANTE:
-        // NO es un token inválido.
-        // NO renovamos.
-        // NO marcamos cooldown.
-        // ========================================================
-
         if (
             esErrorOrganizacionEntitlements(
                 error
@@ -5153,10 +5143,6 @@ async function revisarEntitlementsCuenta(
                     "CLIENTE_SIN_ORGANIZACION"
             };
         }
-
-        // ========================================================
-        // 401 DURANTE LA CONSULTA
-        // ========================================================
 
         if (
             status ===
@@ -5371,10 +5357,6 @@ async function revisarEntitlementsAutomaticos(
                 const status =
                     error.response?.status;
 
-                // ==================================================
-                // ERROR ORGANIZACIÓN
-                // ==================================================
-
                 if (
                     esErrorOrganizacionEntitlements(
                         error
@@ -5387,10 +5369,6 @@ async function revisarEntitlementsAutomaticos(
 
                     continue;
                 }
-
-                // ==================================================
-                // 401
-                // ==================================================
 
                 if (
                     status ===
@@ -5691,19 +5669,48 @@ async function revisarDropsAutomaticos(
                                 )
                                 : false;
 
+                        const estadoAnterior =
+                            !!canal.online;
+
                         if (
-                            !!canal.online !==
+                            estadoAnterior !==
                             nuevoEstado
                         ) {
                             console.log(
-                                `📡 ${canal.displayName}: ${canal.online ? "ONLINE" : "OFFLINE"} → ${nuevoEstado ? "ONLINE EN RUST" : "OFFLINE / NO RUST"}`
+                                `📡 ${canal.displayName}: ${estadoAnterior ? "ONLINE EN RUST" : "OFFLINE"} → ${nuevoEstado ? "ONLINE EN RUST" : "OFFLINE / NO RUST"}`
                             );
 
+                            // Guardamos siempre el estado real.
+                            // Esto permite detectar correctamente
+                            // la próxima transición OFFLINE → ONLINE.
                             canal.online =
                                 nuevoEstado;
 
-                            huboCambios =
-                                true;
+                            // ==================================================
+                            // IMPORTANTE:
+                            //
+                            // SOLO editamos el MISMO embed cuando:
+                            //
+                            // OFFLINE → ONLINE EN RUST
+                            //
+                            // Si pasa:
+                            //
+                            // ONLINE EN RUST → OFFLINE
+                            //
+                            // NO editamos Discord.
+                            // ==================================================
+
+                            if (
+                                !estadoAnterior &&
+                                nuevoEstado
+                            ) {
+                                huboCambios =
+                                    true;
+
+                                console.log(
+                                    `🟢 ${canal.displayName} volvió a ONLINE EN RUST. Se actualizará el mismo embed.`
+                                );
+                            }
                         }
                     }
                 }
@@ -5734,6 +5741,8 @@ async function revisarDropsAutomaticos(
                     }
                 }
 
+                // Guardamos el estado incluso cuando el streamer
+                // pasó a OFFLINE, pero sin modificar el embed.
                 await monitor.save();
 
             } catch (error) {
