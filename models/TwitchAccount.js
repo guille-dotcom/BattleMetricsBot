@@ -50,9 +50,7 @@ const TwitchAccountSchema = new mongoose.Schema(
             default: null
         },
 
-        // Último estado conocido de los Drops.
-        // Lo utilizaremos posteriormente para detectar
-        // cuándo un Drop pasa a estar listo.
+        // Último estado conocido de los Drops
         dropsEstado: {
             type: mongoose.Schema.Types.Mixed,
             default: {}
@@ -79,10 +77,10 @@ const TwitchAccountSchema = new mongoose.Schema(
     }
 );
 
-// Actualizar updatedAt automáticamente antes de guardar
-TwitchAccountSchema.pre("save", function (next) {
+// Actualizar updatedAt automáticamente antes de guardar.
+// No usamos next(): este middleware es síncrono.
+TwitchAccountSchema.pre("save", function () {
     this.updatedAt = new Date();
-    next();
 });
 
 module.exports =
