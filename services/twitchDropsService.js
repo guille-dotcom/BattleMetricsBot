@@ -5511,7 +5511,7 @@ async function enviarAvisoStreamerOnlineRust(
     const lineas =
         lista.map(
             streamer =>
-                `🟢 **[${streamer.displayName}](https://www.twitch.tv/${streamer.login})** está **ONLINE EN RUST**.`
+                `🟢 **[${streamer.displayName}](https://www.twitch.tv/${streamer.login}  está **ONLINE EN RUST**.`
         );
 
     try {
