@@ -28,9 +28,9 @@ const FACEPUNCH_DROPS_URL =
 const INTERVALO_DROPS =
     60 * 1000;
 
-// Si una cuenta tiene un token inválido,
-// no volvemos a consultar Twitch cada minuto.
-// Se vuelve a intentar después de 10 minutos.
+// Si una cuenta no puede renovar su token,
+// no se vuelve a intentar continuamente.
+// Después de este tiempo se vuelve a intentar.
 const INTERVALO_TOKEN_INVALIDO =
     10 * 60 * 1000;
 
@@ -40,9 +40,9 @@ let twitchAppTokenExpiresAt = 0;
 let dropsRevisando = false;
 let dropsAutomaticosIniciados = false;
 
-// Cache de tokens inválidos.
 // key = discordUserId
-// value = timestamp de la última detección 401
+// value = timestamp de la última detección de token
+// que NO pudo ser renovado correctamente.
 const tokensInvalidos =
     new Map();
 
@@ -128,6 +128,15 @@ function marcarTokenInvalido(cuenta) {
 
 function tokenEstaEnCooldown(cuenta) {
     if (!cuenta) {
+        return false;
+    }
+
+    // IMPORTANTE:
+    // Si existe refresh token, NO bloqueamos el intento de
+    // renovación. El refresh debe poder ejecutarse inmediatamente.
+    if (
+        obtenerRefreshToken(cuenta)
+    ) {
         return false;
     }
 
@@ -374,8 +383,6 @@ function guardarRefreshToken(
         return;
     }
 
-    // Si el modelo permite campos estrictos,
-    // este campo debe existir en TwitchAccount.
     cuenta.refreshToken =
         refreshToken;
 }
@@ -412,6 +419,10 @@ async function renovarAccessTokenTwitch(cuenta) {
     if (!refreshToken) {
         console.warn(
             `⚠️ ${cuenta.twitchLogin || cuenta.twitchUserId || "Cuenta Twitch"} no tiene refresh token guardado. Requiere revinculación.`
+        );
+
+        marcarTokenInvalido(
+            cuenta
         );
 
         return {
@@ -467,6 +478,10 @@ async function renovarAccessTokenTwitch(cuenta) {
                 "❌ Twitch no devolvió un nuevo access token al intentar renovarlo."
             );
 
+            marcarTokenInvalido(
+                cuenta
+            );
+
             return {
                 ok: false,
                 motivo: "SIN_ACCESS_TOKEN"
@@ -483,8 +498,6 @@ async function renovarAccessTokenTwitch(cuenta) {
             );
         }
 
-        // Guardamos información de expiración
-        // solamente si el modelo dispone de esos campos.
         if (
             Object.prototype.hasOwnProperty.call(
                 cuenta,
@@ -537,11 +550,14 @@ async function renovarAccessTokenTwitch(cuenta) {
 
         return {
             ok: true,
+
             accessToken:
                 nuevoAccessToken,
+
             refreshToken:
                 nuevoRefreshToken ||
                 refreshToken,
+
             expiresIn
         };
 
@@ -569,10 +585,12 @@ async function renovarAccessTokenTwitch(cuenta) {
 
         return {
             ok: false,
+
             motivo:
                 status === 400
                     ? "REFRESH_TOKEN_INVALIDO"
                     : "ERROR_RENOVANDO_TOKEN",
+
             requiereRevincular:
                 status === 400 ||
                 status === 401
@@ -582,11 +600,6 @@ async function renovarAccessTokenTwitch(cuenta) {
 
 // ============================================================
 // OBTENER TOKEN VÁLIDO DE UNA CUENTA
-//
-// 1. Comprueba access token.
-// 2. Si está inválido, intenta refresh.
-// 3. Comprueba nuevamente el nuevo token.
-// 4. Si no se puede renovar, requiere revincular.
 // ============================================================
 
 async function obtenerTokenValidoCuenta(
@@ -601,17 +614,65 @@ async function obtenerTokenValidoCuenta(
         };
     }
 
+    const refreshToken =
+        obtenerRefreshToken(cuenta);
+
     if (!cuenta.accessToken) {
         console.warn(
             `⚠️ ${cuenta.twitchLogin || cuenta.twitchUserId || "Cuenta Twitch"} no tiene accessToken.`
         );
 
+        if (
+            permitirRefresh &&
+            refreshToken
+        ) {
+            console.log(
+                `🔄 ${cuenta.twitchLogin || cuenta.twitchUserId} tiene refresh token. Se intentará obtener un nuevo access token.`
+            );
+
+            const renovacion =
+                await renovarAccessTokenTwitch(
+                    cuenta
+                );
+
+            if (
+                renovacion.ok
+            ) {
+                const nuevoTokenInfo =
+                    await validarToken(
+                        cuenta.accessToken
+                    );
+
+                if (
+                    nuevoTokenInfo
+                ) {
+                    limpiarTokenInvalido(
+                        cuenta
+                    );
+
+                    return {
+                        valido: true,
+
+                        accessToken:
+                            cuenta.accessToken,
+
+                        tokenInfo:
+                            nuevoTokenInfo,
+
+                        renovado: true
+                    };
+                }
+            }
+        }
+
         return {
             valido: false,
+
             requiereRevincular:
-                !obtenerRefreshToken(cuenta),
+                !refreshToken,
+
             motivo:
-                obtenerRefreshToken(cuenta)
+                refreshToken
                     ? "SIN_ACCESS_TOKEN"
                     : "SIN_TOKENS"
         };
@@ -629,9 +690,12 @@ async function obtenerTokenValidoCuenta(
 
         return {
             valido: true,
+
             accessToken:
                 cuenta.accessToken,
+
             tokenInfo,
+
             renovado: false
         };
     }
@@ -643,15 +707,33 @@ async function obtenerTokenValidoCuenta(
 
         return {
             valido: false,
+
             requiereRevincular:
-                !obtenerRefreshToken(cuenta),
+                !refreshToken,
+
             motivo:
                 "TOKEN_INVALIDO"
         };
     }
 
+    if (!refreshToken) {
+        marcarTokenInvalido(
+            cuenta
+        );
+
+        return {
+            valido: false,
+
+            requiereRevincular:
+                true,
+
+            motivo:
+                "TOKEN_INVALIDO_SIN_REFRESH"
+        };
+    }
+
     console.log(
-        `🔄 El access token de ${cuenta.twitchLogin || cuenta.twitchUserId || "cuenta Twitch"} no es válido. Se intentará renovar automáticamente.`
+        `🔄 El access token de ${cuenta.twitchLogin || cuenta.twitchUserId || "cuenta Twitch"} no es válido. Se intentará renovar automáticamente AHORA.`
     );
 
     const renovacion =
@@ -666,8 +748,10 @@ async function obtenerTokenValidoCuenta(
 
         return {
             valido: false,
+
             requiereRevincular:
                 !!renovacion.requiereRevincular,
+
             motivo:
                 renovacion.motivo
         };
@@ -689,8 +773,10 @@ async function obtenerTokenValidoCuenta(
 
         return {
             valido: false,
+
             requiereRevincular:
                 false,
+
             motivo:
                 "NUEVO_TOKEN_NO_VALIDO"
         };
@@ -706,10 +792,13 @@ async function obtenerTokenValidoCuenta(
 
     return {
         valido: true,
+
         accessToken:
             cuenta.accessToken,
+
         tokenInfo:
             nuevoTokenInfo,
+
         renovado: true
     };
 }
@@ -727,7 +816,8 @@ async function obtenerJuegoRust(
                 "https://api.twitch.tv/helix/games",
                 {
                     params: {
-                        name: "Rust"
+                        name:
+                            "Rust"
                     },
 
                     headers:
@@ -780,7 +870,7 @@ async function obtenerJuegoRust(
                 error.message
         );
 
-        return null;
+        throw error;
     }
 }
 
@@ -799,7 +889,8 @@ async function obtenerEntitlementsDrops(
     try {
         do {
             const params = {
-                first: 1000
+                first:
+                    1000
             };
 
             if (gameId) {
@@ -3431,8 +3522,14 @@ function separarEntitlements(
         const entitlement
         of entitlements
     ) {
+        const estado =
+            String(
+                entitlement.fulfillment_status ||
+                    ""
+            ).toUpperCase();
+
         if (
-            entitlement.fulfillment_status ===
+            estado ===
             "CLAIMED"
         ) {
             claimed.push(
@@ -3441,7 +3538,7 @@ function separarEntitlements(
         }
 
         if (
-            entitlement.fulfillment_status ===
+            estado ===
             "FULFILLED"
         ) {
             fulfilled.push(
@@ -4565,6 +4662,225 @@ async function enviarDMDeDropCompletado(
 }
 
 // ============================================================
+// PROCESAR ENTITLEMENTS Y ESTADOS
+// ============================================================
+
+async function procesarEntitlementsCuenta(
+    client,
+    cuenta,
+    entitlements,
+    tokenRenovado = false
+) {
+    const estados =
+        obtenerDropsEstado(
+            cuenta
+        );
+
+    let notificados =
+        0;
+
+    let cambios =
+        false;
+
+    for (
+        const entitlement
+        of entitlements
+    ) {
+        const clave =
+            obtenerClaveEntitlement(
+                entitlement
+            );
+
+        if (!clave) {
+            continue;
+        }
+
+        const estadoActual =
+            String(
+                entitlement.fulfillment_status ||
+                    ""
+            ).toUpperCase();
+
+        if (!estadoActual) {
+            continue;
+        }
+
+        const estadoAnterior =
+            estados[clave];
+
+        // Primera vez que vemos este entitlement.
+        //
+        // IMPORTANTE:
+        // No mandamos DM aquí aunque ya esté FULFILLED,
+        // porque podría ser un Drop histórico que ya estaba
+        // completado antes de que RustLogix comenzara a vigilarlo.
+        if (!estadoAnterior) {
+            estados[clave] = {
+                status:
+                    estadoActual,
+
+                benefitId:
+                    entitlement.benefit_id ||
+                    null,
+
+                timestamp:
+                    entitlement.timestamp ||
+                    null,
+
+                notified:
+                    false,
+
+                updatedAt:
+                    new Date().toISOString()
+            };
+
+            cambios =
+                true;
+
+            console.log(
+                `📝 Nuevo entitlement registrado para ${cuenta.twitchLogin || cuenta.twitchUserId}: ${estadoActual}`
+            );
+
+            continue;
+        }
+
+        const estadoAnteriorTexto =
+            typeof estadoAnterior ===
+                "string"
+                ? estadoAnterior
+                : String(
+                    estadoAnterior.status ||
+                        ""
+                ).toUpperCase();
+
+        const yaNotificado =
+            typeof estadoAnterior ===
+                "object" &&
+            estadoAnterior.notified ===
+                true;
+
+        // ========================================================
+        // TRANSICIÓN A FULFILLED
+        // ========================================================
+
+        if (
+            estadoAnteriorTexto !==
+                "FULFILLED" &&
+            estadoActual ===
+                "FULFILLED" &&
+            !yaNotificado
+        ) {
+            console.log(
+                `💯 Drop completado detectado para ${cuenta.twitchLogin || cuenta.twitchUserId}.`
+            );
+
+            const enviado =
+                await enviarDMDeDropCompletado(
+                    client,
+                    cuenta,
+                    entitlement
+                );
+
+            estados[clave] = {
+                ...(typeof estadoAnterior ===
+                    "object"
+                    ? estadoAnterior
+                    : {}),
+
+                status:
+                    "FULFILLED",
+
+                benefitId:
+                    entitlement.benefit_id ||
+                    null,
+
+                timestamp:
+                    entitlement.timestamp ||
+                    null,
+
+                notified:
+                    enviado,
+
+                ...(enviado
+                    ? {
+                        notifiedAt:
+                            new Date().toISOString()
+                    }
+                    : {}),
+
+                updatedAt:
+                    new Date().toISOString()
+            };
+
+            cambios =
+                true;
+
+            if (enviado) {
+                notificados++;
+            }
+
+            continue;
+        }
+
+        // ========================================================
+        // ESTADO CAMBIÓ PERO TODAVÍA NO ES FULFILLED
+        // ========================================================
+
+        if (
+            estadoAnteriorTexto !==
+            estadoActual
+        ) {
+            estados[clave] = {
+                ...(typeof estadoAnterior ===
+                    "object"
+                    ? estadoAnterior
+                    : {}),
+
+                status:
+                    estadoActual,
+
+                benefitId:
+                    entitlement.benefit_id ||
+                    null,
+
+                timestamp:
+                    entitlement.timestamp ||
+                    null,
+
+                updatedAt:
+                    new Date().toISOString()
+            };
+
+            cambios =
+                true;
+
+            console.log(
+                `🔄 Estado Drop ${cuenta.twitchLogin || cuenta.twitchUserId}: ${estadoAnteriorTexto || "DESCONOCIDO"} → ${estadoActual}`
+            );
+        }
+    }
+
+    cuenta.dropsEstado =
+        estados;
+
+    cuenta.ultimaRevisionDrops =
+        new Date();
+
+    await cuenta.save();
+
+    return {
+        revisado:
+            true,
+
+        notificados,
+
+        cambios,
+
+        tokenRenovado
+    };
+}
+
+// ============================================================
 // REVISAR DROPS DE UNA CUENTA DE TWITCH
 // ============================================================
 
@@ -4598,6 +4914,16 @@ async function revisarEntitlementsCuenta(
         };
     }
 
+    // ========================================================
+    // IMPORTANTE:
+    //
+    // Si tenemos refresh token, NO respetamos el cooldown aquí.
+    // Primero intentamos recuperar automáticamente la cuenta.
+    //
+    // El cooldown solo sirve para cuentas que no pueden
+    // renovarse automáticamente.
+    // ========================================================
+
     if (
         tokenEstaEnCooldown(
             cuenta
@@ -4615,6 +4941,9 @@ async function revisarEntitlementsCuenta(
                 0,
 
             tokenInvalido:
+                true,
+
+            enCooldown:
                 true
         };
     }
@@ -4656,257 +4985,59 @@ async function revisarEntitlementsCuenta(
         cuenta
     );
 
+    let tokenUsado =
+        cuenta.accessToken;
+
+    let tokenRenovado =
+        !!tokenInfo.renovado;
+
     try {
-        const resultado =
+        let resultado =
             await obtenerRustEntitlements(
-                cuenta.accessToken
+                tokenUsado
             );
 
         if (
-            !resultado ||
-            !resultado.juego
+            resultado &&
+            resultado.juego
         ) {
-            return {
-                revisado:
-                    false,
+            const entitlements =
+                Array.isArray(
+                    resultado.entitlements
+                )
+                    ? resultado.entitlements
+                    : [];
 
-                notificados:
-                    0
-            };
-        }
-
-        const entitlements =
-            Array.isArray(
-                resultado.entitlements
-            )
-                ? resultado.entitlements
-                : [];
-
-        if (!entitlements.length) {
-            cuenta.ultimaRevisionDrops =
-                new Date();
-
-            await cuenta.save();
-
-            return {
-                revisado:
-                    true,
-
-                notificados:
-                    0
-            };
-        }
-
-        const estados =
-            obtenerDropsEstado(
-                cuenta
+            return await procesarEntitlementsCuenta(
+                client,
+                cuenta,
+                entitlements,
+                tokenRenovado
             );
-
-        let notificados =
-            0;
-
-        let cambios =
-            false;
-
-        for (
-            const entitlement
-            of entitlements
-        ) {
-            const clave =
-                obtenerClaveEntitlement(
-                    entitlement
-                );
-
-            if (!clave) {
-                continue;
-            }
-
-            const estadoAnterior =
-                estados[clave];
-
-            const estadoActual =
-                String(
-                    entitlement.fulfillment_status ||
-                        ""
-                ).toUpperCase();
-
-            if (
-                !estadoAnterior
-            ) {
-                estados[clave] = {
-                    status:
-                        estadoActual,
-
-                    benefitId:
-                        entitlement.benefit_id ||
-                        null,
-
-                    timestamp:
-                        entitlement.timestamp ||
-                        null,
-
-                    notified:
-                        false,
-
-                    updatedAt:
-                        new Date().toISOString()
-                };
-
-                cambios =
-                    true;
-
-                console.log(
-                    `📝 Nuevo entitlement registrado para ${cuenta.twitchLogin || cuenta.twitchUserId}: ${estadoActual}`
-                );
-
-                continue;
-            }
-
-            const estadoAnteriorTexto =
-                typeof estadoAnterior ===
-                    "string"
-                    ? estadoAnterior
-                    : estadoAnterior.status;
-
-            const yaNotificado =
-                typeof estadoAnterior ===
-                    "object" &&
-                estadoAnterior.notified ===
-                    true;
-
-            if (
-                estadoAnteriorTexto !==
-                    "FULFILLED" &&
-                estadoActual ===
-                    "FULFILLED" &&
-                !yaNotificado
-            ) {
-                console.log(
-                    `💯 Drop completado detectado para ${cuenta.twitchLogin || cuenta.twitchUserId}.`
-                );
-
-                const enviado =
-                    await enviarDMDeDropCompletado(
-                        client,
-                        cuenta,
-                        entitlement
-                    );
-
-                if (enviado) {
-                    notificados++;
-
-                    estados[clave] = {
-                        status:
-                            "FULFILLED",
-
-                        benefitId:
-                            entitlement.benefit_id ||
-                            null,
-
-                        timestamp:
-                            entitlement.timestamp ||
-                            null,
-
-                        notified:
-                            true,
-
-                        notifiedAt:
-                            new Date().toISOString(),
-
-                        updatedAt:
-                            new Date().toISOString()
-                    };
-
-                    cambios =
-                        true;
-
-                } else {
-                    estados[clave] = {
-                        status:
-                            "FULFILLED",
-
-                        benefitId:
-                            entitlement.benefit_id ||
-                            null,
-
-                        timestamp:
-                            entitlement.timestamp ||
-                            null,
-
-                        notified:
-                            false,
-
-                        updatedAt:
-                            new Date().toISOString()
-                    };
-
-                    cambios =
-                        true;
-                }
-
-                continue;
-            }
-
-            if (
-                estadoAnteriorTexto !==
-                estadoActual
-            ) {
-                estados[clave] = {
-                    ...(typeof estadoAnterior ===
-                        "object"
-                        ? estadoAnterior
-                        : {}),
-
-                    status:
-                        estadoActual,
-
-                    benefitId:
-                        entitlement.benefit_id ||
-                        null,
-
-                    timestamp:
-                        entitlement.timestamp ||
-                        null,
-
-                    updatedAt:
-                        new Date().toISOString()
-                };
-
-                cambios =
-                    true;
-            }
         }
-
-        cuenta.dropsEstado =
-            estados;
-
-        cuenta.ultimaRevisionDrops =
-            new Date();
-
-        await cuenta.save();
 
         return {
             revisado:
-                true,
+                false,
 
-            notificados,
-
-            cambios,
-
-            tokenRenovado:
-                !!tokenInfo.renovado
+            notificados:
+                0
         };
 
     } catch (error) {
         const status =
             error.response?.status;
 
+        // ========================================================
+        // 401 DURANTE LA CONSULTA
+        // ========================================================
+
         if (
             status ===
             401
         ) {
             console.warn(
-                `⚠️ Twitch rechazó el access token de ${cuenta.twitchLogin || cuenta.twitchUserId}. Se intentará renovar.`
+                `⚠️ Twitch rechazó el access token de ${cuenta.twitchLogin || cuenta.twitchUserId}.`
             );
 
             const renovacion =
@@ -4915,67 +5046,113 @@ async function revisarEntitlementsCuenta(
                 );
 
             if (
-                renovacion.ok
+                !renovacion.ok
             ) {
-                try {
-                    const retry =
-                        await obtenerRustEntitlements(
-                            cuenta.accessToken
-                        );
+                marcarTokenInvalido(
+                    cuenta
+                );
 
-                    if (
-                        retry &&
-                        retry.juego
-                    ) {
-                        limpiarTokenInvalido(
-                            cuenta
-                        );
+                console.warn(
+                    `⚠️ No se pudo renovar el token de ${cuenta.twitchLogin || cuenta.twitchUserId}.`
+                );
 
-                        console.log(
-                            `✅ Entitlements recuperados después de renovar el token de ${cuenta.twitchLogin || cuenta.twitchUserId}.`
-                        );
+                return {
+                    revisado:
+                        false,
 
-                        // La siguiente ejecución procesará
-                        // normalmente los estados guardados.
-                        return {
-                            revisado:
-                                true,
+                    notificados:
+                        0,
 
-                            notificados:
-                                0,
+                    tokenInvalido:
+                        true,
 
-                            tokenRenovado:
-                                true
-                        };
-                    }
+                    requiereRevincular:
+                        !!renovacion.requiereRevincular,
 
-                } catch (retryError) {
-                    console.error(
-                        "❌ El nuevo token tampoco permitió obtener entitlements:",
-                        retryError.response?.status ||
-                            retryError.message
-                    );
-                }
+                    motivo:
+                        renovacion.motivo
+                };
             }
 
-            marcarTokenInvalido(
-                cuenta
-            );
+            try {
+                console.log(
+                    `🔁 Reintentando consulta de entitlements con el nuevo token de ${cuenta.twitchLogin || cuenta.twitchUserId}...`
+                );
 
-            return {
-                revisado:
-                    false,
+                const retry =
+                    await obtenerRustEntitlements(
+                        cuenta.accessToken
+                    );
 
-                notificados:
-                    0,
+                if (
+                    retry &&
+                    retry.juego
+                ) {
+                    limpiarTokenInvalido(
+                        cuenta
+                    );
 
-                tokenInvalido:
-                    true,
+                    const entitlements =
+                        Array.isArray(
+                            retry.entitlements
+                        )
+                            ? retry.entitlements
+                            : [];
 
-                requiereRevincular:
-                    !renovacion.ok &&
-                    !!renovacion.requiereRevincular
-            };
+                    console.log(
+                        `✅ Entitlements recuperados después de renovar el token de ${cuenta.twitchLogin || cuenta.twitchUserId}.`
+                    );
+
+                    return await procesarEntitlementsCuenta(
+                        client,
+                        cuenta,
+                        entitlements,
+                        true
+                    );
+                }
+
+                return {
+                    revisado:
+                        false,
+
+                    notificados:
+                        0,
+
+                    tokenRenovado:
+                        true
+                };
+
+            } catch (retryError) {
+                const retryStatus =
+                    retryError.response?.status;
+
+                console.error(
+                    "❌ El nuevo token tampoco permitió obtener entitlements:",
+                    retryStatus ||
+                        retryError.message
+                );
+
+                marcarTokenInvalido(
+                    cuenta
+                );
+
+                return {
+                    revisado:
+                        false,
+
+                    notificados:
+                        0,
+
+                    tokenInvalido:
+                        true,
+
+                    requiereRevincular:
+                        retryStatus ===
+                        400 ||
+                        retryStatus ===
+                        401
+                };
+            }
         }
 
         throw error;
@@ -5052,9 +5229,14 @@ async function revisarEntitlementsAutomaticos(
                     if (
                         renovacion.ok
                     ) {
+                        limpiarTokenInvalido(
+                            cuenta
+                        );
+
                         console.log(
                             `✅ Token de ${cuenta.twitchLogin || cuenta.twitchUserId} renovado durante la revisión automática.`
                         );
+
                     } else {
                         marcarTokenInvalido(
                             cuenta
