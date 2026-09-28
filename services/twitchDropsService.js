@@ -3533,7 +3533,6 @@ async function obtenerRustDrops(
         facepunch
     };
 }
-
 // ============================================================
 // EMBED PRINCIPAL
 // ============================================================
@@ -5444,13 +5443,15 @@ async function revisarEntitlementsAutomaticos(
         );
     }
 }
+
 // ============================================================
 // ENVIAR AVISO STREAMER ONLINE EN RUST
 // ============================================================
 
 async function enviarAvisoStreamerOnlineRust(
     channel,
-    streamers
+    streamers,
+    datos
 ) {
     if (
         !channel ||
@@ -5503,23 +5504,103 @@ async function enviarAvisoStreamerOnlineRust(
         return false;
     }
 
+    // ========================================================
+    // MAPEAR LOS DROPS DE LA CAMPAÑA ACTUAL POR STREAMER
+    // ========================================================
+
+    const dropsPorStreamer =
+        new Map();
+
+    for (
+        const drop
+        of datos?.streamerDrops ||
+        []
+    ) {
+        const nombreDrop =
+            String(
+                drop.nombre ||
+                    ""
+            ).trim();
+
+        if (!nombreDrop) {
+            continue;
+        }
+
+        for (
+            const canal
+            of drop.canales ||
+            []
+        ) {
+            const login =
+                normalizarLogin(
+                    canal.login
+                );
+
+            if (!login) {
+                continue;
+            }
+
+            if (
+                !dropsPorStreamer.has(
+                    login
+                )
+            ) {
+                dropsPorStreamer.set(
+                    login,
+                    []
+                );
+            }
+
+            const listaDrops =
+                dropsPorStreamer.get(
+                    login
+                );
+
+            if (
+                !listaDrops.includes(
+                    nombreDrop
+                )
+            ) {
+                listaDrops.push(
+                    nombreDrop
+                );
+            }
+        }
+    }
+
     const lista =
         [
             ...unicos.values()
         ];
 
-    const lineas =
+    const bloques =
         lista.map(
-            streamer =>
-                `🟢 **[${streamer.displayName}](https://www.twitch.tv/${streamer.login}  está **ONLINE EN RUST**.`
+            streamer => {
+                const drops =
+                    dropsPorStreamer.get(
+                        streamer.login
+                    ) || [];
+
+                const textoDrops =
+                    drops.length
+                        ? drops.join(
+                            ", "
+                        )
+                        : "No se encontraron Drops asociados en la campaña actual";
+
+                return (
+                    `🟢 **[${streamer.displayName}](https://www.twitch.tv/${streamer.login})** está **ONLINE EN RUST**.\n` +
+                    `🎁 **Sus Drops:** ${textoDrops}.`
+                );
+            }
         );
 
     try {
         await channel.send({
             content:
                 "🎥 **Streamer Drops disponibles ahora mismo**\n\n" +
-                lineas.join(
-                    "\n"
+                bloques.join(
+                    "\n\n"
                 ) +
                 "\n\n🎁 Puedes conseguir sus Drops de Twitch mientras estén transmitiendo Rust."
         });
@@ -5527,6 +5608,26 @@ async function enviarAvisoStreamerOnlineRust(
         console.log(
             `📩 Aviso de streamer(s) ONLINE EN RUST enviado en ${channel.id}: ${lista.map(streamer => streamer.login).join(", ")}`
         );
+
+        for (
+            const streamer
+            of lista
+        ) {
+            const drops =
+                dropsPorStreamer.get(
+                    streamer.login
+                ) || [];
+
+            console.log(
+                `🎁 Drops de ${streamer.login}: ${
+                    drops.length
+                        ? drops.join(
+                            ", "
+                        )
+                        : "ninguno encontrado"
+                }`
+            );
+        }
 
         return true;
 
@@ -5811,6 +5912,7 @@ async function revisarDropsAutomaticos(
                             // OFFLINE
                             //       ↓
                             // ONLINE EN RUST
+
                             canal.online =
                                 nuevoEstado;
 
@@ -5904,7 +6006,8 @@ async function revisarDropsAutomaticos(
                             channel,
                             [
                                 ...streamersVolvieronARust.values()
-                            ]
+                            ],
+                            datos
                         );
                     }
                 }
