@@ -3672,6 +3672,7 @@ function separarEntitlements(
         fulfilled
     };
 }
+
 // ============================================================
 // ORDENAR ENTITLEMENTS
 // ============================================================
@@ -4336,6 +4337,15 @@ async function publicarDropsEnCanal(
             channel,
             monitor
         );
+
+        // IMPORTANTE:
+        // Al cambiar de campaña, se reemplaza por completo
+        // el contenido anterior para evitar arrastrar
+        // streamers de la campaña anterior.
+        monitor.messageIds = [];
+        monitor.drops = [];
+        monitor.campaignKey =
+            null;
     }
 
     const messageIds = [];
@@ -5434,6 +5444,101 @@ async function revisarEntitlementsAutomaticos(
         );
     }
 }
+// ============================================================
+// ENVIAR AVISO STREAMER ONLINE EN RUST
+// ============================================================
+
+async function enviarAvisoStreamerOnlineRust(
+    channel,
+    streamers
+) {
+    if (
+        !channel ||
+        typeof channel.send !==
+            "function" ||
+        !Array.isArray(streamers) ||
+        !streamers.length
+    ) {
+        return false;
+    }
+
+    const unicos =
+        new Map();
+
+    for (
+        const streamer
+        of streamers
+    ) {
+        const login =
+            normalizarLogin(
+                streamer.login
+            );
+
+        if (!login) {
+            continue;
+        }
+
+        if (
+            !unicos.has(
+                login
+            )
+        ) {
+            unicos.set(
+                login,
+                {
+                    login,
+
+                    displayName:
+                        streamer.displayName ||
+                        streamer.login ||
+                        login
+                }
+            );
+        }
+    }
+
+    if (
+        !unicos.size
+    ) {
+        return false;
+    }
+
+    const lista =
+        [
+            ...unicos.values()
+        ];
+
+    const lineas =
+        lista.map(
+            streamer =>
+                `🟢 **[${streamer.displayName}](https://www.twitch.tv/${streamer.login})** está **ONLINE EN RUST**.`
+        );
+
+    try {
+        await channel.send({
+            content:
+                "🎥 **Streamer Drops disponibles ahora mismo**\n\n" +
+                lineas.join(
+                    "\n"
+                ) +
+                "\n\n🎁 Puedes conseguir sus Drops de Twitch mientras estén transmitiendo Rust."
+        });
+
+        console.log(
+            `📩 Aviso de streamer(s) ONLINE EN RUST enviado en ${channel.id}: ${lista.map(streamer => streamer.login).join(", ")}`
+        );
+
+        return true;
+
+    } catch (error) {
+        console.error(
+            `❌ No se pudo enviar el aviso de streamer(s) ONLINE EN RUST en ${channel.id}:`,
+            error.message
+        );
+
+        return false;
+    }
+}
 
 // ============================================================
 // REVISAR MONITORES AUTOMÁTICOS
@@ -5620,13 +5725,24 @@ async function revisarDropsAutomaticos(
 
                         estadosActuales.set(
                             login,
-                            !!canal.online
+                            {
+                                online:
+                                    !!canal.online,
+
+                                displayName:
+                                    canal.displayName ||
+                                    canal.login ||
+                                    login
+                            }
                         );
                     }
                 }
 
                 let huboCambios =
                     false;
+
+                const streamersVolvieronARust =
+                    new Map();
 
                 const monitorDrops =
                     Array.isArray(
@@ -5660,13 +5776,14 @@ async function revisarDropsAutomaticos(
                             continue;
                         }
 
-                        const nuevoEstado =
-                            estadosActuales.has(
+                        const estadoActual =
+                            estadosActuales.get(
                                 login
-                            )
-                                ? !!estadosActuales.get(
-                                    login
-                                )
+                            );
+
+                        const nuevoEstado =
+                            estadoActual
+                                ? !!estadoActual.online
                                 : false;
 
                         const estadoAnterior =
@@ -5680,24 +5797,25 @@ async function revisarDropsAutomaticos(
                                 `📡 ${canal.displayName}: ${estadoAnterior ? "ONLINE EN RUST" : "OFFLINE"} → ${nuevoEstado ? "ONLINE EN RUST" : "OFFLINE / NO RUST"}`
                             );
 
-                            // Guardamos siempre el estado real.
-                            // Esto permite detectar correctamente
-                            // la próxima transición OFFLINE → ONLINE.
+                            // Guardamos SIEMPRE el estado real.
+                            //
+                            // Esto es importante porque si pasa:
+                            //
+                            // ONLINE EN RUST
+                            //       ↓
+                            // OFFLINE / OTRO JUEGO
+                            //
+                            // no modificamos Discord, pero sí guardamos
+                            // false para poder detectar después:
+                            //
+                            // OFFLINE
+                            //       ↓
+                            // ONLINE EN RUST
                             canal.online =
                                 nuevoEstado;
 
                             // ==================================================
-                            // IMPORTANTE:
-                            //
-                            // SOLO editamos el MISMO embed cuando:
-                            //
-                            // OFFLINE → ONLINE EN RUST
-                            //
-                            // Si pasa:
-                            //
-                            // ONLINE EN RUST → OFFLINE
-                            //
-                            // NO editamos Discord.
+                            // OFFLINE / NO RUST → ONLINE EN RUST
                             // ==================================================
 
                             if (
@@ -5707,8 +5825,40 @@ async function revisarDropsAutomaticos(
                                 huboCambios =
                                     true;
 
+                                if (
+                                    !streamersVolvieronARust.has(
+                                        login
+                                    )
+                                ) {
+                                    streamersVolvieronARust.set(
+                                        login,
+                                        {
+                                            login,
+
+                                            displayName:
+                                                estadoActual.displayName ||
+                                                canal.displayName ||
+                                                canal.login ||
+                                                login
+                                        }
+                                    );
+                                }
+
                                 console.log(
-                                    `🟢 ${canal.displayName} volvió a ONLINE EN RUST. Se actualizará el mismo embed.`
+                                    `🟢 ${canal.displayName} volvió a ONLINE EN RUST. Se actualizará el mismo embed y se enviará un aviso nuevo.`
+                                );
+                            }
+
+                            // ==================================================
+                            // ONLINE EN RUST → OFFLINE / NO RUST
+                            // ==================================================
+
+                            if (
+                                estadoAnterior &&
+                                !nuevoEstado
+                            ) {
+                                console.log(
+                                    `⚫ ${canal.displayName} dejó de estar ONLINE EN RUST. Se guarda el estado, pero NO se modifica el embed ni se envía aviso.`
                                 );
                             }
                         }
@@ -5718,6 +5868,13 @@ async function revisarDropsAutomaticos(
                 establecerFechaRevision(
                     monitor
                 );
+
+                // ==================================================
+                // SOLO SI VOLVIÓ A RUST:
+                //
+                // 1. Editamos el embed existente.
+                // 2. Enviamos un mensaje NUEVO avisando.
+                // ==================================================
 
                 if (
                     huboCambios
@@ -5739,10 +5896,25 @@ async function revisarDropsAutomaticos(
                             `⚠️ Algunos mensajes del monitor ${monitor._id} no pudieron actualizarse.`
                         );
                     }
+
+                    if (
+                        streamersVolvieronARust.size
+                    ) {
+                        await enviarAvisoStreamerOnlineRust(
+                            channel,
+                            [
+                                ...streamersVolvieronARust.values()
+                            ]
+                        );
+                    }
                 }
 
-                // Guardamos el estado incluso cuando el streamer
-                // pasó a OFFLINE, pero sin modificar el embed.
+                // ==================================================
+                // GUARDAR ESTADO
+                //
+                // Esto se hace también cuando pasó a OFFLINE/NO RUST.
+                // ==================================================
+
                 await monitor.save();
 
             } catch (error) {
