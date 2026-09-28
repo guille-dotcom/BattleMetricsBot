@@ -28,9 +28,6 @@ const FACEPUNCH_DROPS_URL =
 const INTERVALO_DROPS =
     60 * 1000;
 
-// Si una cuenta no puede renovar su token,
-// no se vuelve a intentar continuamente.
-// Después de este tiempo se vuelve a intentar.
 const INTERVALO_TOKEN_INVALIDO =
     10 * 60 * 1000;
 
@@ -40,11 +37,13 @@ let twitchAppTokenExpiresAt = 0;
 let dropsRevisando = false;
 let dropsAutomaticosIniciados = false;
 
-// key = discordUserId
-// value = timestamp de la última detección de token
-// que NO pudo ser renovado correctamente.
 const tokensInvalidos =
     new Map();
+
+// Evita repetir cada 60 segundos el mismo aviso
+// sobre el problema de organización de Twitch.
+const entitlementsOrganizacionAvisados =
+    new Set();
 
 // ============================================================
 // CONFIGURACIÓN
@@ -131,9 +130,6 @@ function tokenEstaEnCooldown(cuenta) {
         return false;
     }
 
-    // IMPORTANTE:
-    // Si existe refresh token, NO bloqueamos el intento de
-    // renovación. El refresh debe poder ejecutarse inmediatamente.
     if (
         obtenerRefreshToken(cuenta)
     ) {
@@ -186,6 +182,135 @@ function limpiarTokenInvalido(cuenta) {
     }
 
     tokensInvalidos.delete(key);
+}
+
+// ============================================================
+// IDENTIFICAR ERROR DE ORGANIZACIÓN TWITCH
+// ============================================================
+
+function esErrorOrganizacionEntitlements(
+    error
+) {
+    const status =
+        error?.response?.status;
+
+    const data =
+        error?.response?.data ||
+        {};
+
+    const mensaje =
+        String(
+            data.message ||
+            error?.message ||
+            ""
+        ).toLowerCase();
+
+    return (
+        status === 400 &&
+        mensaje.includes(
+            "client in the oauth token is not associated with a known organization"
+        )
+    );
+}
+
+// ============================================================
+// CREAR ERROR DE ORGANIZACIÓN
+// ============================================================
+
+function crearErrorOrganizacionEntitlements(
+    error
+) {
+    const nuevoError =
+        new Error(
+            "El Client ID de Twitch no está asociado a una organización autorizada para consultar Entitlements de Drops."
+        );
+
+    nuevoError.response = {
+        status:
+            400,
+
+        data:
+            error?.response?.data ||
+            {
+                status:
+                    400,
+
+                message:
+                    "The client in the OAuth token is not associated with a known organization."
+            }
+    };
+
+    nuevoError.entitlementsNoDisponibles =
+        true;
+
+    nuevoError.motivo =
+        "CLIENTE_SIN_ORGANIZACION";
+
+    return nuevoError;
+}
+
+// ============================================================
+// LIMPIAR AVISO DE ORGANIZACIÓN
+// ============================================================
+
+function limpiarAvisoOrganizacion(
+    cuenta
+) {
+    const key =
+        obtenerClaveCuenta(cuenta);
+
+    if (key) {
+        entitlementsOrganizacionAvisados.delete(
+            key
+        );
+    }
+}
+
+// ============================================================
+// AVISAR ERROR DE ORGANIZACIÓN
+// ============================================================
+
+function avisarErrorOrganizacion(
+    cuenta
+) {
+    const key =
+        obtenerClaveCuenta(cuenta);
+
+    if (!key) {
+        return;
+    }
+
+    if (
+        entitlementsOrganizacionAvisados.has(
+            key
+        )
+    ) {
+        return;
+    }
+
+    entitlementsOrganizacionAvisados.add(
+        key
+    );
+
+    console.error(
+        `🚫 Twitch Entitlements no disponible para ${cuenta?.twitchLogin || cuenta?.twitchUserId || "cuenta Twitch"}.`
+    );
+
+    console.error(
+        "🚫 Twitch respondió: 400 - The client in the OAuth token is not associated with a known organization."
+    );
+
+    console.error(
+        "ℹ️ El access token es válido, pero Twitch no permite a este Client ID consultar Entitlements de Drops."
+    );
+
+    console.error(
+        "ℹ️ Esto NO es un token expirado y NO se intentará renovar el token por este motivo."
+    );
+
+    console.error(
+        "ℹ️ La asociación/autorización del Client ID debe resolverse en Twitch."
+    );
 }
 
 // ============================================================
@@ -270,6 +395,7 @@ async function validarToken(accessToken) {
                 console.error(
                     "❌ ALERTA: El Client ID del token NO coincide con TWITCH_CLIENT_ID."
                 );
+
             } else if (
                 datos.client_id &&
                 datos.client_id ===
@@ -291,7 +417,8 @@ async function validarToken(accessToken) {
             error.response?.data;
 
         if (
-            status === 401
+            status ===
+            401
         ) {
             console.error(
                 "❌ Token Twitch inválido o expirado (401)."
@@ -302,6 +429,7 @@ async function validarToken(accessToken) {
                 data ||
                     error.message
             );
+
         } else {
             console.error(
                 "❌ Error validando token Twitch:",
@@ -316,7 +444,7 @@ async function validarToken(accessToken) {
 }
 
 // ============================================================
-// OBTENER REFRESH TOKEN DE LA CUENTA
+// OBTENER REFRESH TOKEN
 // ============================================================
 
 function obtenerRefreshToken(cuenta) {
@@ -391,11 +519,16 @@ function guardarRefreshToken(
 // RENOVAR ACCESS TOKEN TWITCH
 // ============================================================
 
-async function renovarAccessTokenTwitch(cuenta) {
+async function renovarAccessTokenTwitch(
+    cuenta
+) {
     if (!cuenta) {
         return {
-            ok: false,
-            motivo: "CUENTA_INVALIDA"
+            ok:
+                false,
+
+            motivo:
+                "CUENTA_INVALIDA"
         };
     }
 
@@ -408,8 +541,11 @@ async function renovarAccessTokenTwitch(cuenta) {
         );
 
         return {
-            ok: false,
-            motivo: "CONFIGURACION_TWITCH"
+            ok:
+                false,
+
+            motivo:
+                "CONFIGURACION_TWITCH"
         };
     }
 
@@ -426,9 +562,14 @@ async function renovarAccessTokenTwitch(cuenta) {
         );
 
         return {
-            ok: false,
-            motivo: "SIN_REFRESH_TOKEN",
-            requiereRevincular: true
+            ok:
+                false,
+
+            motivo:
+                "SIN_REFRESH_TOKEN",
+
+            requiereRevincular:
+                true
         };
     }
 
@@ -483,8 +624,11 @@ async function renovarAccessTokenTwitch(cuenta) {
             );
 
             return {
-                ok: false,
-                motivo: "SIN_ACCESS_TOKEN"
+                ok:
+                    false,
+
+                motivo:
+                    "SIN_ACCESS_TOKEN"
             };
         }
 
@@ -518,7 +662,8 @@ async function renovarAccessTokenTwitch(cuenta) {
                 expiresIn
                     ? new Date(
                         Date.now() +
-                        expiresIn * 1000
+                        expiresIn *
+                            1000
                     )
                     : null;
         }
@@ -533,7 +678,8 @@ async function renovarAccessTokenTwitch(cuenta) {
                 expiresIn
                     ? new Date(
                         Date.now() +
-                        expiresIn * 1000
+                        expiresIn *
+                            1000
                     )
                     : null;
         }
@@ -549,7 +695,8 @@ async function renovarAccessTokenTwitch(cuenta) {
         );
 
         return {
-            ok: true,
+            ok:
+                true,
 
             accessToken:
                 nuevoAccessToken,
@@ -584,7 +731,8 @@ async function renovarAccessTokenTwitch(cuenta) {
         );
 
         return {
-            ok: false,
+            ok:
+                false,
 
             motivo:
                 status === 400
@@ -599,7 +747,7 @@ async function renovarAccessTokenTwitch(cuenta) {
 }
 
 // ============================================================
-// OBTENER TOKEN VÁLIDO DE UNA CUENTA
+// OBTENER TOKEN VÁLIDO
 // ============================================================
 
 async function obtenerTokenValidoCuenta(
@@ -608,9 +756,14 @@ async function obtenerTokenValidoCuenta(
 ) {
     if (!cuenta) {
         return {
-            valido: false,
-            requiereRevincular: true,
-            motivo: "CUENTA_INVALIDA"
+            valido:
+                false,
+
+            requiereRevincular:
+                true,
+
+            motivo:
+                "CUENTA_INVALIDA"
         };
     }
 
@@ -651,7 +804,8 @@ async function obtenerTokenValidoCuenta(
                     );
 
                     return {
-                        valido: true,
+                        valido:
+                            true,
 
                         accessToken:
                             cuenta.accessToken,
@@ -659,14 +813,16 @@ async function obtenerTokenValidoCuenta(
                         tokenInfo:
                             nuevoTokenInfo,
 
-                        renovado: true
+                        renovado:
+                            true
                     };
                 }
             }
         }
 
         return {
-            valido: false,
+            valido:
+                false,
 
             requiereRevincular:
                 !refreshToken,
@@ -689,14 +845,16 @@ async function obtenerTokenValidoCuenta(
         );
 
         return {
-            valido: true,
+            valido:
+                true,
 
             accessToken:
                 cuenta.accessToken,
 
             tokenInfo,
 
-            renovado: false
+            renovado:
+                false
         };
     }
 
@@ -706,7 +864,8 @@ async function obtenerTokenValidoCuenta(
         );
 
         return {
-            valido: false,
+            valido:
+                false,
 
             requiereRevincular:
                 !refreshToken,
@@ -722,7 +881,8 @@ async function obtenerTokenValidoCuenta(
         );
 
         return {
-            valido: false,
+            valido:
+                false,
 
             requiereRevincular:
                 true,
@@ -747,7 +907,8 @@ async function obtenerTokenValidoCuenta(
         );
 
         return {
-            valido: false,
+            valido:
+                false,
 
             requiereRevincular:
                 !!renovacion.requiereRevincular,
@@ -772,7 +933,8 @@ async function obtenerTokenValidoCuenta(
         );
 
         return {
-            valido: false,
+            valido:
+                false,
 
             requiereRevincular:
                 false,
@@ -791,7 +953,8 @@ async function obtenerTokenValidoCuenta(
     );
 
     return {
-        valido: true,
+        valido:
+            true,
 
         accessToken:
             cuenta.accessToken,
@@ -799,7 +962,8 @@ async function obtenerTokenValidoCuenta(
         tokenInfo:
             nuevoTokenInfo,
 
-        renovado: true
+        renovado:
+            true
     };
 }
 
@@ -961,6 +1125,20 @@ async function obtenerEntitlementsDrops(
         return todos;
 
     } catch (error) {
+        if (
+            esErrorOrganizacionEntitlements(
+                error
+            )
+        ) {
+            console.error(
+                "🚫 Twitch rechazó la consulta de Entitlements porque el Client ID no está asociado a una organización conocida."
+            );
+
+            throw crearErrorOrganizacionEntitlements(
+                error
+            );
+        }
+
         console.error(
             "❌ Error obteniendo entitlements Twitch Drops:",
             error.response?.status,
@@ -2336,7 +2514,7 @@ function convertirFechaCampanaAISO(
 }
 
 // ============================================================
-// FORMATEAR FECHA PARA DISCORD
+// FORMATEAR FECHA
 // ============================================================
 
 function formatearFechaCampana(
@@ -2476,7 +2654,7 @@ function campanaEstaActiva(
 }
 
 // ============================================================
-// CREAR ENCABEZADO DE CAMPAÑA
+// CREAR ENCABEZADO CAMPAÑA
 // ============================================================
 
 function crearEncabezadoCampana(
@@ -2921,7 +3099,7 @@ function crearEmbedIndividual(
 }
 
 // ============================================================
-// CREAR EMBEDS DE TODOS LOS DROPS
+// CREAR EMBEDS
 // ============================================================
 
 function crearEmbedsDrops(
@@ -3001,7 +3179,7 @@ function crearEmbedsDrops(
 }
 
 // ============================================================
-// CREAR GRUPOS DE MENSAJES
+// CREAR GRUPOS
 // ============================================================
 
 function crearGruposMensajesDrops(
@@ -3131,7 +3309,7 @@ function crearGruposMensajesDrops(
 }
 
 // ============================================================
-// CREAR EMBED ANTIGUO / COMPATIBILIDAD
+// EMBED ANTIGUO
 // ============================================================
 
 function crearEmbedFacepunchDrops(
@@ -3150,64 +3328,6 @@ function crearEmbedFacepunchDrops(
         crearEncabezadoCampana(
             datos
         );
-
-    const general =
-        (
-            datos.generalDrops ||
-            []
-        )
-            .map(
-                drop =>
-                    `📦 **${drop.nombre}** — ${formatearHoras(drop.horas)}`
-            )
-            .join(
-                "\n"
-            );
-
-    if (general) {
-        embed.addFields({
-            name:
-                `📦 Drops Generales (${datos.generalDrops.length})`,
-
-            value:
-                general.slice(
-                    0,
-                    1024
-                ),
-
-            inline:
-                false
-        });
-    }
-
-    const streamer =
-        (
-            datos.streamerDrops ||
-            []
-        )
-            .map(
-                drop =>
-                    `🎯 **${drop.nombre}** — ${formatearHoras(drop.horas)}\n${formatearCanales(drop.canales)}`
-            )
-            .join(
-                "\n\n"
-            );
-
-    if (streamer) {
-        embed.addFields({
-            name:
-                `🎯 Streamer Drops (${datos.streamerDrops.length})`,
-
-            value:
-                streamer.slice(
-                    0,
-                    1024
-                ),
-
-            inline:
-                false
-        });
-    }
 
     embed.setDescription(
         descripcion
@@ -3415,7 +3535,7 @@ async function obtenerRustDrops(
 }
 
 // ============================================================
-// EMBED PRINCIPAL ANTIGUO
+// EMBED PRINCIPAL
 // ============================================================
 
 function crearEmbedRustDrops(
@@ -3691,7 +3811,7 @@ function crearCampaignKey(
 }
 
 // ============================================================
-// CONVERTIR DATOS A DROPS GUARDABLES
+// CONVERTIR DATOS A GUARDADO
 // ============================================================
 
 function convertirDatosAGuardado(
@@ -3766,7 +3886,7 @@ function convertirDatosAGuardado(
 }
 
 // ============================================================
-// OBTENER FECHA DE ÚLTIMA REVISIÓN
+// FECHA DE REVISIÓN
 // ============================================================
 
 function obtenerFechaRevision(
@@ -3779,10 +3899,6 @@ function obtenerFechaRevision(
     );
 }
 
-// ============================================================
-// GUARDAR FECHA DE REVISIÓN
-// ============================================================
-
 function establecerFechaRevision(
     monitor,
     fecha = new Date()
@@ -3792,7 +3908,7 @@ function establecerFechaRevision(
 }
 
 // ============================================================
-// OBTENER CREADOR DEL MONITOR
+// CREADOR
 // ============================================================
 
 function obtenerCreador(
@@ -3804,10 +3920,6 @@ function obtenerCreador(
         null
     );
 }
-
-// ============================================================
-// GUARDAR CREADOR
-// ============================================================
 
 function establecerCreador(
     monitor,
@@ -3822,7 +3934,7 @@ function establecerCreador(
 }
 
 // ============================================================
-// CONSTRUIR DATOS DESDE MONITOR
+// DATOS DESDE MONITOR
 // ============================================================
 
 function datosDesdeMonitor(
@@ -3934,7 +4046,7 @@ function datosDesdeMonitor(
 }
 
 // ============================================================
-// EDITAR MENSAJES DEL MONITOR
+// EDITAR MENSAJES
 // ============================================================
 
 async function editarMensajesMonitor(
@@ -4027,7 +4139,7 @@ async function editarMensajesMonitor(
 }
 
 // ============================================================
-// BORRAR MENSAJES DEL MONITOR
+// BORRAR MENSAJES
 // ============================================================
 
 async function eliminarMensajesMonitor(
@@ -4437,7 +4549,7 @@ async function publicarRustDrops(
 }
 
 // ============================================================
-// CREAR IDENTIFICADOR ÚNICO DEL ENTITLEMENT
+// IDENTIFICADOR ENTITLEMENT
 // ============================================================
 
 function obtenerClaveEntitlement(
@@ -4467,7 +4579,7 @@ function obtenerClaveEntitlement(
 }
 
 // ============================================================
-// OBTENER ESTADO GUARDADO DE DROPS
+// ESTADO GUARDADO
 // ============================================================
 
 function obtenerDropsEstado(
@@ -4496,7 +4608,7 @@ function obtenerDropsEstado(
 }
 
 // ============================================================
-// ENVIAR DM DE DROP COMPLETADO
+// ENVIAR DM DROP COMPLETADO
 // ============================================================
 
 async function enviarDMDeDropCompletado(
@@ -4662,7 +4774,7 @@ async function enviarDMDeDropCompletado(
 }
 
 // ============================================================
-// PROCESAR ENTITLEMENTS Y ESTADOS
+// PROCESAR ENTITLEMENTS
 // ============================================================
 
 async function procesarEntitlementsCuenta(
@@ -4708,12 +4820,6 @@ async function procesarEntitlementsCuenta(
         const estadoAnterior =
             estados[clave];
 
-        // Primera vez que vemos este entitlement.
-        //
-        // IMPORTANTE:
-        // No mandamos DM aquí aunque ya esté FULFILLED,
-        // porque podría ser un Drop histórico que ya estaba
-        // completado antes de que RustLogix comenzara a vigilarlo.
         if (!estadoAnterior) {
             estados[clave] = {
                 status:
@@ -4758,10 +4864,6 @@ async function procesarEntitlementsCuenta(
                 "object" &&
             estadoAnterior.notified ===
                 true;
-
-        // ========================================================
-        // TRANSICIÓN A FULFILLED
-        // ========================================================
 
         if (
             estadoAnteriorTexto !==
@@ -4822,10 +4924,6 @@ async function procesarEntitlementsCuenta(
             continue;
         }
 
-        // ========================================================
-        // ESTADO CAMBIÓ PERO TODAVÍA NO ES FULFILLED
-        // ========================================================
-
         if (
             estadoAnteriorTexto !==
             estadoActual
@@ -4881,7 +4979,7 @@ async function procesarEntitlementsCuenta(
 }
 
 // ============================================================
-// REVISAR DROPS DE UNA CUENTA DE TWITCH
+// REVISAR DROPS DE UNA CUENTA
 // ============================================================
 
 async function revisarEntitlementsCuenta(
@@ -4913,16 +5011,6 @@ async function revisarEntitlementsCuenta(
                 0
         };
     }
-
-    // ========================================================
-    // IMPORTANTE:
-    //
-    // Si tenemos refresh token, NO respetamos el cooldown aquí.
-    // Primero intentamos recuperar automáticamente la cuenta.
-    //
-    // El cooldown solo sirve para cuentas que no pueden
-    // renovarse automáticamente.
-    // ========================================================
 
     if (
         tokenEstaEnCooldown(
@@ -4992,7 +5080,7 @@ async function revisarEntitlementsCuenta(
         !!tokenInfo.renovado;
 
     try {
-        let resultado =
+        const resultado =
             await obtenerRustEntitlements(
                 tokenUsado
             );
@@ -5001,6 +5089,10 @@ async function revisarEntitlementsCuenta(
             resultado &&
             resultado.juego
         ) {
+            limpiarAvisoOrganizacion(
+                cuenta
+            );
+
             const entitlements =
                 Array.isArray(
                     resultado.entitlements
@@ -5027,6 +5119,40 @@ async function revisarEntitlementsCuenta(
     } catch (error) {
         const status =
             error.response?.status;
+
+        // ========================================================
+        // ERROR DE ORGANIZACIÓN
+        //
+        // IMPORTANTE:
+        // NO es un token inválido.
+        // NO renovamos.
+        // NO marcamos cooldown.
+        // ========================================================
+
+        if (
+            esErrorOrganizacionEntitlements(
+                error
+            ) ||
+            error.entitlementsNoDisponibles
+        ) {
+            avisarErrorOrganizacion(
+                cuenta
+            );
+
+            return {
+                revisado:
+                    false,
+
+                notificados:
+                    0,
+
+                entitlementsNoDisponibles:
+                    true,
+
+                motivo:
+                    "CLIENTE_SIN_ORGANIZACION"
+            };
+        }
 
         // ========================================================
         // 401 DURANTE LA CONSULTA
@@ -5092,6 +5218,10 @@ async function revisarEntitlementsCuenta(
                         cuenta
                     );
 
+                    limpiarAvisoOrganizacion(
+                        cuenta
+                    );
+
                     const entitlements =
                         Array.isArray(
                             retry.entitlements
@@ -5125,6 +5255,34 @@ async function revisarEntitlementsCuenta(
             } catch (retryError) {
                 const retryStatus =
                     retryError.response?.status;
+
+                if (
+                    esErrorOrganizacionEntitlements(
+                        retryError
+                    ) ||
+                    retryError.entitlementsNoDisponibles
+                ) {
+                    avisarErrorOrganizacion(
+                        cuenta
+                    );
+
+                    return {
+                        revisado:
+                            false,
+
+                        notificados:
+                            0,
+
+                        tokenRenovado:
+                            true,
+
+                        entitlementsNoDisponibles:
+                            true,
+
+                        motivo:
+                            "CLIENTE_SIN_ORGANIZACION"
+                    };
+                }
 
                 console.error(
                     "❌ El nuevo token tampoco permitió obtener entitlements:",
@@ -5160,7 +5318,7 @@ async function revisarEntitlementsCuenta(
 }
 
 // ============================================================
-// REVISAR TODAS LAS CUENTAS DE TWITCH
+// REVISAR TODAS LAS CUENTAS
 // ============================================================
 
 async function revisarEntitlementsAutomaticos(
@@ -5212,6 +5370,27 @@ async function revisarEntitlementsAutomaticos(
             } catch (error) {
                 const status =
                     error.response?.status;
+
+                // ==================================================
+                // ERROR ORGANIZACIÓN
+                // ==================================================
+
+                if (
+                    esErrorOrganizacionEntitlements(
+                        error
+                    ) ||
+                    error.entitlementsNoDisponibles
+                ) {
+                    avisarErrorOrganizacion(
+                        cuenta
+                    );
+
+                    continue;
+                }
+
+                // ==================================================
+                // 401
+                // ==================================================
 
                 if (
                     status ===
@@ -5300,14 +5479,14 @@ async function revisarDropsAutomaticos(
 
     try {
         // ========================================================
-        // PRIMERO:
-        // REVISAR DMS DE DROPS COMPLETADOS
+        // PRIMERO: DMS DE DROPS COMPLETADOS
         // ========================================================
 
         try {
             await revisarEntitlementsAutomaticos(
                 client
             );
+
         } catch (error) {
             console.error(
                 "❌ Error revisando notificaciones de Drops:",
@@ -5316,8 +5495,7 @@ async function revisarDropsAutomaticos(
         }
 
         // ========================================================
-        // SEGUNDO:
-        // ACTUALIZAR EMBEDS DE STREAMERS
+        // SEGUNDO: ACTUALIZAR EMBEDS
         // ========================================================
 
         const monitores =
@@ -5371,6 +5549,7 @@ async function revisarDropsAutomaticos(
                         await client.guilds.fetch(
                             monitor.guildId
                         );
+
                 } catch (error) {
                     console.log(
                         `⚠️ No se pudo obtener guild ${monitor.guildId}: ${error.message}`
@@ -5390,6 +5569,7 @@ async function revisarDropsAutomaticos(
                         await guild.channels.fetch(
                             monitor.channelId
                         );
+
                 } catch (error) {
                     console.log(
                         `⚠️ No se pudo obtener canal ${monitor.channelId}: ${error.message}`
@@ -5614,6 +5794,7 @@ function iniciarDropsAutomaticos(
                 await revisarDropsAutomaticos(
                     client
                 );
+
             } catch (error) {
                 console.error(
                     "❌ Error primera revisión Twitch Drops:",
@@ -5630,6 +5811,7 @@ function iniciarDropsAutomaticos(
                 await revisarDropsAutomaticos(
                     client
                 );
+
             } catch (error) {
                 console.error(
                     "❌ Error revisión automática Twitch Drops:",
