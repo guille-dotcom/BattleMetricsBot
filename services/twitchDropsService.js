@@ -3533,6 +3533,7 @@ async function obtenerRustDrops(
         facepunch
     };
 }
+
 // ============================================================
 // EMBED PRINCIPAL
 // ============================================================
@@ -5174,7 +5175,7 @@ async function revisarEntitlementsCuenta(
                 );
 
                 console.warn(
-                    `⚠️ No se pudo renovar el token de ${cuenta.twitchLogin || cuenta.twitchUserId}.`
+                    `⚠️ No se pudo renovar el token Twitch de ${cuenta.twitchLogin || cuenta.twitchUserId}.`
                 );
 
                 return {
@@ -5518,7 +5519,7 @@ async function enviarAvisoStreamerOnlineRust(
     ) {
         const nombreDrop =
             String(
-                drop.nombre ||
+                drop?.nombre ||
                     ""
             ).trim();
 
@@ -5533,7 +5534,7 @@ async function enviarAvisoStreamerOnlineRust(
         ) {
             const login =
                 normalizarLogin(
-                    canal.login
+                    canal?.login
                 );
 
             if (!login) {
@@ -5557,8 +5558,10 @@ async function enviarAvisoStreamerOnlineRust(
                 );
 
             if (
-                !listaDrops.includes(
-                    nombreDrop
+                !listaDrops.some(
+                    nombre =>
+                        nombre.toLowerCase() ===
+                        nombreDrop.toLowerCase()
                 )
             ) {
                 listaDrops.push(
@@ -5899,20 +5902,6 @@ async function revisarDropsAutomaticos(
                             );
 
                             // Guardamos SIEMPRE el estado real.
-                            //
-                            // Esto es importante porque si pasa:
-                            //
-                            // ONLINE EN RUST
-                            //       ↓
-                            // OFFLINE / OTRO JUEGO
-                            //
-                            // no modificamos Discord, pero sí guardamos
-                            // false para poder detectar después:
-                            //
-                            // OFFLINE
-                            //       ↓
-                            // ONLINE EN RUST
-
                             canal.online =
                                 nuevoEstado;
 
@@ -5947,7 +5936,7 @@ async function revisarDropsAutomaticos(
                                 }
 
                                 console.log(
-                                    `🟢 ${canal.displayName} volvió a ONLINE EN RUST. Se actualizará el mismo embed y se enviará un aviso nuevo.`
+                                    `🟢 ${canal.displayName} volvió a ONLINE EN RUST. Se actualizará el mismo embed y se revisará si las notificaciones están activadas.`
                                 );
                             }
 
@@ -5975,7 +5964,8 @@ async function revisarDropsAutomaticos(
                 // SOLO SI VOLVIÓ A RUST:
                 //
                 // 1. Editamos el embed existente.
-                // 2. Enviamos un mensaje NUEVO avisando.
+                // 2. Si las notificaciones están activadas,
+                //    enviamos un mensaje NUEVO.
                 // ==================================================
 
                 if (
@@ -6002,20 +5992,54 @@ async function revisarDropsAutomaticos(
                     if (
                         streamersVolvieronARust.size
                     ) {
-                        await enviarAvisoStreamerOnlineRust(
-                            channel,
-                            [
-                                ...streamersVolvieronARust.values()
-                            ],
-                            datos
-                        );
+                        if (
+                            monitor.notificacionesStreamer !==
+                            false
+                        ) {
+                            await enviarAvisoStreamerOnlineRust(
+                                channel,
+                                [
+                                    ...streamersVolvieronARust.values()
+                                ],
+                                datos
+                            );
+
+                        } else {
+                            console.log(
+                                `🔕 Notificaciones de Streamer Drops pausadas en ${guild.name}. Se detectó el regreso de ${[
+                                    ...streamersVolvieronARust.values()
+                                ]
+                                    .map(
+                                        streamer =>
+                                            streamer.login
+                                    )
+                                    .join(
+                                        ", "
+                                    )}, pero NO se enviará aviso.`
+                            );
+                        }
                     }
                 }
 
                 // ==================================================
                 // GUARDAR ESTADO
                 //
-                // Esto se hace también cuando pasó a OFFLINE/NO RUST.
+                // Esto se hace también cuando pasó a
+                // OFFLINE/NO RUST.
+                //
+                // IMPORTANTE:
+                // Si las notificaciones están pausadas y el
+                // streamer está online, se guarda TRUE.
+                //
+                // Por tanto, al volver a activar las
+                // notificaciones NO habrá catch-up.
+                // Solo habrá aviso después de:
+                //
+                // ONLINE
+                //   ↓
+                // OFFLINE
+                //   ↓
+                // ONLINE
                 // ==================================================
 
                 await monitor.save();

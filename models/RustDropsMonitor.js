@@ -109,6 +109,16 @@ const RustDropsMonitorSchema = new mongoose.Schema(
             default: true
         },
 
+        // ====================================================
+        // NOTIFICACIONES AUTOMÁTICAS DE STREAMERS
+        // true  = se envían avisos ONLINE EN RUST
+        // false = se detectan los cambios pero no se avisa
+        // ====================================================
+        notificacionesStreamer: {
+            type: Boolean,
+            default: true
+        },
+
         ultimaRevision: {
             type: Date,
             default: Date.now
