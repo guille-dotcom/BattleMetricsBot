@@ -10,6 +10,99 @@ const {
 const StreamerRole =
     require("../models/StreamerRoleSchema");
 
+
+// ============================================================
+// OBTENER EMOJI SEGÚN EL COLOR DEL ROL
+// ============================================================
+
+function obtenerEmojiColorRol(role) {
+    if (!role || !role.color) {
+        return "⚪";
+    }
+
+    const hex = role.hexColor.replace("#", "");
+
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+
+    // Colores base aproximados para los emojis
+    const colores = [
+        {
+            emoji: "🔴",
+            r: 255,
+            g: 0,
+            b: 0
+        },
+        {
+            emoji: "🟠",
+            r: 255,
+            g: 165,
+            b: 0
+        },
+        {
+            emoji: "🟡",
+            r: 255,
+            g: 255,
+            b: 0
+        },
+        {
+            emoji: "🟢",
+            r: 0,
+            g: 255,
+            b: 0
+        },
+        {
+            emoji: "🔵",
+            r: 0,
+            g: 120,
+            b: 255
+        },
+        {
+            emoji: "🟣",
+            r: 160,
+            g: 0,
+            b: 255
+        },
+        {
+            emoji: "🟤",
+            r: 140,
+            g: 80,
+            b: 40
+        },
+        {
+            emoji: "⚫",
+            r: 0,
+            g: 0,
+            b: 0
+        },
+        {
+            emoji: "⚪",
+            r: 255,
+            g: 255,
+            b: 255
+        }
+    ];
+
+    let mejorEmoji = "⚪";
+    let menorDistancia = Infinity;
+
+    for (const color of colores) {
+        const distancia =
+            Math.pow(r - color.r, 2) +
+            Math.pow(g - color.g, 2) +
+            Math.pow(b - color.b, 2);
+
+        if (distancia < menorDistancia) {
+            menorDistancia = distancia;
+            mejorEmoji = color.emoji;
+        }
+    }
+
+    return mejorEmoji;
+}
+
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("panel-streamers")
@@ -44,15 +137,12 @@ module.exports = {
 
             const configuraciones =
                 await StreamerRole.find({
-                    guildId:
-                        interaction.guild.id
+                    guildId: interaction.guild.id
                 }).sort({
                     streamerName: 1
                 });
 
-            if (
-                !configuraciones.length
-            ) {
+            if (!configuraciones.length) {
                 return interaction.reply({
                     content:
                         "❌ No hay streamers configurados todavía.\n\nUtiliza primero:\n`/rol-streamer streamer:<nombre> rol:<rol>`",
@@ -66,10 +156,7 @@ module.exports = {
 
             const configuracionesValidas = [];
 
-            for (
-                const configuracion
-                of configuraciones
-            ) {
+            for (const configuracion of configuraciones) {
                 const role =
                     interaction.guild.roles.cache.get(
                         configuracion.roleId
@@ -89,14 +176,13 @@ module.exports = {
                     continue;
                 }
 
-                configuracionesValidas.push(
-                    configuracion
-                );
+                configuracionesValidas.push({
+                    configuracion,
+                    role
+                });
             }
 
-            if (
-                !configuracionesValidas.length
-            ) {
+            if (!configuracionesValidas.length) {
                 return interaction.reply({
                     content:
                         "❌ Ninguno de los roles configurados existe actualmente o puede ser utilizado.",
@@ -105,17 +191,14 @@ module.exports = {
             }
 
             // =================================================
-            // CREAR PANELES
-            // Discord permite máximo 25 botones
-            // por mensaje.
+            // DISCORD PERMITE MÁXIMO 25 BOTONES POR MENSAJE
             // =================================================
 
             const grupos = [];
 
             for (
                 let i = 0;
-                i <
-                configuracionesValidas.length;
+                i < configuracionesValidas.length;
                 i += 25
             ) {
                 grupos.push(
@@ -132,14 +215,16 @@ module.exports = {
 
             let numeroPanel = 0;
 
-            for (
-                const grupo
-                of grupos
-            ) {
+            // =================================================
+            // CREAR PANELES
+            // =================================================
+
+            for (const grupo of grupos) {
                 numeroPanel++;
 
                 const filas = [];
 
+                // Máximo 5 botones por fila
                 for (
                     let i = 0;
                     i < grupo.length;
@@ -154,18 +239,18 @@ module.exports = {
                             i + 5
                         );
 
-                    for (
-                        const configuracion
-                        of botones
-                    ) {
+                    for (const item of botones) {
+                        const configuracion =
+                            item.configuracion;
+
+                        const role =
+                            item.role;
+
                         let label =
                             configuracion.streamerName;
 
                         // Discord permite hasta 80 caracteres
-                        if (
-                            label.length >
-                            80
-                        ) {
+                        if (label.length > 80) {
                             label =
                                 label.substring(
                                     0,
@@ -173,39 +258,43 @@ module.exports = {
                                 ) + "...";
                         }
 
-                        fila.addComponents(
+                        // Obtener color correspondiente al rol
+                        const emoji =
+                            obtenerEmojiColorRol(
+                                role
+                            );
+
+                        const boton =
                             new ButtonBuilder()
                                 .setCustomId(
                                     `streamer_role_${configuracion._id}`
                                 )
-                                .setLabel(
-                                    label
-                                )
-                                .setEmoji("🎥")
+                                .setLabel(label)
+                                .setEmoji(emoji)
                                 .setStyle(
                                     ButtonStyle.Secondary
-                                )
+                                );
+
+                        fila.addComponents(
+                            boton
                         );
                     }
 
-                    filas.push(
-                        fila
-                    );
+                    filas.push(fila);
                 }
+
+                // =================================================
+                // EMBED
+                // =================================================
 
                 const embed =
                     new EmbedBuilder()
-                        .setColor(
-                            0x9146FF
-                        )
+                        .setColor(0x9146FF)
                         .setTitle(
                             "🎥 Roles de Streamers"
                         )
                         .setDescription(
-                            "Selecciona los streamers que quieres seguir.\n\n" +
-                            "🟢 Pulsa un botón para **obtener su rol**.\n" +
-                            "🔴 Pulsa nuevamente el mismo botón para **quitarte el rol**.\n\n" +
-                            "Puedes elegir todos los streamers que quieras."
+                            "Reacciona al rol del streamer que deseas"
                         )
                         .setFooter({
                             text:
@@ -213,9 +302,7 @@ module.exports = {
                         })
                         .setTimestamp();
 
-                if (
-                    grupos.length > 1
-                ) {
+                if (grupos.length > 1) {
                     embed.setTitle(
                         `🎥 Roles de Streamers • ${numeroPanel}/${grupos.length}`
                     );
@@ -240,6 +327,7 @@ module.exports = {
                     `🎥 Streamers configurados: **${configuracionesValidas.length}**\n` +
                     `📋 Paneles publicados: **${grupos.length}**`
             });
+
         } catch (error) {
             console.error(
                 "❌ Error en /panel-streamers:",
@@ -262,6 +350,7 @@ module.exports = {
                         "❌ Ocurrió un error publicando el panel de streamers.",
                     ephemeral: true
                 });
+
             } catch (replyError) {
                 console.error(
                     "❌ Error respondiendo /panel-streamers:",
