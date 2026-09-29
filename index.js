@@ -84,9 +84,7 @@ const server =
                     "/twitch/callback"
                 )
             ) {
-
                 try {
-
                     const url =
                         new URL(
                             req.url,
@@ -118,7 +116,6 @@ const server =
                     // =================================================
 
                     if (error) {
-
                         console.log(
                             "⚠️ Autorización Twitch cancelada:",
                             error,
@@ -186,7 +183,6 @@ p {
                     // =================================================
 
                     if (!code || !state) {
-
                         console.error(
                             "❌ Callback Twitch sin code o state."
                         );
@@ -462,9 +458,7 @@ p {
                             "❌ Error enviando respuesta Twitch:",
                             responseError.message
                         );
-
                     }
-
                 }
 
                 return;
@@ -487,7 +481,6 @@ p {
             );
 
             res.end("OK");
-
         }
     );
 
@@ -503,7 +496,6 @@ server.listen(
         console.log(
             "🟣 Callback Twitch activo en /twitch/callback"
         );
-
     }
 );
 
@@ -541,16 +533,13 @@ client.on(
             texto.includes("LOGIN RESULT") ||
             texto.includes("token:")
         ) {
-
             return;
-
         }
 
         console.log(
             "🔧 DISCORD DEBUG:",
             texto
         );
-
     }
 );
 
@@ -566,7 +555,6 @@ client.on(
             "⚠️ DISCORD WARN:",
             info
         );
-
     }
 );
 
@@ -581,7 +569,6 @@ client.on(
         console.log(
             `🟢 SHARD ${id} CONECTADO`
         );
-
     }
 );
 
@@ -597,7 +584,6 @@ client.on(
             "❌ ERROR SHARD DISCORD:",
             error
         );
-
     }
 );
 
@@ -613,7 +599,6 @@ client.on(
             `🔴 SHARD ${id} DESCONECTADO:`,
             event
         );
-
     }
 );
 
@@ -628,7 +613,6 @@ client.on(
         console.log(
             `🔄 SHARD ${id} INTENTANDO RECONEXIÓN...`
         );
-
     }
 );
 
@@ -643,7 +627,6 @@ client.on(
         console.error(
             "❌ SESIÓN DE DISCORD INVALIDADA"
         );
-
     }
 );
 
@@ -659,7 +642,6 @@ client.on(
             "❌ ERROR DISCORD:",
             error
         );
-
     }
 );
 
@@ -727,7 +709,6 @@ for (
             console.log(
                 `⚠️ El comando en ${file} le falta la propiedad 'data' o 'execute'.`
             );
-
         }
 
     } catch (error) {
@@ -736,9 +717,7 @@ for (
             `❌ Error cargando comando ${file}:`,
             error.message
         );
-
     }
-
 }
 
 // ======================
@@ -790,7 +769,6 @@ client.once(
                 "❌ Error al registrar comandos:",
                 error
             );
-
         }
 
         // ======================
@@ -824,7 +802,6 @@ client.once(
                 "⚠️ Error presencia:",
                 error.message
             );
-
         }
 
         // ======================
@@ -854,7 +831,6 @@ client.once(
                 "❌ Error revisión inicial tracker:",
                 error.message
             );
-
         }
 
         // ======================
@@ -873,7 +849,6 @@ client.once(
                     );
 
                     return;
-
                 }
 
                 trackerRevisando =
@@ -896,7 +871,6 @@ client.once(
 
                     trackerRevisando =
                         false;
-
                 }
 
             },
@@ -921,7 +895,6 @@ client.once(
                 throw new Error(
                     "iniciarDropsAutomaticos no está exportada desde twitchDropsService.js"
                 );
-
             }
 
             iniciarDropsAutomaticos(
@@ -938,7 +911,6 @@ client.once(
                 "❌ Error iniciando Twitch Drops automáticos:",
                 error
             );
-
         }
 
         // ======================
@@ -965,7 +937,6 @@ client.once(
                 "❌ Error iniciando tienda Rust automática:",
                 error
             );
-
         }
 
         // ======================
@@ -992,7 +963,6 @@ client.once(
                 "❌ Error iniciando planilla automática:",
                 error
             );
-
         }
 
         // ======================
@@ -1009,7 +979,7 @@ client.once(
             if (
                 comandoGiveaway &&
                 typeof comandoGiveaway.iniciarGiveaways ===
-                    "function"
+                "function"
             ) {
 
                 await comandoGiveaway.iniciarGiveaways(
@@ -1019,7 +989,6 @@ client.once(
                 console.log(
                     "🎁 Sistema de Giveaways recuperado correctamente."
                 );
-
             }
 
         } catch (error) {
@@ -1028,9 +997,7 @@ client.once(
                 "❌ Error recuperando Giveaways:",
                 error
             );
-
         }
-
     }
 );
 
@@ -1122,6 +1089,12 @@ Después podrás usar:
 
 🔓 \`/drops desvincular\`
 
+🎥 **Roles de Streamers**
+
+🎥 \`/rol-streamer\`
+
+📋 \`/panel-streamers\`
+
 📚 Usa:
 
 \`/help\`
@@ -1141,7 +1114,6 @@ para ver todos los comandos disponibles.`,
                         }
                     ]
                 });
-
             }
 
         } catch (error) {
@@ -1150,9 +1122,7 @@ para ver todos los comandos disponibles.`,
                 "❌ Error enviando bienvenida:",
                 error.message
             );
-
         }
-
     }
 );
 
@@ -1181,7 +1151,7 @@ client.on(
             if (
                 comandoSteam &&
                 typeof comandoSteam.handleInteraction ===
-                    "function"
+                "function"
             ) {
 
                 try {
@@ -1194,9 +1164,7 @@ client.on(
                     if (
                         manejado
                     ) {
-
                         return;
-
                     }
 
                 } catch (error) {
@@ -1219,7 +1187,6 @@ client.on(
                                 ephemeral:
                                     true
                             });
-
                         }
 
                     } catch (replyError) {
@@ -1228,15 +1195,11 @@ client.on(
                             "❌ Error respondiendo interacción Steam:",
                             replyError.message
                         );
-
                     }
 
                     return;
-
                 }
-
             }
-
         }
 
         // =====================================================
@@ -1255,11 +1218,9 @@ client.on(
             if (
                 !command ||
                 typeof command.autocomplete !==
-                    "function"
+                "function"
             ) {
-
                 return;
-
             }
 
             try {
@@ -1274,11 +1235,9 @@ client.on(
                     `❌ Error en autocompletado para /${interaction.commandName}:`,
                     error
                 );
-
             }
 
             return;
-
         }
 
         // =====================================================
@@ -1288,6 +1247,87 @@ client.on(
         if (
             interaction.isButton()
         ) {
+
+            // =================================================
+            // ROLES DE STREAMERS
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "streamer_role_"
+                )
+            ) {
+
+                try {
+
+                    const comandoStreamerRoles =
+                        client.commands.get(
+                            "rol-streamer"
+                        );
+
+                    if (
+                        !comandoStreamerRoles ||
+                        typeof comandoStreamerRoles.manejarBoton !==
+                        "function"
+                    ) {
+
+                        console.error(
+                            "❌ No se encontró manejarBoton en /rol-streamer."
+                        );
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ El sistema de roles de streamers no está disponible.",
+                                ephemeral:
+                                    true
+                            });
+                        }
+
+                        return;
+                    }
+
+                    await comandoStreamerRoles.manejarBoton(
+                        interaction
+                    );
+
+                } catch (error) {
+
+                    console.error(
+                        "❌ Error manejando botón de rol streamer:",
+                        error
+                    );
+
+                    try {
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Ocurrió un error al cambiar tu rol de streamer.",
+                                ephemeral:
+                                    true
+                            });
+                        }
+
+                    } catch (replyError) {
+
+                        console.error(
+                            "❌ Error respondiendo botón streamer:",
+                            replyError.message
+                        );
+                    }
+                }
+
+                return;
+            }
 
             // =================================================
             // GIVEAWAY - FINALIZAR
@@ -1309,7 +1349,7 @@ client.on(
                     if (
                         !comandoGiveaway ||
                         typeof comandoGiveaway.procesarFinalizar !==
-                            "function"
+                        "function"
                     ) {
 
                         return interaction.reply({
@@ -1318,7 +1358,6 @@ client.on(
                             ephemeral:
                                 true
                         });
-
                     }
 
                     await comandoGiveaway.procesarFinalizar(
@@ -1345,7 +1384,6 @@ client.on(
                                 ephemeral:
                                     true
                             });
-
                         }
 
                     } catch (replyError) {
@@ -1354,13 +1392,10 @@ client.on(
                             "❌ Error respondiendo Finalizar Giveaway:",
                             replyError.message
                         );
-
                     }
-
                 }
 
                 return;
-
             }
 
             // =================================================
@@ -1383,7 +1418,7 @@ client.on(
                     if (
                         !comandoGiveaway ||
                         typeof comandoGiveaway.procesarReroll !==
-                            "function"
+                        "function"
                     ) {
 
                         return interaction.reply({
@@ -1392,7 +1427,6 @@ client.on(
                             ephemeral:
                                 true
                         });
-
                     }
 
                     await comandoGiveaway.procesarReroll(
@@ -1419,7 +1453,6 @@ client.on(
                                 ephemeral:
                                     true
                             });
-
                         }
 
                     } catch (replyError) {
@@ -1428,13 +1461,10 @@ client.on(
                             "❌ Error respondiendo Reroll Giveaway:",
                             replyError.message
                         );
-
                     }
-
                 }
 
                 return;
-
             }
 
             // =================================================
@@ -1457,13 +1487,12 @@ client.on(
                     if (
                         comandoGiveaway &&
                         typeof comandoGiveaway.procesarParticipacion ===
-                            "function"
+                        "function"
                     ) {
 
                         await comandoGiveaway.procesarParticipacion(
                             interaction
                         );
-
                     }
 
                 } catch (error) {
@@ -1472,11 +1501,9 @@ client.on(
                         "❌ Error participando en Giveaway:",
                         error
                     );
-
                 }
 
                 return;
-
             }
 
             // =================================================
@@ -1503,7 +1530,7 @@ client.on(
                     if (
                         !comandoRaid ||
                         typeof comandoRaid.manejarBotonRaid !==
-                            "function"
+                        "function"
                     ) {
 
                         console.error(
@@ -1521,11 +1548,9 @@ client.on(
                                 ephemeral:
                                     true
                             });
-
                         }
 
                         return;
-
                     }
 
                     await comandoRaid.manejarBotonRaid(
@@ -1552,7 +1577,6 @@ client.on(
                                 ephemeral:
                                     true
                             });
-
                         }
 
                     } catch (err) {
@@ -1561,13 +1585,10 @@ client.on(
                             "❌ Error respondiendo botón /raid:",
                             err.message
                         );
-
                     }
-
                 }
 
                 return;
-
             }
 
             // =================================================
@@ -1603,7 +1624,6 @@ client.on(
                             ephemeral:
                                 true
                         });
-
                     }
 
                     const comandoTrackers =
@@ -1614,7 +1634,7 @@ client.on(
                     if (
                         !comandoTrackers ||
                         typeof comandoTrackers.mostrarPagina !==
-                            "function"
+                        "function"
                     ) {
 
                         console.error(
@@ -1627,7 +1647,6 @@ client.on(
                             ephemeral:
                                 true
                         });
-
                     }
 
                     await comandoTrackers.mostrarPagina(
@@ -1655,7 +1674,6 @@ client.on(
                                 ephemeral:
                                     true
                             });
-
                         }
 
                     } catch (replyError) {
@@ -1664,13 +1682,10 @@ client.on(
                             "❌ Error respondiendo paginación:",
                             replyError.message
                         );
-
                     }
-
                 }
 
                 return;
-
             }
 
             // =================================================
@@ -1711,7 +1726,6 @@ client.on(
                             ephemeral:
                                 true
                         });
-
                     }
 
                     console.log(
@@ -1726,7 +1740,7 @@ client.on(
                     if (
                         comandoTrackers &&
                         typeof comandoTrackers.mostrarPagina ===
-                            "function"
+                        "function"
                     ) {
 
                         let paginaActual =
@@ -1758,7 +1772,7 @@ client.on(
 
                                     if (
                                         customId ===
-                                            "trackers_pagina_actual" &&
+                                        "trackers_pagina_actual" &&
                                         label
                                     ) {
 
@@ -1776,13 +1790,9 @@ client.on(
                                                     match[1],
                                                     10
                                                 );
-
                                         }
-
                                     }
-
                                 }
-
                             }
 
                         } catch (errorPagina) {
@@ -1793,7 +1803,6 @@ client.on(
 
                             paginaActual =
                                 1;
-
                         }
 
                         await comandoTrackers.mostrarPagina(
@@ -1802,7 +1811,6 @@ client.on(
                         );
 
                         return;
-
                     }
 
                     return interaction.update({
@@ -1832,7 +1840,6 @@ client.on(
                                 ephemeral:
                                     true
                             });
-
                         }
 
                     } catch (replyError) {
@@ -1841,17 +1848,13 @@ client.on(
                             "❌ Error respondiendo eliminación de tracker:",
                             replyError.message
                         );
-
                     }
-
                 }
 
                 return;
-
             }
 
             return;
-
         }
 
         // =====================================================
@@ -1861,7 +1864,7 @@ client.on(
         if (
             interaction.isStringSelectMenu() &&
             interaction.customId ===
-                "config_tienda_selector"
+            "config_tienda_selector"
         ) {
 
             const comandoConfigTienda =
@@ -1872,15 +1875,13 @@ client.on(
             if (
                 comandoConfigTienda &&
                 typeof comandoConfigTienda.manejarSelectMenu ===
-                    "function"
+                "function"
             ) {
 
                 return await comandoConfigTienda.manejarSelectMenu(
                     interaction
                 );
-
             }
-
         }
 
         // =====================================================
@@ -1902,15 +1903,13 @@ client.on(
             if (
                 comandoConfigTienda &&
                 typeof comandoConfigTienda.manejarModal ===
-                    "function"
+                "function"
             ) {
 
                 return await comandoConfigTienda.manejarModal(
                     interaction
                 );
-
             }
-
         }
 
         // =====================================================
@@ -1920,9 +1919,7 @@ client.on(
         if (
             !interaction.isChatInputCommand()
         ) {
-
             return;
-
         }
 
         const command =
@@ -1937,7 +1934,6 @@ client.on(
             );
 
             return;
-
         }
 
         try {
@@ -1984,7 +1980,6 @@ client.on(
                         ephemeral:
                             true
                     });
-
                 }
 
             } catch (err) {
@@ -1993,11 +1988,8 @@ client.on(
                     "ERROR RESPONDIENDO DISCORD:",
                     err.message
                 );
-
             }
-
         }
-
     }
 );
 
@@ -2013,7 +2005,6 @@ process.on(
             "❌ Unhandled Promise:",
             reason
         );
-
     }
 );
 
@@ -2025,7 +2016,6 @@ process.on(
             "❌ Uncaught Exception:",
             error
         );
-
     }
 );
 
@@ -2075,7 +2065,6 @@ async function iniciarBot() {
                                     resolve();
                                 }
                             );
-
                         }
                     );
 
@@ -2090,7 +2079,6 @@ async function iniciarBot() {
                         request.destroy();
 
                         resolve();
-
                     }
                 );
 
@@ -2104,10 +2092,8 @@ async function iniciarBot() {
                         );
 
                         resolve();
-
                     }
                 );
-
             }
         );
 
@@ -2126,7 +2112,6 @@ async function iniciarBot() {
             throw new Error(
                 "❌ La variable TOKEN no existe en las variables de entorno."
             );
-
         }
 
         console.log(
@@ -2154,7 +2139,6 @@ async function iniciarBot() {
                         },
                         60000
                     );
-
                 }
             );
 
@@ -2178,9 +2162,7 @@ async function iniciarBot() {
         );
 
         process.exit(1);
-
     }
-
 }
 
 // ======================
