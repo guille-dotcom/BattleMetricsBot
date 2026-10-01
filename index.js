@@ -82,6 +82,7 @@ const server =
                 req.url &&
                 req.url.startsWith("/twitch/callback")
             ) {
+
                 try {
 
                     const url =
@@ -871,6 +872,7 @@ client.once(
                 typeof iniciarDropsAutomaticos !==
                 "function"
             ) {
+
                 throw new Error(
                     "iniciarDropsAutomaticos no está exportada desde twitchDropsService.js"
                 );
@@ -1114,6 +1116,188 @@ client.on(
     async interaction => {
 
         // =====================================================
+        // AUTOCOMPLETADO
+        // =====================================================
+
+        if (
+            interaction.isAutocomplete()
+        ) {
+
+            const command =
+                client.commands.get(
+                    interaction.commandName
+                );
+
+            if (
+                !command ||
+                typeof command.autocomplete !==
+                "function"
+            ) {
+                return;
+            }
+
+            try {
+
+                await command.autocomplete(
+                    interaction
+                );
+
+            } catch (error) {
+
+                console.error(
+                    `❌ Error en autocompletado para /${interaction.commandName}:`,
+                    error
+                );
+            }
+
+            return;
+        }
+
+        // =====================================================
+        // SISTEMA CREAR TEAM
+        // =====================================================
+
+        // -----------------------------------------------------
+        // SELECTOR DE JUGADORES
+        // -----------------------------------------------------
+
+        if (
+            interaction.isStringSelectMenu() &&
+            interaction.customId.startsWith(
+                "crear_team_selector_"
+            )
+        ) {
+
+            try {
+
+                const comandoCrearTeam =
+                    client.commands.get(
+                        "crear-team"
+                    );
+
+                if (
+                    !comandoCrearTeam ||
+                    typeof comandoCrearTeam.manejarSelectMenu !==
+                    "function"
+                ) {
+
+                    return interaction.reply({
+                        content:
+                            "❌ El sistema de Teams no está disponible.",
+                        ephemeral:
+                            true
+                    });
+                }
+
+                return await comandoCrearTeam.manejarSelectMenu(
+                    interaction
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "❌ Error manejando selector de Team:",
+                    error
+                );
+
+                try {
+
+                    if (
+                        !interaction.replied &&
+                        !interaction.deferred
+                    ) {
+
+                        await interaction.reply({
+                            content:
+                                "❌ Ocurrió un error al seleccionar los jugadores.",
+                            ephemeral:
+                                true
+                        });
+                    }
+
+                } catch (replyError) {
+
+                    console.error(
+                        "❌ Error respondiendo selector Team:",
+                        replyError.message
+                    );
+                }
+
+                return;
+            }
+        }
+
+        // -----------------------------------------------------
+        // TODOS LOS BOTONES DE CREAR TEAM
+        // -----------------------------------------------------
+
+        if (
+            interaction.isButton() &&
+            interaction.customId.startsWith(
+                "crear_team_"
+            )
+        ) {
+
+            try {
+
+                const comandoCrearTeam =
+                    client.commands.get(
+                        "crear-team"
+                    );
+
+                if (
+                    !comandoCrearTeam ||
+                    typeof comandoCrearTeam.manejarBoton !==
+                    "function"
+                ) {
+
+                    return interaction.reply({
+                        content:
+                            "❌ El sistema de Teams no está disponible.",
+                        ephemeral:
+                            true
+                    });
+                }
+
+                return await comandoCrearTeam.manejarBoton(
+                    interaction
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "❌ Error manejando botón de Team:",
+                    error
+                );
+
+                try {
+
+                    if (
+                        !interaction.replied &&
+                        !interaction.deferred
+                    ) {
+
+                        await interaction.reply({
+                            content:
+                                "❌ Ocurrió un error con el creador de Teams.",
+                            ephemeral:
+                                true
+                        });
+                    }
+
+                } catch (replyError) {
+
+                    console.error(
+                        "❌ Error respondiendo botón Team:",
+                        replyError.message
+                    );
+                }
+
+                return;
+            }
+        }
+
+        // =====================================================
         // INTERACCIONES DE /STEAM
         // =====================================================
 
@@ -1180,191 +1364,12 @@ client.on(
         }
 
         // =====================================================
-        // AUTOCOMPLETADO
-        // =====================================================
-
-        if (
-            interaction.isAutocomplete()
-        ) {
-
-            const command =
-                client.commands.get(
-                    interaction.commandName
-                );
-
-            if (
-                !command ||
-                typeof command.autocomplete !==
-                "function"
-            ) {
-                return;
-            }
-
-            try {
-
-                await command.autocomplete(
-                    interaction
-                );
-
-            } catch (error) {
-
-                console.error(
-                    `❌ Error en autocompletado para /${interaction.commandName}:`,
-                    error
-                );
-            }
-
-            return;
-        }
-
-        // =====================================================
-        // MENÚ DESPLEGABLE DE CREAR TEAM
-        // =====================================================
-
-        if (
-            interaction.isStringSelectMenu() &&
-            interaction.customId.startsWith(
-                "crear_team_selector_"
-            )
-        ) {
-
-            try {
-
-                const comandoCrearTeam =
-                    client.commands.get(
-                        "crear-team"
-                    );
-
-                if (
-                    !comandoCrearTeam ||
-                    typeof comandoCrearTeam.manejarSelectMenu !==
-                    "function"
-                ) {
-
-                    return interaction.reply({
-                        content:
-                            "❌ El sistema de Teams no está disponible.",
-                        ephemeral:
-                            true
-                    });
-                }
-
-                await comandoCrearTeam.manejarSelectMenu(
-                    interaction
-                );
-
-            } catch (error) {
-
-                console.error(
-                    "❌ Error manejando selector de Team:",
-                    error
-                );
-
-                try {
-
-                    if (
-                        !interaction.replied &&
-                        !interaction.deferred
-                    ) {
-
-                        await interaction.reply({
-                            content:
-                                "❌ Ocurrió un error al crear el Team.",
-                            ephemeral:
-                                true
-                        });
-                    }
-
-                } catch (replyError) {
-
-                    console.error(
-                        "❌ Error respondiendo selector Team:",
-                        replyError.message
-                    );
-                }
-            }
-
-            return;
-        }
-
-        // =====================================================
         // BOTONES
         // =====================================================
 
         if (
             interaction.isButton()
         ) {
-
-            // =================================================
-            // BOTÓN CANCELAR CREAR TEAM
-            // =================================================
-
-            if (
-                interaction.customId.startsWith(
-                    "crear_team_cancelar_"
-                )
-            ) {
-
-                try {
-
-                    const comandoCrearTeam =
-                        client.commands.get(
-                            "crear-team"
-                        );
-
-                    if (
-                        comandoCrearTeam &&
-                        typeof comandoCrearTeam.manejarBoton ===
-                        "function"
-                    ) {
-
-                        await comandoCrearTeam.manejarBoton(
-                            interaction
-                        );
-
-                    } else {
-
-                        await interaction.reply({
-                            content:
-                                "❌ El sistema de Teams no está disponible.",
-                            ephemeral:
-                                true
-                        });
-                    }
-
-                } catch (error) {
-
-                    console.error(
-                        "❌ Error cancelando creación de Team:",
-                        error
-                    );
-
-                    try {
-
-                        if (
-                            !interaction.replied &&
-                            !interaction.deferred
-                        ) {
-
-                            await interaction.reply({
-                                content:
-                                    "❌ Ocurrió un error.",
-                                ephemeral:
-                                    true
-                            });
-                        }
-
-                    } catch (replyError) {
-
-                        console.error(
-                            "❌ Error respondiendo cancelar Team:",
-                            replyError.message
-                        );
-                    }
-                }
-
-                return;
-            }
 
             // =================================================
             // ROLES DE STREAMERS
@@ -1870,16 +1875,14 @@ client.on(
                                 interaction.message.components || [];
 
                             for (
-                                const fila
-                                of filas
+                                const fila of filas
                             ) {
 
                                 const componentes =
                                     fila.components || [];
 
                                 for (
-                                    const componente
-                                    of componentes
+                                    const componente of componentes
                                 ) {
 
                                     const customId =
@@ -2251,6 +2254,7 @@ async function iniciarBot() {
                                     "⏰ TIMEOUT: Discord no completó la conexión después de 60 segundos."
                                 )
                             );
+
                         },
                         60000
                     );
