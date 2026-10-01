@@ -1012,19 +1012,13 @@ module.exports = {
                                 value:
                                     `\`\`\`\n${textoTeam}\n\`\`\``
                             },
-                            {
-                                name:
-                                    "Jugadores",
-                                value:
-                                    nombresSeleccionados
-                                        .map(
-                                            nombre =>
-                                                `@${nombre}`
-                                        )
-                                        .join(
-                                            "\n"
-                                        )
-                            }
+                          {
+    name:
+        "Jugadores",
+    value:
+        `\`\`\`\n${nombresSeleccionados
+            .join("\n")}\n\`\`\``
+}
                         )
                         .setFooter({
                             text:
