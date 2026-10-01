@@ -78,27 +78,6 @@ function obtenerPaginaValida(
 }
 
 // ============================================================
-// OBTENER MIEMBROS DE UNA PÁGINA
-// ============================================================
-
-async function obtenerDatosPagina(
-    guildId,
-    pagina
-) {
-
-    const guild =
-        await require("discord.js")
-            .Client
-            ? null
-            : null;
-
-    return {
-        guildId,
-        pagina
-    };
-}
-
-// ============================================================
 // CREAR EMBED
 // ============================================================
 
@@ -119,7 +98,7 @@ function crearEmbed(
             )
             .map(
                 miembro =>
-                    miembro.displayName
+                    miembro.nombre
             );
 
     const cantidadTotal =
@@ -152,7 +131,7 @@ function crearEmbed(
     } else {
 
         descripcion +=
-            `### 📋 Jugadores\n`;
+            `### 📋 Jugadores disponibles\n`;
 
         descripcion +=
             `Selecciona uno o varios jugadores en el menú de abajo.`;
@@ -189,7 +168,7 @@ function crearComponentes(
     const filas = [];
 
     // ========================================================
-    // SELECTOR
+    // SELECTOR DE JUGADORES
     // ========================================================
 
     if (
@@ -200,32 +179,27 @@ function crearComponentes(
             miembros.map(
                 miembro => {
 
-                    const nombre =
-                        String(
-                            miembro.displayName ||
-                            miembro.user?.username ||
-                            miembro.username ||
-                            miembro.id
-                        )
-                            .slice(
-                                0,
-                                100
-                            );
-
                     return {
                         label:
-                            nombre,
+                            String(
+                                miembro.nombre
+                            ).slice(
+                                0,
+                                100
+                            ),
 
                         value:
                             miembro.id,
 
                         description:
-                            `ID: ${miembro.id}`
+                            `Jugador disponible`
                                 .slice(
                                     0,
                                     100
                                 ),
 
+                        // SOLO se marca si el usuario
+                        // lo seleccionó anteriormente.
                         default:
                             seleccionados.includes(
                                 miembro.id
@@ -267,7 +241,7 @@ function crearComponentes(
     }
 
     // ========================================================
-    // BOTONES DE PAGINACIÓN
+    // PAGINACIÓN
     // ========================================================
 
     const botonAnterior =
@@ -325,7 +299,7 @@ function crearComponentes(
     );
 
     // ========================================================
-    // BOTONES CREAR / CANCELAR
+    // CREAR / CANCELAR
     // ========================================================
 
     const botonCrear =
@@ -408,7 +382,7 @@ async function actualizarPanel(
         paginaValida;
 
     // ========================================================
-    // OBTENER MIEMBROS DE LA PÁGINA ACTUAL
+    // MIEMBROS DE LA PÁGINA
     // ========================================================
 
     const inicio =
@@ -426,8 +400,7 @@ async function actualizarPanel(
         );
 
     // ========================================================
-    // MUY IMPORTANTE:
-    // USAMOS LA SELECCIÓN GLOBAL DE LA SESIÓN
+    // SELECCIONES GLOBALES
     // ========================================================
 
     const seleccionados =
@@ -473,7 +446,7 @@ module.exports = {
                 "crear-team"
             )
             .setDescription(
-                "Crea un Team seleccionando jugadores del servidor."
+                "Crea un Team seleccionando jugadores de la lista."
             ),
 
     // ========================================================
@@ -492,43 +465,51 @@ module.exports = {
             });
 
             // =================================================
-            // OBTENER MIEMBROS
+            // OBTENER LA LISTA DE /team-agregar
+            // =================================================
+
+            const jugadores =
+                await KickTeamMember.find({
+                    guildId:
+                        interaction.guild.id
+                })
+                    .sort({
+                        nombre:
+                            1
+                    })
+                    .lean();
+
+            // =================================================
+            // CONVERTIR A FORMATO INTERNO
             // =================================================
 
             const miembros =
-                await interaction.guild.members.fetch();
+                jugadores.map(
+                    jugador => {
 
-            const miembrosValidos =
-                Array.from(
-                    miembros.values()
-                )
-                    .filter(
-                        miembro =>
-                            !miembro.user.bot
-                    )
-                    .sort(
-                        (a, b) =>
-                            String(
-                                a.displayName
-                            ).localeCompare(
+                        return {
+                            id:
                                 String(
-                                    b.displayName
+                                    jugador._id
                                 ),
-                                "es",
-                                {
-                                    sensitivity:
-                                        "base"
-                                }
-                            )
-                    );
+
+                            nombre:
+                                jugador.nombre
+                        };
+                    }
+                );
+
+            // =================================================
+            // COMPROBAR SI HAY JUGADORES
+            // =================================================
 
             if (
-                miembrosValidos.length === 0
+                miembros.length === 0
             ) {
 
                 return interaction.editReply({
                     content:
-                        "❌ No hay jugadores disponibles para crear un Team."
+                        "❌ No hay jugadores en la lista de Teams. Usa `/team-agregar` para agregar nombres."
                 });
             }
 
@@ -538,7 +519,7 @@ module.exports = {
 
             const totalPaginas =
                 Math.ceil(
-                    miembrosValidos.length /
+                    miembros.length /
                     MIEMBROS_POR_PAGINA
                 );
 
@@ -555,13 +536,10 @@ module.exports = {
                 clave,
                 {
                     miembros:
-                        miembrosValidos,
+                        miembros,
 
-                    // =========================================
-                    // AQUÍ SE GUARDAN TODOS LOS JUGADORES
-                    // DE TODAS LAS PÁGINAS
-                    // =========================================
-
+                    // AQUÍ SE GUARDAN LAS SELECCIONES
+                    // DE TODAS LAS PÁGINAS.
                     seleccionados:
                         new Set(),
 
@@ -571,11 +549,11 @@ module.exports = {
             );
 
             // =================================================
-            // OBTENER PRIMERA PÁGINA
+            // PRIMERA PÁGINA
             // =================================================
 
             const miembrosPagina =
-                miembrosValidos.slice(
+                miembros.slice(
                     0,
                     MIEMBROS_POR_PAGINA
                 );
@@ -736,17 +714,20 @@ module.exports = {
                 );
 
             // =================================================
-            // SELECCIONES REALIZADAS EN ESTA PÁGINA
+            // SELECCIONES DE ESTA PÁGINA
             // =================================================
 
             const nuevosSeleccionados =
                 interaction.values || [];
 
             // =================================================
-            // LIMPIAR SOLAMENTE LOS MIEMBROS
-            // DE ESTA PÁGINA
+            // IMPORTANTE:
             //
-            // NO TOCAR LOS DE OTRAS PÁGINAS
+            // ELIMINAMOS SOLAMENTE LAS SELECCIONES
+            // DE LA PÁGINA ACTUAL.
+            //
+            // LAS SELECCIONES DE OTRAS PÁGINAS
+            // SE MANTIENEN.
             // =================================================
 
             for (
@@ -759,7 +740,8 @@ module.exports = {
             }
 
             // =================================================
-            // COMPROBAR LÍMITE GLOBAL
+            // SELECCIONES QUE YA EXISTÍAN
+            // EN OTRAS PÁGINAS
             // =================================================
 
             const seleccionadosFueraDePagina =
@@ -771,22 +753,25 @@ module.exports = {
                 MAX_MIEMBROS_TEAM -
                 seleccionadosFueraDePagina.length;
 
+            // =================================================
+            // COMPROBAR LÍMITE
+            // =================================================
+
             if (
                 nuevosSeleccionados.length >
                 espacioDisponible
             ) {
 
-                // =============================================
-                // RESTAURAR EL ESTADO ANTERIOR
-                // =============================================
-
+                // Agregamos solamente los que caben.
                 for (
                     const id of nuevosSeleccionados
                 ) {
 
                     if (
-                        espacioDisponible <= 0
+                        sesion.seleccionados.size >=
+                        MAX_MIEMBROS_TEAM
                     ) {
+
                         break;
                     }
 
@@ -795,74 +780,20 @@ module.exports = {
                     );
                 }
 
-                // =============================================
-                // ACTUALIZAR PANEL
-                // =============================================
+            } else {
 
-                const totalPaginas =
-                    Math.ceil(
-                        sesion.miembros.length /
-                        MIEMBROS_POR_PAGINA
+                // =================================================
+                // AGREGAR TODAS LAS SELECCIONES DE ESTA PÁGINA
+                // =================================================
+
+                for (
+                    const id of nuevosSeleccionados
+                ) {
+
+                    sesion.seleccionados.add(
+                        id
                     );
-
-                const paginaValida =
-                    obtenerPaginaValida(
-                        pagina,
-                        totalPaginas
-                    );
-
-                const miembrosActuales =
-                    sesion.miembros.slice(
-                        paginaValida *
-                            MIEMBROS_POR_PAGINA,
-                        paginaValida *
-                            MIEMBROS_POR_PAGINA +
-                            MIEMBROS_POR_PAGINA
-                    );
-
-                const embed =
-                    crearEmbed(
-                        paginaValida,
-                        totalPaginas,
-                        miembrosActuales,
-                        Array.from(
-                            sesion.seleccionados
-                        )
-                    );
-
-                const componentes =
-                    crearComponentes(
-                        interaction.user.id,
-                        paginaValida,
-                        totalPaginas,
-                        miembrosActuales,
-                        Array.from(
-                            sesion.seleccionados
-                        )
-                    );
-
-                await interaction.update({
-                    embeds: [
-                        embed
-                    ],
-                    components:
-                        componentes
-                });
-
-                return;
-            }
-
-            // =================================================
-            // AGREGAR NUEVAS SELECCIONES
-            // =================================================
-
-            for (
-                const id of nuevosSeleccionados
-            ) {
-
-                sesion.seleccionados.add(
-                    id
-                );
+                }
             }
 
             // =================================================
@@ -1090,6 +1021,10 @@ module.exports = {
                         sesion.seleccionados
                     );
 
+                // =================================================
+                // COMPROBAR SELECCIONES
+                // =================================================
+
                 if (
                     seleccionados.length === 0
                 ) {
@@ -1116,7 +1051,7 @@ module.exports = {
                 }
 
                 // =================================================
-                // OBTENER MIEMBROS
+                // OBTENER JUGADORES SELECCIONADOS
                 // =================================================
 
                 const miembrosSeleccionados =
@@ -1130,54 +1065,8 @@ module.exports = {
                 const nombresSeleccionados =
                     miembrosSeleccionados.map(
                         miembro =>
-                            miembro.displayName
+                            miembro.nombre
                     );
-
-                // =================================================
-                // GUARDAR / PROCESAR KICKTEAM
-                // =================================================
-
-                for (
-                    const miembro of miembrosSeleccionados
-                ) {
-
-                    try {
-
-                        await KickTeamMember.findOneAndUpdate(
-                            {
-                                guildId:
-                                    interaction.guild.id,
-
-                                userId:
-                                    miembro.id
-                            },
-                            {
-                                guildId:
-                                    interaction.guild.id,
-
-                                userId:
-                                    miembro.id,
-
-                                username:
-                                    miembro.displayName
-                            },
-                            {
-                                upsert:
-                                    true,
-
-                                new:
-                                    true
-                            }
-                        );
-
-                    } catch (error) {
-
-                        console.error(
-                            `⚠️ Error guardando ${miembro.displayName} en KickTeamMember:`,
-                            error.message
-                        );
-                    }
-                }
 
                 // =================================================
                 // TEXTO FINAL
@@ -1188,6 +1077,10 @@ module.exports = {
 
                 const textoCodigo =
                     `\`\`\`${textoTeam}\`\`\``;
+
+                // =================================================
+                // EMBED FINAL
+                // =================================================
 
                 const embed =
                     new EmbedBuilder()
@@ -1227,6 +1120,10 @@ module.exports = {
                 sesionesTeam.delete(
                     clave
                 );
+
+                // =================================================
+                // MOSTRAR RESULTADO
+                // =================================================
 
                 await interaction.update({
                     embeds: [
