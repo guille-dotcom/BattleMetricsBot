@@ -108,13 +108,15 @@ module.exports = {
 
             if (interaction.replied || interaction.deferred) {
                 return interaction.followUp({
-                    content: "❌ Ocurrió un error al abrir el creador de Teams.",
+                    content:
+                        "❌ Ocurrió un error al abrir el creador de Teams.",
                     ephemeral: true
                 });
             }
 
             return interaction.reply({
-                content: "❌ Ocurrió un error al abrir el creador de Teams.",
+                content:
+                    "❌ Ocurrió un error al abrir el creador de Teams.",
                 ephemeral: true
             });
         }
@@ -178,68 +180,43 @@ module.exports = {
                 });
             }
 
-            const nombres =
-                miembros.map(miembro =>
-                    miembro.nombre
-                );
+            /*
+             * IMPORTANTE:
+             *
+             * Los nombres se utilizan exactamente como
+             * están guardados en la lista.
+             *
+             * No se buscan usuarios de Discord.
+             * No se convierten en menciones.
+             * No se modifican "_" "*" ni ningún otro carácter.
+             */
+            const nombresSeleccionados =
+                seleccionados
+                    .map(id =>
+                        miembros.find(
+                            miembro =>
+                                String(miembro._id) === String(id)
+                        )
+                    )
+                    .filter(Boolean)
+                    .map(miembro => miembro.nombre);
 
-            const menciones = [];
-
-            for (const nombre of nombres) {
-                let miembroDiscord = null;
-
-                try {
-                    miembroDiscord =
-                        interaction.guild.members.cache.find(
-                            member =>
-                                member.user.username.toLowerCase() ===
-                                nombre.toLowerCase() ||
-
-                                member.displayName.toLowerCase() ===
-                                nombre.toLowerCase()
-                        );
-
-                    if (!miembroDiscord) {
-                        miembroDiscord =
-                            await interaction.guild.members
-                                .search({
-                                    query: nombre,
-                                    limit: 10
-                                })
-                                .then(resultado =>
-                                    resultado.find(member =>
-                                        member.user.username.toLowerCase() ===
-                                        nombre.toLowerCase() ||
-
-                                        member.displayName.toLowerCase() ===
-                                        nombre.toLowerCase()
-                                    )
-                                );
-                    }
-                } catch (error) {
-                    console.error(
-                        `⚠️ No se pudo buscar a ${nombre}:`,
-                        error
-                    );
-                }
-
-                if (miembroDiscord) {
-                    menciones.push(
-                        `<@${miembroDiscord.id}>`
-                    );
-                } else {
-                    menciones.push(
-                        `@${nombre}`
-                    );
-                }
+            if (!nombresSeleccionados.length) {
+                return interaction.reply({
+                    content:
+                        "❌ No se pudieron obtener los nombres seleccionados.",
+                    ephemeral: true
+                });
             }
 
-            const creador =
-                `<@${interaction.user.id}>`;
-
+            /*
+             * Este texto es FIJO para Kick.
+             *
+             * $(user) NO es una mención de Discord.
+             * Debe aparecer literalmente.
+             */
             const textoTeam =
-                `Hola ${creador}\n\n` +
-                `El team es ${menciones.join(" ")}`;
+                `!editcom !team Hola $(user) El team es ${nombresSeleccionados.join(" ")}`;
 
             const embed =
                 new EmbedBuilder()
@@ -249,7 +226,7 @@ module.exports = {
                         text: "RustLogix"
                     });
 
-            await interaction.update({
+            return interaction.update({
                 embeds: [embed],
                 components: []
             });
@@ -260,7 +237,10 @@ module.exports = {
                 error
             );
 
-            if (!interaction.replied && !interaction.deferred) {
+            if (
+                !interaction.replied &&
+                !interaction.deferred
+            ) {
                 return interaction.reply({
                     content:
                         "❌ Ocurrió un error al crear el Team.",
@@ -308,7 +288,10 @@ module.exports = {
                 error
             );
 
-            if (!interaction.replied && !interaction.deferred) {
+            if (
+                !interaction.replied &&
+                !interaction.deferred
+            ) {
                 return interaction.reply({
                     content:
                         "❌ Ocurrió un error.",
