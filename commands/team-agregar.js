@@ -8,11 +8,15 @@ const KickTeamMember =
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("team-agregar")
-        .setDescription("Agrega un nombre a la lista disponible para crear Teams.")
+        .setDescription(
+            "Agrega un nombre a la lista disponible para crear Teams."
+        )
         .addStringOption(option =>
             option
                 .setName("nombre")
-                .setDescription("Nombre del jugador que quieres agregar.")
+                .setDescription(
+                    "Nombre del jugador que quieres agregar."
+                )
                 .setRequired(true)
         ),
 
@@ -25,20 +29,34 @@ module.exports = {
 
             if (!nombre) {
                 return interaction.reply({
-                    content: "❌ Debes indicar un nombre.",
+                    content:
+                        "❌ Debes indicar un nombre.",
                     ephemeral: true
                 });
             }
 
+            /*
+             * Busca duplicados dentro de ESTE servidor.
+             *
+             * No importa si cambia mayúsculas/minúsculas:
+             * Ludovici = ludovici = LUDOVICI
+             */
             const existente =
                 await KickTeamMember.findOne({
                     guildId: interaction.guild.id,
-                    nombre: nombre
+                    nombre: {
+                        $regex: `^${nombre.replace(
+                            /[.*+?^${}()|[\]\\]/g,
+                            "\\$&"
+                        )}$`,
+                        $options: "i"
+                    }
                 });
 
             if (existente) {
                 return interaction.reply({
-                    content: `❌ **${nombre}** ya está en la lista.`,
+                    content:
+                        `❌ **${nombre}** ya está en la lista.`,
                     ephemeral: true
                 });
             }
@@ -49,8 +67,16 @@ module.exports = {
                 creadoPor: interaction.user.id
             });
 
+            /*
+             * IMPORTANTE:
+             * ephemeral: true hace que este mensaje
+             * solamente lo vea la persona que ejecutó
+             * /team-agregar.
+             */
             return interaction.reply({
-                content: `✅ **${nombre}** fue agregado a la lista de Teams.`
+                content:
+                    `✅ **${nombre}** fue agregado a la lista de Teams.`,
+                ephemeral: true
             });
 
         } catch (error) {
@@ -59,15 +85,20 @@ module.exports = {
                 error
             );
 
-            if (interaction.replied || interaction.deferred) {
+            if (
+                interaction.replied ||
+                interaction.deferred
+            ) {
                 return interaction.followUp({
-                    content: "❌ Ocurrió un error al agregar el nombre.",
+                    content:
+                        "❌ Ocurrió un error al agregar el nombre.",
                     ephemeral: true
                 });
             }
 
             return interaction.reply({
-                content: "❌ Ocurrió un error al agregar el nombre.",
+                content:
+                    "❌ Ocurrió un error al agregar el nombre.",
                 ephemeral: true
             });
         }
