@@ -17,14 +17,13 @@ module.exports = {
 
     async execute(interaction) {
         try {
-            const miembros =
-                await KickTeamMember.find({
-                    guildId: interaction.guild.id
+            const miembros = await KickTeamMember.find({
+                guildId: interaction.guild.id
+            })
+                .sort({
+                    nombre: 1
                 })
-                    .sort({
-                        nombre: 1
-                    })
-                    .lean();
+                .lean();
 
             if (!miembros.length) {
                 return interaction.reply({
@@ -36,61 +35,55 @@ module.exports = {
             }
 
             /*
-             * Discord permite un máximo de 25 opciones
+             * Discord permite hasta 25 opciones
              * en un String Select Menu.
              *
-             * El Team puede tener hasta 15 miembros.
+             * El Team permite hasta 15 miembros.
              */
-            const opciones =
-                miembros
-                    .slice(0, 25)
-                    .map(miembro => ({
-                        label: miembro.nombre.slice(0, 100),
-                        value: String(miembro._id),
-                        description: "Seleccionar para el Team"
-                    }));
+            const opciones = miembros
+                .slice(0, 25)
+                .map(miembro => ({
+                    label: miembro.nombre.slice(0, 100),
+                    value: String(miembro._id),
+                    description: "Seleccionar para el Team"
+                }));
 
-            const selector =
-                new StringSelectMenuBuilder()
-                    .setCustomId(
-                        `crear_team_selector_${interaction.user.id}`
-                    )
-                    .setPlaceholder(
-                        "Selecciona los miembros del Team"
-                    )
-                    .setMinValues(1)
-                    .setMaxValues(
-                        Math.min(15, opciones.length)
-                    )
-                    .addOptions(opciones);
+            const selector = new StringSelectMenuBuilder()
+                .setCustomId(
+                    `crear_team_selector_${interaction.user.id}`
+                )
+                .setPlaceholder(
+                    "Selecciona los miembros del Team"
+                )
+                .setMinValues(1)
+                .setMaxValues(
+                    Math.min(15, opciones.length)
+                )
+                .addOptions(opciones);
 
-            const filaSelector =
-                new ActionRowBuilder()
-                    .addComponents(selector);
+            const filaSelector = new ActionRowBuilder()
+                .addComponents(selector);
 
-            const botonCancelar =
-                new ButtonBuilder()
-                    .setCustomId(
-                        `crear_team_cancelar_${interaction.user.id}`
-                    )
-                    .setLabel("Cancelar")
-                    .setStyle(ButtonStyle.Danger);
+            const botonCancelar = new ButtonBuilder()
+                .setCustomId(
+                    `crear_team_cancelar_${interaction.user.id}`
+                )
+                .setLabel("Cancelar")
+                .setStyle(ButtonStyle.Danger);
 
-            const filaBoton =
-                new ActionRowBuilder()
-                    .addComponents(botonCancelar);
+            const filaBoton = new ActionRowBuilder()
+                .addComponents(botonCancelar);
 
-            const embed =
-                new EmbedBuilder()
-                    .setTitle("🎯 Crear Team")
-                    .setDescription(
-                        "Selecciona los jugadores que formarán el Team.\n\n" +
-                        "👥 Máximo: **15 miembros**."
-                    )
-                    .setColor(0x5865F2)
-                    .setFooter({
-                        text: "RustLogix"
-                    });
+            const embed = new EmbedBuilder()
+                .setTitle("🎯 Crear Team")
+                .setDescription(
+                    "Selecciona los jugadores que formarán el Team.\n\n" +
+                    "👥 Máximo: **15 miembros**."
+                )
+                .setColor(0x5865F2)
+                .setFooter({
+                    text: "RustLogix"
+                });
 
             return interaction.reply({
                 embeds: [embed],
@@ -106,7 +99,10 @@ module.exports = {
                 error
             );
 
-            if (interaction.replied || interaction.deferred) {
+            if (
+                interaction.replied ||
+                interaction.deferred
+            ) {
                 return interaction.followUp({
                     content:
                         "❌ Ocurrió un error al abrir el creador de Teams.",
@@ -169,8 +165,7 @@ module.exports = {
                         $in: seleccionados
                     },
                     guildId: interaction.guild.id
-                })
-                    .lean();
+                }).lean();
 
             if (!miembros.length) {
                 return interaction.reply({
@@ -181,25 +176,20 @@ module.exports = {
             }
 
             /*
-             * IMPORTANTE:
-             *
-             * Los nombres se utilizan exactamente como
-             * están guardados en la lista.
-             *
-             * No se buscan usuarios de Discord.
-             * No se convierten en menciones.
-             * No se modifican "_" "*" ni ningún otro carácter.
+             * Mantener exactamente el orden
+             * en que fueron seleccionados.
              */
-            const nombresSeleccionados =
-                seleccionados
-                    .map(id =>
-                        miembros.find(
-                            miembro =>
-                                String(miembro._id) === String(id)
-                        )
+            const nombresSeleccionados = seleccionados
+                .map(id =>
+                    miembros.find(
+                        miembro =>
+                            String(miembro._id) === String(id)
                     )
-                    .filter(Boolean)
-                    .map(miembro => miembro.nombre);
+                )
+                .filter(Boolean)
+                .map(miembro =>
+                    `@${miembro.nombre}`
+                );
 
             if (!nombresSeleccionados.length) {
                 return interaction.reply({
@@ -210,21 +200,30 @@ module.exports = {
             }
 
             /*
-             * Este texto es FIJO para Kick.
+             * Comando fijo para Kick.
              *
-             * $(user) NO es una mención de Discord.
-             * Debe aparecer literalmente.
+             * $(user) aparece literalmente.
              */
             const textoTeam =
                 `!editcom !team Hola $(user) El team es ${nombresSeleccionados.join(" ")}`;
 
-            const embed =
-                new EmbedBuilder()
-                    .setDescription(textoTeam)
-                    .setColor(0x5865F2)
-                    .setFooter({
-                        text: "RustLogix"
-                    });
+            /*
+             * Bloque de código para que Discord
+             * no interprete "*" ni "_".
+             */
+            const textoCodigo =
+                `\`\`\`${textoTeam}\`\`\``;
+
+            /*
+             * Embed final:
+             * sin título, solamente el comando.
+             */
+            const embed = new EmbedBuilder()
+                .setDescription(textoCodigo)
+                .setColor(0x5865F2)
+                .setFooter({
+                    text: "RustLogix"
+                });
 
             return interaction.update({
                 embeds: [embed],
@@ -264,8 +263,7 @@ module.exports = {
                     );
 
                 if (
-                    interaction.user.id !==
-                    usuarioId
+                    interaction.user.id !== usuarioId
                 ) {
                     return interaction.reply({
                         content:
