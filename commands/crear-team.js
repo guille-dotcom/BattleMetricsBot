@@ -18,76 +18,83 @@ const MIEMBROS_POR_PAGINA = 25;
 const MAX_MIEMBROS_TEAM = 25;
 
 // ============================================================
-// SESIONES TEMPORALES
+// SESIONES ACTIVAS
 // ============================================================
 
 const sesionesTeam = new Map();
 
 // ============================================================
-// FUNCIONES AUXILIARES
+// OBTENER CLAVE DE SESIÓN
 // ============================================================
 
 function obtenerClaveSesion(interaction) {
+
     return `${interaction.guild.id}_${interaction.user.id}`;
 }
 
-function obtenerPaginaValida(pagina, totalPaginas) {
-    if (pagina < 0) {
-        return 0;
+// ============================================================
+// OBTENER PÁGINA VÁLIDA
+// ============================================================
+
+function obtenerPaginaValida(
+    pagina,
+    totalPaginas
+) {
+
+    let paginaNumerica =
+        parseInt(
+            pagina,
+            10
+        );
+
+    if (
+        Number.isNaN(
+            paginaNumerica
+        )
+    ) {
+
+        paginaNumerica = 0;
     }
 
-    if (pagina >= totalPaginas) {
-        return Math.max(0, totalPaginas - 1);
+    if (
+        paginaNumerica < 0
+    ) {
+
+        paginaNumerica = 0;
     }
 
-    return pagina;
+    if (
+        paginaNumerica >= totalPaginas
+    ) {
+
+        paginaNumerica =
+            Math.max(
+                0,
+                totalPaginas - 1
+            );
+    }
+
+    return paginaNumerica;
 }
 
 // ============================================================
-// OBTENER DATOS DE UNA PÁGINA
+// OBTENER MIEMBROS DE UNA PÁGINA
 // ============================================================
 
-async function obtenerDatosPagina(guildId, pagina) {
+async function obtenerDatosPagina(
+    guildId,
+    pagina
+) {
 
-    const miembros =
-        await KickTeamMember.find({
-            guildId
-        })
-            .sort({
-                nombre: 1
-            })
-            .lean();
-
-    const totalPaginas =
-        Math.max(
-            1,
-            Math.ceil(
-                miembros.length /
-                MIEMBROS_POR_PAGINA
-            )
-        );
-
-    const paginaValida =
-        obtenerPaginaValida(
-            pagina,
-            totalPaginas
-        );
-
-    const inicio =
-        paginaValida *
-        MIEMBROS_POR_PAGINA;
-
-    const miembrosPagina =
-        miembros.slice(
-            inicio,
-            inicio + MIEMBROS_POR_PAGINA
-        );
+    const guild =
+        await require("discord.js")
+            .Client
+            ? null
+            : null;
 
     return {
-        miembros,
-        miembrosPagina,
-        pagina: paginaValida,
-        totalPaginas
+        guildId,
+        pagina
     };
 }
 
@@ -95,42 +102,75 @@ async function obtenerDatosPagina(guildId, pagina) {
 // CREAR EMBED
 // ============================================================
 
-function crearEmbed({
+function crearEmbed(
     pagina,
     totalPaginas,
-    seleccionados,
-    miembrosPagina
-}) {
+    miembros,
+    seleccionados
+) {
 
-    const cantidadSeleccionados =
-        seleccionados.size;
+    const nombresSeleccionados =
+        miembros
+            .filter(
+                miembro =>
+                    seleccionados.includes(
+                        miembro.id
+                    )
+            )
+            .map(
+                miembro =>
+                    miembro.displayName
+            );
+
+    const cantidadTotal =
+        seleccionados.length;
 
     let descripcion =
-        "Selecciona los jugadores que formarán el Team.\n\n" +
-        `👥 **Seleccionados: ${cantidadSeleccionados}/${MAX_MIEMBROS_TEAM}**\n` +
-        `📄 **Página: ${pagina + 1}/${totalPaginas}**`;
+        `Selecciona los jugadores que quieres incluir en el Team.\n\n`;
+
+    descripcion +=
+        `👥 **Seleccionados:** ${cantidadTotal}/${MAX_MIEMBROS_TEAM}\n`;
+
+    descripcion +=
+        `📄 **Página:** ${pagina + 1}/${totalPaginas}\n\n`;
 
     if (
-        cantidadSeleccionados ===
-        MAX_MIEMBROS_TEAM
+        nombresSeleccionados.length > 0
     ) {
-        descripcion +=
-            "\n\n⚠️ Has alcanzado el máximo de **25 miembros**.";
-    }
 
-    if (
-        miembrosPagina.length === 0
-    ) {
         descripcion +=
-            "\n\n❌ No hay jugadores en esta página.";
+            `### ✅ Seleccionados en esta página\n`;
+
+        descripcion +=
+            nombresSeleccionados
+                .map(
+                    nombre =>
+                        `• ${nombre}`
+                )
+                .join("\n");
+
+    } else {
+
+        descripcion +=
+            `### 📋 Jugadores\n`;
+
+        descripcion +=
+            `Selecciona uno o varios jugadores en el menú de abajo.`;
     }
 
     return new EmbedBuilder()
-        .setTitle("🎯 Crear Team")
-        .setDescription(descripcion)
-        .setColor(0x5865F2)
+        .setColor(
+            0x3498DB
+        )
+        .setTitle(
+            "👥 Crear Team"
+        )
+        .setDescription(
+            descripcion
+        )
         .setFooter({
-            text: "RustLogix"
+            text:
+                "RustLogix • Puedes cambiar de página sin perder tus selecciones"
         });
 }
 
@@ -138,90 +178,96 @@ function crearEmbed({
 // CREAR COMPONENTES
 // ============================================================
 
-function crearComponentes({
+function crearComponentes(
     usuarioId,
     pagina,
     totalPaginas,
-    miembrosPagina,
+    miembros,
     seleccionados
-}) {
+) {
+
+    const filas = [];
 
     // ========================================================
     // SELECTOR
     // ========================================================
 
-    const opciones =
-        miembrosPagina.map(
-            miembro => {
+    if (
+        miembros.length > 0
+    ) {
 
-                const id =
-                    String(
-                        miembro._id
-                    );
+        const opciones =
+            miembros.map(
+                miembro => {
 
-                const seleccionado =
-                    seleccionados.has(
-                        id
-                    );
-
-                return {
-                    label:
+                    const nombre =
                         String(
-                            miembro.nombre
-                        ).slice(
-                            0,
-                            100
-                        ),
+                            miembro.displayName ||
+                            miembro.user?.username ||
+                            miembro.username ||
+                            miembro.id
+                        )
+                            .slice(
+                                0,
+                                100
+                            );
 
-                    value:
-                        id,
+                    return {
+                        label:
+                            nombre,
 
-                    description:
-                        seleccionado
-                            ? "✅ Seleccionado"
-                            : "Seleccionar para el Team",
+                        value:
+                            miembro.id,
 
-                    default:
-                        seleccionado
-                };
-            }
-        );
+                        description:
+                            `ID: ${miembro.id}`
+                                .slice(
+                                    0,
+                                    100
+                                ),
 
-    const selector =
-        new StringSelectMenuBuilder()
-            .setCustomId(
-                `crear_team_selector_${usuarioId}_${pagina}`
-            )
-            .setPlaceholder(
-                "Selecciona los miembros del Team"
-            )
-            .setMinValues(0)
-            .setMaxValues(
-                Math.min(
-                    MIEMBROS_POR_PAGINA,
-                    Math.max(
-                        1,
-                        opciones.length
-                    )
-                )
+                        default:
+                            seleccionados.includes(
+                                miembro.id
+                            )
+                    };
+                }
             );
 
-    if (
-        opciones.length > 0
-    ) {
-        selector.addOptions(
-            opciones
+        const selector =
+            new StringSelectMenuBuilder()
+                .setCustomId(
+                    `crear_team_selector_${usuarioId}_${pagina}`
+                )
+                .setPlaceholder(
+                    "Selecciona jugadores..."
+                )
+                .setMinValues(
+                    0
+                )
+                .setMaxValues(
+                    Math.min(
+                        MAX_MIEMBROS_TEAM,
+                        Math.max(
+                            1,
+                            opciones.length
+                        )
+                    )
+                )
+                .addOptions(
+                    opciones
+                );
+
+        filas.push(
+            new ActionRowBuilder()
+                .addComponents(
+                    selector
+                )
         );
     }
 
-    const filaSelector =
-        new ActionRowBuilder()
-            .addComponents(
-                selector
-            );
-
     // ========================================================
-    // PAGINACIÓN
+    // BOTONES DE PAGINACIÓN
     // ========================================================
 
     const botonAnterior =
@@ -239,6 +285,21 @@ function crearComponentes({
                 pagina <= 0
             );
 
+    const botonPagina =
+        new ButtonBuilder()
+            .setCustomId(
+                `crear_team_pagina_actual_${usuarioId}_${pagina}`
+            )
+            .setLabel(
+                `Página ${pagina + 1}/${totalPaginas}`
+            )
+            .setStyle(
+                ButtonStyle.Secondary
+            )
+            .setDisabled(
+                true
+            );
+
     const botonSiguiente =
         new ButtonBuilder()
             .setCustomId(
@@ -251,19 +312,20 @@ function crearComponentes({
                 ButtonStyle.Secondary
             )
             .setDisabled(
-                pagina >=
-                totalPaginas - 1
+                pagina >= totalPaginas - 1
             );
 
-    const filaPaginas =
+    filas.push(
         new ActionRowBuilder()
             .addComponents(
                 botonAnterior,
+                botonPagina,
                 botonSiguiente
-            );
+            )
+    );
 
     // ========================================================
-    // CREAR / CANCELAR
+    // BOTONES CREAR / CANCELAR
     // ========================================================
 
     const botonCrear =
@@ -278,7 +340,7 @@ function crearComponentes({
                 ButtonStyle.Success
             )
             .setDisabled(
-                seleccionados.size === 0
+                seleccionados.length === 0
             );
 
     const botonCancelar =
@@ -293,18 +355,15 @@ function crearComponentes({
                 ButtonStyle.Danger
             );
 
-    const filaAcciones =
+    filas.push(
         new ActionRowBuilder()
             .addComponents(
                 botonCrear,
                 botonCancelar
-            );
+            )
+    );
 
-    return [
-        filaSelector,
-        filaPaginas,
-        filaAcciones
-    ];
+    return filas;
 }
 
 // ============================================================
@@ -326,55 +385,74 @@ async function actualizarPanel(
             clave
         );
 
-    if (!sesion) {
+    if (
+        !sesion
+    ) {
 
-        return interaction.reply({
-            content:
-                "❌ Esta sesión de creación de Team ya no está disponible. Ejecuta `/crear-team` nuevamente.",
-            ephemeral: true
-        });
+        return;
     }
 
-    const datos =
-        await obtenerDatosPagina(
-            interaction.guild.id,
-            pagina
+    const totalPaginas =
+        Math.ceil(
+            sesion.miembros.length /
+            MIEMBROS_POR_PAGINA
+        );
+
+    const paginaValida =
+        obtenerPaginaValida(
+            pagina,
+            totalPaginas
+        );
+
+    sesion.pagina =
+        paginaValida;
+
+    // ========================================================
+    // OBTENER MIEMBROS DE LA PÁGINA ACTUAL
+    // ========================================================
+
+    const inicio =
+        paginaValida *
+        MIEMBROS_POR_PAGINA;
+
+    const fin =
+        inicio +
+        MIEMBROS_POR_PAGINA;
+
+    const miembrosPagina =
+        sesion.miembros.slice(
+            inicio,
+            fin
+        );
+
+    // ========================================================
+    // MUY IMPORTANTE:
+    // USAMOS LA SELECCIÓN GLOBAL DE LA SESIÓN
+    // ========================================================
+
+    const seleccionados =
+        Array.from(
+            sesion.seleccionados
         );
 
     const embed =
-        crearEmbed({
-            pagina:
-                datos.pagina,
-
-            totalPaginas:
-                datos.totalPaginas,
-
-            seleccionados:
-                sesion.seleccionados,
-
-            miembrosPagina:
-                datos.miembrosPagina
-        });
+        crearEmbed(
+            paginaValida,
+            totalPaginas,
+            miembrosPagina,
+            seleccionados
+        );
 
     const componentes =
-        crearComponentes({
-            usuarioId:
-                interaction.user.id,
+        crearComponentes(
+            interaction.user.id,
+            paginaValida,
+            totalPaginas,
+            miembrosPagina,
+            seleccionados
+        );
 
-            pagina:
-                datos.pagina,
-
-            totalPaginas:
-                datos.totalPaginas,
-
-            miembrosPagina:
-                datos.miembrosPagina,
-
-            seleccionados:
-                sesion.seleccionados
-        });
-
-    return interaction.update({
+    await interaction.update({
         embeds: [
             embed
         ],
@@ -395,93 +473,131 @@ module.exports = {
                 "crear-team"
             )
             .setDescription(
-                "Crea un Team seleccionando jugadores de la lista."
+                "Crea un Team seleccionando jugadores del servidor."
             ),
 
     // ========================================================
-    // EJECUTAR COMANDO
+    // EXECUTE
     // ========================================================
 
-    async execute(interaction) {
+    async execute(
+        interaction
+    ) {
 
         try {
 
+            await interaction.deferReply({
+                ephemeral:
+                    true
+            });
+
+            // =================================================
+            // OBTENER MIEMBROS
+            // =================================================
+
             const miembros =
-                await KickTeamMember.find({
-                    guildId:
-                        interaction.guild.id
-                })
-                    .sort({
-                        nombre: 1
-                    })
-                    .lean();
+                await interaction.guild.members.fetch();
+
+            const miembrosValidos =
+                Array.from(
+                    miembros.values()
+                )
+                    .filter(
+                        miembro =>
+                            !miembro.user.bot
+                    )
+                    .sort(
+                        (a, b) =>
+                            String(
+                                a.displayName
+                            ).localeCompare(
+                                String(
+                                    b.displayName
+                                ),
+                                "es",
+                                {
+                                    sensitivity:
+                                        "base"
+                                }
+                            )
+                    );
 
             if (
-                miembros.length === 0
+                miembrosValidos.length === 0
             ) {
 
-                return interaction.reply({
+                return interaction.editReply({
                     content:
-                        "❌ No hay nombres en la lista.\n\n" +
-                        "Primero agrega jugadores con `/team-agregar`.",
-                    ephemeral:
-                        true
+                        "❌ No hay jugadores disponibles para crear un Team."
                 });
             }
+
+            // =================================================
+            // TOTAL DE PÁGINAS
+            // =================================================
+
+            const totalPaginas =
+                Math.ceil(
+                    miembrosValidos.length /
+                    MIEMBROS_POR_PAGINA
+                );
+
+            // =================================================
+            // CREAR SESIÓN
+            // =================================================
 
             const clave =
                 obtenerClaveSesion(
                     interaction
                 );
 
-            const seleccionados =
-                new Set();
-
             sesionesTeam.set(
                 clave,
                 {
-                    seleccionados
+                    miembros:
+                        miembrosValidos,
+
+                    // =========================================
+                    // AQUÍ SE GUARDAN TODOS LOS JUGADORES
+                    // DE TODAS LAS PÁGINAS
+                    // =========================================
+
+                    seleccionados:
+                        new Set(),
+
+                    pagina:
+                        0
                 }
             );
 
-            const pagina =
-                0;
-
-            const totalPaginas =
-                Math.max(
-                    1,
-                    Math.ceil(
-                        miembros.length /
-                        MIEMBROS_POR_PAGINA
-                    )
-                );
+            // =================================================
+            // OBTENER PRIMERA PÁGINA
+            // =================================================
 
             const miembrosPagina =
-                miembros.slice(
+                miembrosValidos.slice(
                     0,
                     MIEMBROS_POR_PAGINA
                 );
 
             const embed =
-                crearEmbed({
-                    pagina,
-                    totalPaginas,
-                    seleccionados,
-                    miembrosPagina
-                });
-
-            const componentes =
-                crearComponentes({
-                    usuarioId:
-                        interaction.user.id,
-
-                    pagina,
+                crearEmbed(
+                    0,
                     totalPaginas,
                     miembrosPagina,
-                    seleccionados
-                });
+                    []
+                );
 
-            return interaction.reply({
+            const componentes =
+                crearComponentes(
+                    interaction.user.id,
+                    0,
+                    totalPaginas,
+                    miembrosPagina,
+                    []
+                );
+
+            await interaction.editReply({
                 embeds: [
                     embed
                 ],
@@ -496,30 +612,42 @@ module.exports = {
                 error
             );
 
-            if (
-                interaction.replied ||
-                interaction.deferred
-            ) {
+            try {
 
-                return interaction.followUp({
-                    content:
-                        "❌ Ocurrió un error al abrir el creador de Teams.",
-                    ephemeral:
-                        true
-                });
+                if (
+                    interaction.deferred ||
+                    interaction.replied
+                ) {
+
+                    await interaction.editReply({
+                        content:
+                            "❌ Ocurrió un error al abrir el creador de Teams.",
+                        embeds: [],
+                        components: []
+                    });
+
+                } else {
+
+                    await interaction.reply({
+                        content:
+                            "❌ Ocurrió un error al abrir el creador de Teams.",
+                        ephemeral:
+                            true
+                    });
+                }
+
+            } catch (replyError) {
+
+                console.error(
+                    "❌ Error respondiendo /crear-team:",
+                    replyError
+                );
             }
-
-            return interaction.reply({
-                content:
-                    "❌ Ocurrió un error al abrir el creador de Teams.",
-                ephemeral:
-                    true
-            });
         }
     },
 
     // ========================================================
-    // SELECTOR
+    // SELECT MENU
     // ========================================================
 
     async manejarSelectMenu(
@@ -527,51 +655,6 @@ module.exports = {
     ) {
 
         try {
-
-            const prefijo =
-                "crear_team_selector_";
-
-            if (
-                !interaction.customId.startsWith(
-                    prefijo
-                )
-            ) {
-                return;
-            }
-
-            const resto =
-                interaction.customId.substring(
-                    prefijo.length
-                );
-
-            const ultimoGuion =
-                resto.lastIndexOf("_");
-
-            const usuarioId =
-                resto.substring(
-                    0,
-                    ultimoGuion
-                );
-
-            const paginaActual =
-                Number(
-                    resto.substring(
-                        ultimoGuion + 1
-                    )
-                );
-
-            if (
-                interaction.user.id !==
-                usuarioId
-            ) {
-
-                return interaction.reply({
-                    content:
-                        "❌ Este selector pertenece a otra persona.",
-                    ephemeral:
-                        true
-                });
-            }
 
             const clave =
                 obtenerClaveSesion(
@@ -583,32 +666,87 @@ module.exports = {
                     clave
                 );
 
-            if (!sesion) {
+            if (
+                !sesion
+            ) {
 
                 return interaction.reply({
                     content:
-                        "❌ Esta sesión de creación de Team ya no está disponible. Ejecuta `/crear-team` nuevamente.",
+                        "❌ Esta sesión de creación de Team ya no está activa. Usa `/crear-team` nuevamente.",
                     ephemeral:
                         true
                 });
             }
 
-            const datos =
-                await obtenerDatosPagina(
-                    interaction.guild.id,
-                    paginaActual
+            // =================================================
+            // OBTENER PÁGINA DEL SELECTOR
+            // =================================================
+
+            const partes =
+                interaction.customId.split(
+                    "_"
+                );
+
+            const pagina =
+                parseInt(
+                    partes[
+                        partes.length - 1
+                    ],
+                    10
+                );
+
+            if (
+                Number.isNaN(
+                    pagina
+                )
+            ) {
+
+                return interaction.reply({
+                    content:
+                        "❌ No se pudo identificar la página actual.",
+                    ephemeral:
+                        true
+                });
+            }
+
+            // =================================================
+            // MIEMBROS DE ESTA PÁGINA
+            // =================================================
+
+            const inicio =
+                pagina *
+                MIEMBROS_POR_PAGINA;
+
+            const fin =
+                inicio +
+                MIEMBROS_POR_PAGINA;
+
+            const miembrosPagina =
+                sesion.miembros.slice(
+                    inicio,
+                    fin
                 );
 
             const idsPagina =
-                datos.miembrosPagina.map(
-                    miembro =>
-                        String(
-                            miembro._id
-                        )
+                new Set(
+                    miembrosPagina.map(
+                        miembro =>
+                            miembro.id
+                    )
                 );
 
             // =================================================
-            // QUITAR SELECCIONES DE ESTA PÁGINA
+            // SELECCIONES REALIZADAS EN ESTA PÁGINA
+            // =================================================
+
+            const nuevosSeleccionados =
+                interaction.values || [];
+
+            // =================================================
+            // LIMPIAR SOLAMENTE LOS MIEMBROS
+            // DE ESTA PÁGINA
+            //
+            // NO TOCAR LOS DE OTRAS PÁGINAS
             // =================================================
 
             for (
@@ -621,72 +759,160 @@ module.exports = {
             }
 
             // =================================================
-            // NUEVAS SELECCIONES
+            // COMPROBAR LÍMITE GLOBAL
             // =================================================
 
-            const nuevosSeleccionados =
-                interaction.values || [];
+            const seleccionadosFueraDePagina =
+                Array.from(
+                    sesion.seleccionados
+                );
 
-            const nuevoTotal =
-                sesion.seleccionados.size +
-                nuevosSeleccionados.length;
+            const espacioDisponible =
+                MAX_MIEMBROS_TEAM -
+                seleccionadosFueraDePagina.length;
 
             if (
-                nuevoTotal >
-                MAX_MIEMBROS_TEAM
+                nuevosSeleccionados.length >
+                espacioDisponible
             ) {
 
-                return interaction.reply({
-                    content:
-                        `❌ Un Team puede tener como máximo **${MAX_MIEMBROS_TEAM} jugadores**.\n\n` +
-                        `Actualmente tienes **${sesion.seleccionados.size}** seleccionados fuera de esta página.`,
-                    ephemeral:
-                        true
+                // =============================================
+                // RESTAURAR EL ESTADO ANTERIOR
+                // =============================================
+
+                for (
+                    const id of nuevosSeleccionados
+                ) {
+
+                    if (
+                        espacioDisponible <= 0
+                    ) {
+                        break;
+                    }
+
+                    sesion.seleccionados.add(
+                        id
+                    );
+                }
+
+                // =============================================
+                // ACTUALIZAR PANEL
+                // =============================================
+
+                const totalPaginas =
+                    Math.ceil(
+                        sesion.miembros.length /
+                        MIEMBROS_POR_PAGINA
+                    );
+
+                const paginaValida =
+                    obtenerPaginaValida(
+                        pagina,
+                        totalPaginas
+                    );
+
+                const miembrosActuales =
+                    sesion.miembros.slice(
+                        paginaValida *
+                            MIEMBROS_POR_PAGINA,
+                        paginaValida *
+                            MIEMBROS_POR_PAGINA +
+                            MIEMBROS_POR_PAGINA
+                    );
+
+                const embed =
+                    crearEmbed(
+                        paginaValida,
+                        totalPaginas,
+                        miembrosActuales,
+                        Array.from(
+                            sesion.seleccionados
+                        )
+                    );
+
+                const componentes =
+                    crearComponentes(
+                        interaction.user.id,
+                        paginaValida,
+                        totalPaginas,
+                        miembrosActuales,
+                        Array.from(
+                            sesion.seleccionados
+                        )
+                    );
+
+                await interaction.update({
+                    embeds: [
+                        embed
+                    ],
+                    components:
+                        componentes
                 });
+
+                return;
             }
+
+            // =================================================
+            // AGREGAR NUEVAS SELECCIONES
+            // =================================================
 
             for (
                 const id of nuevosSeleccionados
             ) {
 
                 sesion.seleccionados.add(
-                    String(id)
+                    id
                 );
             }
 
+            // =================================================
+            // ACTUALIZAR PANEL
+            // =================================================
+
+            const totalPaginas =
+                Math.ceil(
+                    sesion.miembros.length /
+                    MIEMBROS_POR_PAGINA
+                );
+
+            const paginaValida =
+                obtenerPaginaValida(
+                    pagina,
+                    totalPaginas
+                );
+
+            const miembrosActuales =
+                sesion.miembros.slice(
+                    paginaValida *
+                        MIEMBROS_POR_PAGINA,
+                    paginaValida *
+                        MIEMBROS_POR_PAGINA +
+                        MIEMBROS_POR_PAGINA
+                );
+
+            const seleccionados =
+                Array.from(
+                    sesion.seleccionados
+                );
+
             const embed =
-                crearEmbed({
-                    pagina:
-                        datos.pagina,
-
-                    totalPaginas:
-                        datos.totalPaginas,
-
-                    seleccionados:
-                        sesion.seleccionados,
-
-                    miembrosPagina:
-                        datos.miembrosPagina
-                });
+                crearEmbed(
+                    paginaValida,
+                    totalPaginas,
+                    miembrosActuales,
+                    seleccionados
+                );
 
             const componentes =
-                crearComponentes({
-                    usuarioId,
+                crearComponentes(
+                    interaction.user.id,
+                    paginaValida,
+                    totalPaginas,
+                    miembrosActuales,
+                    seleccionados
+                );
 
-                    pagina:
-                        datos.pagina,
-
-                    totalPaginas:
-                        datos.totalPaginas,
-
-                    miembrosPagina:
-                        datos.miembrosPagina,
-
-                    seleccionados:
-                        sesion.seleccionados
-                });
-
-            return interaction.update({
+            await interaction.update({
                 embeds: [
                     embed
                 ],
@@ -697,21 +923,31 @@ module.exports = {
         } catch (error) {
 
             console.error(
-                "❌ Error en selector de crear-team:",
+                "❌ Error en selector de /crear-team:",
                 error
             );
 
-            if (
-                !interaction.replied &&
-                !interaction.deferred
-            ) {
+            try {
 
-                return interaction.reply({
-                    content:
-                        "❌ Ocurrió un error al seleccionar los jugadores.",
-                    ephemeral:
-                        true
-                });
+                if (
+                    !interaction.replied &&
+                    !interaction.deferred
+                ) {
+
+                    await interaction.reply({
+                        content:
+                            "❌ Ocurrió un error al seleccionar jugadores.",
+                        ephemeral:
+                            true
+                    });
+                }
+
+            } catch (replyError) {
+
+                console.error(
+                    "❌ Error respondiendo selector:",
+                    replyError
+                );
             }
         }
     },
@@ -726,14 +962,79 @@ module.exports = {
 
         try {
 
-            const customId =
-                interaction.customId;
+            const clave =
+                obtenerClaveSesion(
+                    interaction
+                );
+
+            const sesion =
+                sesionesTeam.get(
+                    clave
+                );
 
             if (
-                !customId.startsWith(
-                    "crear_team_"
+                !sesion
+            ) {
+
+                return interaction.reply({
+                    content:
+                        "❌ Esta sesión de creación de Team ya no está activa. Usa `/crear-team` nuevamente.",
+                    ephemeral:
+                        true
+                });
+            }
+
+            // =================================================
+            // ANTERIOR
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "crear_team_pagina_anterior_"
                 )
             ) {
+
+                const nuevaPagina =
+                    Math.max(
+                        0,
+                        sesion.pagina - 1
+                    );
+
+                await actualizarPanel(
+                    interaction,
+                    nuevaPagina
+                );
+
+                return;
+            }
+
+            // =================================================
+            // SIGUIENTE
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "crear_team_pagina_siguiente_"
+                )
+            ) {
+
+                const totalPaginas =
+                    Math.ceil(
+                        sesion.miembros.length /
+                        MIEMBROS_POR_PAGINA
+                    );
+
+                const nuevaPagina =
+                    Math.min(
+                        totalPaginas - 1,
+                        sesion.pagina + 1
+                    );
+
+                await actualizarPanel(
+                    interaction,
+                    nuevaPagina
+                );
+
                 return;
             }
 
@@ -742,93 +1043,47 @@ module.exports = {
             // =================================================
 
             if (
-                customId.startsWith(
+                interaction.customId.startsWith(
                     "crear_team_cancelar_"
                 )
             ) {
-
-                const usuarioId =
-                    customId.substring(
-                        "crear_team_cancelar_".length
-                    );
-
-                if (
-                    interaction.user.id !==
-                    usuarioId
-                ) {
-
-                    return interaction.reply({
-                        content:
-                            "❌ Este botón pertenece a otra persona.",
-                        ephemeral:
-                            true
-                    });
-                }
-
-                const clave =
-                    obtenerClaveSesion(
-                        interaction
-                    );
 
                 sesionesTeam.delete(
                     clave
                 );
 
-                return interaction.update({
-                    content:
-                        "❌ Creación del Team cancelada.",
-                    embeds: [],
+                await interaction.update({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(
+                                0xED4245
+                            )
+                            .setTitle(
+                                "❌ Creación de Team cancelada"
+                            )
+                            .setDescription(
+                                "La creación del Team fue cancelada."
+                            )
+                            .setFooter({
+                                text:
+                                    "RustLogix"
+                            })
+                    ],
                     components: []
                 });
+
+                return;
             }
 
             // =================================================
-            // CREAR TEAM
+            // CONFIRMAR TEAM
             // =================================================
 
             if (
-                customId.startsWith(
+                interaction.customId.startsWith(
                     "crear_team_confirmar_"
                 )
             ) {
-
-                const usuarioId =
-                    customId.substring(
-                        "crear_team_confirmar_".length
-                    );
-
-                if (
-                    interaction.user.id !==
-                    usuarioId
-                ) {
-
-                    return interaction.reply({
-                        content:
-                            "❌ Este botón pertenece a otra persona.",
-                        ephemeral:
-                            true
-                    });
-                }
-
-                const clave =
-                    obtenerClaveSesion(
-                        interaction
-                    );
-
-                const sesion =
-                    sesionesTeam.get(
-                        clave
-                    );
-
-                if (!sesion) {
-
-                    return interaction.reply({
-                        content:
-                            "❌ Esta sesión de creación de Team ya no está disponible.",
-                        ephemeral:
-                            true
-                    });
-                }
 
                 const seleccionados =
                     Array.from(
@@ -836,8 +1091,7 @@ module.exports = {
                     );
 
                 if (
-                    seleccionados.length ===
-                    0
+                    seleccionados.length === 0
                 ) {
 
                     return interaction.reply({
@@ -855,80 +1109,79 @@ module.exports = {
 
                     return interaction.reply({
                         content:
-                            `❌ Un Team puede tener como máximo **${MAX_MIEMBROS_TEAM} jugadores**.`,
+                            `❌ El Team no puede tener más de ${MAX_MIEMBROS_TEAM} jugadores.`,
                         ephemeral:
                             true
                     });
                 }
 
-                // =============================================
-                // BUSCAR JUGADORES
-                // =============================================
+                // =================================================
+                // OBTENER MIEMBROS
+                // =================================================
 
-                const miembros =
-                    await KickTeamMember.find({
-                        _id: {
-                            $in:
-                                seleccionados
-                        },
-
-                        guildId:
-                            interaction.guild.id
-                    }).lean();
-
-                if (
-                    miembros.length ===
-                    0
-                ) {
-
-                    return interaction.reply({
-                        content:
-                            "❌ No se encontraron los jugadores seleccionados.",
-                        ephemeral:
-                            true
-                    });
-                }
-
-                // =============================================
-                // RESPETAR ORDEN
-                // =============================================
+                const miembrosSeleccionados =
+                    sesion.miembros.filter(
+                        miembro =>
+                            seleccionados.includes(
+                                miembro.id
+                            )
+                    );
 
                 const nombresSeleccionados =
-                    seleccionados
-                        .map(
-                            id =>
-                                miembros.find(
-                                    miembro =>
-                                        String(
-                                            miembro._id
-                                        ) ===
-                                        String(id)
-                                )
-                        )
-                        .filter(
-                            Boolean
-                        )
-                        .map(
-                            miembro =>
-                                `@${miembro.nombre}`
-                        );
+                    miembrosSeleccionados.map(
+                        miembro =>
+                            miembro.displayName
+                    );
 
-                if (
-                    nombresSeleccionados.length ===
-                    0
+                // =================================================
+                // GUARDAR / PROCESAR KICKTEAM
+                // =================================================
+
+                for (
+                    const miembro of miembrosSeleccionados
                 ) {
 
-                    return interaction.reply({
-                        content:
-                            "❌ No se pudieron obtener los nombres seleccionados.",
-                        ephemeral:
-                            true
-                    });
+                    try {
+
+                        await KickTeamMember.findOneAndUpdate(
+                            {
+                                guildId:
+                                    interaction.guild.id,
+
+                                userId:
+                                    miembro.id
+                            },
+                            {
+                                guildId:
+                                    interaction.guild.id,
+
+                                userId:
+                                    miembro.id,
+
+                                username:
+                                    miembro.displayName
+                            },
+                            {
+                                upsert:
+                                    true,
+
+                                new:
+                                    true
+                            }
+                        );
+
+                    } catch (error) {
+
+                        console.error(
+                            `⚠️ Error guardando ${miembro.displayName} en KickTeamMember:`,
+                            error.message
+                        );
+                    }
                 }
 
-                // =============================================
-                // CREAR TEXTO
-                // =============================================
+                // =================================================
+                // TEXTO FINAL
+                // =================================================
 
                 const textoTeam =
                     `!editcom !team Hola $(user) El team es ${nombresSeleccionados.join(" ")}`;
@@ -938,203 +1191,57 @@ module.exports = {
 
                 const embed =
                     new EmbedBuilder()
-                        .setDescription(
-                            textoCodigo
-                        )
                         .setColor(
-                            0x5865F2
+                            0x57F287
                         )
+                        .setTitle(
+                            "✅ Team creado"
+                        )
+                        .setDescription(
+                            `Se seleccionaron **${nombresSeleccionados.length} jugador(es)**.\n\n${textoCodigo}`
+                        )
+                        .addFields({
+                            name:
+                                "👥 Jugadores",
+                            value:
+                                nombresSeleccionados
+                                    .map(
+                                        nombre =>
+                                            `• ${nombre}`
+                                    )
+                                    .join("\n")
+                                    .slice(
+                                        0,
+                                        1024
+                                    )
+                        })
                         .setFooter({
                             text:
                                 "RustLogix"
                         });
 
-                // =============================================
+                // =================================================
                 // BORRAR SESIÓN
-                // =============================================
+                // =================================================
 
                 sesionesTeam.delete(
                     clave
                 );
 
-                // =============================================
-                // MOSTRAR RESULTADO
-                // =============================================
-
-                return interaction.update({
+                await interaction.update({
                     embeds: [
                         embed
                     ],
                     components: []
                 });
-            }
 
-            // =================================================
-            // PÁGINA ANTERIOR
-            // =================================================
-
-            if (
-                customId.startsWith(
-                    "crear_team_pagina_anterior_"
-                )
-            ) {
-
-                const prefijo =
-                    "crear_team_pagina_anterior_";
-
-                const resto =
-                    customId.substring(
-                        prefijo.length
-                    );
-
-                const ultimoGuion =
-                    resto.lastIndexOf("_");
-
-                const usuarioId =
-                    resto.substring(
-                        0,
-                        ultimoGuion
-                    );
-
-                const paginaActual =
-                    Number(
-                        resto.substring(
-                            ultimoGuion + 1
-                        )
-                    );
-
-                if (
-                    interaction.user.id !==
-                    usuarioId
-                ) {
-
-                    return interaction.reply({
-                        content:
-                            "❌ Este botón pertenece a otra persona.",
-                        ephemeral:
-                            true
-                    });
-                }
-
-                const clave =
-                    obtenerClaveSesion(
-                        interaction
-                    );
-
-                if (
-                    !sesionesTeam.has(
-                        clave
-                    )
-                ) {
-
-                    return interaction.reply({
-                        content:
-                            "❌ Esta sesión ya no está disponible.",
-                        ephemeral:
-                            true
-                    });
-                }
-
-                const nuevaPagina =
-                    Math.max(
-                        0,
-                        paginaActual - 1
-                    );
-
-                return actualizarPanel(
-                    interaction,
-                    nuevaPagina
-                );
-            }
-
-            // =================================================
-            // PÁGINA SIGUIENTE
-            // =================================================
-
-            if (
-                customId.startsWith(
-                    "crear_team_pagina_siguiente_"
-                )
-            ) {
-
-                const prefijo =
-                    "crear_team_pagina_siguiente_";
-
-                const resto =
-                    customId.substring(
-                        prefijo.length
-                    );
-
-                const ultimoGuion =
-                    resto.lastIndexOf("_");
-
-                const usuarioId =
-                    resto.substring(
-                        0,
-                        ultimoGuion
-                    );
-
-                const paginaActual =
-                    Number(
-                        resto.substring(
-                            ultimoGuion + 1
-                        )
-                    );
-
-                if (
-                    interaction.user.id !==
-                    usuarioId
-                ) {
-
-                    return interaction.reply({
-                        content:
-                            "❌ Este botón pertenece a otra persona.",
-                        ephemeral:
-                            true
-                    });
-                }
-
-                const clave =
-                    obtenerClaveSesion(
-                        interaction
-                    );
-
-                if (
-                    !sesionesTeam.has(
-                        clave
-                    )
-                ) {
-
-                    return interaction.reply({
-                        content:
-                            "❌ Esta sesión ya no está disponible.",
-                        ephemeral:
-                            true
-                    });
-                }
-
-                const datos =
-                    await obtenerDatosPagina(
-                        interaction.guild.id,
-                        paginaActual
-                    );
-
-                const nuevaPagina =
-                    Math.min(
-                        datos.totalPaginas - 1,
-                        paginaActual + 1
-                    );
-
-                return actualizarPanel(
-                    interaction,
-                    nuevaPagina
-                );
+                return;
             }
 
         } catch (error) {
 
             console.error(
-                "❌ Error en botón de crear-team:",
+                "❌ Error manejando botón de /crear-team:",
                 error
             );
 
@@ -1145,9 +1252,9 @@ module.exports = {
                     !interaction.deferred
                 ) {
 
-                    return interaction.reply({
+                    await interaction.reply({
                         content:
-                            "❌ Ocurrió un error con el creador de Teams.",
+                            "❌ Ocurrió un error procesando el botón.",
                         ephemeral:
                             true
                     });
@@ -1156,8 +1263,8 @@ module.exports = {
             } catch (replyError) {
 
                 console.error(
-                    "❌ Error respondiendo botón de Team:",
-                    replyError.message
+                    "❌ Error respondiendo botón Team:",
+                    replyError
                 );
             }
         }
