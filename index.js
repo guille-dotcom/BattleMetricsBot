@@ -80,11 +80,10 @@ const server =
 
             if (
                 req.url &&
-                req.url.startsWith(
-                    "/twitch/callback"
-                )
+                req.url.startsWith("/twitch/callback")
             ) {
                 try {
+
                     const url =
                         new URL(
                             req.url,
@@ -92,19 +91,13 @@ const server =
                         );
 
                     const code =
-                        url.searchParams.get(
-                            "code"
-                        );
+                        url.searchParams.get("code");
 
                     const state =
-                        url.searchParams.get(
-                            "state"
-                        );
+                        url.searchParams.get("state");
 
                     const error =
-                        url.searchParams.get(
-                            "error"
-                        );
+                        url.searchParams.get("error");
 
                     const errorDescription =
                         url.searchParams.get(
@@ -116,6 +109,7 @@ const server =
                     // =================================================
 
                     if (error) {
+
                         console.log(
                             "⚠️ Autorización Twitch cancelada:",
                             error,
@@ -183,6 +177,7 @@ p {
                     // =================================================
 
                     if (!code || !state) {
+
                         console.error(
                             "❌ Callback Twitch sin code o state."
                         );
@@ -304,6 +299,16 @@ h1 {
                         }
                     );
 
+                    const nombreTwitch =
+                        String(
+                            twitchUser.display_name ||
+                            twitchUser.login
+                        )
+                            .replace(/&/g, "&amp;")
+                            .replace(/</g, "&lt;")
+                            .replace(/>/g, "&gt;")
+                            .replace(/"/g, "&quot;");
+
                     res.end(`
 <!DOCTYPE html>
 <html lang="es">
@@ -364,14 +369,7 @@ p {
         La cuenta se vinculó correctamente.
     </p>
     <div class="account">
-        🟣 ${String(
-            twitchUser.display_name ||
-            twitchUser.login
-        )
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")}
+        🟣 ${nombreTwitch}
     </div>
     <p>
         Ya puedes cerrar esta ventana y volver a Discord.
@@ -390,9 +388,7 @@ p {
                         "❌ ERROR EN CALLBACK TWITCH:"
                     );
 
-                    console.error(
-                        error
-                    );
+                    console.error(error);
 
                     try {
 
@@ -471,12 +467,9 @@ p {
             res.writeHead(
                 200,
                 {
-                    "Content-Type":
-                        "text/plain",
-                    "Content-Length":
-                        "2",
-                    "Connection":
-                        "close"
+                    "Content-Type": "text/plain",
+                    "Content-Length": "2",
+                    "Connection": "close"
                 }
             );
 
@@ -664,9 +657,7 @@ const commandsPath =
 
 const commandFiles =
     fs
-        .readdirSync(
-            commandsPath
-        )
+        .readdirSync(commandsPath)
         .filter(
             file =>
                 file.endsWith(".js")
@@ -674,10 +665,7 @@ const commandFiles =
 
 const commandsArray = [];
 
-for (
-    const file
-    of commandFiles
-) {
+for (const file of commandFiles) {
 
     try {
 
@@ -754,8 +742,7 @@ client.once(
                     client.user.id
                 ),
                 {
-                    body:
-                        commandsArray
+                    body: commandsArray
                 }
             );
 
@@ -778,16 +765,11 @@ client.once(
         try {
 
             await client.user.setPresence({
-                status:
-                    "online",
-
+                status: "online",
                 activities: [
                     {
-                        name:
-                            "chivando siempre 👀",
-
-                        type:
-                            0
+                        name: "chivando siempre 👀",
+                        type: 0
                     }
                 ]
             });
@@ -840,9 +822,7 @@ client.once(
         setInterval(
             async () => {
 
-                if (
-                    trackerRevisando
-                ) {
+                if (trackerRevisando) {
 
                     console.log(
                         "⏳ Tracker anterior todavía ejecutándose..."
@@ -891,7 +871,6 @@ client.once(
                 typeof iniciarDropsAutomaticos !==
                 "function"
             ) {
-
                 throw new Error(
                     "iniciarDropsAutomaticos no está exportada desde twitchDropsService.js"
                 );
@@ -1161,9 +1140,7 @@ client.on(
                             interaction
                         );
 
-                    if (
-                        manejado
-                    ) {
+                    if (manejado) {
                         return;
                     }
 
@@ -1241,12 +1218,153 @@ client.on(
         }
 
         // =====================================================
+        // MENÚ DESPLEGABLE DE CREAR TEAM
+        // =====================================================
+
+        if (
+            interaction.isStringSelectMenu() &&
+            interaction.customId.startsWith(
+                "crear_team_selector_"
+            )
+        ) {
+
+            try {
+
+                const comandoCrearTeam =
+                    client.commands.get(
+                        "crear-team"
+                    );
+
+                if (
+                    !comandoCrearTeam ||
+                    typeof comandoCrearTeam.manejarSelectMenu !==
+                    "function"
+                ) {
+
+                    return interaction.reply({
+                        content:
+                            "❌ El sistema de Teams no está disponible.",
+                        ephemeral:
+                            true
+                    });
+                }
+
+                await comandoCrearTeam.manejarSelectMenu(
+                    interaction
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "❌ Error manejando selector de Team:",
+                    error
+                );
+
+                try {
+
+                    if (
+                        !interaction.replied &&
+                        !interaction.deferred
+                    ) {
+
+                        await interaction.reply({
+                            content:
+                                "❌ Ocurrió un error al crear el Team.",
+                            ephemeral:
+                                true
+                        });
+                    }
+
+                } catch (replyError) {
+
+                    console.error(
+                        "❌ Error respondiendo selector Team:",
+                        replyError.message
+                    );
+                }
+            }
+
+            return;
+        }
+
+        // =====================================================
         // BOTONES
         // =====================================================
 
         if (
             interaction.isButton()
         ) {
+
+            // =================================================
+            // BOTÓN CANCELAR CREAR TEAM
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "crear_team_cancelar_"
+                )
+            ) {
+
+                try {
+
+                    const comandoCrearTeam =
+                        client.commands.get(
+                            "crear-team"
+                        );
+
+                    if (
+                        comandoCrearTeam &&
+                        typeof comandoCrearTeam.manejarBoton ===
+                        "function"
+                    ) {
+
+                        await comandoCrearTeam.manejarBoton(
+                            interaction
+                        );
+
+                    } else {
+
+                        await interaction.reply({
+                            content:
+                                "❌ El sistema de Teams no está disponible.",
+                            ephemeral:
+                                true
+                        });
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        "❌ Error cancelando creación de Team:",
+                        error
+                    );
+
+                    try {
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Ocurrió un error.",
+                                ephemeral:
+                                    true
+                            });
+                        }
+
+                    } catch (replyError) {
+
+                        console.error(
+                            "❌ Error respondiendo cancelar Team:",
+                            replyError.message
+                        );
+                    }
+                }
+
+                return;
+            }
 
             // =================================================
             // ROLES DE STREAMERS
@@ -1781,9 +1899,7 @@ client.on(
                                                 /Página\s+(\d+)\s*\/\s*(\d+)/i
                                             );
 
-                                        if (
-                                            match
-                                        ) {
+                                        if (match) {
 
                                             paginaActual =
                                                 parseInt(
@@ -1858,7 +1974,7 @@ client.on(
         }
 
         // =====================================================
-        // MENÚS DESPLEGABLES
+        // MENÚS DESPLEGABLES DE TIENDA
         // =====================================================
 
         if (
@@ -2135,7 +2251,6 @@ async function iniciarBot() {
                                     "⏰ TIMEOUT: Discord no completó la conexión después de 60 segundos."
                                 )
                             );
-
                         },
                         60000
                     );
