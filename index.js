@@ -537,6 +537,7 @@ client.on(
             "🔧 DISCORD DEBUG:",
             texto
         );
+
     }
 );
 
@@ -1036,8 +1037,11 @@ client.on(
             if (canal) {
 
                 await canal.send({
+
                     embeds: [
+
                         {
+
                             title:
                                 "🎯 Bienvenido a RustLogix",
 
@@ -1104,6 +1108,12 @@ Después podrás usar:
 
 🎮 \`/minijuegos\`
 
+🕹️ **Juegos disponibles**
+
+⚔️ Duelo 1vs1
+🪙 Cara o Cruz
+🃏 21 / Blackjack
+
 📚 Usa:
 
 \`/help\`
@@ -1120,8 +1130,11 @@ para ver todos los comandos disponibles.`,
 
                             timestamp:
                                 new Date()
+
                         }
+
                     ]
+
                 });
 
             }
@@ -1188,10 +1201,6 @@ client.on(
         // =====================================================
         // SISTEMA CREAR TEAM
         // =====================================================
-
-        // -----------------------------------------------------
-        // SELECTOR DE JUGADORES
-        // -----------------------------------------------------
 
         if (
             interaction.isStringSelectMenu() &&
@@ -1260,11 +1269,12 @@ client.on(
 
                 return;
             }
+
         }
 
-        // -----------------------------------------------------
-        // TODOS LOS BOTONES DE CREAR TEAM
-        // -----------------------------------------------------
+        // =====================================================
+        // BOTONES CREAR TEAM
+        // =====================================================
 
         if (
             interaction.isButton() &&
@@ -1333,6 +1343,7 @@ client.on(
 
                 return;
             }
+
         }
 
         // =====================================================
@@ -1400,17 +1411,21 @@ client.on(
 
                     return;
                 }
+
             }
+
         }
 
         // =====================================================
-        // SELECTOR DE MINIJUEGOS
+        // MINIJUEGOS - MENÚ
         // =====================================================
 
         if (
             interaction.isStringSelectMenu() &&
-            interaction.customId ===
-                "minijuegos_menu"
+            (
+                interaction.customId === "minijuegos_menu" ||
+                interaction.customId.startsWith("minijuegos_")
+            )
         ) {
 
             try {
@@ -1473,6 +1488,112 @@ client.on(
 
                 return;
             }
+
+        }
+
+        // =====================================================
+        // MINIJUEGOS - MODALES
+        //
+        // Esto permite que Duelo 1vs1, Blackjack/21 y futuros
+        // minijuegos puedan utilizar formularios.
+        // =====================================================
+
+        if (
+            interaction.isModalSubmit() &&
+            interaction.customId.startsWith(
+                "minijuegos_"
+            )
+        ) {
+
+            try {
+
+                const comandoMinijuegos =
+                    client.commands.get(
+                        "minijuegos"
+                    );
+
+                if (
+                    !comandoMinijuegos
+                ) {
+
+                    return interaction.reply({
+                        content:
+                            "❌ El sistema de Minijuegos no está disponible.",
+                        ephemeral:
+                            true
+                    });
+
+                }
+
+                if (
+                    typeof comandoMinijuegos.manejarModal ===
+                    "function"
+                ) {
+
+                    const manejado =
+                        await comandoMinijuegos.manejarModal(
+                            interaction
+                        );
+
+                    if (
+                        manejado !== false
+                    ) {
+                        return;
+                    }
+
+                }
+
+                if (
+                    typeof comandoMinijuegos.handleInteraction ===
+                    "function"
+                ) {
+
+                    const manejado =
+                        await comandoMinijuegos.handleInteraction(
+                            interaction
+                        );
+
+                    if (manejado) {
+                        return;
+                    }
+
+                }
+
+            } catch (error) {
+
+                console.error(
+                    "❌ Error manejando modal de Minijuegos:",
+                    error
+                );
+
+                try {
+
+                    if (
+                        !interaction.replied &&
+                        !interaction.deferred
+                    ) {
+
+                        await interaction.reply({
+                            content:
+                                "❌ Ocurrió un error con el sistema de Minijuegos.",
+                            ephemeral:
+                                true
+                        });
+
+                    }
+
+                } catch (replyError) {
+
+                    console.error(
+                        "❌ Error respondiendo modal Minijuegos:",
+                        replyError.message
+                    );
+
+                }
+
+                return;
+            }
+
         }
 
         // =====================================================
@@ -1485,6 +1606,12 @@ client.on(
 
             // =================================================
             // MINIJUEGOS
+            //
+            // Aquí entran:
+            // - Duelo 1vs1
+            // - Cara o Cruz
+            // - 21 / Blackjack
+            // - Futuros minijuegos
             // =================================================
 
             if (
@@ -1558,6 +1685,7 @@ client.on(
 
                     return;
                 }
+
             }
 
             // =================================================
@@ -2139,6 +2267,7 @@ client.on(
 
                             paginaActual =
                                 1;
+
                         }
 
                         await comandoTrackers.mostrarPagina(
@@ -2203,7 +2332,7 @@ client.on(
         if (
             interaction.isStringSelectMenu() &&
             interaction.customId ===
-                "config_tienda_selector"
+            "config_tienda_selector"
         ) {
 
             const comandoConfigTienda =
@@ -2517,7 +2646,9 @@ async function iniciarBot() {
         );
 
         process.exit(1);
+
     }
+
 }
 
 // ======================
