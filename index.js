@@ -455,7 +455,9 @@ p {
                             "❌ Error enviando respuesta Twitch:",
                             responseError.message
                         );
+
                     }
+
                 }
 
                 return;
@@ -490,6 +492,7 @@ server.listen(
         console.log(
             "🟣 Callback Twitch activo en /twitch/callback"
         );
+
     }
 );
 
@@ -549,6 +552,7 @@ client.on(
             "⚠️ DISCORD WARN:",
             info
         );
+
     }
 );
 
@@ -563,6 +567,7 @@ client.on(
         console.log(
             `🟢 SHARD ${id} CONECTADO`
         );
+
     }
 );
 
@@ -578,6 +583,7 @@ client.on(
             "❌ ERROR SHARD DISCORD:",
             error
         );
+
     }
 );
 
@@ -593,6 +599,7 @@ client.on(
             `🔴 SHARD ${id} DESCONECTADO:`,
             event
         );
+
     }
 );
 
@@ -607,6 +614,7 @@ client.on(
         console.log(
             `🔄 SHARD ${id} INTENTANDO RECONEXIÓN...`
         );
+
     }
 );
 
@@ -621,6 +629,7 @@ client.on(
         console.error(
             "❌ SESIÓN DE DISCORD INVALIDADA"
         );
+
     }
 );
 
@@ -636,6 +645,7 @@ client.on(
             "❌ ERROR DISCORD:",
             error
         );
+
     }
 );
 
@@ -698,6 +708,7 @@ for (const file of commandFiles) {
             console.log(
                 `⚠️ El comando en ${file} le falta la propiedad 'data' o 'execute'.`
             );
+
         }
 
     } catch (error) {
@@ -706,7 +717,9 @@ for (const file of commandFiles) {
             `❌ Error cargando comando ${file}:`,
             error.message
         );
+
     }
+
 }
 
 // ======================
@@ -757,6 +770,7 @@ client.once(
                 "❌ Error al registrar comandos:",
                 error
             );
+
         }
 
         // ======================
@@ -785,6 +799,7 @@ client.once(
                 "⚠️ Error presencia:",
                 error.message
             );
+
         }
 
         // ======================
@@ -814,6 +829,7 @@ client.once(
                 "❌ Error revisión inicial tracker:",
                 error.message
             );
+
         }
 
         // ======================
@@ -852,6 +868,7 @@ client.once(
 
                     trackerRevisando =
                         false;
+
                 }
 
             },
@@ -876,6 +893,7 @@ client.once(
                 throw new Error(
                     "iniciarDropsAutomaticos no está exportada desde twitchDropsService.js"
                 );
+
             }
 
             iniciarDropsAutomaticos(
@@ -892,6 +910,7 @@ client.once(
                 "❌ Error iniciando Twitch Drops automáticos:",
                 error
             );
+
         }
 
         // ======================
@@ -918,6 +937,7 @@ client.once(
                 "❌ Error iniciando tienda Rust automática:",
                 error
             );
+
         }
 
         // ======================
@@ -944,6 +964,7 @@ client.once(
                 "❌ Error iniciando planilla automática:",
                 error
             );
+
         }
 
         // ======================
@@ -970,6 +991,7 @@ client.once(
                 console.log(
                     "🎁 Sistema de Giveaways recuperado correctamente."
                 );
+
             }
 
         } catch (error) {
@@ -978,7 +1000,9 @@ client.once(
                 "❌ Error recuperando Giveaways:",
                 error
             );
+
         }
+
     }
 );
 
@@ -1076,6 +1100,10 @@ Después podrás usar:
 
 📋 \`/panel-streamers\`
 
+🎮 **Minijuegos**
+
+🎮 \`/minijuegos\`
+
 📚 Usa:
 
 \`/help\`
@@ -1095,6 +1123,7 @@ para ver todos los comandos disponibles.`,
                         }
                     ]
                 });
+
             }
 
         } catch (error) {
@@ -1103,7 +1132,9 @@ para ver todos los comandos disponibles.`,
                 "❌ Error enviando bienvenida:",
                 error.message
             );
+
         }
+
     }
 );
 
@@ -1148,6 +1179,7 @@ client.on(
                     `❌ Error en autocompletado para /${interaction.commandName}:`,
                     error
                 );
+
             }
 
             return;
@@ -1187,6 +1219,7 @@ client.on(
                         ephemeral:
                             true
                     });
+
                 }
 
                 return await comandoCrearTeam.manejarSelectMenu(
@@ -1213,6 +1246,7 @@ client.on(
                             ephemeral:
                                 true
                         });
+
                     }
 
                 } catch (replyError) {
@@ -1221,6 +1255,7 @@ client.on(
                         "❌ Error respondiendo selector Team:",
                         replyError.message
                     );
+
                 }
 
                 return;
@@ -1257,6 +1292,7 @@ client.on(
                         ephemeral:
                             true
                     });
+
                 }
 
                 return await comandoCrearTeam.manejarBoton(
@@ -1283,6 +1319,7 @@ client.on(
                             ephemeral:
                                 true
                         });
+
                     }
 
                 } catch (replyError) {
@@ -1291,6 +1328,7 @@ client.on(
                         "❌ Error respondiendo botón Team:",
                         replyError.message
                     );
+
                 }
 
                 return;
@@ -1348,6 +1386,7 @@ client.on(
                                 ephemeral:
                                     true
                             });
+
                         }
 
                     } catch (replyError) {
@@ -1356,10 +1395,83 @@ client.on(
                             "❌ Error respondiendo interacción Steam:",
                             replyError.message
                         );
+
                     }
 
                     return;
                 }
+            }
+        }
+
+        // =====================================================
+        // SELECTOR DE MINIJUEGOS
+        // =====================================================
+
+        if (
+            interaction.isStringSelectMenu() &&
+            interaction.customId ===
+                "minijuegos_menu"
+        ) {
+
+            try {
+
+                const comandoMinijuegos =
+                    client.commands.get(
+                        "minijuegos"
+                    );
+
+                if (
+                    !comandoMinijuegos ||
+                    typeof comandoMinijuegos.manejarSelectMenu !==
+                    "function"
+                ) {
+
+                    return interaction.reply({
+                        content:
+                            "❌ El sistema de Minijuegos no está disponible.",
+                        ephemeral:
+                            true
+                    });
+
+                }
+
+                return await comandoMinijuegos.manejarSelectMenu(
+                    interaction
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "❌ Error manejando menú de Minijuegos:",
+                    error
+                );
+
+                try {
+
+                    if (
+                        !interaction.replied &&
+                        !interaction.deferred
+                    ) {
+
+                        await interaction.reply({
+                            content:
+                                "❌ Ocurrió un error con el menú de Minijuegos.",
+                            ephemeral:
+                                true
+                        });
+
+                    }
+
+                } catch (replyError) {
+
+                    console.error(
+                        "❌ Error respondiendo menú Minijuegos:",
+                        replyError.message
+                    );
+
+                }
+
+                return;
             }
         }
 
@@ -1370,6 +1482,83 @@ client.on(
         if (
             interaction.isButton()
         ) {
+
+            // =================================================
+            // MINIJUEGOS
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "minijuegos_"
+                )
+            ) {
+
+                try {
+
+                    const comandoMinijuegos =
+                        client.commands.get(
+                            "minijuegos"
+                        );
+
+                    if (
+                        !comandoMinijuegos ||
+                        typeof comandoMinijuegos.manejarBoton !==
+                        "function"
+                    ) {
+
+                        return interaction.reply({
+                            content:
+                                "❌ El sistema de Minijuegos no está disponible.",
+                            ephemeral:
+                                true
+                        });
+
+                    }
+
+                    const manejado =
+                        await comandoMinijuegos.manejarBoton(
+                            interaction
+                        );
+
+                    if (manejado) {
+                        return;
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        "❌ Error manejando botón de Minijuegos:",
+                        error
+                    );
+
+                    try {
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Ocurrió un error con el sistema de Minijuegos.",
+                                ephemeral:
+                                    true
+                            });
+
+                        }
+
+                    } catch (replyError) {
+
+                        console.error(
+                            "❌ Error respondiendo botón Minijuegos:",
+                            replyError.message
+                        );
+
+                    }
+
+                    return;
+                }
+            }
 
             // =================================================
             // ROLES DE STREAMERS
@@ -1409,6 +1598,7 @@ client.on(
                                 ephemeral:
                                     true
                             });
+
                         }
 
                         return;
@@ -1438,6 +1628,7 @@ client.on(
                                 ephemeral:
                                     true
                             });
+
                         }
 
                     } catch (replyError) {
@@ -1446,7 +1637,9 @@ client.on(
                             "❌ Error respondiendo botón streamer:",
                             replyError.message
                         );
+
                     }
+
                 }
 
                 return;
@@ -1481,6 +1674,7 @@ client.on(
                             ephemeral:
                                 true
                         });
+
                     }
 
                     await comandoGiveaway.procesarFinalizar(
@@ -1507,6 +1701,7 @@ client.on(
                                 ephemeral:
                                     true
                             });
+
                         }
 
                     } catch (replyError) {
@@ -1515,7 +1710,9 @@ client.on(
                             "❌ Error respondiendo Finalizar Giveaway:",
                             replyError.message
                         );
+
                     }
+
                 }
 
                 return;
@@ -1550,6 +1747,7 @@ client.on(
                             ephemeral:
                                 true
                         });
+
                     }
 
                     await comandoGiveaway.procesarReroll(
@@ -1576,6 +1774,7 @@ client.on(
                                 ephemeral:
                                     true
                             });
+
                         }
 
                     } catch (replyError) {
@@ -1584,7 +1783,9 @@ client.on(
                             "❌ Error respondiendo Reroll Giveaway:",
                             replyError.message
                         );
+
                     }
+
                 }
 
                 return;
@@ -1616,6 +1817,7 @@ client.on(
                         await comandoGiveaway.procesarParticipacion(
                             interaction
                         );
+
                     }
 
                 } catch (error) {
@@ -1624,6 +1826,7 @@ client.on(
                         "❌ Error participando en Giveaway:",
                         error
                     );
+
                 }
 
                 return;
@@ -1671,6 +1874,7 @@ client.on(
                                 ephemeral:
                                     true
                             });
+
                         }
 
                         return;
@@ -1700,6 +1904,7 @@ client.on(
                                 ephemeral:
                                     true
                             });
+
                         }
 
                     } catch (err) {
@@ -1708,7 +1913,9 @@ client.on(
                             "❌ Error respondiendo botón /raid:",
                             err.message
                         );
+
                     }
+
                 }
 
                 return;
@@ -1747,6 +1954,7 @@ client.on(
                             ephemeral:
                                 true
                         });
+
                     }
 
                     const comandoTrackers =
@@ -1770,6 +1978,7 @@ client.on(
                             ephemeral:
                                 true
                         });
+
                     }
 
                     await comandoTrackers.mostrarPagina(
@@ -1797,6 +2006,7 @@ client.on(
                                 ephemeral:
                                     true
                             });
+
                         }
 
                     } catch (replyError) {
@@ -1805,7 +2015,9 @@ client.on(
                             "❌ Error respondiendo paginación:",
                             replyError.message
                         );
+
                     }
+
                 }
 
                 return;
@@ -1849,6 +2061,7 @@ client.on(
                             ephemeral:
                                 true
                         });
+
                     }
 
                     console.log(
@@ -1909,9 +2122,13 @@ client.on(
                                                     match[1],
                                                     10
                                                 );
+
                                         }
+
                                     }
+
                                 }
+
                             }
 
                         } catch (errorPagina) {
@@ -1959,6 +2176,7 @@ client.on(
                                 ephemeral:
                                     true
                             });
+
                         }
 
                     } catch (replyError) {
@@ -1967,7 +2185,9 @@ client.on(
                             "❌ Error respondiendo eliminación de tracker:",
                             replyError.message
                         );
+
                     }
+
                 }
 
                 return;
@@ -1983,7 +2203,7 @@ client.on(
         if (
             interaction.isStringSelectMenu() &&
             interaction.customId ===
-            "config_tienda_selector"
+                "config_tienda_selector"
         ) {
 
             const comandoConfigTienda =
@@ -2000,7 +2220,9 @@ client.on(
                 return await comandoConfigTienda.manejarSelectMenu(
                     interaction
                 );
+
             }
+
         }
 
         // =====================================================
@@ -2028,7 +2250,9 @@ client.on(
                 return await comandoConfigTienda.manejarModal(
                     interaction
                 );
+
             }
+
         }
 
         // =====================================================
@@ -2099,6 +2323,7 @@ client.on(
                         ephemeral:
                             true
                     });
+
                 }
 
             } catch (err) {
@@ -2107,8 +2332,11 @@ client.on(
                     "ERROR RESPONDIENDO DISCORD:",
                     err.message
                 );
+
             }
+
         }
+
     }
 );
 
@@ -2124,6 +2352,7 @@ process.on(
             "❌ Unhandled Promise:",
             reason
         );
+
     }
 );
 
@@ -2135,6 +2364,7 @@ process.on(
             "❌ Uncaught Exception:",
             error
         );
+
     }
 );
 
@@ -2184,6 +2414,7 @@ async function iniciarBot() {
                                     resolve();
                                 }
                             );
+
                         }
                     );
 
@@ -2198,6 +2429,7 @@ async function iniciarBot() {
                         request.destroy();
 
                         resolve();
+
                     }
                 );
 
@@ -2211,8 +2443,10 @@ async function iniciarBot() {
                         );
 
                         resolve();
+
                     }
                 );
+
             }
         );
 
@@ -2231,6 +2465,7 @@ async function iniciarBot() {
             throw new Error(
                 "❌ La variable TOKEN no existe en las variables de entorno."
             );
+
         }
 
         console.log(
@@ -2258,6 +2493,7 @@ async function iniciarBot() {
                         },
                         60000
                     );
+
                 }
             );
 
