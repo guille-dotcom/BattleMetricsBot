@@ -22,35 +22,34 @@ module.exports = {
         .setName("tracker")
 
         .setDescription(
-            "Rastrea un jugador durante 24 horas"
+            "Vigila a un jugador durante 24 horas"
         )
 
         .addStringOption(option =>
             option
-
                 .setName("jugador")
-
                 .setDescription(
-                    "Steam ID, ID o link de BattleMetrics"
+                    "ID/link de BattleMetrics o Steam ID"
                 )
-
                 .setRequired(true)
         ),
 
     async execute(interaction) {
 
+        console.log("🎯 Ejecutando /tracker");
+
+        await interaction.deferReply();
+
         try {
 
-            await interaction.deferReply();
-
             const jugador =
-                interaction.options.getString(
-                    "jugador"
-                );
+                interaction.options
+                    .getString("jugador")
+                    .trim();
 
-            // =================================================
+            // =====================================================
             // RESOLVER JUGADOR
-            // =================================================
+            // =====================================================
 
             const resultado =
                 await resolverJugadorTracker(
@@ -58,411 +57,217 @@ module.exports = {
                     interaction.guild.id
                 );
 
-            // =================================================
-            // ERROR
-            // =================================================
-
-            if (!resultado.ok) {
-
-                if (
-                    resultado.error ===
-                    "servidor_no_configurado"
-                ) {
-
-                    return await interaction.editReply(
-                        "❌ No hay un servidor de BattleMetrics configurado para este servidor de Discord."
-                    );
-                }
-
-                if (
-                    resultado.error ===
-                    "steam_no_encontrado"
-                ) {
-
-                    return await interaction.editReply(
-                        "❌ No se pudo obtener el perfil de Steam con ese Steam ID."
-                    );
-                }
-
-                if (
-                    resultado.error ===
-                    "jugador_no_encontrado_servidor"
-                ) {
-
-                    return await interaction.editReply(
-                        `❌ El jugador de Steam **${resultado.nombreSteam}** no fue encontrado en el servidor de BattleMetrics configurado.`
-                    );
-                }
+            if (
+                !resultado ||
+                !resultado.battlemetricsId
+            ) {
 
                 return await interaction.editReply(
-                    "❌ Debes introducir un Steam ID válido, un ID de BattleMetrics o un link de BattleMetrics."
+                    resultado?.error ||
+                    "❌ No se pudo encontrar el jugador."
                 );
             }
 
-            // =================================================
-            // DATOS RESUELTOS
-            // =================================================
-
             const battlemetricsId =
-                resultado.battlemetricsId;
+                String(
+                    resultado.battlemetricsId
+                );
+
+            // =====================================================
+            // OBTENER ESTADO ACTUAL
+            // =====================================================
 
             const status =
                 await getBattleMetricsPlayerStatus(
                     battlemetricsId
                 );
 
+            if (!status) {
+
+                return await interaction.editReply(
+                    "❌ No se pudieron obtener los datos del jugador desde BattleMetrics."
+                );
+            }
+
             const nombre =
-                status?.name ||
-                resultado.nombre ||
+                status.name ||
+                resultado.nombreBattleMetrics ||
+                resultado.nombreSteam ||
                 "Desconocido";
 
             const esOnline =
-                status &&
-                (
-                    status.online === true ||
-                    status.online === "true"
+                Boolean(
+                    status.online
                 );
 
-            // =================================================
-            // REGISTRAR TRACKER
-            // =================================================
+            // =====================================================
+            // DATOS DEL SERVIDOR
+            // =====================================================
 
-            await registrarTracker({
-
-                battlemetricsId,
-
-                nombre,
-
-                canalId:
-                    interaction.channel.id,
-
-                guildId:
-                    interaction.guild.id,
-
-                registradoPor:
-                    interaction.user.tag,
-
-                estadoForzado:
-                    esOnline
-                        ? "online"
-                        : "offline",
-
-                inicioSesionForzado:
-                    esOnline
-                        ? new Date()
-                        : null,
-
-                servidorForzado:
-                    esOnline
-                        ? status.server
-                        : null,
-
-                serverIdForzado:
-                    esOnline
-                        ? status.serverId
-                        : null
-            });
-
-            const serverToShow =
-                status?.server ||
+            const servidor =
+                status.server ||
                 "Desconocido";
 
-            // =================================================
-            // EMBED TRACKER CREADO
-            // =================================================
+            const serverId =
+                status.serverId ||
+                null;
 
-            const embedConfirmacion =
+            // =====================================================
+            // REGISTRAR TRACKER
+            // =====================================================
+
+            const tracker =
+                await registrarTracker({
+
+                    battlemetricsId,
+
+                    nombre,
+
+                    canalId:
+                        interaction.channel.id,
+
+                    guildId:
+                        interaction.guild.id,
+
+                    registradoPor:
+                        interaction.user.tag,
+
+                    ultimoEstado:
+                        esOnline
+                            ? "online"
+                            : "offline",
+
+                    inicioSesion:
+                        esOnline
+                            ? new Date()
+                            : null,
+
+                    ultimoServidor:
+                        servidor,
+
+                    ultimoServerId:
+                        serverId
+                });
+
+            // =====================================================
+            // EMBED DE CONFIRMACIÓN
+            // =====================================================
+
+            const embed =
                 new EmbedBuilder()
 
-                    .setAuthor({
-                        name:
-                            "RustLogix • BattleMetrics Tracker"
-                    })
-
                     .setTitle(
-                        "🎯 TRACKER ACTIVADO"
-                    )
-
-                    .setDescription(
-                        `El seguimiento de **${nombre}** ha sido activado correctamente durante **24 horas**.`
+                        "🎯 Tracker activado"
                     )
 
                     .setColor(
                         esOnline
-                            ? 0x57F287
-                            : 0xED4245
+                            ? "#57F287"
+                            : "#5865F2"
+                    )
+
+                    .setDescription(
+                        `Se ha comenzado a vigilar a **${nombre}** durante **24 horas**.`
                     )
 
                     .addFields(
 
                         {
-                            name:
-                                "👤 Jugador",
-
+                            name: "👤 Jugador",
                             value:
-                                `**${nombre}**`,
-
-                            inline: false
+                                `\`${nombre}\``,
+                            inline: true
                         },
 
                         {
-                            name:
-                                "📡 Estado",
+                            name: "🆔 BattleMetrics",
+                            value:
+                                `[${battlemetricsId}](https://www.battlemetrics.com/players/${battlemetricsId})`,
+                            inline: true
+                        },
 
+                        {
+                            name: "🎮 Estado actual",
                             value:
                                 esOnline
-                                    ? "🟢 **ONLINE**"
-                                    : "🔴 **OFFLINE**",
-
+                                    ? "🟢 Online"
+                                    : "🔴 Offline",
                             inline: true
                         },
 
                         {
-                            name:
-                                "⏱️ Duración",
+                            name: "🖥️ Servidor",
+                            value:
+                                `\`${servidor}\``,
+                            inline: true
+                        },
 
+                        {
+                            name: "⏱️ Duración",
                             value:
                                 "`24 horas`",
-
                             inline: true
                         },
 
                         {
-                            name:
-                                "🎮 Servidor",
-
+                            name: "📡 Canal",
                             value:
-                                `\`${serverToShow}\``,
-
-                            inline: false
-                        },
-
-                        {
-                            name:
-                                "🆔 BattleMetrics",
-
-                            value:
-                                `\`${battlemetricsId}\``,
-
-                            inline: true
-                        },
-
-                        {
-                            name:
-                                "👮 Registrado por",
-
-                            value:
-                                interaction.user.tag,
-
+                                `<#${interaction.channel.id}>`,
                             inline: true
                         }
+
                     )
+
+                    .setTimestamp()
 
                     .setFooter({
                         text:
-                            "RustLogix • Tracker activo"
-                    })
+                            "RustLogix • BattleMetrics Tracker"
+                    });
 
-                    .setTimestamp();
+            // =====================================================
+            // BOTÓN
+            // =====================================================
 
-            const botonPerfil =
+            const row =
                 new ActionRowBuilder()
                     .addComponents(
 
                         new ButtonBuilder()
-
                             .setLabel(
-                                "Ver perfil BattleMetrics"
+                                "Ver BattleMetrics"
                             )
-
                             .setStyle(
                                 ButtonStyle.Link
                             )
-
                             .setURL(
                                 `https://www.battlemetrics.com/players/${battlemetricsId}`
                             )
-
-                            .setEmoji("🔗")
                     );
+
+            // =====================================================
+            // RESPUESTA
+            // =====================================================
 
             await interaction.editReply({
 
                 embeds: [
-                    embedConfirmacion
+                    embed
                 ],
 
                 components: [
-                    botonPerfil
+                    row
                 ]
+
             });
 
-            // =================================================
-            // ESTADO ACTUAL
-            // =================================================
+            // =====================================================
+            // LOG
+            // =====================================================
 
-            if (esOnline) {
-
-                const embedOnline =
-                    new EmbedBuilder()
-
-                        .setAuthor({
-                            name:
-                                "RustLogix • BattleMetrics Tracker"
-                        })
-
-                        .setTitle(
-                            "🟢 JUGADOR ONLINE"
-                        )
-
-                        .setDescription(
-                            `**${status.name || nombre}** está actualmente conectado a un servidor.`
-                        )
-
-                        .setColor(0x57F287)
-
-                        .addFields(
-
-                            {
-                                name:
-                                    "👤 Jugador",
-
-                                value:
-                                    `**${status.name || nombre}**`,
-
-                                inline: false
-                            },
-
-                            {
-                                name:
-                                    "🎮 Servidor actual",
-
-                                value:
-                                    `\`${serverToShow}\``,
-
-                                inline: false
-                            },
-
-                            {
-                                name:
-                                    "⏱️ Tiempo jugando",
-
-                                value:
-                                    `\`${status.jugando || "0m"}\``,
-
-                                inline: true
-                            },
-
-                            {
-                                name:
-                                    "📡 Estado",
-
-                                value:
-                                    "🟢 **ONLINE**",
-
-                                inline: true
-                            }
-                        )
-
-                        .setFooter({
-                            text:
-                                "RustLogix • Tracker activo"
-                        })
-
-                        .setTimestamp();
-
-                await interaction.channel.send({
-
-                    embeds: [
-                        embedOnline
-                    ],
-
-                    components: [
-                        botonPerfil
-                    ]
-                });
-
-            } else {
-
-                const embedOffline =
-                    new EmbedBuilder()
-
-                        .setAuthor({
-                            name:
-                                "RustLogix • BattleMetrics Tracker"
-                        })
-
-                        .setTitle(
-                            "🔴 JUGADOR OFFLINE"
-                        )
-
-                        .setDescription(
-                            `**${nombre}** no está conectado actualmente.\n\nEl tracker continuará vigilando su actividad durante las próximas **24 horas**.`
-                        )
-
-                        .setColor(0xED4245)
-
-                        .addFields(
-
-                            {
-                                name:
-                                    "👤 Jugador",
-
-                                value:
-                                    `**${nombre}**`,
-
-                                inline: false
-                            },
-
-                            {
-                                name:
-                                    "📡 Estado",
-
-                                value:
-                                    "🔴 **OFFLINE**",
-
-                                inline: true
-                            },
-
-                            {
-                                name:
-                                    "👁️ Tracker",
-
-                                value:
-                                    "🟢 **Activo**",
-
-                                inline: true
-                            },
-
-                            {
-                                name:
-                                    "⏳ Próximo evento",
-
-                                value:
-                                    "Esperando conexión...",
-
-                                inline: false
-                            }
-                        )
-
-                        .setFooter({
-                            text:
-                                "RustLogix • Esperando conexión"
-                        })
-
-                        .setTimestamp();
-
-                await interaction.channel.send({
-
-                    embeds: [
-                        embedOffline
-                    ],
-
-                    components: [
-                        botonPerfil
-                    ]
-                });
-            }
+            console.log(
+                `✅ /tracker terminado | ${nombre} | BM ${battlemetricsId} | ${esOnline ? "ONLINE" : "OFFLINE"}`
+            );
 
         } catch (error) {
 
@@ -477,18 +282,18 @@ module.exports = {
             ) {
 
                 await interaction.editReply(
-                    "❌ Error creando tracker."
+                    "❌ Ocurrió un error al configurar el tracker."
+                ).catch(
+                    () => {}
                 );
 
             } else {
 
-                await interaction.reply({
-
-                    content:
-                        "❌ Error creando tracker.",
-
-                    ephemeral: true
-                });
+                await interaction.reply(
+                    "❌ Ocurrió un error al configurar el tracker."
+                ).catch(
+                    () => {}
+                );
             }
         }
     }
