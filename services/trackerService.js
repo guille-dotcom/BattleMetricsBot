@@ -9,6 +9,8 @@ const Tracker = require("../models/TrackerSchema");
 const ServerConfig = require("../models/ServerConfig");
 
 const {
+    obtenerNombreSteam,
+    searchBattleMetricsPlayer,
     getBattleMetricsPlayerStatus
 } = require("./battlemetricsSearch");
 
@@ -17,25 +19,206 @@ const {
 // =====================================================
 
 function obtenerBattleMetricsId(texto) {
+
     if (!texto) return null;
 
     texto = String(texto).trim();
 
-    // Si ya es un ID
-    if (/^\d+$/.test(texto)) {
-        return texto;
-    }
+    // =================================================
+    // LINK DE BATTLEMETRICS
+    // =================================================
 
-    // Si es un link de BattleMetrics
-    const match = texto.match(
-        /battlemetrics\.com\/players\/(\d+)/i
-    );
+    const match =
+        texto.match(
+            /battlemetrics\.com\/players\/(\d+)/i
+        );
 
     if (match) {
         return match[1];
     }
 
+    // =================================================
+    // ID BATTLEMETRICS
+    // =================================================
+    // Un Steam ID normalmente tiene 17 dígitos.
+    // Por eso NO lo tratamos aquí como BM ID.
+
+    if (
+        /^\d+$/.test(texto) &&
+        !/^\d{17}$/.test(texto)
+    ) {
+        return texto;
+    }
+
     return null;
+}
+
+// =====================================================
+// DETECTAR STEAM ID
+// =====================================================
+
+function esSteamId(texto) {
+
+    if (!texto) return false;
+
+    return /^\d{17}$/.test(
+        String(texto).trim()
+    );
+}
+
+// =====================================================
+// OBTENER SERVIDOR CONFIGURADO
+// =====================================================
+
+async function obtenerServidorConfigurado(guildId) {
+
+    try {
+
+        const config =
+            await ServerConfig.findOne({
+                guildId
+            });
+
+        if (
+            !config ||
+            !config.battleMetricsServerId
+        ) {
+            return null;
+        }
+
+        return String(
+            config.battleMetricsServerId
+        );
+
+    } catch (error) {
+
+        console.error(
+            "[TRACKER] Error obteniendo servidor configurado:",
+            error
+        );
+
+        return null;
+    }
+}
+
+// =====================================================
+// RESOLVER JUGADOR DEL TRACKER
+// =====================================================
+
+async function resolverJugadorTracker(
+    texto,
+    guildId
+) {
+
+    if (!texto) {
+        return {
+            ok: false,
+            error: "entrada_invalida"
+        };
+    }
+
+    const entrada =
+        String(texto).trim();
+
+    // =================================================
+    // 1. LINK O ID DE BATTLEMETRICS
+    // =================================================
+
+    const battlemetricsId =
+        obtenerBattleMetricsId(
+            entrada
+        );
+
+    if (battlemetricsId) {
+
+        const status =
+            await getBattleMetricsPlayerStatus(
+                battlemetricsId
+            );
+
+        return {
+            ok: true,
+            battlemetricsId,
+            nombre:
+                status?.name ||
+                "Desconocido",
+            origen: "battlemetrics"
+        };
+    }
+
+    // =================================================
+    // 2. STEAM ID
+    // =================================================
+
+    if (esSteamId(entrada)) {
+
+        const servidorConfigurado =
+            await obtenerServidorConfigurado(
+                guildId
+            );
+
+        if (!servidorConfigurado) {
+
+            return {
+                ok: false,
+                error: "servidor_no_configurado"
+            };
+        }
+
+        // ---------------------------------------------
+        // STEAM ID → NOMBRE
+        // ---------------------------------------------
+
+        const nombreSteam =
+            await obtenerNombreSteam(
+                entrada
+            );
+
+        if (!nombreSteam) {
+
+            return {
+                ok: false,
+                error: "steam_no_encontrado"
+            };
+        }
+
+        // ---------------------------------------------
+        // NOMBRE → JUGADOR BM DEL SERVIDOR
+        // ---------------------------------------------
+
+        const jugadorBM =
+            await searchBattleMetricsPlayer(
+                nombreSteam,
+                servidorConfigurado
+            );
+
+        if (!jugadorBM) {
+
+            return {
+                ok: false,
+                error: "jugador_no_encontrado_servidor",
+                nombreSteam,
+                servidorConfigurado
+            };
+        }
+
+        return {
+            ok: true,
+            battlemetricsId:
+                String(jugadorBM.id),
+            nombre:
+                jugadorBM.attributes?.name ||
+                nombreSteam,
+            origen: "steam",
+            steamId: entrada,
+            servidorConfigurado
+        };
+    }
+
+    return {
+        ok: false,
+        error: "entrada_invalida"
+    };
 }
 
 // =====================================================
@@ -43,19 +226,41 @@ function obtenerBattleMetricsId(texto) {
 // =====================================================
 
 function formatoTiempo(ms) {
+
     if (!ms || ms < 0) return "0m";
 
-    const segundos = Math.floor(ms / 1000);
+    const segundos =
+        Math.floor(ms / 1000);
 
-    const dias = Math.floor(segundos / 86400);
-    const horas = Math.floor((segundos % 86400) / 3600);
-    const minutos = Math.floor((segundos % 3600) / 60);
+    const dias =
+        Math.floor(
+            segundos / 86400
+        );
+
+    const horas =
+        Math.floor(
+            (segundos % 86400) / 3600
+        );
+
+    const minutos =
+        Math.floor(
+            (segundos % 3600) / 60
+        );
 
     const partes = [];
 
-    if (dias > 0) partes.push(`${dias}d`);
-    if (horas > 0) partes.push(`${horas}h`);
-    if (minutos > 0 || partes.length === 0) {
+    if (dias > 0) {
+        partes.push(`${dias}d`);
+    }
+
+    if (horas > 0) {
+        partes.push(`${horas}h`);
+    }
+
+    if (
+        minutos > 0 ||
+        partes.length === 0
+    ) {
         partes.push(`${minutos}m`);
     }
 
@@ -66,8 +271,12 @@ function formatoTiempo(ms) {
 // BOTÓN BATTLEMETRICS
 // =====================================================
 
-function crearBotonBattleMetrics(battlemetricsId) {
+function crearBotonBattleMetrics(
+    battlemetricsId
+) {
+
     return new ActionRowBuilder().addComponents(
+
         new ButtonBuilder()
             .setLabel("BattleMetrics")
             .setStyle(ButtonStyle.Link)
@@ -75,29 +284,6 @@ function crearBotonBattleMetrics(battlemetricsId) {
                 `https://www.battlemetrics.com/players/${battlemetricsId}`
             )
     );
-}
-
-// =====================================================
-// OBTENER SERVIDOR CONFIGURADO
-// =====================================================
-
-async function obtenerServidorConfigurado(guildId) {
-    try {
-        const config = await ServerConfig.findOne({ guildId });
-
-        if (!config || !config.battleMetricsServerId) {
-            return null;
-        }
-
-        return String(config.battleMetricsServerId);
-    } catch (error) {
-        console.error(
-            "[TRACKER] Error obteniendo servidor configurado:",
-            error
-        );
-
-        return null;
-    }
 }
 
 // =====================================================
@@ -109,6 +295,7 @@ function crearEmbedOnline(
     tracker,
     servidorConfigurado
 ) {
+
     const servidorActual =
         status?.server ||
         "Servidor desconocido";
@@ -120,44 +307,58 @@ function crearEmbedOnline(
     const esServidorConfigurado =
         status?.serverId &&
         servidorConfigurado &&
-        String(status.serverId) === String(servidorConfigurado);
+        String(status.serverId) ===
+        String(servidorConfigurado);
 
     return new EmbedBuilder()
+
         .setTitle("🟢 JUGADOR ONLINE")
+
         .setDescription(
             `**${status?.name || tracker.nombre}** está actualmente conectado al servidor configurado.`
         )
+
         .setColor(0x00ff00)
+
         .addFields(
+
             {
                 name: "👤 Jugador",
-                value: `\`${status?.name || tracker.nombre}\``,
+                value:
+                    `\`${status?.name || tracker.nombre}\``,
                 inline: false
             },
+
             {
                 name: "🎮 Servidor",
                 value: servidorActual,
                 inline: false
             },
+
             {
                 name: "⏱ Jugando",
                 value: tiempoJugando,
                 inline: true
             },
+
             {
                 name: "📡 Estado",
-                value: esServidorConfigurado
-                    ? "🟢 ONLINE"
-                    : "🟡 OTRO SERVIDOR",
+                value:
+                    esServidorConfigurado
+                        ? "🟢 ONLINE"
+                        : "🟡 OTRO SERVIDOR",
                 inline: true
             },
+
             {
                 name: "🎯 Tracker",
                 value: "Activo",
                 inline: true
             }
         )
+
         .setTimestamp()
+
         .setFooter({
             text: "RustLogix"
         });
@@ -172,56 +373,77 @@ function crearEmbedOtroServidor(
     tracker,
     servidorConfigurado
 ) {
+
     const servidorActual =
         status?.server ||
         "Servidor desconocido";
 
     return new EmbedBuilder()
+
         .setTitle("🟡 ESTÁ EN OTRO SERVIDOR")
+
         .setDescription(
             `**${status?.name || tracker.nombre}** está conectado, pero no está en el servidor configurado.`
         )
+
         .setColor(0xffff00)
+
         .addFields(
+
             {
                 name: "👤 Jugador",
-                value: `\`${status?.name || tracker.nombre}\``,
+                value:
+                    `\`${status?.name || tracker.nombre}\``,
                 inline: false
             },
+
             {
                 name: "🎮 Servidor actual",
                 value: servidorActual,
                 inline: false
             },
+
             {
                 name: "🆔 Servidor actual",
-                value: status?.serverId
-                    ? `\`${status.serverId}\``
-                    : "Desconocido",
+                value:
+                    status?.serverId
+                        ? `\`${status.serverId}\``
+                        : "Desconocido",
                 inline: true
             },
+
             {
                 name: "🎯 Servidor configurado",
-                value: `\`${servidorConfigurado || "No configurado"}\``,
+                value:
+                    `\`${servidorConfigurado || "No configurado"}\``,
                 inline: true
             },
+
             {
                 name: "⏱ Jugando",
-                value: status?.jugando || "0m",
+                value:
+                    status?.jugando ||
+                    "0m",
                 inline: true
             },
+
             {
                 name: "📡 Estado",
-                value: "🟡 OTRO SERVIDOR",
+                value:
+                    "🟡 OTRO SERVIDOR",
                 inline: true
             },
+
             {
                 name: "🎯 Tracker",
-                value: "Activo",
+                value:
+                    "Activo",
                 inline: true
             }
         )
+
         .setTimestamp()
+
         .setFooter({
             text: "RustLogix"
         });
@@ -236,40 +458,59 @@ function crearEmbedOffline(
     tiempo,
     ultimoServidor
 ) {
+
     return new EmbedBuilder()
+
         .setTitle("🔴 JUGADOR OFFLINE")
+
         .setDescription(
             `**${tracker.nombre}** ha salido del servidor configurado.`
         )
+
         .setColor(0xff0000)
+
         .addFields(
+
             {
                 name: "👤 Jugador",
-                value: `\`${tracker.nombre}\``,
+                value:
+                    `\`${tracker.nombre}\``,
                 inline: false
             },
+
             {
                 name: "🎮 Último servidor",
-                value: ultimoServidor || "Desconocido",
+                value:
+                    ultimoServidor ||
+                    "Desconocido",
                 inline: false
             },
+
             {
                 name: "⏱ Tiempo de sesión",
-                value: tiempo || "0m",
+                value:
+                    tiempo ||
+                    "0m",
                 inline: true
             },
+
             {
                 name: "📡 Estado",
-                value: "🔴 OFFLINE",
+                value:
+                    "🔴 OFFLINE",
                 inline: true
             },
+
             {
                 name: "🎯 Tracker",
-                value: "Activo",
+                value:
+                    "Activo",
                 inline: true
             }
         )
+
         .setTimestamp()
+
         .setFooter({
             text: "RustLogix"
         });
@@ -280,6 +521,7 @@ function crearEmbedOffline(
 // =====================================================
 
 async function registrarTracker({
+
     battlemetricsId,
     nombre,
     canalId,
@@ -289,41 +531,39 @@ async function registrarTracker({
     inicioSesionForzado,
     servidorForzado,
     serverIdForzado
+
 }) {
-    const ahora = new Date();
 
-    const expiresAt = new Date(
-        ahora.getTime() + 24 * 60 * 60 * 1000
-    );
+    const ahora =
+        new Date();
 
-    // -------------------------------------------------
-    // Obtener servidor configurado
-    // -------------------------------------------------
+    const expiresAt =
+        new Date(
+            ahora.getTime() +
+            24 * 60 * 60 * 1000
+        );
 
     const servidorConfigurado =
-        await obtenerServidorConfigurado(guildId);
-
-    // -------------------------------------------------
-    // Consultar estado actual
-    // -------------------------------------------------
+        await obtenerServidorConfigurado(
+            guildId
+        );
 
     let status = null;
 
     try {
+
         status =
             await getBattleMetricsPlayerStatus(
                 battlemetricsId
             );
+
     } catch (error) {
+
         console.error(
             `[TRACKER] Error consultando ${battlemetricsId}:`,
             error
         );
     }
-
-    // -------------------------------------------------
-    // Determinar estado actual
-    // -------------------------------------------------
 
     const estaOnline =
         status &&
@@ -338,18 +578,32 @@ async function registrarTracker({
         estaOnline &&
         servidorConfigurado &&
         serverIdActual &&
-        serverIdActual === String(servidorConfigurado);
+        serverIdActual ===
+        String(servidorConfigurado);
 
     let estadoInicial;
 
     if (estadoForzado) {
-        estadoInicial = estadoForzado;
-    } else if (estaEnServidorConfigurado) {
-        estadoInicial = "online";
+
+        estadoInicial =
+            estadoForzado;
+
+    } else if (
+        estaEnServidorConfigurado
+    ) {
+
+        estadoInicial =
+            "online";
+
     } else if (estaOnline) {
-        estadoInicial = "otro_servidor";
+
+        estadoInicial =
+            "otro_servidor";
+
     } else {
-        estadoInicial = "offline";
+
+        estadoInicial =
+            "offline";
     }
 
     const inicioSesion =
@@ -362,29 +616,38 @@ async function registrarTracker({
     const ultimoServidor =
         servidorForzado !== undefined
             ? servidorForzado
-            : status?.server || null;
+            : status?.server ||
+              null;
 
     const ultimoServerId =
         serverIdForzado !== undefined
             ? serverIdForzado
             : serverIdActual;
 
-    // -------------------------------------------------
-    // Crear tracker
-    // -------------------------------------------------
+    const tracker =
+        await Tracker.create({
 
-    const tracker = await Tracker.create({
-        battlemetricsId,
-        nombre,
-        canalId,
-        guildId,
-        registradoPor,
-        ultimoEstado: estadoInicial,
-        inicioSesion,
-        ultimoServidor,
-        ultimoServerId,
-        expiresAt
-    });
+            battlemetricsId,
+
+            nombre,
+
+            canalId,
+
+            guildId,
+
+            registradoPor,
+
+            ultimoEstado:
+                estadoInicial,
+
+            inicioSesion,
+
+            ultimoServidor,
+
+            ultimoServerId,
+
+            expiresAt
+        });
 
     return tracker;
 }
@@ -394,8 +657,11 @@ async function registrarTracker({
 // =====================================================
 
 async function revisarTrackers(client) {
+
     try {
-        const trackers = await Tracker.find({});
+
+        const trackers =
+            await Tracker.find({});
 
         if (!trackers.length) {
             return;
@@ -409,8 +675,10 @@ async function revisarTrackers(client) {
 
             if (
                 tracker.expiresAt &&
-                new Date() >= tracker.expiresAt
+                new Date() >=
+                tracker.expiresAt
             ) {
+
                 console.log(
                     `[TRACKER] Expirado: ${tracker.nombre} (${tracker.battlemetricsId})`
                 );
@@ -423,7 +691,7 @@ async function revisarTrackers(client) {
             }
 
             // ==========================================
-            // OBTENER SERVIDOR CONFIGURADO
+            // SERVIDOR CONFIGURADO
             // ==========================================
 
             const servidorConfigurado =
@@ -432,6 +700,7 @@ async function revisarTrackers(client) {
                 );
 
             if (!servidorConfigurado) {
+
                 console.log(
                     `[TRACKER] No hay servidor configurado para guild ${tracker.guildId}`
                 );
@@ -446,11 +715,14 @@ async function revisarTrackers(client) {
             let status = null;
 
             try {
+
                 status =
                     await getBattleMetricsPlayerStatus(
                         tracker.battlemetricsId
                     );
+
             } catch (error) {
+
                 console.error(
                     `[TRACKER] Error consultando ${tracker.nombre}:`,
                     error
@@ -469,6 +741,7 @@ async function revisarTrackers(client) {
                     .catch(() => null);
 
             if (!canal) {
+
                 console.log(
                     `[TRACKER] Canal no encontrado para ${tracker.nombre}`
                 );
@@ -493,25 +766,32 @@ async function revisarTrackers(client) {
                 estaOnline &&
                 serverIdActual &&
                 serverIdActual ===
-                    String(servidorConfigurado);
+                String(servidorConfigurado);
 
             // ==========================================
             // ESTADO DESCONOCIDO
             // ==========================================
 
-            if (!tracker.ultimoEstado ||
-                tracker.ultimoEstado === "desconocido") {
+            if (
+                !tracker.ultimoEstado ||
+                tracker.ultimoEstado ===
+                "desconocido"
+            ) {
 
-                if (estaEnServidorConfigurado) {
+                if (
+                    estaEnServidorConfigurado
+                ) {
 
-                    tracker.ultimoEstado = "online";
+                    tracker.ultimoEstado =
+                        "online";
 
                     tracker.inicioSesion =
                         tracker.inicioSesion ||
                         new Date();
 
                     tracker.ultimoServidor =
-                        status.server || null;
+                        status.server ||
+                        null;
 
                     tracker.ultimoServerId =
                         serverIdActual;
@@ -521,10 +801,12 @@ async function revisarTrackers(client) {
                     tracker.ultimoEstado =
                         "otro_servidor";
 
-                    tracker.inicioSesion = null;
+                    tracker.inicioSesion =
+                        null;
 
                     tracker.ultimoServidor =
-                        status.server || null;
+                        status.server ||
+                        null;
 
                     tracker.ultimoServerId =
                         serverIdActual;
@@ -534,9 +816,11 @@ async function revisarTrackers(client) {
                     tracker.ultimoEstado =
                         "offline";
 
-                    tracker.inicioSesion = null;
+                    tracker.inicioSesion =
+                        null;
 
-                    tracker.ultimoServerId = null;
+                    tracker.ultimoServerId =
+                        null;
                 }
 
                 await tracker.save();
@@ -545,14 +829,12 @@ async function revisarTrackers(client) {
             }
 
             // ==========================================
-            // 1. ESTÁ EN EL SERVIDOR CONFIGURADO
+            // 1. SERVIDOR CONFIGURADO
             // ==========================================
 
-            if (estaEnServidorConfigurado) {
-
-                // --------------------------------------
-                // VOLVIÓ DESDE OFFLINE
-                // --------------------------------------
+            if (
+                estaEnServidorConfigurado
+            ) {
 
                 if (
                     tracker.ultimoEstado ===
@@ -560,8 +842,10 @@ async function revisarTrackers(client) {
                 ) {
 
                     await canal.send({
+
                         content:
                             `🔔 **${tracker.nombre} volvió a entrar al servidor **`,
+
                         embeds: [
                             crearEmbedOnline(
                                 status,
@@ -569,6 +853,7 @@ async function revisarTrackers(client) {
                                 servidorConfigurado
                             )
                         ],
+
                         components: [
                             crearBotonBattleMetrics(
                                 tracker.battlemetricsId
@@ -582,20 +867,16 @@ async function revisarTrackers(client) {
                     tracker.inicioSesion =
                         new Date();
 
-                }
-
-                // --------------------------------------
-                // VOLVIÓ DESDE OTRO SERVIDOR
-                // --------------------------------------
-
-                else if (
+                } else if (
                     tracker.ultimoEstado ===
                     "otro_servidor"
                 ) {
 
                     await canal.send({
+
                         content:
                             `🔔 **${tracker.nombre} Regreso al servidor **`,
+
                         embeds: [
                             crearEmbedOnline(
                                 status,
@@ -603,6 +884,7 @@ async function revisarTrackers(client) {
                                 servidorConfigurado
                             )
                         ],
+
                         components: [
                             crearBotonBattleMetrics(
                                 tracker.battlemetricsId
@@ -615,13 +897,8 @@ async function revisarTrackers(client) {
 
                     tracker.inicioSesion =
                         new Date();
-                }
 
-                // --------------------------------------
-                // SIGUE ONLINE
-                // --------------------------------------
-
-                else if (
+                } else if (
                     tracker.ultimoEstado ===
                     "online"
                 ) {
@@ -630,13 +907,15 @@ async function revisarTrackers(client) {
                         "online";
 
                     if (!tracker.inicioSesion) {
+
                         tracker.inicioSesion =
                             new Date();
                     }
                 }
 
                 tracker.ultimoServidor =
-                    status.server || null;
+                    status.server ||
+                    null;
 
                 tracker.ultimoServerId =
                     serverIdActual;
@@ -647,14 +926,13 @@ async function revisarTrackers(client) {
             }
 
             // ==========================================
-            // 2. ESTÁ ONLINE PERO EN OTRO SERVIDOR
+            // 2. OTRO SERVIDOR
             // ==========================================
 
-            if (estaOnline && !estaEnServidorConfigurado) {
-
-                // --------------------------------------
-                // VIENE DEL SERVIDOR CONFIGURADO
-                // --------------------------------------
+            if (
+                estaOnline &&
+                !estaEnServidorConfigurado
+            ) {
 
                 if (
                     tracker.ultimoEstado ===
@@ -670,8 +948,10 @@ async function revisarTrackers(client) {
                             : "0m";
 
                     await canal.send({
+
                         content:
                             `🔔 **${tracker.nombre} está en otro servidor**`,
+
                         embeds: [
                             crearEmbedOtroServidor(
                                 status,
@@ -679,6 +959,7 @@ async function revisarTrackers(client) {
                                 servidorConfigurado
                             )
                         ],
+
                         components: [
                             crearBotonBattleMetrics(
                                 tracker.battlemetricsId
@@ -689,21 +970,13 @@ async function revisarTrackers(client) {
                     tracker.ultimoEstado =
                         "otro_servidor";
 
-                    tracker.inicioSesion = null;
-                }
+                    tracker.inicioSesion =
+                        null;
 
-                // --------------------------------------
-                // YA ESTABA EN OTRO SERVIDOR
-                // --------------------------------------
-
-                else if (
+                } else if (
                     tracker.ultimoEstado ===
                     "otro_servidor"
                 ) {
-
-                    // Si cambió de servidor externo,
-                    // actualizamos los datos pero NO
-                    // mandamos una alerta de "volvió".
 
                     if (
                         tracker.ultimoServerId !==
@@ -711,25 +984,23 @@ async function revisarTrackers(client) {
                     ) {
 
                         tracker.ultimoServidor =
-                            status.server || null;
+                            status.server ||
+                            null;
 
                         tracker.ultimoServerId =
                             serverIdActual;
                     }
-                }
 
-                // --------------------------------------
-                // OFFLINE -> OTRO SERVIDOR
-                // --------------------------------------
-
-                else if (
+                } else if (
                     tracker.ultimoEstado ===
                     "offline"
                 ) {
 
                     await canal.send({
+
                         content:
                             `🔔 **${tracker.nombre} está en otro servidor**`,
+
                         embeds: [
                             crearEmbedOtroServidor(
                                 status,
@@ -737,6 +1008,7 @@ async function revisarTrackers(client) {
                                 servidorConfigurado
                             )
                         ],
+
                         components: [
                             crearBotonBattleMetrics(
                                 tracker.battlemetricsId
@@ -747,11 +1019,13 @@ async function revisarTrackers(client) {
                     tracker.ultimoEstado =
                         "otro_servidor";
 
-                    tracker.inicioSesion = null;
+                    tracker.inicioSesion =
+                        null;
                 }
 
                 tracker.ultimoServidor =
-                    status.server || null;
+                    status.server ||
+                    null;
 
                 tracker.ultimoServerId =
                     serverIdActual;
@@ -762,14 +1036,10 @@ async function revisarTrackers(client) {
             }
 
             // ==========================================
-            // 3. ESTÁ COMPLETAMENTE OFFLINE
+            // 3. OFFLINE
             // ==========================================
 
             if (!estaOnline) {
-
-                // --------------------------------------
-                // SALIÓ DEL SERVIDOR CONFIGURADO
-                // --------------------------------------
 
                 if (
                     tracker.ultimoEstado ===
@@ -785,8 +1055,10 @@ async function revisarTrackers(client) {
                             : "0m";
 
                     await canal.send({
+
                         content:
                             `🔔 **${tracker.nombre} salió del servidor configurado**`,
+
                         embeds: [
                             crearEmbedOffline(
                                 tracker,
@@ -794,6 +1066,7 @@ async function revisarTrackers(client) {
                                 tracker.ultimoServidor
                             )
                         ],
+
                         components: [
                             crearBotonBattleMetrics(
                                 tracker.battlemetricsId
@@ -809,13 +1082,8 @@ async function revisarTrackers(client) {
 
                     tracker.ultimoServerId =
                         null;
-                }
 
-                // --------------------------------------
-                // YA ESTABA OFFLINE
-                // --------------------------------------
-
-                else if (
+                } else if (
                     tracker.ultimoEstado ===
                     "offline"
                 ) {
@@ -825,14 +1093,8 @@ async function revisarTrackers(client) {
 
                     tracker.ultimoServerId =
                         null;
-                }
 
-                // --------------------------------------
-                // ESTABA EN OTRO SERVIDOR Y
-                // AHORA ESTÁ OFFLINE
-                // --------------------------------------
-
-                else if (
+                } else if (
                     tracker.ultimoEstado ===
                     "otro_servidor"
                 ) {
@@ -854,6 +1116,7 @@ async function revisarTrackers(client) {
         }
 
     } catch (error) {
+
         console.error(
             "[TRACKER] Error general revisando trackers:",
             error
@@ -866,7 +1129,14 @@ async function revisarTrackers(client) {
 // =====================================================
 
 module.exports = {
+
     obtenerBattleMetricsId,
+
+    obtenerServidorConfigurado,
+
+    resolverJugadorTracker,
+
     registrarTracker,
+
     revisarTrackers
 };
