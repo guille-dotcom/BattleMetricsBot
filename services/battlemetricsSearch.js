@@ -21,6 +21,54 @@ function getHeaders() {
 }
 
 // ============================================================
+// FORMATEAR DURACIÓN
+// ============================================================
+
+function formatoDuracion(ms) {
+
+    if (!ms || ms < 0) {
+        return "0m";
+    }
+
+    const segundos =
+        Math.floor(ms / 1000);
+
+    const dias =
+        Math.floor(
+            segundos / 86400
+        );
+
+    const horas =
+        Math.floor(
+            (segundos % 86400) / 3600
+        );
+
+    const minutos =
+        Math.floor(
+            (segundos % 3600) / 60
+        );
+
+    const partes = [];
+
+    if (dias > 0) {
+        partes.push(`${dias}d`);
+    }
+
+    if (horas > 0) {
+        partes.push(`${horas}h`);
+    }
+
+    if (
+        minutos > 0 ||
+        partes.length === 0
+    ) {
+        partes.push(`${minutos}m`);
+    }
+
+    return partes.join(" ");
+}
+
+// ============================================================
 // OBTENER NOMBRE ACTUAL DE STEAM
 // ============================================================
 
@@ -114,7 +162,10 @@ function normalizarNombre(nombre) {
 // BUSCAR JUGADOR DENTRO DE UN SERVIDOR
 // ============================================================
 
-async function searchBattleMetricsPlayer(playerName, serverId) {
+async function searchBattleMetricsPlayer(
+    playerName,
+    serverId
+) {
 
     if (!playerName || !serverId) {
         return null;
@@ -125,11 +176,6 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
         console.log(
             `[BM] Buscando "${playerName}" en servidor ${serverId}`
         );
-
-        // --------------------------------------------------------
-        // BattleMetrics permite incluir la relación de players
-        // al consultar el servidor.
-        // --------------------------------------------------------
 
         const response = await axios.get(
             `${BM_API}/servers/${serverId}`,
@@ -163,7 +209,8 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
 
         const jugadores =
             included.filter(
-                item => item.type === "player"
+                item =>
+                    item.type === "player"
             );
 
         console.log(
@@ -172,10 +219,12 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
 
         console.log(
             "[BM DEBUG] Primeros jugadores:",
-            jugadores.slice(0, 20).map(player => ({
-                id: player.id,
-                name: player.attributes?.name
-            }))
+            jugadores
+                .slice(0, 20)
+                .map(player => ({
+                    id: player.id,
+                    name: player.attributes?.name
+                }))
         );
 
         // --------------------------------------------------------
@@ -193,7 +242,10 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
                         player.attributes?.name
                     );
 
-                return nombreJugador === nombreBuscado;
+                return (
+                    nombreJugador ===
+                    nombreBuscado
+                );
             });
 
         if (jugadorEncontrado) {
@@ -210,7 +262,10 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
         // --------------------------------------------------------
 
         const nombreSinEspacios =
-            nombreBuscado.replace(/\s+/g, "");
+            nombreBuscado.replace(
+                /\s+/g,
+                ""
+            );
 
         const jugadorEncontradoFlexible =
             jugadores.find(player => {
@@ -218,10 +273,15 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
                 const nombreJugador =
                     normalizarNombre(
                         player.attributes?.name
-                    )
-                    .replace(/\s+/g, "");
+                    ).replace(
+                        /\s+/g,
+                        ""
+                    );
 
-                return nombreJugador === nombreSinEspacios;
+                return (
+                    nombreJugador ===
+                    nombreSinEspacios
+                );
             });
 
         if (jugadorEncontradoFlexible) {
@@ -245,7 +305,10 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
             "[BM DEBUG] Nombres disponibles:",
             jugadores
                 .slice(0, 100)
-                .map(player => player.attributes?.name)
+                .map(
+                    player =>
+                        player.attributes?.name
+                )
                 .filter(Boolean)
         );
 
@@ -267,7 +330,9 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
 // OBTENER ESTADO ACTUAL DEL JUGADOR
 // ============================================================
 
-async function getBattleMetricsPlayerStatus(playerId) {
+async function getBattleMetricsPlayerStatus(
+    playerId
+) {
 
     try {
 
@@ -275,13 +340,14 @@ async function getBattleMetricsPlayerStatus(playerId) {
         // Información básica
         // --------------------------------------------------------
 
-        const playerResponse = await axios.get(
-            `${BM_API}/players/${playerId}`,
-            {
-                headers: getHeaders(),
-                timeout: 10000
-            }
-        );
+        const playerResponse =
+            await axios.get(
+                `${BM_API}/players/${playerId}`,
+                {
+                    headers: getHeaders(),
+                    timeout: 10000
+                }
+            );
 
         const playerData =
             playerResponse.data?.data;
@@ -293,6 +359,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
                 name: "Desconocido",
                 online: false,
                 jugando: false,
+                tiempoJugando: "0m",
                 server: null,
                 serverId: null,
                 horasTotalesBM: 0
@@ -307,17 +374,18 @@ async function getBattleMetricsPlayerStatus(playerId) {
         // Sesiones
         // --------------------------------------------------------
 
-        const sessionsResponse = await axios.get(
-            `${BM_API}/players/${playerId}/relationships/sessions`,
-            {
-                headers: getHeaders(),
-                params: {
-                    include: "server",
-                    "page[size]": 5
-                },
-                timeout: 10000
-            }
-        );
+        const sessionsResponse =
+            await axios.get(
+                `${BM_API}/players/${playerId}/relationships/sessions`,
+                {
+                    headers: getHeaders(),
+                    params: {
+                        include: "server",
+                        "page[size]": 5
+                    },
+                    timeout: 10000
+                }
+            );
 
         const sessions =
             sessionsResponse.data?.data || [];
@@ -342,7 +410,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
             });
 
         // --------------------------------------------------------
-        // Calcular horas
+        // Calcular horas totales
         // --------------------------------------------------------
 
         let horasTotalesBM = 0;
@@ -384,7 +452,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
             segundosTotales / 3600;
 
         // --------------------------------------------------------
-        // Offline
+        // OFFLINE
         // --------------------------------------------------------
 
         if (!sesionActiva) {
@@ -394,10 +462,42 @@ async function getBattleMetricsPlayerStatus(playerId) {
                 name: nombre,
                 online: false,
                 jugando: false,
+                tiempoJugando: "0m",
                 server: null,
                 serverId: null,
-                horasTotalesBM
+                horasTotalesBM,
+                horasTotales:
+                    horasTotalesBM
             };
+        }
+
+        // --------------------------------------------------------
+        // TIEMPO DE LA SESIÓN ACTUAL
+        // --------------------------------------------------------
+
+        const inicioSesion =
+            sesionActiva.attributes?.start;
+
+        let tiempoJugando =
+            "0m";
+
+        if (inicioSesion) {
+
+            const inicioMs =
+                new Date(
+                    inicioSesion
+                ).getTime();
+
+            if (
+                Number.isFinite(inicioMs)
+            ) {
+
+                tiempoJugando =
+                    formatoDuracion(
+                        Date.now() -
+                        inicioMs
+                    );
+            }
         }
 
         // --------------------------------------------------------
@@ -410,7 +510,9 @@ async function getBattleMetricsPlayerStatus(playerId) {
         const serverRelationship =
             sesionActiva.relationships?.server;
 
-        if (serverRelationship?.data?.id) {
+        if (
+            serverRelationship?.data?.id
+        ) {
 
             serverId =
                 String(
@@ -421,7 +523,8 @@ async function getBattleMetricsPlayerStatus(playerId) {
                 included.find(
                     item =>
                         item.type === "server" &&
-                        String(item.id) === serverId
+                        String(item.id) ===
+                            serverId
                 );
 
             if (serverIncluido) {
@@ -436,7 +539,10 @@ async function getBattleMetricsPlayerStatus(playerId) {
         // Si no vino incluido, obtener servidor
         // --------------------------------------------------------
 
-        if (serverId && !serverName) {
+        if (
+            serverId &&
+            !serverName
+        ) {
 
             try {
 
@@ -470,10 +576,16 @@ async function getBattleMetricsPlayerStatus(playerId) {
             name: nombre,
             online: true,
             jugando: true,
+
+            // Tiempo REAL de la sesión actual
+            tiempoJugando,
+
             server: serverName,
             serverId,
+
             horasTotalesBM,
-            horasTotales: horasTotalesBM
+            horasTotales:
+                horasTotalesBM
         };
 
     } catch (error) {
@@ -489,6 +601,7 @@ async function getBattleMetricsPlayerStatus(playerId) {
             name: "Desconocido",
             online: false,
             jugando: false,
+            tiempoJugando: "0m",
             server: null,
             serverId: null,
             horasTotalesBM: 0
