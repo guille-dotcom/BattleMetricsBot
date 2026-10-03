@@ -1,14 +1,16 @@
 const {
     SlashCommandBuilder,
-    EmbedBuilder,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle
+    EmbedBuilder
 } = require("discord.js");
 
 const {
     resolverJugadorTracker,
-    registrarTracker
+    registrarTracker,
+    obtenerServidorConfigurado,
+    crearEmbedOnline,
+    crearEmbedOtroServidor,
+    crearEmbedOffline,
+    crearBotonBattleMetrics
 } = require("../services/trackerService");
 
 const {
@@ -42,7 +44,11 @@ module.exports = {
 
         try {
 
-            const jugador =
+            // =====================================================
+            // ENTRADA
+            // =====================================================
+
+            const entrada =
                 interaction.options
                     .getString("jugador")
                     .trim();
@@ -53,75 +59,152 @@ module.exports = {
 
             const resultado =
                 await resolverJugadorTracker(
-                    jugador,
+                    entrada,
                     interaction.guild.id
                 );
 
+            // =====================================================
+            // ERRORES DE RESOLUCIÓN
+            // =====================================================
+
             if (
                 !resultado ||
+                !resultado.ok ||
                 !resultado.battlemetricsId
             ) {
 
+                let mensaje =
+                    "❌ No se pudo encontrar el jugador.";
+
+                switch (
+                    resultado?.error
+                ) {
+
+                    case "entrada_invalida":
+
+                        mensaje =
+                            "❌ La entrada no es válida. Usa un ID/link de BattleMetrics o un Steam ID de 17 dígitos.";
+
+                        break;
+
+                    case "servidor_no_configurado":
+
+                        mensaje =
+                            "❌ Este servidor de Discord no tiene configurado un servidor de BattleMetrics.";
+
+                        break;
+
+                    case "steam_no_encontrado":
+
+                        mensaje =
+                            "❌ No se pudo encontrar ese Steam ID.";
+
+                        break;
+
+                    case "jugador_no_encontrado_servidor":
+
+                        mensaje =
+                            `❌ No se encontró a **${resultado.nombreSteam || "ese jugador"}** en el servidor de BattleMetrics configurado.`;
+
+                        break;
+                }
+
                 return await interaction.editReply(
-                    resultado?.error ||
-                    "❌ No se pudo encontrar el jugador."
+                    mensaje
                 );
             }
+
+            // =====================================================
+            // DATOS DEL JUGADOR
+            // =====================================================
 
             const battlemetricsId =
                 String(
                     resultado.battlemetricsId
                 );
 
+            const nombre =
+                resultado.nombre ||
+                "Desconocido";
+
+            // =====================================================
+            // SERVIDOR CONFIGURADO
+            // =====================================================
+
+            const servidorConfigurado =
+                await obtenerServidorConfigurado(
+                    interaction.guild.id
+                );
+
+            if (!servidorConfigurado) {
+
+                return await interaction.editReply(
+                    "❌ Este servidor de Discord no tiene configurado un servidor de BattleMetrics."
+                );
+            }
+
             // =====================================================
             // OBTENER ESTADO ACTUAL
             // =====================================================
 
-            const status =
-                await getBattleMetricsPlayerStatus(
-                    battlemetricsId
+            let status = null;
+
+            try {
+
+                status =
+                    await getBattleMetricsPlayerStatus(
+                        battlemetricsId
+                    );
+
+            } catch (error) {
+
+                console.error(
+                    "[TRACKER] Error obteniendo estado inicial:",
+                    error
                 );
+
+                return await interaction.editReply(
+                    "❌ No se pudieron obtener los datos actuales del jugador desde BattleMetrics."
+                );
+            }
 
             if (!status) {
 
                 return await interaction.editReply(
-                    "❌ No se pudieron obtener los datos del jugador desde BattleMetrics."
+                    "❌ No se pudieron obtener los datos actuales del jugador desde BattleMetrics."
                 );
             }
 
-            const nombre =
-                status.name ||
-                resultado.nombreBattleMetrics ||
-                resultado.nombreSteam ||
-                "Desconocido";
-
-            const esOnline =
-                Boolean(
-                    status.online
-                );
-
             // =====================================================
-            // DATOS DEL SERVIDOR
+            // ESTADO ACTUAL
             // =====================================================
 
-            const servidor =
-                status.server ||
-                "Desconocido";
+            const estaOnline =
+                status.online === true;
 
-            const serverId =
-                status.serverId ||
-                null;
+            const serverIdActual =
+                status?.serverId
+                    ? String(status.serverId)
+                    : null;
+
+            const estaEnServidorConfigurado =
+                estaOnline &&
+                serverIdActual &&
+                String(serverIdActual) ===
+                String(servidorConfigurado);
 
             // =====================================================
             // REGISTRAR TRACKER
             // =====================================================
 
-            const tracker =
+            const resultadoTracker =
                 await registrarTracker({
 
                     battlemetricsId,
 
-                    nombre,
+                    nombre:
+                        status.name ||
+                        nombre,
 
                     canalId:
                         interaction.channel.id,
@@ -130,92 +213,206 @@ module.exports = {
                         interaction.guild.id,
 
                     registradoPor:
-                        interaction.user.tag,
-
-                    ultimoEstado:
-                        esOnline
-                            ? "online"
-                            : "offline",
-
-                    inicioSesion:
-                        esOnline
-                            ? new Date()
-                            : null,
-
-                    ultimoServidor:
-                        servidor,
-
-                    ultimoServerId:
-                        serverId
+                        interaction.user.tag
                 });
 
             // =====================================================
-            // EMBED DE CONFIRMACIÓN
+            // TRACKER YA EXISTENTE
             // =====================================================
 
-            const embed =
+            if (
+                resultadoTracker &&
+                resultadoTracker.existente
+            ) {
+
+                const trackerExistente =
+                    resultadoTracker.tracker;
+
+                const restante =
+                    trackerExistente.expiresAt
+                        ? Math.max(
+                            0,
+                            new Date(
+                                trackerExistente.expiresAt
+                            ).getTime() -
+                            Date.now()
+                        )
+                        : 0;
+
+                const horasRestantes =
+                    Math.floor(
+                        restante /
+                        (60 * 60 * 1000)
+                    );
+
+                const minutosRestantes =
+                    Math.floor(
+                        (
+                            restante %
+                            (60 * 60 * 1000)
+                        ) /
+                        (60 * 1000)
+                    );
+
+                const embedExistente =
+                    new EmbedBuilder()
+
+                        .setTitle(
+                            "⚠️ TRACKER YA ACTIVO"
+                        )
+
+                        .setColor(
+                            0xfee75c
+                        )
+
+                        .setDescription(
+                            `**${trackerExistente.nombre || nombre}** ya está siendo vigilado.`
+                        )
+
+                        .addFields(
+
+                            {
+                                name: "👤 Jugador",
+
+                                value:
+                                    `\`${trackerExistente.nombre || nombre}\``,
+
+                                inline: true
+                            },
+
+                            {
+                                name: "🆔 BattleMetrics",
+
+                                value:
+                                    `[${battlemetricsId}](https://www.battlemetrics.com/players/${battlemetricsId})`,
+
+                                inline: true
+                            },
+
+                            {
+                                name: "🎯 Estado del tracker",
+
+                                value:
+                                    "🟢 Activo",
+
+                                inline: true
+                            },
+
+                            {
+                                name: "⏱ Tiempo restante",
+
+                                value:
+                                    `${horasRestantes}h ${minutosRestantes}m`,
+
+                                inline: true
+                            },
+
+                            {
+                                name: "📡 Canal",
+
+                                value:
+                                    `<#${trackerExistente.canalId}>`,
+
+                                inline: true
+                            }
+                        )
+
+                        .setTimestamp()
+
+                        .setFooter({
+                            text:
+                                "RustLogix • BattleMetrics Tracker"
+                        });
+
+                return await interaction.editReply({
+
+                    embeds: [
+                        embedExistente
+                    ],
+
+                    components: [
+                        crearBotonBattleMetrics(
+                            battlemetricsId
+                        )
+                    ]
+
+                });
+            }
+
+            // =====================================================
+            // TRACKER NUEVO
+            // =====================================================
+
+            const embedConfirmacion =
                 new EmbedBuilder()
 
                     .setTitle(
-                        "🎯 Tracker activado"
+                        "🎯 TRACKER ACTIVADO"
                     )
 
                     .setColor(
-                        esOnline
-                            ? "#57F287"
-                            : "#5865F2"
+                        0x5865f2
                     )
 
                     .setDescription(
-                        `Se ha comenzado a vigilar a **${nombre}** durante **24 horas**.`
+                        `Se ha comenzado a vigilar a **${status.name || nombre}** durante **24 horas**.`
                     )
 
                     .addFields(
 
                         {
                             name: "👤 Jugador",
+
                             value:
-                                `\`${nombre}\``,
+                                `\`${status.name || nombre}\``,
+
                             inline: true
                         },
 
                         {
                             name: "🆔 BattleMetrics",
+
                             value:
                                 `[${battlemetricsId}](https://www.battlemetrics.com/players/${battlemetricsId})`,
+
                             inline: true
                         },
 
                         {
-                            name: "🎮 Estado actual",
-                            value:
-                                esOnline
-                                    ? "🟢 Online"
-                                    : "🔴 Offline",
-                            inline: true
-                        },
+                            name: "⏱ Duración",
 
-                        {
-                            name: "🖥️ Servidor",
-                            value:
-                                `\`${servidor}\``,
-                            inline: true
-                        },
-
-                        {
-                            name: "⏱️ Duración",
                             value:
                                 "`24 horas`",
+
+                            inline: true
+                        },
+
+                        {
+                            name: "🎯 Servidor vigilado",
+
+                            value:
+                                `\`${servidorConfigurado}\``,
+
                             inline: true
                         },
 
                         {
                             name: "📡 Canal",
+
                             value:
                                 `<#${interaction.channel.id}>`,
+
+                            inline: true
+                        },
+
+                        {
+                            name: "👮 Registrado por",
+
+                            value:
+                                `<@${interaction.user.id}>`,
+
                             inline: true
                         }
-
                     )
 
                     .setTimestamp()
@@ -226,24 +423,43 @@ module.exports = {
                     });
 
             // =====================================================
-            // BOTÓN
+            // EMBED DE ESTADO INICIAL
             // =====================================================
 
-            const row =
-                new ActionRowBuilder()
-                    .addComponents(
+            let embedEstado;
 
-                        new ButtonBuilder()
-                            .setLabel(
-                                "Ver BattleMetrics"
-                            )
-                            .setStyle(
-                                ButtonStyle.Link
-                            )
-                            .setURL(
-                                `https://www.battlemetrics.com/players/${battlemetricsId}`
-                            )
+            if (
+                estaEnServidorConfigurado
+            ) {
+
+                embedEstado =
+                    crearEmbedOnline(
+                        status,
+                        resultadoTracker.tracker,
+                        servidorConfigurado
                     );
+
+            } else if (
+                estaOnline
+            ) {
+
+                embedEstado =
+                    crearEmbedOtroServidor(
+                        status,
+                        resultadoTracker.tracker,
+                        servidorConfigurado
+                    );
+
+            } else {
+
+                embedEstado =
+                    crearEmbedOffline(
+                        resultadoTracker.tracker,
+                        "0m",
+                        status?.server ||
+                        "Desconocido"
+                    );
+            }
 
             // =====================================================
             // RESPUESTA
@@ -252,11 +468,14 @@ module.exports = {
             await interaction.editReply({
 
                 embeds: [
-                    embed
+                    embedConfirmacion,
+                    embedEstado
                 ],
 
                 components: [
-                    row
+                    crearBotonBattleMetrics(
+                        battlemetricsId
+                    )
                 ]
 
             });
@@ -266,7 +485,7 @@ module.exports = {
             // =====================================================
 
             console.log(
-                `✅ /tracker terminado | ${nombre} | BM ${battlemetricsId} | ${esOnline ? "ONLINE" : "OFFLINE"}`
+                `✅ /tracker terminado | ${status.name || nombre} | BM ${battlemetricsId} | ${estaEnServidorConfigurado ? "SERVIDOR CONFIGURADO" : estaOnline ? "OTRO SERVIDOR" : "OFFLINE"}`
             );
 
         } catch (error) {
