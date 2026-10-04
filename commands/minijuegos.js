@@ -7,7 +7,8 @@ const {
     StringSelectMenuBuilder,
     ModalBuilder,
     TextInputBuilder,
-    TextInputStyle
+    TextInputStyle,
+    PermissionFlagsBits
 } = require("discord.js");
 
 const MiniGameProfile =
@@ -19,26 +20,16 @@ const MiniGameProfile =
 
 const MAX_JUGADORES = 10;
 
-const TIEMPO_ESPERA_PARTIDA =
-    60 * 1000;
+const TIEMPO_ESPERA_PARTIDA = 60 * 1000;
+const TIEMPO_DUELO = 60 * 1000;
+const TIEMPO_CARA_CRUZ = 60 * 1000;
 
-const TIEMPO_DUELO =
-    60 * 1000;
-
-const TIEMPO_CARA_CRUZ =
-    60 * 1000;
-
-const COOLDOWN_TRAGAPERRAS =
-    10 * 1000;
-
-// ============================================================
-// TIENDA
-// ============================================================
+const COOLDOWN_TRAGAPERRAS = 10 * 1000;
 
 const PRECIO_COLOR_PERSONALIZADO = 300;
 
 // ============================================================
-// COLORES DISPONIBLES
+// COLORES PERSONALIZADOS
 // ============================================================
 
 const COLORES_PERSONALIZADOS = {
@@ -113,67 +104,43 @@ const partidasCaraOCruz = new Map();
 const partidasBlackjack = new Map();
 
 // ============================================================
-// COOLDOWN TRAGAPERRAS
+// TRAGAPERRAS
 // ============================================================
 
 const cooldownTragaperras = new Map();
 
 // ============================================================
-// COLORES PENDIENTES DE NOMBRE
-// ============================================================
-//
-// Guarda temporalmente el color seleccionado mientras el usuario
-// escribe el nombre del rol en el Modal.
-//
-// Clave:
-// guildId:userId
-//
+// COLORES PENDIENTES
 // ============================================================
 
 const coloresPendientes = new Map();
 
 // ============================================================
-// COMANDO
-// ============================================================
-
-const data =
-    new SlashCommandBuilder()
-        .setName("minijuegos")
-        .setDescription(
-            "🎮 Juega minijuegos interactivos con otros usuarios."
-        );
-
-// ============================================================
 // PERFIL
 // ============================================================
 
-async function obtenerPerfil(
-    guildId,
-    userId
-) {
-    let perfil =
-        await MiniGameProfile.findOne({
-            guildId,
-            userId
-        });
+async function obtenerPerfil(guildId, userId) {
+    let perfil = await MiniGameProfile.findOne({
+        guildId,
+        userId
+    });
 
     if (!perfil) {
-        perfil =
-            await MiniGameProfile.create({
-                guildId,
-                userId,
-                puntos: 0,
-                victorias: 0,
-                derrotas: 0,
-                partidas: 0
-            });
+        perfil = await MiniGameProfile.create({
+            guildId,
+            userId,
+            puntos: 0,
+            victorias: 0,
+            derrotas: 0,
+            partidas: 0
+        });
     }
 
     return perfil;
 }
 
 // ============================================================
-// REGISTRAR RESULTADO
+// RESULTADOS
 // ============================================================
 
 async function registrarResultado(
@@ -182,1358 +149,1360 @@ async function registrarResultado(
     resultado,
     puntos
 ) {
-    const perfil =
-        await obtenerPerfil(
-            guildId,
-            userId
-        );
+    const perfil = await obtenerPerfil(
+        guildId,
+        userId
+    );
 
     perfil.partidas += 1;
     perfil.puntos += puntos;
 
-    if (
-        resultado === "victoria"
-    ) {
+    if (resultado === "victoria") {
         perfil.victorias += 1;
     }
 
-    if (
-        resultado === "derrota"
-    ) {
+    if (resultado === "derrota") {
         perfil.derrotas += 1;
     }
 
     await perfil.save();
+
+    return perfil;
 }
 
 // ============================================================
 // MENU PRINCIPAL
 // ============================================================
 
+function crearEmbedPrincipal() {
+    return new EmbedBuilder()
+        .setTitle("🎮 RUSTLOGIX ARCADE")
+        .setDescription(
+            [
+                "¡Bienvenido al arcade de **RustLogix**!",
+                "",
+                "🎲 **Dados Multijugador**",
+                "⚔️ **Duelo 1vs1**",
+                "🪙 **Cara o Cruz**",
+                "🃏 **21 / Blackjack**",
+                "🎰 **Tragaperras**",
+                "🏆 **Mis Estadísticas**",
+                "🛒 **Tienda**",
+                "",
+                "🪙 Consigue puntos jugando y úsalos en la tienda."
+            ].join("\n")
+        )
+        .setColor(0x5865F2);
+}
+
 function crearMenuPrincipal() {
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                "🎮 RUSTLOGIX ARCADE"
-            )
-            .setDescription(
-                "¡Bienvenido a los minijuegos de RustLogix!\n\n" +
-                "Selecciona una opción en el menú de abajo.\n\n" +
-
-                "🎲 **Dados Multijugador**\n" +
-                "Juega contra varios usuarios y lanza los dados.\n\n" +
-
-                "⚔️ **Duelo 1vs1**\n" +
-                "Reta a otro jugador a un duelo.\n\n" +
-
-                "🪙 **Cara o Cruz**\n" +
-                "Desafía a otro jugador en un lanzamiento de moneda.\n\n" +
-
-                "🃏 **21 / Blackjack**\n" +
-                "Juega contra la banca intentando acercarte a 21.\n\n" +
-
-                "🎰 **Tragaperras**\n" +
-                "Juega solo y consigue puntos cada 10 segundos.\n\n" +
-
-                "🏆 **Mis Estadísticas**\n" +
-                "Consulta tus puntos, victorias y partidas.\n\n" +
-
-                "🛒 **Tienda**\n" +
-                "Gasta tus puntos en recompensas."
-            )
-            .setColor(0x5865F2)
-            .setFooter({
-                text:
-                    "RustLogix • Minijuegos"
-            });
-
-    const menu =
-        new StringSelectMenuBuilder()
-            .setCustomId(
-                "minijuegos_menu"
-            )
-            .setPlaceholder(
-                "🎮 Selecciona una opción"
-            )
-            .addOptions([
-                {
-                    label:
-                        "Dados Multijugador",
-                    description:
-                        "Juega dados contra varios jugadores.",
-                    value:
-                        "dados",
-                    emoji:
-                        "🎲"
-                },
-
-                {
-                    label:
-                        "Duelo 1vs1",
-                    description:
-                        "Reta a otro jugador.",
-                    value:
-                        "duelo",
-                    emoji:
-                        "⚔️"
-                },
-
-                {
-                    label:
-                        "Cara o Cruz",
-                    description:
-                        "Desafía a otro jugador.",
-                    value:
-                        "cara_cruz",
-                    emoji:
-                        "🪙"
-                },
-
-                {
-                    label:
-                        "21 / Blackjack",
-                    description:
-                        "Juega Blackjack contra la banca.",
-                    value:
-                        "blackjack",
-                    emoji:
-                        "🃏"
-                },
-
-                {
-                    label:
-                        "Tragaperras",
-                    description:
-                        "Juega solo y consigue puntos.",
-                    value:
-                        "tragaperras",
-                    emoji:
-                        "🎰"
-                },
-
-                {
-                    label:
-                        "Mis Estadísticas",
-                    description:
-                        "Mira tus puntos y victorias.",
-                    value:
-                        "estadisticas",
-                    emoji:
-                        "🏆"
-                },
-
-                {
-                    label:
-                        "Tienda",
-                    description:
-                        "Gasta tus puntos en recompensas.",
-                    value:
-                        "tienda",
-                    emoji:
-                        "🛒"
-                }
-            ]);
-
-    return {
-        embeds: [
-            embed
-        ],
-        components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    menu
-                )
-        ]
-    };
-}
-
-// ============================================================
-// MENU TIENDA
-// ============================================================
-
-async function crearMenuTienda(
-    interaction
-) {
-    const perfil =
-        await obtenerPerfil(
-            interaction.guild.id,
-            interaction.user.id
+    return new ActionRowBuilder()
+        .addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId("minijuegos_menu")
+                .setPlaceholder("Selecciona un minijuego...")
+                .addOptions([
+                    {
+                        label: "Dados Multijugador",
+                        description: "Juega con hasta 10 jugadores",
+                        value: "dados",
+                        emoji: "🎲"
+                    },
+                    {
+                        label: "Duelo 1vs1",
+                        description: "Enfréntate a otro jugador",
+                        value: "duelo",
+                        emoji: "⚔️"
+                    },
+                    {
+                        label: "Cara o Cruz",
+                        description: "Apuesta por cara o cruz",
+                        value: "cara_cruz",
+                        emoji: "🪙"
+                    },
+                    {
+                        label: "21 / Blackjack",
+                        description: "Intenta acercarte a 21",
+                        value: "blackjack",
+                        emoji: "🃏"
+                    },
+                    {
+                        label: "Tragaperras",
+                        description: "Juega solo y gana puntos",
+                        value: "tragaperras",
+                        emoji: "🎰"
+                    },
+                    {
+                        label: "Mis Estadísticas",
+                        description: "Consulta tus estadísticas",
+                        value: "estadisticas",
+                        emoji: "🏆"
+                    },
+                    {
+                        label: "Tienda",
+                        description: "Compra recompensas con tus puntos",
+                        value: "tienda",
+                        emoji: "🛒"
+                    }
+                ])
         );
-
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                "🛒 TIENDA RUSTLOGIX"
-            )
-            .setDescription(
-                "Gasta los puntos que consigues jugando a los minijuegos.\n\n" +
-
-                `💰 **Tus puntos:** **${perfil.puntos}**\n\n` +
-
-                "🎨 **Color personalizado**\n" +
-                "Crea un rol con el nombre que tú quieras y el color que elijas.\n\n" +
-
-                `💰 Precio: **${PRECIO_COLOR_PERSONALIZADO} puntos**\n\n` +
-
-                "Pulsa el botón para comenzar."
-            )
-            .setColor(0xF1C40F)
-            .setFooter({
-                text:
-                    "RustLogix • Tienda"
-            });
-
-    const comprar =
-        new ButtonBuilder()
-            .setCustomId(
-                "minijuegos_tienda_color"
-            )
-            .setLabel(
-                `Color personalizado • ${PRECIO_COLOR_PERSONALIZADO} puntos`
-            )
-            .setEmoji("🎨")
-            .setStyle(
-                ButtonStyle.Primary
-            );
-
-    const volver =
-        new ButtonBuilder()
-            .setCustomId(
-                "minijuegos_volver"
-            )
-            .setLabel(
-                "Volver"
-            )
-            .setEmoji("↩️")
-            .setStyle(
-                ButtonStyle.Secondary
-            );
-
-    return {
-        embeds: [
-            embed
-        ],
-        components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    comprar,
-                    volver
-                )
-        ]
-    };
 }
 
 // ============================================================
-// MENU DADOS
+// BOTÓN VOLVER
 // ============================================================
 
-function crearMenuDados() {
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                "🎲 DADOS MULTIJUGADOR"
-            )
-            .setDescription(
-                "Crea una partida y deja que otros jugadores se unan.\n\n" +
-
-                `👥 Máximo: **${MAX_JUGADORES} jugadores**\n` +
-                "⏱️ La partida espera 60 segundos antes de expirar.\n\n" +
-
-                "**Recompensas**\n" +
-                "🎮 Participar: **+10 puntos**\n" +
-                "🏆 Ganar: **+100 puntos adicionales**\n\n" +
-
-                "Necesitas al menos **2 jugadores** para comenzar."
-            )
-            .setColor(0xF1C40F)
-            .setFooter({
-                text:
-                    "RustLogix • Dados"
-            });
-
-    const crear =
-        new ButtonBuilder()
-            .setCustomId(
-                "minijuegos_dados_crear"
-            )
-            .setLabel(
-                "Crear partida"
-            )
-            .setEmoji("🎲")
-            .setStyle(
-                ButtonStyle.Primary
-            );
-
-    const volver =
-        new ButtonBuilder()
-            .setCustomId(
-                "minijuegos_volver"
-            )
-            .setLabel(
-                "Volver"
-            )
-            .setEmoji("↩️")
-            .setStyle(
-                ButtonStyle.Secondary
-            );
-
-    return {
-        embeds: [
-            embed
-        ],
-        components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    crear,
-                    volver
-                )
-        ]
-    };
-}
-
-// ============================================================
-// MENSAJE PARTIDA DADOS
-// ============================================================
-
-function crearMensajePartida(
-    partida
-) {
-    const jugadoresTexto =
-        partida.jugadores
-            .map(
-                (
-                    jugador,
-                    index
-                ) =>
-                    `${index + 1}. <@${jugador.userId}>`
-            )
-            .join("\n");
-
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                "🎲 PARTIDA DE DADOS"
-            )
-            .setDescription(
-                `👑 **Creador:** <@${partida.creadorId}>\n\n` +
-
-                `👥 **Jugadores (${partida.jugadores.length}/${MAX_JUGADORES})**\n` +
-                `${jugadoresTexto}\n\n` +
-
-                "🙋 Pulsa **Unirse** para entrar.\n" +
-                "🎲 El creador puede iniciar cuando haya al menos 2 jugadores."
-            )
-            .setColor(0xF1C40F)
-            .setFooter({
-                text:
-                    "La partida expira automáticamente en 60 segundos."
-            });
-
-    const unirse =
-        new ButtonBuilder()
-            .setCustomId(
-                `minijuegos_dados_unirse_${partida.id}`
-            )
-            .setLabel(
-                "Unirse"
-            )
-            .setEmoji("🙋")
-            .setStyle(
-                ButtonStyle.Success
-            )
-            .setDisabled(
-                partida.jugadores.length >=
-                    MAX_JUGADORES
-            );
-
-    const iniciar =
-        new ButtonBuilder()
-            .setCustomId(
-                `minijuegos_dados_iniciar_${partida.id}`
-            )
-            .setLabel(
-                "Iniciar partida"
-            )
-            .setEmoji("🎲")
-            .setStyle(
-                ButtonStyle.Primary
-            );
-
-    const cancelar =
-        new ButtonBuilder()
-            .setCustomId(
-                `minijuegos_dados_cancelar_${partida.id}`
-            )
-            .setLabel(
-                "Cancelar"
-            )
-            .setEmoji("❌")
-            .setStyle(
-                ButtonStyle.Danger
-            );
-
-    return {
-        embeds: [
-            embed
-        ],
-        components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    unirse,
-                    iniciar,
-                    cancelar
-                )
-        ]
-    };
-}
-
-// ============================================================
-// MENU DUELO
-// ============================================================
-
-function crearMenuDuelo() {
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                "⚔️ DUELO 1VS1"
-            )
-            .setDescription(
-                "Crea un duelo y espera a que otro jugador acepte.\n\n" +
-
-                "⚔️ Cada jugador lanzará un dado de 1 a 6.\n" +
-                "🏆 El jugador con el número más alto gana.\n\n" +
-
-                "**Recompensas**\n" +
-                "🎮 Participar: **+10 puntos**\n" +
-                "🏆 Ganador: **+100 puntos adicionales**\n\n" +
-
-                "⏱️ El desafío expira después de 60 segundos."
-            )
-            .setColor(0xE74C3C)
-            .setFooter({
-                text:
-                    "RustLogix • Duelo 1vs1"
-            });
-
-    const crear =
-        new ButtonBuilder()
-            .setCustomId(
-                "minijuegos_duelo_crear"
-            )
-            .setLabel(
-                "Crear duelo"
-            )
-            .setEmoji("⚔️")
-            .setStyle(
-                ButtonStyle.Danger
-            );
-
-    const volver =
-        new ButtonBuilder()
-            .setCustomId(
-                "minijuegos_volver"
-            )
-            .setLabel(
-                "Volver"
-            )
-            .setEmoji("↩️")
-            .setStyle(
-                ButtonStyle.Secondary
-            );
-
-    return {
-        embeds: [
-            embed
-        ],
-        components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    crear,
-                    volver
-                )
-        ]
-    };
-}
-
-// ============================================================
-// MENSAJE DUELO
-// ============================================================
-
-function crearMensajeDuelo(
-    partida
-) {
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                "⚔️ DUELO 1VS1"
-            )
-            .setDescription(
-                `👤 **Jugador 1:** <@${partida.creadorId}>\n` +
-
-                `👤 **Jugador 2:** ${
-                    partida.oponenteId
-                        ? `<@${partida.oponenteId}>`
-                        : "**Esperando jugador...**"
-                }\n\n` +
-
-                "⚔️ Otro jugador puede aceptar el desafío.\n" +
-                "🎲 Cuando haya dos jugadores, el creador puede comenzar."
-            )
-            .setColor(0xE74C3C)
-            .setFooter({
-                text:
-                    "RustLogix • Duelo 1vs1"
-            });
-
-    const unirse =
-        new ButtonBuilder()
-            .setCustomId(
-                `minijuegos_duelo_unirse_${partida.id}`
-            )
-            .setLabel(
-                "Aceptar duelo"
-            )
-            .setEmoji("⚔️")
-            .setStyle(
-                ButtonStyle.Success
-            )
-            .setDisabled(
-                Boolean(
-                    partida.oponenteId
-                )
-            );
-
-    const iniciar =
-        new ButtonBuilder()
-            .setCustomId(
-                `minijuegos_duelo_iniciar_${partida.id}`
-            )
-            .setLabel(
-                "Iniciar"
-            )
-            .setEmoji("🎲")
-            .setStyle(
-                ButtonStyle.Primary
-            )
-            .setDisabled(
-                !partida.oponenteId
-            );
-
-    const cancelar =
-        new ButtonBuilder()
-            .setCustomId(
-                `minijuegos_duelo_cancelar_${partida.id}`
-            )
-            .setLabel(
-                "Cancelar"
-            )
-            .setEmoji("❌")
-            .setStyle(
-                ButtonStyle.Danger
-            );
-
-    return {
-        embeds: [
-            embed
-        ],
-        components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    unirse,
-                    iniciar,
-                    cancelar
-                )
-        ]
-    };
-}
-
-// ============================================================
-// MENU CARA O CRUZ
-// ============================================================
-
-function crearMenuCaraOCruz() {
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                "🪙 CARA O CRUZ"
-            )
-            .setDescription(
-                "Crea un desafío y espera a que otro jugador se una.\n\n" +
-
-                "🪙 El creador elegirá **Cara** o **Cruz**.\n" +
-                "👤 El segundo jugador recibirá automáticamente el lado contrario.\n\n" +
-
-                "**Recompensas**\n" +
-                "🎮 Participar: **+10 puntos**\n" +
-                "🏆 Ganador: **+100 puntos adicionales**\n\n" +
-
-                "⏱️ El desafío expira después de 60 segundos."
-            )
-            .setColor(0x3498DB)
-            .setFooter({
-                text:
-                    "RustLogix • Cara o Cruz"
-            });
-
-    const crear =
-        new ButtonBuilder()
-            .setCustomId(
-                "minijuegos_cara_cruz_crear"
-            )
-            .setLabel(
-                "Crear desafío"
-            )
-            .setEmoji("🪙")
-            .setStyle(
-                ButtonStyle.Primary
-            );
-
-    const volver =
-        new ButtonBuilder()
-            .setCustomId(
-                "minijuegos_volver"
-            )
-            .setLabel(
-                "Volver"
-            )
-            .setEmoji("↩️")
-            .setStyle(
-                ButtonStyle.Secondary
-            );
-
-    return {
-        embeds: [
-            embed
-        ],
-        components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    crear,
-                    volver
-                )
-        ]
-    };
-}
-
-// ============================================================
-// MENSAJE CARA O CRUZ
-// ============================================================
-
-function crearMensajeCaraOCruz(
-    partida
-) {
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                "🪙 DESAFÍO CARA O CRUZ"
-            )
-            .setDescription(
-                `👑 **Creador:** <@${partida.creadorId}>\n` +
-
-                `👤 **Oponente:** ${
-                    partida.oponenteId
-                        ? `<@${partida.oponenteId}>`
-                        : "**Esperando jugador...**"
-                }\n\n` +
-
-                (
-                    partida.oponenteId
-                        ? "🪙 El creador debe elegir **Cara** o **Cruz**."
-                        : "🙋 Pulsa **Unirse** para aceptar el desafío."
-                )
-            )
-            .setColor(0x3498DB)
-            .setFooter({
-                text:
-                    "RustLogix • Cara o Cruz"
-            });
-
-    const componentes = [];
-
-    if (
-        !partida.oponenteId
-    ) {
-        const unirse =
+function botonVolver() {
+    return new ActionRowBuilder()
+        .addComponents(
             new ButtonBuilder()
-                .setCustomId(
-                    `minijuegos_cara_cruz_unirse_${partida.id}`
-                )
-                .setLabel(
-                    "Unirse"
-                )
-                .setEmoji("🙋")
-                .setStyle(
-                    ButtonStyle.Success
-                );
-
-        componentes.push(
-            new ActionRowBuilder()
-                .addComponents(
-                    unirse
-                )
+                .setCustomId("minijuegos_volver")
+                .setLabel("Volver")
+                .setEmoji("↩️")
+                .setStyle(ButtonStyle.Secondary)
         );
-    } else if (
-        !partida.eleccionCreador
-    ) {
-        const cara =
-            new ButtonBuilder()
-                .setCustomId(
-                    `minijuegos_cara_cruz_cara_${partida.id}`
-                )
-                .setLabel(
-                    "Cara"
-                )
-                .setEmoji("🙂")
-                .setStyle(
-                    ButtonStyle.Primary
-                );
+}
 
-        const cruz =
-            new ButtonBuilder()
-                .setCustomId(
-                    `minijuegos_cara_cruz_cruz_${partida.id}`
-                )
-                .setLabel(
-                    "Cruz"
-                )
-                .setEmoji("✖️")
-                .setStyle(
-                    ButtonStyle.Primary
-                );
+// ============================================================
+// ESTADÍSTICAS
+// ============================================================
 
-        componentes.push(
-            new ActionRowBuilder()
-                .addComponents(
-                    cara,
-                    cruz
-                )
-        );
-    }
-
-    const cancelar =
-        new ButtonBuilder()
-            .setCustomId(
-                `minijuegos_cara_cruz_cancelar_${partida.id}`
-            )
-            .setLabel(
-                "Cancelar"
-            )
-            .setEmoji("❌")
-            .setStyle(
-                ButtonStyle.Danger
-            );
-
-    componentes.push(
-        new ActionRowBuilder()
-            .addComponents(
-                cancelar
-            )
+async function mostrarEstadisticas(interaction) {
+    const perfil = await obtenerPerfil(
+        interaction.guild.id,
+        interaction.user.id
     );
 
-    return {
-        embeds: [
-            embed
-        ],
-        components:
-            componentes
-    };
+    const porcentaje =
+        perfil.partidas > 0
+            ? ((perfil.victorias / perfil.partidas) * 100).toFixed(1)
+            : "0.0";
+
+    const embed = new EmbedBuilder()
+        .setTitle("🏆 MIS ESTADÍSTICAS")
+        .setThumbnail(interaction.user.displayAvatarURL())
+        .addFields(
+            {
+                name: "🪙 Puntos",
+                value: `**${perfil.puntos}**`,
+                inline: true
+            },
+            {
+                name: "🎮 Partidas",
+                value: `**${perfil.partidas}**`,
+                inline: true
+            },
+            {
+                name: "🏆 Victorias",
+                value: `**${perfil.victorias}**`,
+                inline: true
+            },
+            {
+                name: "💀 Derrotas",
+                value: `**${perfil.derrotas}**`,
+                inline: true
+            },
+            {
+                name: "📊 Winrate",
+                value: `**${porcentaje}%**`,
+                inline: true
+            }
+        )
+        .setColor(0xF1C40F);
+
+    await interaction.update({
+        embeds: [embed],
+        components: [botonVolver()]
+    });
 }
 
 // ============================================================
-// MENU BLACKJACK
+// TIENDA
 // ============================================================
 
-function crearMenuBlackjack() {
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                "🃏 21 / BLACKJACK"
-            )
-            .setDescription(
-                "Juega contra la banca.\n\n" +
+function crearEmbedTienda(perfil) {
+    return new EmbedBuilder()
+        .setTitle("🛒 TIENDA RUSTLOGIX")
+        .setDescription(
+            [
+                `🪙 Tus puntos: **${perfil.puntos}**`,
+                "",
+                `🎨 **Color personalizado**`,
+                `💰 Precio: **${PRECIO_COLOR_PERSONALIZADO} puntos**`,
+                "",
+                "Elige un color y después escribe el nombre que quieres para tu rol.",
+                "",
+                "Ejemplo:",
+                "`VIP Naranja`"
+            ].join("\n")
+        )
+        .setColor(0x5865F2);
+}
 
-                "🎯 Intenta acercarte a **21** sin pasarte.\n" +
-                "🃏 Puedes pedir cartas o plantarte.\n\n" +
+function crearMenuTienda() {
+    return new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId("minijuegos_tienda_color")
+                .setLabel("Comprar color personalizado")
+                .setEmoji("🎨")
+                .setStyle(ButtonStyle.Primary),
 
-                "**Recompensas**\n" +
-                "🎮 Victoria: **+100 puntos**\n" +
-                "💀 Derrota: **-10 puntos**\n" +
-                "🤝 Empate: **+10 puntos**\n\n" +
+            new ButtonBuilder()
+                .setCustomId("minijuegos_volver")
+                .setLabel("Volver")
+                .setEmoji("↩️")
+                .setStyle(ButtonStyle.Secondary)
+        );
+}
 
-                "El Blackjack natural paga **+150 puntos**."
-            )
-            .setColor(0x2ECC71)
-            .setFooter({
-                text:
-                    "RustLogix • Blackjack"
-            });
-
-    const jugar =
-        new ButtonBuilder()
-            .setCustomId(
-                "minijuegos_blackjack_jugar"
-            )
-            .setLabel(
-                "Jugar"
-            )
-            .setEmoji("🃏")
-            .setStyle(
-                ButtonStyle.Success
-            );
-
-    const volver =
-        new ButtonBuilder()
-            .setCustomId(
-                "minijuegos_volver"
-            )
-            .setLabel(
-                "Volver"
-            )
-            .setEmoji("↩️")
-            .setStyle(
-                ButtonStyle.Secondary
-            );
-
-    return {
-        embeds: [
-            embed
-        ],
-        components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    jugar,
-                    volver
+function crearMenuColores() {
+    return new ActionRowBuilder()
+        .addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId("minijuegos_color_seleccionar")
+                .setPlaceholder("Selecciona un color...")
+                .addOptions(
+                    Object.entries(COLORES_PERSONALIZADOS)
+                        .map(([key, color]) => ({
+                            label: color.nombre,
+                            description: `Color ${color.nombre.toLowerCase()}`,
+                            value: key,
+                            emoji: color.emoji
+                        }))
                 )
-        ]
-    };
+        );
 }
 
 // ============================================================
-// MENU TRAGAPERRAS
+// MODAL DEL NOMBRE DEL ROL
 // ============================================================
+
+function crearModalNombreRol() {
+    const input = new TextInputBuilder()
+        .setCustomId("minijuegos_nombre_rol")
+        .setLabel("¿Qué nombre quieres ponerle al rol?")
+        .setPlaceholder("Ejemplo: VIP Naranja")
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setMinLength(1)
+        .setMaxLength(100);
+
+    return new ModalBuilder()
+        .setCustomId("minijuegos_modal_nombre_color")
+        .setTitle("Nombre del rol")
+        .addComponents(
+            new ActionRowBuilder().addComponents(input)
+        );
+}
+
+// ============================================================
+// TRAGAPERRAS
+// ============================================================
+
+const SIMBOLOS_TRAGAPERRAS = [
+    "🍒",
+    "🍋",
+    "🍊",
+    "💎",
+    "7️⃣"
+];
+
+function obtenerSimboloTragaperras() {
+    return SIMBOLOS_TRAGAPERRAS[
+        Math.floor(
+            Math.random() * SIMBOLOS_TRAGAPERRAS.length
+        )
+    ];
+}
+
+function calcularPremioTragaperras(resultado) {
+    const [a, b, c] = resultado;
+
+    // Tres iguales
+    if (a === b && b === c) {
+        switch (a) {
+            case "🍒":
+                return 100;
+
+            case "🍋":
+                return 150;
+
+            case "🍊":
+                return 200;
+
+            case "💎":
+                return 400;
+
+            case "7️⃣":
+                return 800;
+        }
+    }
+
+    // Dos iguales
+    if (
+        a === b ||
+        a === c ||
+        b === c
+    ) {
+        return 40;
+    }
+
+    return 0;
+}
+
+function crearEmbedTragaperras(
+    resultado,
+    premio,
+    puntosActuales
+) {
+    let mensaje;
+
+    if (premio >= 800) {
+        mensaje = "🎉 ¡¡¡PREMIO GORDO!!!";
+    } else if (premio > 0) {
+        mensaje = "🎊 ¡Has ganado puntos!";
+    } else {
+        mensaje = "😢 No ha habido premio esta vez.";
+    }
+
+    return new EmbedBuilder()
+        .setTitle("🎰 TRAGAPERRAS")
+        .setDescription(
+            [
+                "╔══════════════╗",
+                `   ${resultado.join("   ")}`,
+                "╚══════════════╝",
+                "",
+                `**${mensaje}**`,
+                "",
+                premio > 0
+                    ? `🪙 Premio: **+${premio} puntos**`
+                    : "🪙 Premio: **0 puntos**",
+                "",
+                `💰 Tus puntos: **${puntosActuales}**`,
+                "",
+                "⏱️ Puedes volver a jugar en **10 segundos**."
+            ].join("\n")
+        )
+        .setColor(
+            premio >= 800
+                ? 0xFFD700
+                : premio > 0
+                    ? 0x57F287
+                    : 0xED4245
+        );
+}
 
 function crearMenuTragaperras() {
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                "🎰 TRAGAPERRAS RUSTLOGIX"
-            )
-            .setDescription(
-                "Juega solo y consigue puntos.\n\n" +
+    return new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId("minijuegos_tragaperras_jugar")
+                .setLabel("Jugar")
+                .setEmoji("🎰")
+                .setStyle(ButtonStyle.Success),
 
-                "🎰 Pulsa **Jugar** para probar suerte.\n\n" +
-
-                "**Premios**\n" +
-                "🍒🍒🍒 → **+20 puntos**\n" +
-                "🍋🍋🍋 → **+30 puntos**\n" +
-                "🍊🍊🍊 → **+40 puntos**\n" +
-                "💎💎💎 → **+100 puntos**\n" +
-                "7️⃣7️⃣7️⃣ → **+300 puntos**\n\n" +
-
-                "❌ Cualquier otra combinación → **0 puntos**\n\n" +
-
-                "⏱️ Puedes volver a jugar cada **10 segundos**."
-            )
-            .setColor(0xF1C40F)
-            .setFooter({
-                text:
-                    "RustLogix • Tragaperras"
-            });
-
-    const jugar =
-        new ButtonBuilder()
-            .setCustomId(
-                "minijuegos_tragaperras_jugar"
-            )
-            .setLabel(
-                "Jugar"
-            )
-            .setEmoji("🎰")
-            .setStyle(
-                ButtonStyle.Success
-            );
-
-    const volver =
-        new ButtonBuilder()
-            .setCustomId(
-                "minijuegos_volver"
-            )
-            .setLabel(
-                "Volver"
-            )
-            .setEmoji("↩️")
-            .setStyle(
-                ButtonStyle.Secondary
-            );
-
-    return {
-        embeds: [
-            embed
-        ],
-        components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    jugar,
-                    volver
-                )
-        ]
-    };
+            new ButtonBuilder()
+                .setCustomId("minijuegos_volver")
+                .setLabel("Volver")
+                .setEmoji("↩️")
+                .setStyle(ButtonStyle.Secondary)
+        );
 }
 
-// ============================================================
-// BARAJA BLACKJACK
-// ============================================================
+async function jugarTragaperras(interaction) {
+    const key =
+        `${interaction.guild.id}:${interaction.user.id}`;
 
-function crearBaraja() {
-    const palos = [
-        "♠️",
-        "♥️",
-        "♦️",
-        "♣️"
-    ];
+    const ahora = Date.now();
 
-    const valores = [
-        {
-            nombre: "A",
-            valor: 11
-        },
-        {
-            nombre: "2",
-            valor: 2
-        },
-        {
-            nombre: "3",
-            valor: 3
-        },
-        {
-            nombre: "4",
-            valor: 4
-        },
-        {
-            nombre: "5",
-            valor: 5
-        },
-        {
-            nombre: "6",
-            valor: 6
-        },
-        {
-            nombre: "7",
-            valor: 7
-        },
-        {
-            nombre: "8",
-            valor: 8
-        },
-        {
-            nombre: "9",
-            valor: 9
-        },
-        {
-            nombre: "10",
-            valor: 10
-        },
-        {
-            nombre: "J",
-            valor: 10
-        },
-        {
-            nombre: "Q",
-            valor: 10
-        },
-        {
-            nombre: "K",
-            valor: 10
-        }
-    ];
+    const ultimoJuego =
+        cooldownTragaperras.get(key) || 0;
 
-    const baraja = [];
+    const restante =
+        COOLDOWN_TRAGAPERRAS -
+        (ahora - ultimoJuego);
 
-    for (
-        const palo of palos
-    ) {
-        for (
-            const valor of valores
-        ) {
-            baraja.push({
-                nombre:
-                    `${valor.nombre}${palo}`,
-                valor:
-                    valor.valor
-            });
-        }
+    if (restante > 0) {
+        const segundos =
+            Math.ceil(restante / 1000);
+
+        return interaction.reply({
+            content:
+                `⏱️ Tienes que esperar **${segundos} segundos** para volver a jugar.`,
+            ephemeral: true
+        });
     }
 
-    for (
-        let i = baraja.length - 1;
-        i > 0;
-        i--
-    ) {
-        const j =
-            Math.floor(
-                Math.random() *
-                    (i + 1)
-            );
-
-        [
-            baraja[i],
-            baraja[j]
-        ] = [
-            baraja[j],
-            baraja[i]
-        ];
-    }
-
-    return baraja;
-}
-
-// ============================================================
-// VALOR MANO
-// ============================================================
-
-function calcularValorMano(
-    mano
-) {
-    let total =
-        mano.reduce(
-            (
-                suma,
-                carta
-            ) =>
-                suma +
-                carta.valor,
-            0
-        );
-
-    let ases =
-        mano.filter(
-            carta =>
-                carta.nombre.startsWith(
-                    "A"
-                )
-        ).length;
-
-    while (
-        total > 21 &&
-        ases > 0
-    ) {
-        total -= 10;
-        ases--;
-    }
-
-    return total;
-}
-
-// ============================================================
-// TEXTO MANO
-// ============================================================
-
-function textoMano(
-    mano
-) {
-    return mano
-        .map(
-            carta =>
-                carta.nombre
-        )
-        .join("  ");
-}
-
-// ============================================================
-// MENSAJE BLACKJACK
-// ============================================================
-
-function crearMensajeBlackjack(
-    partida
-) {
-    const jugadorTotal =
-        calcularValorMano(
-            partida.jugador
-        );
-
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                "🃏 21 / BLACKJACK"
-            )
-            .setDescription(
-                `👤 **Jugador:** <@${partida.userId}>\n\n` +
-
-                `🃏 **Tus cartas:**\n${textoMano(partida.jugador)}\n\n` +
-
-                `🎯 **Tu puntuación:** **${jugadorTotal}**\n\n` +
-
-                "🏦 **Banca:**\n🃏 Carta oculta\n\n" +
-
-                "¿Qué quieres hacer?"
-            )
-            .setColor(0x2ECC71)
-            .setFooter({
-                text:
-                    "RustLogix • Blackjack"
-            });
-
-    const pedir =
-        new ButtonBuilder()
-            .setCustomId(
-                `minijuegos_blackjack_pedir_${partida.id}`
-            )
-            .setLabel(
-                "Pedir carta"
-            )
-            .setEmoji("🃏")
-            .setStyle(
-                ButtonStyle.Primary
-            );
-
-    const plantarse =
-        new ButtonBuilder()
-            .setCustomId(
-                `minijuegos_blackjack_plantarse_${partida.id}`
-            )
-            .setLabel(
-                "Plantarse"
-            )
-            .setEmoji("✋")
-            .setStyle(
-                ButtonStyle.Secondary
-            );
-
-    return {
-        embeds: [
-            embed
-        ],
-        components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    pedir,
-                    plantarse
-                )
-        ]
-    };
-}
-
-// ============================================================
-// FINALIZAR BLACKJACK
-// ============================================================
-
-async function finalizarBlackjack(
-    interaction,
-    partida
-) {
-    while (
-        calcularValorMano(
-            partida.banca
-        ) < 17
-    ) {
-        partida.banca.push(
-            partida.baraja.pop()
-        );
-    }
-
-    const jugadorTotal =
-        calcularValorMano(
-            partida.jugador
-        );
-
-    const bancaTotal =
-        calcularValorMano(
-            partida.banca
-        );
-
-    let resultado;
-    let puntos;
-    let tipoResultado;
-
-    if (
-        jugadorTotal > 21
-    ) {
-        resultado =
-            "💀 **Te pasaste de 21. Has perdido.**";
-
-        puntos =
-            -10;
-
-        tipoResultado =
-            "derrota";
-    } else if (
-        bancaTotal > 21
-    ) {
-        resultado =
-            "🏆 **La banca se pasó de 21. ¡Has ganado!**";
-
-        puntos =
-            100;
-
-        tipoResultado =
-            "victoria";
-    } else if (
-        jugadorTotal >
-        bancaTotal
-    ) {
-        resultado =
-            "🏆 **¡Has ganado!**";
-
-        puntos =
-            100;
-
-        tipoResultado =
-            "victoria";
-    } else if (
-        jugadorTotal <
-        bancaTotal
-    ) {
-        resultado =
-            "💀 **La banca gana.**";
-
-        puntos =
-            -10;
-
-        tipoResultado =
-            "derrota";
-    } else {
-        resultado =
-            "🤝 **Empate.**";
-
-        puntos =
-            10;
-
-        tipoResultado =
-            "empate";
-    }
-
-    const perfil =
-        await obtenerPerfil(
-            partida.guildId,
-            partida.userId
-        );
-
-    perfil.partidas += 1;
-    perfil.puntos += puntos;
-
-    if (
-        tipoResultado ===
-        "victoria"
-    ) {
-        perfil.victorias += 1;
-    }
-
-    if (
-        tipoResultado ===
-        "derrota"
-    ) {
-        perfil.derrotas += 1;
-    }
-
-    await perfil.save();
-
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                "🃏 RESULTADO BLACKJACK"
-            )
-            .setDescription(
-                `👤 <@${partida.userId}>\n\n` +
-
-                `🃏 **Tus cartas:**\n${textoMano(partida.jugador)}\n` +
-                `🎯 **Total:** ${jugadorTotal}\n\n` +
-
-                `🏦 **Cartas de la banca:**\n${textoMano(partida.banca)}\n` +
-                `🎯 **Total banca:** ${bancaTotal}\n\n` +
-
-                `${resultado}\n\n` +
-
-                `💰 **Puntos:** ${
-                    puntos >= 0
-                        ? "+"
-                        : ""
-                }${puntos}`
-            )
-            .setColor(
-                puntos > 0
-                    ? 0x2ECC71
-                    : puntos < 0
-                        ? 0xE74C3C
-                        : 0xF1C40F
-            )
-            .setFooter({
-                text:
-                    "RustLogix • Blackjack"
-            });
-
-    partidasBlackjack.delete(
-        partida.id
+    cooldownTragaperras.set(
+        key,
+        ahora
     );
 
-    const volver =
-        new ButtonBuilder()
-            .setCustomId(
-                "minijuegos_volver"
-            )
-            .setLabel(
-                "Volver a Minijuegos"
-            )
-            .setEmoji("🎮")
-            .setStyle(
-                ButtonStyle.Secondary
-            );
+    const resultado = [
+        obtenerSimboloTragaperras(),
+        obtenerSimboloTragaperras(),
+        obtenerSimboloTragaperras()
+    ];
+
+    const premio =
+        calcularPremioTragaperras(resultado);
+
+    const perfil =
+        await registrarResultado(
+            interaction.guild.id,
+            interaction.user.id,
+            premio > 0
+                ? "victoria"
+                : "derrota",
+            premio
+        );
 
     await interaction.update({
         embeds: [
-            embed
+            crearEmbedTragaperras(
+                resultado,
+                premio,
+                perfil.puntos
+            )
         ],
         components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    volver
-                )
+            crearMenuTragaperras()
         ]
     });
 }
 
 // ============================================================
-// EXECUTE
+// DADOS
 // ============================================================
 
-async function execute(
-    interaction
-) {
-    await interaction.reply(
-        crearMenuPrincipal()
+function crearEmbedDados(partida) {
+    const jugadores = partida.jugadores
+        .map((id, index) => {
+            const nombre =
+                partida.nombres.get(id) ||
+                "Jugador";
+
+            return `${index + 1}. ${nombre}`;
+        })
+        .join("\n");
+
+    return new EmbedBuilder()
+        .setTitle("🎲 DADOS MULTIJUGADOR")
+        .setDescription(
+            [
+                `Jugadores: **${partida.jugadores.length}/${MAX_JUGADORES}**`,
+                "",
+                jugadores || "Nadie se ha unido todavía.",
+                "",
+                "🪙 Participar: **+10 puntos**",
+                "🏆 Ganar: **+100 puntos**",
+                "🤝 Empate: **+50 puntos**",
+                "",
+                "La partida comienza al pulsar **Empezar** o cuando termine el tiempo."
+            ].join("\n")
+        )
+        .setColor(0x5865F2);
+}
+
+function crearBotonesDados(messageId) {
+    return new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId(
+                    `minijuegos_dados_unirse_${messageId}`
+                )
+                .setLabel("Unirse")
+                .setEmoji("➕")
+                .setStyle(ButtonStyle.Success),
+
+            new ButtonBuilder()
+                .setCustomId(
+                    `minijuegos_dados_empezar_${messageId}`
+                )
+                .setLabel("Empezar")
+                .setEmoji("🎲")
+                .setStyle(ButtonStyle.Primary),
+
+            new ButtonBuilder()
+                .setCustomId(
+                    `minijuegos_dados_cancelar_${messageId}`
+                )
+                .setLabel("Cancelar")
+                .setEmoji("❌")
+                .setStyle(ButtonStyle.Danger)
+        );
+}
+
+async function iniciarDados(interaction) {
+    const partida = {
+        creador: interaction.user.id,
+        jugadores: [interaction.user.id],
+        nombres: new Map([
+            [
+                interaction.user.id,
+                interaction.user.username
+            ]
+        ]),
+        finalizada: false,
+        timeout: null
+    };
+
+    await interaction.update({
+        embeds: [crearEmbedDados(partida)],
+        components: [
+            new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_dados_unirse"
+                        )
+                        .setLabel("Unirse")
+                        .setEmoji("➕")
+                        .setStyle(ButtonStyle.Success),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_dados_empezar"
+                        )
+                        .setLabel("Empezar")
+                        .setEmoji("🎲")
+                        .setStyle(ButtonStyle.Primary),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_dados_cancelar"
+                        )
+                        .setLabel("Cancelar")
+                        .setEmoji("❌")
+                        .setStyle(ButtonStyle.Danger)
+                )
+        ]
+    });
+
+    const message =
+        await interaction.fetchReply();
+
+    partidasDados.set(
+        message.id,
+        partida
     );
+
+    partida.timeout = setTimeout(
+        () => terminarDados(
+            interaction.client,
+            interaction.channel,
+            message.id
+        ),
+        TIEMPO_ESPERA_PARTIDA
+    );
+
+    await message.edit({
+        embeds: [crearEmbedDados(partida)],
+        components: [
+            crearBotonesDados(message.id)
+        ]
+    });
+}
+
+async function terminarDados(
+    client,
+    channel,
+    messageId
+) {
+    const partida =
+        partidasDados.get(messageId);
+
+    if (!partida || partida.finalizada) {
+        return;
+    }
+
+    partida.finalizada = true;
+
+    if (partida.timeout) {
+        clearTimeout(partida.timeout);
+    }
+
+    partidasDados.delete(messageId);
+
+    if (partida.jugadores.length < 2) {
+        try {
+            const message =
+                await channel.messages.fetch(messageId);
+
+            await message.edit({
+                embeds: [
+                    new EmbedBuilder()
+                        .setTitle("🎲 DADOS")
+                        .setDescription(
+                            "❌ No había suficientes jugadores para comenzar."
+                        )
+                        .setColor(0xED4245)
+                ],
+                components: []
+            });
+        } catch {}
+
+        return;
+    }
+
+    const resultados = partida.jugadores.map(
+        userId => ({
+            userId,
+            nombre:
+                partida.nombres.get(userId) ||
+                "Jugador",
+            dado:
+                Math.floor(Math.random() * 6) + 1
+        })
+    );
+
+    const maximo = Math.max(
+        ...resultados.map(
+            jugador => jugador.dado
+        )
+    );
+
+    const ganadores =
+        resultados.filter(
+            jugador =>
+                jugador.dado === maximo
+        );
+
+    for (const jugador of resultados) {
+        if (ganadores.some(
+            ganador =>
+                ganador.userId === jugador.userId
+        )) {
+            await registrarResultado(
+                channel.guild.id,
+                jugador.userId,
+                "victoria",
+                ganadores.length === 1
+                    ? 110
+                    : 60
+            );
+        } else {
+            await registrarResultado(
+                channel.guild.id,
+                jugador.userId,
+                "derrota",
+                10
+            );
+        }
+    }
+
+    const texto =
+        resultados
+            .sort((a, b) => b.dado - a.dado)
+            .map(
+                jugador =>
+                    `${jugador.dado === maximo ? "🏆" : "🎲"} **${jugador.nombre}** → ${jugador.dado}`
+            )
+            .join("\n");
+
+    const ganadoresTexto =
+        ganadores
+            .map(jugador => jugador.nombre)
+            .join(", ");
+
+    try {
+        const message =
+            await channel.messages.fetch(messageId);
+
+        await message.edit({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle("🎲 RESULTADO DE LOS DADOS")
+                    .setDescription(
+                        [
+                            texto,
+                            "",
+                            ganadores.length === 1
+                                ? `🏆 Ganador: **${ganadoresTexto}**`
+                                : `🤝 Empate entre: **${ganadoresTexto}**`,
+                            "",
+                            "🪙 Participación: +10 puntos",
+                            ganadores.length === 1
+                                ? "🏆 Ganador: +100 puntos"
+                                : "🤝 Empate: +50 puntos"
+                        ].join("\n")
+                    )
+                    .setColor(0x57F287)
+            ],
+            components: []
+        });
+    } catch {}
 }
 
 // ============================================================
-// MANEJAR BOTONES
+// DUELO
 // ============================================================
 
-async function manejarBoton(
-    interaction
+function crearEmbedDuelo(partida) {
+    const jugadores =
+        partida.jugadores
+            .map(
+                id =>
+                    `⚔️ ${partida.nombres.get(id) || "Jugador"}`
+            )
+            .join("\n");
+
+    return new EmbedBuilder()
+        .setTitle("⚔️ DUELO 1VS1")
+        .setDescription(
+            [
+                jugadores,
+                "",
+                `Jugadores: **${partida.jugadores.length}/2**`,
+                "",
+                "Pulsa **Unirse** para enfrentarte al creador.",
+                "La partida comienza automáticamente al llegar 2 jugadores."
+            ].join("\n")
+        )
+        .setColor(0xED4245);
+}
+
+async function iniciarDuelo(interaction) {
+    const partida = {
+        creador: interaction.user.id,
+        jugadores: [interaction.user.id],
+        nombres: new Map([
+            [
+                interaction.user.id,
+                interaction.user.username
+            ]
+        ]),
+        finalizada: false,
+        timeout: null
+    };
+
+    await interaction.update({
+        embeds: [crearEmbedDuelo(partida)],
+        components: [
+            new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_duelo_unirse"
+                        )
+                        .setLabel("Unirse al duelo")
+                        .setEmoji("⚔️")
+                        .setStyle(ButtonStyle.Danger),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_duelo_cancelar"
+                        )
+                        .setLabel("Cancelar")
+                        .setEmoji("❌")
+                        .setStyle(ButtonStyle.Secondary)
+                )
+        ]
+    });
+
+    const message =
+        await interaction.fetchReply();
+
+    partidasDuelo.set(
+        message.id,
+        partida
+    );
+
+    partida.timeout = setTimeout(
+        () => cancelarDueloPorTiempo(
+            interaction.channel,
+            message.id
+        ),
+        TIEMPO_DUELO
+    );
+
+    await message.edit({
+        embeds: [crearEmbedDuelo(partida)],
+        components: [
+            new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(
+                            `minijuegos_duelo_unirse_${message.id}`
+                        )
+                        .setLabel("Unirse al duelo")
+                        .setEmoji("⚔️")
+                        .setStyle(ButtonStyle.Danger),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            `minijuegos_duelo_cancelar_${message.id}`
+                        )
+                        .setLabel("Cancelar")
+                        .setEmoji("❌")
+                        .setStyle(ButtonStyle.Secondary)
+                )
+        ]
+    });
+}
+
+async function comenzarDuelo(
+    interaction,
+    messageId
 ) {
-    const customId =
-        interaction.customId;
+    const partida =
+        partidasDuelo.get(messageId);
 
-    // ========================================================
-    // VOLVER
-    // ========================================================
-
-    if (
-        customId ===
-        "minijuegos_volver"
-    ) {
-        await interaction.update(
-            crearMenuPrincipal()
-        );
-
-        return true;
+    if (!partida || partida.finalizada) {
+        return;
     }
 
-    // ========================================================
-    // ABRIR COMPRA DE COLOR
-    // ========================================================
+    if (partida.jugadores.length < 2) {
+        return interaction.reply({
+            content:
+                "❌ Todavía falta un jugador.",
+            ephemeral: true
+        });
+    }
+
+    partida.finalizada = true;
+
+    if (partida.timeout) {
+        clearTimeout(partida.timeout);
+    }
+
+    partidasDuelo.delete(messageId);
+
+    const jugador1 = partida.jugadores[0];
+    const jugador2 = partida.jugadores[1];
+
+    const dado1 =
+        Math.floor(Math.random() * 6) + 1;
+
+    const dado2 =
+        Math.floor(Math.random() * 6) + 1;
+
+    let resultado;
+
+    if (dado1 === dado2) {
+        resultado = "empate";
+    } else if (dado1 > dado2) {
+        resultado = jugador1;
+    } else {
+        resultado = jugador2;
+    }
+
+    await registrarResultado(
+        interaction.guild.id,
+        jugador1,
+        resultado === "empate"
+            ? "victoria"
+            : resultado === jugador1
+                ? "victoria"
+                : "derrota",
+        resultado === "empate"
+            ? 60
+            : resultado === jugador1
+                ? 110
+                : 10
+    );
+
+    await registrarResultado(
+        interaction.guild.id,
+        jugador2,
+        resultado === "empate"
+            ? "victoria"
+            : resultado === jugador2
+                ? "victoria"
+                : "derrota",
+        resultado === "empate"
+            ? 60
+            : resultado === jugador2
+                ? 110
+                : 10
+    );
+
+    const nombre1 =
+        partida.nombres.get(jugador1);
+
+    const nombre2 =
+        partida.nombres.get(jugador2);
+
+    let texto;
+
+    if (resultado === "empate") {
+        texto =
+            `🤝 **Empate**\n\n${nombre1}: 🎲 ${dado1}\n${nombre2}: 🎲 ${dado2}`;
+    } else {
+        const ganador =
+            resultado === jugador1
+                ? nombre1
+                : nombre2;
+
+        texto =
+            `🏆 **${ganador} gana el duelo**\n\n${nombre1}: 🎲 ${dado1}\n${nombre2}: 🎲 ${dado2}`;
+    }
+
+    await interaction.update({
+        embeds: [
+            new EmbedBuilder()
+                .setTitle("⚔️ RESULTADO DEL DUELO")
+                .setDescription(
+                    [
+                        texto,
+                        "",
+                        "🏆 Victoria: +100 puntos",
+                        "🤝 Empate: +50 puntos",
+                        "🪙 Participación: +10 puntos"
+                    ].join("\n")
+                )
+                .setColor(0x57F287)
+        ],
+        components: []
+    });
+}
+
+async function cancelarDueloPorTiempo(
+    channel,
+    messageId
+) {
+    const partida =
+        partidasDuelo.get(messageId);
+
+    if (!partida) {
+        return;
+    }
+
+    partidasDuelo.delete(messageId);
+
+    try {
+        const message =
+            await channel.messages.fetch(messageId);
+
+        await message.edit({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle("⚔️ DUELO")
+                    .setDescription(
+                        "⌛ El tiempo para encontrar un rival ha terminado."
+                    )
+                    .setColor(0xED4245)
+            ],
+            components: []
+        });
+    } catch {}
+}
+
+// ============================================================
+// CARA O CRUZ
+// ============================================================
+
+function crearEmbedCaraOCruz() {
+    return new EmbedBuilder()
+        .setTitle("🪙 CARA O CRUZ")
+        .setDescription(
+            [
+                "Elige una opción.",
+                "",
+                "🪙 **Cara** → +20 puntos si aciertas",
+                "🪙 **Cruz** → +20 puntos si aciertas",
+                "",
+                "❌ Si fallas, pierdes la partida."
+            ].join("\n")
+        )
+        .setColor(0xF1C40F);
+}
+
+function crearBotonesCaraOCruz() {
+    return new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId("minijuegos_cara")
+                .setLabel("Cara")
+                .setEmoji("🙂")
+                .setStyle(ButtonStyle.Primary),
+
+            new ButtonBuilder()
+                .setCustomId("minijuegos_cruz")
+                .setLabel("Cruz")
+                .setEmoji("✖️")
+                .setStyle(ButtonStyle.Primary),
+
+            new ButtonBuilder()
+                .setCustomId("minijuegos_volver")
+                .setLabel("Volver")
+                .setEmoji("↩️")
+                .setStyle(ButtonStyle.Secondary)
+        );
+}
+
+async function jugarCaraOCruz(
+    interaction,
+    eleccion
+) {
+    const resultado =
+        Math.random() < 0.5
+            ? "cara"
+            : "cruz";
+
+    const acierto =
+        eleccion === resultado;
+
+    const puntos =
+        acierto ? 20 : 0;
+
+    const perfil =
+        await registrarResultado(
+            interaction.guild.id,
+            interaction.user.id,
+            acierto
+                ? "victoria"
+                : "derrota",
+            puntos
+        );
+
+    await interaction.update({
+        embeds: [
+            new EmbedBuilder()
+                .setTitle("🪙 RESULTADO CARA O CRUZ")
+                .setDescription(
+                    [
+                        `Tu elección: **${eleccion === "cara" ? "🙂 Cara" : "✖️ Cruz"}**`,
+                        `Resultado: **${resultado === "cara" ? "🙂 Cara" : "✖️ Cruz"}**`,
+                        "",
+                        acierto
+                            ? "🎉 **¡Has acertado! +20 puntos**"
+                            : "❌ **Has fallado.**",
+                        "",
+                        `🪙 Puntos actuales: **${perfil.puntos}**`
+                    ].join("\n")
+                )
+                .setColor(
+                    acierto
+                        ? 0x57F287
+                        : 0xED4245
+                )
+        ],
+        components: [
+            crearBotonesCaraOCruz()
+        ]
+    });
+}
+
+// ============================================================
+// BLACKJACK
+// ============================================================
+
+function cartaAleatoria() {
+    return Math.floor(Math.random() * 10) + 1;
+}
+
+function calcularMano(cartas) {
+    return cartas.reduce(
+        (total, carta) => total + carta,
+        0
+    );
+}
+
+function crearEmbedBlackjack(partida) {
+    return new EmbedBuilder()
+        .setTitle("🃏 21 / BLACKJACK")
+        .setDescription(
+            [
+                `Tus cartas: **${partida.cartas.join(" • ")}**`,
+                "",
+                `🎯 Total: **${calcularMano(partida.cartas)}**`,
+                "",
+                "🃏 **Pedir** → roba otra carta",
+                "🛑 **Plantarse** → termina la partida",
+                "",
+                "🎯 Llegar a 21: **+100 puntos**",
+                "🏆 Ganar: **+50 puntos**",
+                "❌ Perder: **0 puntos**"
+            ].join("\n")
+        )
+        .setColor(0x9B59B6);
+}
+
+function crearBotonesBlackjack() {
+    return new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId("minijuegos_blackjack_pedir")
+                .setLabel("Pedir")
+                .setEmoji("🃏")
+                .setStyle(ButtonStyle.Primary),
+
+            new ButtonBuilder()
+                .setCustomId("minijuegos_blackjack_plantarse")
+                .setLabel("Plantarse")
+                .setEmoji("🛑")
+                .setStyle(ButtonStyle.Success),
+
+            new ButtonBuilder()
+                .setCustomId("minijuegos_volver")
+                .setLabel("Volver")
+                .setEmoji("↩️")
+                .setStyle(ButtonStyle.Secondary)
+        );
+}
+
+async function iniciarBlackjack(interaction) {
+    const cartas = [
+        cartaAleatoria(),
+        cartaAleatoria()
+    ];
+
+    const partida = {
+        userId: interaction.user.id,
+        cartas,
+        finalizada: false
+    };
+
+    const message =
+        await interaction.update({
+            embeds: [
+                crearEmbedBlackjack(partida)
+            ],
+            components: [
+                crearBotonesBlackjack()
+            ]
+        });
+
+    const reply =
+        await interaction.fetchReply();
+
+    partidasBlackjack.set(
+        reply.id,
+        partida
+    );
+}
+
+async function finalizarBlackjack(
+    interaction,
+    partida,
+    resultado,
+    puntos
+) {
+    partida.finalizada = true;
+
+    const perfil =
+        await registrarResultado(
+            interaction.guild.id,
+            interaction.user.id,
+            resultado,
+            puntos
+        );
+
+    partidasBlackjack.delete(
+        interaction.message.id
+    );
+
+    await interaction.update({
+        embeds: [
+            new EmbedBuilder()
+                .setTitle("🃏 RESULTADO BLACKJACK")
+                .setDescription(
+                    [
+                        `Tus cartas: **${partida.cartas.join(" • ")}**`,
+                        "",
+                        `🎯 Total: **${calcularMano(partida.cartas)}**`,
+                        "",
+                        resultado === "victoria"
+                            ? `🎉 **¡Has ganado! +${puntos} puntos**`
+                            : "❌ **Has perdido.**",
+                        "",
+                        `🪙 Puntos actuales: **${perfil.puntos}**`
+                    ].join("\n")
+                )
+                .setColor(
+                    resultado === "victoria"
+                        ? 0x57F287
+                        : 0xED4245
+                )
+        ],
+        components: [
+            botonVolver()
+        ]
+    });
+}
+
+// ============================================================
+// HANDLER PRINCIPAL
+// ============================================================
+
+async function ejecutar(interaction) {
+    await interaction.reply({
+        embeds: [
+            crearEmbedPrincipal()
+        ],
+        components: [
+            crearMenuPrincipal()
+        ]
+    });
+}
+
+// ============================================================
+// SELECT MENUS
+// ============================================================
+
+async function manejarSelectMenu(interaction) {
+    if (interaction.customId === "minijuegos_menu") {
+        const opcion =
+            interaction.values[0];
+
+        if (opcion === "dados") {
+            return iniciarDados(interaction);
+        }
+
+        if (opcion === "duelo") {
+            return iniciarDuelo(interaction);
+        }
+
+        if (opcion === "cara_cruz") {
+            return interaction.update({
+                embeds: [
+                    crearEmbedCaraOCruz()
+                ],
+                components: [
+                    crearBotonesCaraOCruz()
+                ]
+            });
+        }
+
+        if (opcion === "blackjack") {
+            return iniciarBlackjack(interaction);
+        }
+
+        if (opcion === "tragaperras") {
+            return interaction.update({
+                embeds: [
+                    new EmbedBuilder()
+                        .setTitle("🎰 TRAGAPERRAS")
+                        .setDescription(
+                            [
+                                "Prueba tu suerte.",
+                                "",
+                                "🍒🍒🍒 → **+100 puntos**",
+                                "🍋🍋🍋 → **+150 puntos**",
+                                "🍊🍊🍊 → **+200 puntos**",
+                                "💎💎💎 → **+400 puntos**",
+                                "7️⃣7️⃣7️⃣ → **+800 puntos**",
+                                "",
+                                "🔸 Dos iguales → **+40 puntos**",
+                                "🔸 Todo diferente → **0 puntos**",
+                                "",
+                                "⏱️ Puedes jugar cada **10 segundos**."
+                            ].join("\n")
+                        )
+                        .setColor(0xE67E22)
+                ],
+                components: [
+                    crearMenuTragaperras()
+                ]
+            });
+        }
+
+        if (opcion === "estadisticas") {
+            return mostrarEstadisticas(interaction);
+        }
+
+        if (opcion === "tienda") {
+            const perfil =
+                await obtenerPerfil(
+                    interaction.guild.id,
+                    interaction.user.id
+                );
+
+            return interaction.update({
+                embeds: [
+                    crearEmbedTienda(perfil)
+                ],
+                components: [
+                    crearMenuTienda()
+                ]
+            });
+        }
+    }
 
     if (
-        customId ===
+        interaction.customId ===
+        "minijuegos_color_seleccionar"
+    ) {
+        const colorKey =
+            interaction.values[0];
+
+        const color =
+            COLORES_PERSONALIZADOS[colorKey];
+
+        if (!color) {
+            return interaction.reply({
+                content:
+                    "❌ Ese color no existe.",
+                ephemeral: true
+            });
+        }
+
+        const perfil =
+            await obtenerPerfil(
+                interaction.guild.id,
+                interaction.user.id
+            );
+
+        if (
+            perfil.puntos <
+            PRECIO_COLOR_PERSONALIZADO
+        ) {
+            return interaction.reply({
+                content:
+                    `❌ Necesitas **${PRECIO_COLOR_PERSONALIZADO} puntos** y tienes **${perfil.puntos}**.`,
+                ephemeral: true
+            });
+        }
+
+        const key =
+            `${interaction.guild.id}:${interaction.user.id}`;
+
+        coloresPendientes.set(
+            key,
+            {
+                colorKey,
+                expiresAt:
+                    Date.now() + 5 * 60 * 1000
+            }
+        );
+
+        return interaction.showModal(
+            crearModalNombreRol()
+        );
+    }
+}
+
+// ============================================================
+// BOTONES
+// ============================================================
+
+async function manejarBoton(interaction) {
+    const id = interaction.customId;
+
+    // --------------------------------------------------------
+    // VOLVER
+    // --------------------------------------------------------
+
+    if (id === "minijuegos_volver") {
+        return interaction.update({
+            embeds: [
+                crearEmbedPrincipal()
+            ],
+            components: [
+                crearMenuPrincipal()
+            ]
+        });
+    }
+
+    // --------------------------------------------------------
+    // TIENDA
+    // --------------------------------------------------------
+
+    if (
+        id ===
         "minijuegos_tienda_color"
     ) {
         const perfil =
@@ -1546,2372 +1515,602 @@ async function manejarBoton(
             perfil.puntos <
             PRECIO_COLOR_PERSONALIZADO
         ) {
-            await interaction.reply({
+            return interaction.reply({
                 content:
-                    `❌ No tienes suficientes puntos.\n\n` +
-                    `💰 Tienes: **${perfil.puntos} puntos**\n` +
-                    `🎨 Necesitas: **${PRECIO_COLOR_PERSONALIZADO} puntos**\n` +
-                    `📉 Te faltan: **${PRECIO_COLOR_PERSONALIZADO - perfil.puntos} puntos**`,
+                    `❌ Necesitas **${PRECIO_COLOR_PERSONALIZADO} puntos** para comprar un color personalizado.\n\n🪙 Actualmente tienes **${perfil.puntos}**.`,
                 ephemeral: true
             });
-
-            return true;
         }
 
-        const menuColores =
-            new StringSelectMenuBuilder()
-                .setCustomId(
-                    "minijuegos_color_seleccionar"
-                )
-                .setPlaceholder(
-                    "🎨 Selecciona tu color"
-                )
-                .addOptions(
-                    Object.entries(
-                        COLORES_PERSONALIZADOS
-                    ).map(
-                        (
-                            [
-                                valor,
-                                color
-                            ]
-                        ) => ({
-                            label:
-                                color.nombre,
-                            description:
-                                `${color.nombre} • ${PRECIO_COLOR_PERSONALIZADO} puntos`,
-                            value:
-                                valor,
-                            emoji:
-                                color.emoji
-                        })
-                    )
-                );
-
-        const embed =
-            new EmbedBuilder()
-                .setTitle(
-                    "🎨 ELIGE TU COLOR"
-                )
-                .setDescription(
-                    `Selecciona el color que quieres para tu nuevo rol.\n\n` +
-
-                    `💰 **Precio:** ${PRECIO_COLOR_PERSONALIZADO} puntos\n` +
-                    `🪙 **Tus puntos:** ${perfil.puntos}\n\n` +
-
-                    "📝 Después de elegir el color, RustLogix te pedirá el **nombre que quieres ponerle al rol**."
-                )
-                .setColor(0x5865F2)
-                .setFooter({
-                    text:
-                        "RustLogix • Tienda"
-                });
-
-        const cancelar =
-            new ButtonBuilder()
-                .setCustomId(
-                    "minijuegos_volver"
-                )
-                .setLabel(
-                    "Cancelar"
-                )
-                .setEmoji("↩️")
-                .setStyle(
-                    ButtonStyle.Secondary
-                );
-
-        await interaction.update({
+        return interaction.update({
             embeds: [
-                embed
+                new EmbedBuilder()
+                    .setTitle("🎨 ELIGE TU COLOR")
+                    .setDescription(
+                        [
+                            `🪙 Precio: **${PRECIO_COLOR_PERSONALIZADO} puntos**`,
+                            "",
+                            "Selecciona el color que quieres para tu rol.",
+                            "",
+                            "Después podrás escribir el **nombre personalizado** del rol."
+                        ].join("\n")
+                    )
+                    .setColor(0x5865F2)
             ],
             components: [
-                new ActionRowBuilder()
-                    .addComponents(
-                        menuColores
-                    ),
-                new ActionRowBuilder()
-                    .addComponents(
-                        cancelar
-                    )
+                crearMenuColores(),
+                botonVolver()
             ]
         });
-
-        return true;
     }
 
-    // ========================================================
+    // --------------------------------------------------------
     // TRAGAPERRAS
-    // ========================================================
+    // --------------------------------------------------------
 
     if (
-        customId ===
+        id ===
         "minijuegos_tragaperras_jugar"
     ) {
-        const ahora =
-            Date.now();
-
-        const ultimoJuego =
-            cooldownTragaperras.get(
-                interaction.user.id
-            );
-
-        if (
-            ultimoJuego &&
-            ahora -
-                ultimoJuego <
-                COOLDOWN_TRAGAPERRAS
-        ) {
-            const restante =
-                Math.ceil(
-                    (
-                        COOLDOWN_TRAGAPERRAS -
-                        (
-                            ahora -
-                            ultimoJuego
-                        )
-                    ) /
-                        1000
-                );
-
-            await interaction.reply({
-                content:
-                    `⏱️ Debes esperar **${restante} segundos** para volver a jugar.`,
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        cooldownTragaperras.set(
-            interaction.user.id,
-            ahora
+        return jugarTragaperras(
+            interaction
         );
-
-        const simbolos = [
-            "🍒",
-            "🍋",
-            "🍊",
-            "💎",
-            "7️⃣"
-        ];
-
-        const resultado = [
-            simbolos[
-                Math.floor(
-                    Math.random() *
-                        simbolos.length
-                )
-            ],
-
-            simbolos[
-                Math.floor(
-                    Math.random() *
-                        simbolos.length
-                )
-            ],
-
-            simbolos[
-                Math.floor(
-                    Math.random() *
-                        simbolos.length
-                )
-            ]
-        ];
-
-        let puntos = 0;
-        let mensaje =
-            "❌ **Sin premio esta vez.**";
-
-        if (
-            resultado.every(
-                simbolo =>
-                    simbolo ===
-                    "🍒"
-            )
-        ) {
-            puntos =
-                20;
-
-            mensaje =
-                "🍒 **¡Tres cerezas! +20 puntos**";
-        } else if (
-            resultado.every(
-                simbolo =>
-                    simbolo ===
-                    "🍋"
-            )
-        ) {
-            puntos =
-                30;
-
-            mensaje =
-                "🍋 **¡Tres limones! +30 puntos**";
-        } else if (
-            resultado.every(
-                simbolo =>
-                    simbolo ===
-                    "🍊"
-            )
-        ) {
-            puntos =
-                40;
-
-            mensaje =
-                "🍊 **¡Tres naranjas! +40 puntos**";
-        } else if (
-            resultado.every(
-                simbolo =>
-                    simbolo ===
-                    "💎"
-            )
-        ) {
-            puntos =
-                100;
-
-            mensaje =
-                "💎 **¡TRES DIAMANTES! +100 puntos**";
-        } else if (
-            resultado.every(
-                simbolo =>
-                    simbolo ===
-                    "7️⃣"
-            )
-        ) {
-            puntos =
-                300;
-
-            mensaje =
-                "🎉 **¡777! PREMIO MÁXIMO +300 PUNTOS**";
-        }
-
-        const perfil =
-            await obtenerPerfil(
-                interaction.guild.id,
-                interaction.user.id
-            );
-
-        perfil.partidas += 1;
-        perfil.puntos += puntos;
-
-        await perfil.save();
-
-        const embed =
-            new EmbedBuilder()
-                .setTitle(
-                    "🎰 RESULTADO TRAGAPERRAS"
-                )
-                .setDescription(
-                    `👤 <@${interaction.user.id}>\n\n` +
-
-                    `🎰 **${resultado.join(" │ ")}**\n\n` +
-
-                    `${mensaje}\n\n` +
-
-                    `💰 **Tus puntos:** ${perfil.puntos}\n\n` +
-
-                    "⏱️ Puedes volver a jugar en **10 segundos**."
-                )
-                .setColor(
-                    puntos > 0
-                        ? 0x2ECC71
-                        : 0xE74C3C
-                )
-                .setFooter({
-                    text:
-                        "RustLogix • Tragaperras"
-                });
-
-        const jugar =
-            new ButtonBuilder()
-                .setCustomId(
-                    "minijuegos_tragaperras_jugar"
-                )
-                .setLabel(
-                    "Jugar otra vez"
-                )
-                .setEmoji("🎰")
-                .setStyle(
-                    ButtonStyle.Success
-                );
-
-        const volver =
-            new ButtonBuilder()
-                .setCustomId(
-                    "minijuegos_volver"
-                )
-                .setLabel(
-                    "Volver"
-                )
-                .setEmoji("↩️")
-                .setStyle(
-                    ButtonStyle.Secondary
-                );
-
-        await interaction.update({
-            embeds: [
-                embed
-            ],
-            components: [
-                new ActionRowBuilder()
-                    .addComponents(
-                        jugar,
-                        volver
-                    )
-            ]
-        });
-
-        return true;
     }
 
-    // ========================================================
-    // DADOS - CREAR
-    // ========================================================
+    // --------------------------------------------------------
+    // DADOS
+    // --------------------------------------------------------
 
     if (
-        customId ===
-        "minijuegos_dados_crear"
+        id ===
+        "minijuegos_dados_unirse"
     ) {
-        const partidaExistente =
-            [
-                ...partidasDados.values()
-            ].find(
-                partida =>
-                    partida.guildId ===
-                        interaction.guild.id &&
-                    partida.jugadores.some(
-                        jugador =>
-                            jugador.userId ===
-                            interaction.user.id
-                    )
-            );
-
-        if (
-            partidaExistente
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ Ya estás participando en una partida de dados.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        const id =
-            `${interaction.guild.id}_${Date.now()}_${interaction.user.id}`;
-
-        const partida = {
-            id,
-            guildId:
-                interaction.guild.id,
-            canalId:
-                interaction.channel.id,
-            creadorId:
-                interaction.user.id,
-            jugadores: [
-                {
-                    userId:
-                        interaction.user.id,
-                    nombre:
-                        interaction.user.username
-                }
-            ],
-            iniciada:
-                false
-        };
-
-        partidasDados.set(
-            id,
-            partida
-        );
-
-        await interaction.update(
-            crearMensajePartida(
-                partida
-            )
-        );
-
-        setTimeout(
-            async () => {
-                const actual =
-                    partidasDados.get(
-                        id
-                    );
-
-                if (
-                    !actual ||
-                    actual.iniciada
-                ) {
-                    return;
-                }
-
-                partidasDados.delete(
-                    id
-                );
-
-                try {
-                    await interaction.editReply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setTitle(
-                                    "⏰ PARTIDA EXPIRADA"
-                                )
-                                .setDescription(
-                                    "La partida de dados expiró porque no fue iniciada a tiempo."
-                                )
-                                .setColor(
-                                    0xE74C3C
-                                )
-                        ],
-                        components: []
-                    });
-                } catch (error) {
-                    console.error(
-                        "❌ Error cerrando partida de dados:",
-                        error.message
-                    );
-                }
-            },
-            TIEMPO_ESPERA_PARTIDA
-        );
-
-        return true;
+        return interaction.reply({
+            content:
+                "❌ Esta partida ya no está disponible.",
+            ephemeral: true
+        });
     }
 
-    // ========================================================
-    // DADOS - UNIRSE
-    // ========================================================
-
     if (
-        customId.startsWith(
+        id.startsWith(
             "minijuegos_dados_unirse_"
         )
     ) {
-        const id =
-            customId.replace(
+        const messageId =
+            id.replace(
                 "minijuegos_dados_unirse_",
                 ""
             );
 
         const partida =
-            partidasDados.get(
-                id
-            );
+            partidasDados.get(messageId);
 
-        if (!partida) {
-            await interaction.reply({
+        if (!partida || partida.finalizada) {
+            return interaction.reply({
                 content:
-                    "❌ Esta partida ya no existe.",
+                    "❌ Esta partida ya ha terminado.",
                 ephemeral: true
             });
-
-            return true;
         }
 
         if (
-            partida.iniciada
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ La partida ya comenzó.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        if (
-            partida.jugadores.some(
-                jugador =>
-                    jugador.userId ===
-                    interaction.user.id
+            partida.jugadores.includes(
+                interaction.user.id
             )
         ) {
-            await interaction.reply({
+            return interaction.reply({
                 content:
-                    "⚠️ Ya estás dentro de esta partida.",
+                    "❌ Ya estás dentro de esta partida.",
                 ephemeral: true
             });
-
-            return true;
         }
 
         if (
             partida.jugadores.length >=
             MAX_JUGADORES
         ) {
-            await interaction.reply({
+            return interaction.reply({
                 content:
-                    "❌ La partida ya está llena.",
+                    "❌ La partida está llena.",
                 ephemeral: true
             });
-
-            return true;
         }
 
-        partida.jugadores.push({
-            userId:
-                interaction.user.id,
-            nombre:
-                interaction.user.username
-        });
-
-        await interaction.update(
-            crearMensajePartida(
-                partida
-            )
+        partida.jugadores.push(
+            interaction.user.id
         );
 
-        return true;
-    }
-
-    // ========================================================
-    // DADOS - INICIAR
-    // ========================================================
-
-    if (
-        customId.startsWith(
-            "minijuegos_dados_iniciar_"
-        )
-    ) {
-        const id =
-            customId.replace(
-                "minijuegos_dados_iniciar_",
-                ""
-            );
-
-        const partida =
-            partidasDados.get(
-                id
-            );
-
-        if (!partida) {
-            await interaction.reply({
-                content:
-                    "❌ Esta partida ya no existe.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        if (
-            interaction.user.id !==
-            partida.creadorId
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ Solo el creador puede iniciar la partida.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        if (
-            partida.jugadores.length <
-            2
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ Necesitas al menos **2 jugadores** para comenzar.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        partida.iniciada =
-            true;
-
-        const resultados = [];
-
-        for (
-            const jugador of
-            partida.jugadores
-        ) {
-            resultados.push({
-                userId:
-                    jugador.userId,
-                nombre:
-                    jugador.nombre,
-                dado:
-                    Math.floor(
-                        Math.random() *
-                            6
-                    ) + 1
-            });
-        }
-
-        const mayor =
-            Math.max(
-                ...resultados.map(
-                    resultado =>
-                        resultado.dado
-                )
-            );
-
-        const ganadores =
-            resultados.filter(
-                resultado =>
-                    resultado.dado ===
-                    mayor
-            );
-
-        resultados.sort(
-            (a, b) =>
-                b.dado -
-                a.dado
-        );
-
-        const textoResultados =
-            resultados
-                .map(
-                    resultado =>
-                        `🎲 <@${resultado.userId}> → **${resultado.dado}**`
-                )
-                .join("\n");
-
-        for (
-            const resultado of
-            resultados
-        ) {
-            const perfil =
-                await obtenerPerfil(
-                    partida.guildId,
-                    resultado.userId
-                );
-
-            perfil.partidas += 1;
-            perfil.puntos += 10;
-
-            if (
-                resultado.dado ===
-                mayor
-            ) {
-                perfil.victorias += 1;
-
-                perfil.puntos +=
-                    ganadores.length ===
-                        1
-                        ? 100
-                        : 50;
-            } else {
-                perfil.derrotas += 1;
-            }
-
-            await perfil.save();
-        }
-
-        let ganadorTexto;
-
-        if (
-            ganadores.length ===
-            1
-        ) {
-            ganadorTexto =
-                `🏆 **Ganador:** <@${ganadores[0].userId}>\n` +
-                `🎲 Sacó un **${mayor}**\n` +
-                `💰 **+110 puntos**`;
-        } else {
-            ganadorTexto =
-                `🏆 **Empate entre ${ganadores.length} jugadores**\n` +
-                `🎲 Todos sacaron **${mayor}**\n` +
-                `💰 **+60 puntos** para cada ganador`;
-        }
-
-        const embed =
-            new EmbedBuilder()
-                .setTitle(
-                    "🎲 RESULTADO DE LOS DADOS"
-                )
-                .setDescription(
-                    `${textoResultados}\n\n` +
-                    `${ganadorTexto}\n\n` +
-                    "🎮 Los demás participantes reciben **+10 puntos**."
-                )
-                .setColor(
-                    0x2ECC71
-                )
-                .setFooter({
-                    text:
-                        "RustLogix • Minijuegos"
-                });
-
-        partidasDados.delete(
-            id
+        partida.nombres.set(
+            interaction.user.id,
+            interaction.user.username
         );
 
         await interaction.update({
             embeds: [
-                embed
+                crearEmbedDados(partida)
             ],
             components: [
-                new ActionRowBuilder()
-                    .addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(
-                                "minijuegos_volver"
-                            )
-                            .setLabel(
-                                "Volver a Minijuegos"
-                            )
-                            .setEmoji("🎮")
-                            .setStyle(
-                                ButtonStyle.Secondary
-                            )
-                    )
+                crearBotonesDados(messageId)
             ]
         });
 
-        return true;
+        return;
     }
 
-    // ========================================================
-    // DADOS - CANCELAR
-    // ========================================================
+    if (
+        id.startsWith(
+            "minijuegos_dados_empezar_"
+        )
+    ) {
+        const messageId =
+            id.replace(
+                "minijuegos_dados_empezar_",
+                ""
+            );
+
+        const partida =
+            partidasDados.get(messageId);
+
+        if (!partida) {
+            return interaction.reply({
+                content:
+                    "❌ Esta partida ya ha terminado.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            partida.creador !==
+            interaction.user.id
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Solo el creador puede iniciar la partida.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            partida.jugadores.length < 2
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Necesitas al menos 2 jugadores.",
+                ephemeral: true
+            });
+        }
+
+        return terminarDados(
+            interaction.client,
+            interaction.channel,
+            messageId
+        );
+    }
 
     if (
-        customId.startsWith(
+        id.startsWith(
             "minijuegos_dados_cancelar_"
         )
     ) {
-        const id =
-            customId.replace(
+        const messageId =
+            id.replace(
                 "minijuegos_dados_cancelar_",
                 ""
             );
 
         const partida =
-            partidasDados.get(
-                id
-            );
+            partidasDados.get(messageId);
 
         if (!partida) {
-            await interaction.reply({
+            return interaction.reply({
                 content:
-                    "❌ Esta partida ya no existe.",
+                    "❌ Esta partida ya ha terminado.",
                 ephemeral: true
             });
-
-            return true;
         }
 
         if (
-            interaction.user.id !==
-            partida.creadorId
+            partida.creador !==
+            interaction.user.id
         ) {
-            await interaction.reply({
+            return interaction.reply({
                 content:
                     "❌ Solo el creador puede cancelar la partida.",
                 ephemeral: true
             });
+        }
 
-            return true;
+        partida.finalizada = true;
+
+        if (partida.timeout) {
+            clearTimeout(partida.timeout);
         }
 
         partidasDados.delete(
-            id
+            messageId
         );
 
-        await interaction.update({
+        return interaction.update({
             embeds: [
                 new EmbedBuilder()
-                    .setTitle(
-                        "❌ PARTIDA CANCELADA"
-                    )
+                    .setTitle("🎲 DADOS")
                     .setDescription(
-                        "La partida de dados fue cancelada por el creador."
+                        "❌ La partida ha sido cancelada."
                     )
-                    .setColor(
-                        0xE74C3C
-                    )
+                    .setColor(0xED4245)
             ],
-            components: [
-                new ActionRowBuilder()
-                    .addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(
-                                "minijuegos_volver"
-                            )
-                            .setLabel(
-                                "Volver a Minijuegos"
-                            )
-                            .setEmoji("🎮")
-                            .setStyle(
-                                ButtonStyle.Secondary
-                            )
-                    )
-            ]
+            components: []
         });
-
-        return true;
     }
 
-    // ========================================================
-    // DUELO - CREAR
-    // ========================================================
+    // --------------------------------------------------------
+    // DUELO
+    // --------------------------------------------------------
 
     if (
-        customId ===
-        "minijuegos_duelo_crear"
-    ) {
-        const existente =
-            [
-                ...partidasDuelo.values()
-            ].find(
-                partida =>
-                    partida.guildId ===
-                        interaction.guild.id &&
-                    (
-                        partida.creadorId ===
-                            interaction.user.id ||
-                        partida.oponenteId ===
-                            interaction.user.id
-                    )
-            );
-
-        if (
-            existente
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ Ya tienes un duelo activo.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        const id =
-            `${interaction.guild.id}_${Date.now()}_${interaction.user.id}`;
-
-        const partida = {
-            id,
-            guildId:
-                interaction.guild.id,
-            canalId:
-                interaction.channel.id,
-            creadorId:
-                interaction.user.id,
-            oponenteId:
-                null,
-            iniciada:
-                false
-        };
-
-        partidasDuelo.set(
-            id,
-            partida
-        );
-
-        await interaction.update(
-            crearMensajeDuelo(
-                partida
-            )
-        );
-
-        setTimeout(
-            async () => {
-                const actual =
-                    partidasDuelo.get(
-                        id
-                    );
-
-                if (
-                    !actual ||
-                    actual.iniciada
-                ) {
-                    return;
-                }
-
-                partidasDuelo.delete(
-                    id
-                );
-
-                try {
-                    await interaction.editReply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setTitle(
-                                    "⏰ DUELO EXPIRADO"
-                                )
-                                .setDescription(
-                                    "El desafío expiró porque nadie inició el duelo."
-                                )
-                                .setColor(
-                                    0xE74C3C
-                                )
-                        ],
-                        components: []
-                    });
-                } catch (error) {
-                    console.error(
-                        "❌ Error cerrando duelo:",
-                        error.message
-                    );
-                }
-            },
-            TIEMPO_DUELO
-        );
-
-        return true;
-    }
-
-    // ========================================================
-    // DUELO - UNIRSE
-    // ========================================================
-
-    if (
-        customId.startsWith(
+        id.startsWith(
             "minijuegos_duelo_unirse_"
         )
     ) {
-        const id =
-            customId.replace(
+        const messageId =
+            id.replace(
                 "minijuegos_duelo_unirse_",
                 ""
             );
 
         const partida =
-            partidasDuelo.get(
-                id
-            );
+            partidasDuelo.get(messageId);
 
-        if (!partida) {
-            await interaction.reply({
+        if (!partida || partida.finalizada) {
+            return interaction.reply({
                 content:
-                    "❌ Este duelo ya no existe.",
+                    "❌ Este duelo ya terminó.",
                 ephemeral: true
             });
-
-            return true;
         }
 
         if (
-            interaction.user.id ===
-            partida.creadorId
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ No puedes enfrentarte contra ti mismo.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        if (
-            partida.oponenteId
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ Este duelo ya tiene un oponente.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        partida.oponenteId =
-            interaction.user.id;
-
-        await interaction.update(
-            crearMensajeDuelo(
-                partida
+            partida.jugadores.includes(
+                interaction.user.id
             )
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Ya estás dentro del duelo.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            partida.jugadores.length >= 2
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ El duelo ya está completo.",
+                ephemeral: true
+            });
+        }
+
+        partida.jugadores.push(
+            interaction.user.id
         );
 
-        return true;
-    }
+        partida.nombres.set(
+            interaction.user.id,
+            interaction.user.username
+        );
 
-    // ========================================================
-    // DUELO - INICIAR
-    // ========================================================
-
-    if (
-        customId.startsWith(
-            "minijuegos_duelo_iniciar_"
-        )
-    ) {
-        const id =
-            customId.replace(
-                "minijuegos_duelo_iniciar_",
-                ""
+        if (
+            partida.jugadores.length === 2
+        ) {
+            return comenzarDuelo(
+                interaction,
+                messageId
             );
-
-        const partida =
-            partidasDuelo.get(
-                id
-            );
-
-        if (!partida) {
-            await interaction.reply({
-                content:
-                    "❌ Este duelo ya no existe.",
-                ephemeral: true
-            });
-
-            return true;
         }
 
-        if (
-            interaction.user.id !==
-            partida.creadorId
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ Solo el creador puede iniciar el duelo.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        if (
-            !partida.oponenteId
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ Todavía falta un jugador.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        partida.iniciada =
-            true;
-
-        const dado1 =
-            Math.floor(
-                Math.random() *
-                    6
-            ) + 1;
-
-        const dado2 =
-            Math.floor(
-                Math.random() *
-                    6
-            ) + 1;
-
-        let resultado;
-        let ganadorId =
-            null;
-
-        if (
-            dado1 > dado2
-        ) {
-            ganadorId =
-                partida.creadorId;
-
-            resultado =
-                `🏆 **Ganador:** <@${partida.creadorId}>`;
-        } else if (
-            dado2 > dado1
-        ) {
-            ganadorId =
-                partida.oponenteId;
-
-            resultado =
-                `🏆 **Ganador:** <@${partida.oponenteId}>`;
-        } else {
-            resultado =
-                "🤝 **¡Empate!**";
-        }
-
-        await registrarResultado(
-            partida.guildId,
-            partida.creadorId,
-            ganadorId === null
-                ? "empate"
-                : ganadorId ===
-                    partida.creadorId
-                    ? "victoria"
-                    : "derrota",
-            ganadorId === null
-                ? 10
-                : ganadorId ===
-                    partida.creadorId
-                    ? 110
-                    : 10
-        );
-
-        await registrarResultado(
-            partida.guildId,
-            partida.oponenteId,
-            ganadorId === null
-                ? "empate"
-                : ganadorId ===
-                    partida.oponenteId
-                    ? "victoria"
-                    : "derrota",
-            ganadorId === null
-                ? 10
-                : ganadorId ===
-                    partida.oponenteId
-                    ? 110
-                    : 10
-        );
-
-        const embed =
-            new EmbedBuilder()
-                .setTitle(
-                    "⚔️ RESULTADO DEL DUELO"
-                )
-                .setDescription(
-                    `👤 <@${partida.creadorId}> → 🎲 **${dado1}**\n` +
-                    `👤 <@${partida.oponenteId}> → 🎲 **${dado2}**\n\n` +
-
-                    `${resultado}\n\n` +
-
-                    (
-                        ganadorId
-                            ? "💰 El ganador recibe **+110 puntos**.\n🎮 El perdedor recibe **+10 puntos**."
-                            : "💰 Ambos reciben **+10 puntos**."
-                    )
-                )
-                .setColor(
-                    ganadorId
-                        ? 0x2ECC71
-                        : 0xF1C40F
-                );
-
-        partidasDuelo.delete(
-            id
-        );
-
-        await interaction.update({
+        return interaction.update({
             embeds: [
-                embed
+                crearEmbedDuelo(partida)
             ],
-            components: [
-                new ActionRowBuilder()
-                    .addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(
-                                "minijuegos_volver"
-                            )
-                            .setLabel(
-                                "Volver a Minijuegos"
-                            )
-                            .setEmoji("🎮")
-                            .setStyle(
-                                ButtonStyle.Secondary
-                            )
-                    )
-            ]
+            components: []
         });
-
-        return true;
     }
 
-    // ========================================================
-    // DUELO - CANCELAR
-    // ========================================================
-
     if (
-        customId.startsWith(
+        id.startsWith(
             "minijuegos_duelo_cancelar_"
         )
     ) {
-        const id =
-            customId.replace(
+        const messageId =
+            id.replace(
                 "minijuegos_duelo_cancelar_",
                 ""
             );
 
         const partida =
-            partidasDuelo.get(
-                id
-            );
+            partidasDuelo.get(messageId);
 
         if (!partida) {
-            await interaction.reply({
+            return interaction.reply({
                 content:
-                    "❌ Este duelo ya no existe.",
+                    "❌ Este duelo ya terminó.",
                 ephemeral: true
             });
-
-            return true;
         }
 
         if (
-            interaction.user.id !==
-            partida.creadorId
+            partida.creador !==
+            interaction.user.id
         ) {
-            await interaction.reply({
+            return interaction.reply({
                 content:
                     "❌ Solo el creador puede cancelar el duelo.",
                 ephemeral: true
             });
+        }
 
-            return true;
+        if (partida.timeout) {
+            clearTimeout(partida.timeout);
         }
 
         partidasDuelo.delete(
-            id
+            messageId
         );
 
-        await interaction.update({
+        return interaction.update({
             embeds: [
                 new EmbedBuilder()
-                    .setTitle(
-                        "❌ DUELO CANCELADO"
-                    )
+                    .setTitle("⚔️ DUELO")
                     .setDescription(
-                        "El creador canceló el duelo."
+                        "❌ El duelo ha sido cancelado."
                     )
-                    .setColor(
-                        0xE74C3C
-                    )
+                    .setColor(0xED4245)
             ],
-            components: [
-                new ActionRowBuilder()
-                    .addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(
-                                "minijuegos_volver"
-                            )
-                            .setLabel(
-                                "Volver a Minijuegos"
-                            )
-                            .setEmoji("🎮")
-                            .setStyle(
-                                ButtonStyle.Secondary
-                            )
-                    )
-            ]
+            components: []
         });
-
-        return true;
     }
 
-    // ========================================================
-    // CARA O CRUZ - CREAR
-    // ========================================================
+    // --------------------------------------------------------
+    // CARA O CRUZ
+    // --------------------------------------------------------
 
-    if (
-        customId ===
-        "minijuegos_cara_cruz_crear"
-    ) {
-        const existente =
-            [
-                ...partidasCaraOCruz.values()
-            ].find(
-                partida =>
-                    partida.guildId ===
-                        interaction.guild.id &&
-                    (
-                        partida.creadorId ===
-                            interaction.user.id ||
-                        partida.oponenteId ===
-                            interaction.user.id
-                    )
-            );
-
-        if (
-            existente
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ Ya tienes un desafío de Cara o Cruz activo.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        const id =
-            `${interaction.guild.id}_${Date.now()}_${interaction.user.id}`;
-
-        const partida = {
-            id,
-            guildId:
-                interaction.guild.id,
-            canalId:
-                interaction.channel.id,
-            creadorId:
-                interaction.user.id,
-            oponenteId:
-                null,
-            eleccionCreador:
-                null,
-            iniciada:
-                false
-        };
-
-        partidasCaraOCruz.set(
-            id,
-            partida
+    if (id === "minijuegos_cara") {
+        return jugarCaraOCruz(
+            interaction,
+            "cara"
         );
-
-        await interaction.update(
-            crearMensajeCaraOCruz(
-                partida
-            )
-        );
-
-        setTimeout(
-            async () => {
-                const actual =
-                    partidasCaraOCruz.get(
-                        id
-                    );
-
-                if (
-                    !actual ||
-                    actual.iniciada
-                ) {
-                    return;
-                }
-
-                partidasCaraOCruz.delete(
-                    id
-                );
-
-                try {
-                    await interaction.editReply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setTitle(
-                                    "⏰ DESAFÍO EXPIRADO"
-                                )
-                                .setDescription(
-                                    "El desafío de Cara o Cruz expiró."
-                                )
-                                .setColor(
-                                    0xE74C3C
-                                )
-                        ],
-                        components: []
-                    });
-                } catch (error) {
-                    console.error(
-                        "❌ Error cerrando Cara o Cruz:",
-                        error.message
-                    );
-                }
-            },
-            TIEMPO_CARA_CRUZ
-        );
-
-        return true;
     }
 
-    // ========================================================
-    // CARA O CRUZ - UNIRSE
-    // ========================================================
-
-    if (
-        customId.startsWith(
-            "minijuegos_cara_cruz_unirse_"
-        )
-    ) {
-        const id =
-            customId.replace(
-                "minijuegos_cara_cruz_unirse_",
-                ""
-            );
-
-        const partida =
-            partidasCaraOCruz.get(
-                id
-            );
-
-        if (!partida) {
-            await interaction.reply({
-                content:
-                    "❌ Este desafío ya no existe.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        if (
-            interaction.user.id ===
-            partida.creadorId
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ No puedes jugar contra ti mismo.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        if (
-            partida.oponenteId
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ Este desafío ya tiene un jugador.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        partida.oponenteId =
-            interaction.user.id;
-
-        await interaction.update(
-            crearMensajeCaraOCruz(
-                partida
-            )
+    if (id === "minijuegos_cruz") {
+        return jugarCaraOCruz(
+            interaction,
+            "cruz"
         );
-
-        return true;
     }
 
-    // ========================================================
-    // CARA O CRUZ - ELECCIÓN
-    // ========================================================
+    // --------------------------------------------------------
+    // BLACKJACK
+    // --------------------------------------------------------
 
     if (
-        customId.startsWith(
-            "minijuegos_cara_cruz_cara_"
-        ) ||
-        customId.startsWith(
-            "minijuegos_cara_cruz_cruz_"
-        )
+        id ===
+        "minijuegos_blackjack_pedir"
     ) {
-        const esCara =
-            customId.startsWith(
-                "minijuegos_cara_cruz_cara_"
-            );
-
-        const prefijo =
-            esCara
-                ? "minijuegos_cara_cruz_cara_"
-                : "minijuegos_cara_cruz_cruz_";
-
-        const id =
-            customId.replace(
-                prefijo,
-                ""
-            );
-
-        const partida =
-            partidasCaraOCruz.get(
-                id
-            );
-
-        if (!partida) {
-            await interaction.reply({
-                content:
-                    "❌ Este desafío ya no existe.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        if (
-            interaction.user.id !==
-            partida.creadorId
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ Solo el creador puede elegir Cara o Cruz.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        if (
-            !partida.oponenteId
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ Primero debe unirse otro jugador.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        partida.eleccionCreador =
-            esCara
-                ? "cara"
-                : "cruz";
-
-        partida.iniciada =
-            true;
-
-        const eleccionOponente =
-            esCara
-                ? "cruz"
-                : "cara";
-
-        const resultado =
-            Math.random() <
-                0.5
-                ? "cara"
-                : "cruz";
-
-        const ganadorId =
-            resultado ===
-                partida.eleccionCreador
-                ? partida.creadorId
-                : partida.oponenteId;
-
-        await registrarResultado(
-            partida.guildId,
-            partida.creadorId,
-            ganadorId ===
-                partida.creadorId
-                ? "victoria"
-                : "derrota",
-            ganadorId ===
-                partida.creadorId
-                ? 110
-                : 10
-        );
-
-        await registrarResultado(
-            partida.guildId,
-            partida.oponenteId,
-            ganadorId ===
-                partida.oponenteId
-                ? "victoria"
-                : "derrota",
-            ganadorId ===
-                partida.oponenteId
-                ? 110
-                : 10
-        );
-
-        const ganadorTexto =
-            ganadorId ===
-                partida.creadorId
-                ? `<@${partida.creadorId}>`
-                : `<@${partida.oponenteId}>`;
-
-        const embed =
-            new EmbedBuilder()
-                .setTitle(
-                    "🪙 RESULTADO CARA O CRUZ"
-                )
-                .setDescription(
-                    `👤 <@${partida.creadorId}> eligió **${
-                        partida.eleccionCreador ===
-                            "cara"
-                            ? "Cara 🙂"
-                            : "Cruz ✖️"
-                    }**\n` +
-
-                    `👤 <@${partida.oponenteId}> recibió **${
-                        eleccionOponente ===
-                            "cara"
-                            ? "Cara 🙂"
-                            : "Cruz ✖️"
-                    }**\n\n` +
-
-                    `🪙 **La moneda cayó en: ${
-                        resultado ===
-                            "cara"
-                            ? "CARA 🙂"
-                            : "CRUZ ✖️"
-                    }**\n\n` +
-
-                    `🏆 **Ganador:** ${ganadorTexto}\n` +
-
-                    "💰 El ganador recibe **+110 puntos**.\n" +
-                    "🎮 El perdedor recibe **+10 puntos**."
-                )
-                .setColor(
-                    0x2ECC71
-                );
-
-        partidasCaraOCruz.delete(
-            id
-        );
-
-        await interaction.update({
-            embeds: [
-                embed
-            ],
-            components: [
-                new ActionRowBuilder()
-                    .addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(
-                                "minijuegos_volver"
-                            )
-                            .setLabel(
-                                "Volver a Minijuegos"
-                            )
-                            .setEmoji("🎮")
-                            .setStyle(
-                                ButtonStyle.Secondary
-                            )
-                    )
-            ]
-        });
-
-        return true;
-    }
-
-    // ========================================================
-    // CARA O CRUZ - CANCELAR
-    // ========================================================
-
-    if (
-        customId.startsWith(
-            "minijuegos_cara_cruz_cancelar_"
-        )
-    ) {
-        const id =
-            customId.replace(
-                "minijuegos_cara_cruz_cancelar_",
-                ""
-            );
-
-        const partida =
-            partidasCaraOCruz.get(
-                id
-            );
-
-        if (!partida) {
-            await interaction.reply({
-                content:
-                    "❌ Este desafío ya no existe.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        if (
-            interaction.user.id !==
-            partida.creadorId
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ Solo el creador puede cancelar el desafío.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        partidasCaraOCruz.delete(
-            id
-        );
-
-        await interaction.update({
-            embeds: [
-                new EmbedBuilder()
-                    .setTitle(
-                        "❌ DESAFÍO CANCELADO"
-                    )
-                    .setDescription(
-                        "El desafío de Cara o Cruz fue cancelado."
-                    )
-                    .setColor(
-                        0xE74C3C
-                    )
-            ],
-            components: [
-                new ActionRowBuilder()
-                    .addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(
-                                "minijuegos_volver"
-                            )
-                            .setLabel(
-                                "Volver a Minijuegos"
-                            )
-                            .setEmoji("🎮")
-                            .setStyle(
-                                ButtonStyle.Secondary
-                            )
-                    )
-            ]
-        });
-
-        return true;
-    }
-
-    // ========================================================
-    // BLACKJACK - JUGAR
-    // ========================================================
-
-    if (
-        customId ===
-        "minijuegos_blackjack_jugar"
-    ) {
-        const existente =
-            [
-                ...partidasBlackjack.values()
-            ].find(
-                partida =>
-                    partida.guildId ===
-                        interaction.guild.id &&
-                    partida.userId ===
-                        interaction.user.id
-            );
-
-        if (
-            existente
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ Ya tienes una partida de Blackjack activa.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        const baraja =
-            crearBaraja();
-
-        const partida = {
-            id:
-                `${interaction.guild.id}_${Date.now()}_${interaction.user.id}`,
-
-            guildId:
-                interaction.guild.id,
-
-            canalId:
-                interaction.channel.id,
-
-            userId:
-                interaction.user.id,
-
-            baraja,
-
-            jugador: [
-                baraja.pop(),
-                baraja.pop()
-            ],
-
-            banca: [
-                baraja.pop(),
-                baraja.pop()
-            ]
-        };
-
-        partidasBlackjack.set(
-            partida.id,
-            partida
-        );
-
-        const jugadorTotal =
-            calcularValorMano(
-                partida.jugador
-            );
-
-        if (
-            jugadorTotal ===
-            21
-        ) {
-            partidasBlackjack.delete(
-                partida.id
-            );
-
-            const perfil =
-                await obtenerPerfil(
-                    partida.guildId,
-                    partida.userId
-                );
-
-            perfil.partidas += 1;
-            perfil.victorias += 1;
-            perfil.puntos += 150;
-
-            await perfil.save();
-
-            const embed =
-                new EmbedBuilder()
-                    .setTitle(
-                        "🃏 ¡BLACKJACK!"
-                    )
-                    .setDescription(
-                        `👤 <@${partida.userId}>\n\n` +
-
-                        `🃏 **Tus cartas:**\n${textoMano(partida.jugador)}\n\n` +
-
-                        "🎯 **21 puntos**\n\n" +
-
-                        "🏆 **¡Blackjack natural!**\n" +
-                        "💰 **+150 puntos**"
-                    )
-                    .setColor(
-                        0xF1C40F
-                    );
-
-            await interaction.update({
-                embeds: [
-                    embed
-                ],
-                components: [
-                    new ActionRowBuilder()
-                        .addComponents(
-                            new ButtonBuilder()
-                                .setCustomId(
-                                    "minijuegos_volver"
-                                )
-                                .setLabel(
-                                    "Volver a Minijuegos"
-                                )
-                                .setEmoji("🎮")
-                                .setStyle(
-                                    ButtonStyle.Secondary
-                                )
-                        )
-                ]
-            });
-
-            return true;
-        }
-
-        await interaction.update(
-            crearMensajeBlackjack(
-                partida
-            )
-        );
-
-        return true;
-    }
-
-    // ========================================================
-    // BLACKJACK - PEDIR
-    // ========================================================
-
-    if (
-        customId.startsWith(
-            "minijuegos_blackjack_pedir_"
-        )
-    ) {
-        const id =
-            customId.replace(
-                "minijuegos_blackjack_pedir_",
-                ""
-            );
-
         const partida =
             partidasBlackjack.get(
-                id
+                interaction.message.id
             );
 
-        if (!partida) {
-            await interaction.reply({
+        if (
+            !partida ||
+            partida.finalizada
+        ) {
+            return interaction.reply({
                 content:
-                    "❌ Esta partida ya no existe.",
+                    "❌ Esta partida ya terminó.",
                 ephemeral: true
             });
-
-            return true;
         }
 
         if (
-            interaction.user.id !==
-            partida.userId
+            partida.userId !==
+            interaction.user.id
         ) {
-            await interaction.reply({
+            return interaction.reply({
                 content:
                     "❌ Esta partida pertenece a otro jugador.",
                 ephemeral: true
             });
-
-            return true;
         }
 
-        partida.jugador.push(
-            partida.baraja.pop()
+        partida.cartas.push(
+            cartaAleatoria()
         );
 
         const total =
-            calcularValorMano(
-                partida.jugador
-            );
+            calcularMano(partida.cartas);
 
-        if (
-            total >= 21
-        ) {
-            await finalizarBlackjack(
+        if (total > 21) {
+            return finalizarBlackjack(
                 interaction,
-                partida
+                partida,
+                "derrota",
+                0
             );
-
-            return true;
         }
 
-        await interaction.update(
-            crearMensajeBlackjack(
-                partida
-            )
-        );
+        if (total === 21) {
+            return finalizarBlackjack(
+                interaction,
+                partida,
+                "victoria",
+                100
+            );
+        }
 
-        return true;
+        return interaction.update({
+            embeds: [
+                crearEmbedBlackjack(partida)
+            ],
+            components: [
+                crearBotonesBlackjack()
+            ]
+        });
     }
 
-    // ========================================================
-    // BLACKJACK - PLANTARSE
-    // ========================================================
-
     if (
-        customId.startsWith(
-            "minijuegos_blackjack_plantarse_"
-        )
+        id ===
+        "minijuegos_blackjack_plantarse"
     ) {
-        const id =
-            customId.replace(
-                "minijuegos_blackjack_plantarse_",
-                ""
-            );
-
         const partida =
             partidasBlackjack.get(
-                id
+                interaction.message.id
             );
 
-        if (!partida) {
-            await interaction.reply({
+        if (
+            !partida ||
+            partida.finalizada
+        ) {
+            return interaction.reply({
                 content:
-                    "❌ Esta partida ya no existe.",
+                    "❌ Esta partida ya terminó.",
                 ephemeral: true
             });
-
-            return true;
         }
 
         if (
-            interaction.user.id !==
-            partida.userId
+            partida.userId !==
+            interaction.user.id
         ) {
-            await interaction.reply({
+            return interaction.reply({
                 content:
                     "❌ Esta partida pertenece a otro jugador.",
                 ephemeral: true
             });
-
-            return true;
         }
 
-        await finalizarBlackjack(
+        const total =
+            calcularMano(partida.cartas);
+
+        if (total >= 17) {
+            return finalizarBlackjack(
+                interaction,
+                partida,
+                "victoria",
+                50
+            );
+        }
+
+        return finalizarBlackjack(
             interaction,
-            partida
+            partida,
+            "derrota",
+            0
         );
-
-        return true;
     }
-
-    return false;
 }
 
 // ============================================================
-// SELECT MENUS
+// MODALS
 // ============================================================
 
-async function manejarSelectMenu(
-    interaction
-) {
-    // ========================================================
-    // SELECCIÓN DE COLOR
-    // ========================================================
-
-    if (
-        interaction.customId ===
-        "minijuegos_color_seleccionar"
-    ) {
-        const colorSeleccionado =
-            interaction.values[0];
-
-        const datosColor =
-            COLORES_PERSONALIZADOS[
-                colorSeleccionado
-            ];
-
-        if (!datosColor) {
-            await interaction.reply({
-                content:
-                    "❌ Ese color no existe.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        const perfil =
-            await obtenerPerfil(
-                interaction.guild.id,
-                interaction.user.id
-            );
-
-        if (
-            perfil.puntos <
-            PRECIO_COLOR_PERSONALIZADO
-        ) {
-            await interaction.reply({
-                content:
-                    `❌ No tienes suficientes puntos.\n\n` +
-                    `💰 Tienes: **${perfil.puntos} puntos**\n` +
-                    `🎨 Necesitas: **${PRECIO_COLOR_PERSONALIZADO} puntos**`,
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        const botMember =
-            interaction.guild.members.me;
-
-        if (!botMember) {
-            await interaction.reply({
-                content:
-                    "❌ No pude comprobar los permisos del bot.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        if (
-            !botMember.permissions.has(
-                "ManageRoles"
-            )
-        ) {
-            await interaction.reply({
-                content:
-                    "❌ RustLogix necesita el permiso **Gestionar roles** para crear tu rol.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        // ====================================================
-        // GUARDAR COLOR SELECCIONADO
-        // ====================================================
-
-        const clave =
-            `${interaction.guild.id}:${interaction.user.id}`;
-
-        coloresPendientes.set(
-            clave,
-            {
-                color:
-                    colorSeleccionado,
-                creado:
-                    Date.now()
-            }
-        );
-
-        // ====================================================
-        // CREAR MODAL
-        // ====================================================
-
-        const modal =
-            new ModalBuilder()
-                .setCustomId(
-                    "minijuegos_color_nombre_modal"
-                )
-                .setTitle(
-                    `🎨 Rol ${datosColor.nombre}`
-                );
-
-        const nombreRolInput =
-            new TextInputBuilder()
-                .setCustomId(
-                    "minijuegos_nombre_rol"
-                )
-                .setLabel(
-                    "¿Qué nombre quieres para tu rol?"
-                )
-                .setPlaceholder(
-                    "Ejemplo: VIP Naranja"
-                )
-                .setStyle(
-                    TextInputStyle.Short
-                )
-                .setMinLength(
-                    1
-                )
-                .setMaxLength(
-                    100
-                )
-                .setRequired(
-                    true
-                );
-
-        modal.addComponents(
-            new ActionRowBuilder()
-                .addComponents(
-                    nombreRolInput
-                )
-        );
-
-        await interaction.showModal(
-            modal
-        );
-
-        // ====================================================
-        // LIMPIAR DESPUÉS DE 5 MINUTOS
-        // ====================================================
-
-        setTimeout(
-            () => {
-                const pendiente =
-                    coloresPendientes.get(
-                        clave
-                    );
-
-                if (
-                    pendiente &&
-                    pendiente.creado ===
-                        Date.now()
-                ) {
-                    coloresPendientes.delete(
-                        clave
-                    );
-                }
-            },
-            5 * 60 * 1000
-        );
-
-        return true;
-    }
-
-    // ========================================================
-    // MENU PRINCIPAL
-    // ========================================================
-
+async function manejarModal(interaction) {
     if (
         interaction.customId !==
-        "minijuegos_menu"
+        "minijuegos_modal_nombre_color"
     ) {
         return false;
     }
 
-    const valor =
-        interaction.values[0];
-
-    if (
-        valor ===
-        "dados"
-    ) {
-        await interaction.update(
-            crearMenuDados()
-        );
-
-        return true;
-    }
-
-    if (
-        valor ===
-        "duelo"
-    ) {
-        await interaction.update(
-            crearMenuDuelo()
-        );
-
-        return true;
-    }
-
-    if (
-        valor ===
-        "cara_cruz"
-    ) {
-        await interaction.update(
-            crearMenuCaraOCruz()
-        );
-
-        return true;
-    }
-
-    if (
-        valor ===
-        "blackjack"
-    ) {
-        await interaction.update(
-            crearMenuBlackjack()
-        );
-
-        return true;
-    }
-
-    if (
-        valor ===
-        "tragaperras"
-    ) {
-        await interaction.update(
-            crearMenuTragaperras()
-        );
-
-        return true;
-    }
-
-    if (
-        valor ===
-        "estadisticas"
-    ) {
-        const perfil =
-            await obtenerPerfil(
-                interaction.guild.id,
-                interaction.user.id
-            );
-
-        const embed =
-            new EmbedBuilder()
-                .setTitle(
-                    "🏆 MIS ESTADÍSTICAS"
-                )
-                .setDescription(
-                    `👤 **Jugador:** <@${interaction.user.id}>\n\n` +
-
-                    `💰 **Puntos:** ${perfil.puntos}\n` +
-                    `🏆 **Victorias:** ${perfil.victorias}\n` +
-                    `💀 **Derrotas:** ${perfil.derrotas}\n` +
-                    `🎮 **Partidas:** ${perfil.partidas}`
-                )
-                .setColor(
-                    0x5865F2
-                );
-
-        const volver =
-            new ButtonBuilder()
-                .setCustomId(
-                    "minijuegos_volver"
-                )
-                .setLabel(
-                    "Volver"
-                )
-                .setEmoji("↩️")
-                .setStyle(
-                    ButtonStyle.Secondary
-                );
-
-        await interaction.update({
-            embeds: [
-                embed
-            ],
-            components: [
-                new ActionRowBuilder()
-                    .addComponents(
-                        volver
-                    )
-            ]
-        });
-
-        return true;
-    }
-
-    if (
-        valor ===
-        "tienda"
-    ) {
-        await interaction.update(
-            await crearMenuTienda(
-                interaction
-            )
-        );
-
-        return true;
-    }
-
-    return false;
-}
-
-// ============================================================
-// MODAL - NOMBRE DEL ROL
-// ============================================================
-
-async function manejarModal(
-    interaction
-) {
-    if (
-        interaction.customId !==
-        "minijuegos_color_nombre_modal"
-    ) {
-        return false;
-    }
-
-    const clave =
+    const key =
         `${interaction.guild.id}:${interaction.user.id}`;
 
     const pendiente =
-        coloresPendientes.get(
-            clave
-        );
+        coloresPendientes.get(key);
 
     if (!pendiente) {
-        await interaction.reply({
+        return interaction.reply({
             content:
-                "❌ Esta compra expiró. Vuelve a seleccionar el color desde la tienda.",
+                "❌ La selección del color ha caducado. Vuelve a intentarlo.",
             ephemeral: true
         });
-
-        return true;
     }
 
-    coloresPendientes.delete(
-        clave
-    );
+    if (
+        Date.now() >
+        pendiente.expiresAt
+    ) {
+        coloresPendientes.delete(key);
 
-    // ========================================================
-    // COMPROBAR COLOR
-    // ========================================================
+        return interaction.reply({
+            content:
+                "❌ La selección del color ha caducado. Vuelve a intentarlo.",
+            ephemeral: true
+        });
+    }
 
-    const datosColor =
+    const color =
         COLORES_PERSONALIZADOS[
-            pendiente.color
+            pendiente.colorKey
         ];
 
-    if (!datosColor) {
-        await interaction.reply({
+    if (!color) {
+        coloresPendientes.delete(key);
+
+        return interaction.reply({
             content:
-                "❌ El color seleccionado ya no está disponible.",
+                "❌ El color seleccionado no existe.",
             ephemeral: true
         });
-
-        return true;
     }
 
-    // ========================================================
-    // OBTENER NOMBRE
-    // ========================================================
-
-    let nombreRol =
-        interaction.fields.getTextInputValue(
-            "minijuegos_nombre_rol"
-        );
-
-    nombreRol =
-        nombreRol.trim();
+    const nombreRol =
+        interaction.fields
+            .getTextInputValue(
+                "minijuegos_nombre_rol"
+            )
+            .trim();
 
     if (!nombreRol) {
-        await interaction.reply({
+        return interaction.reply({
             content:
                 "❌ Debes escribir un nombre para el rol.",
             ephemeral: true
         });
-
-        return true;
     }
 
     if (
-        nombreRol.length >
-        100
+        nombreRol === "@everyone" ||
+        nombreRol === "@here"
     ) {
-        await interaction.reply({
+        return interaction.reply({
             content:
-                "❌ El nombre del rol no puede superar los 100 caracteres.",
+                "❌ Ese nombre no está permitido.",
             ephemeral: true
         });
-
-        return true;
     }
 
-    // ========================================================
-    // COMPROBAR PUNTOS DE NUEVO
-    // ========================================================
+    const botMember =
+        interaction.guild.members.me ||
+        await interaction.guild.members.fetch(
+            interaction.client.user.id
+        );
+
+    if (
+        !botMember.permissions.has(
+            PermissionFlagsBits.ManageRoles
+        )
+    ) {
+        coloresPendientes.delete(key);
+
+        return interaction.reply({
+            content:
+                "❌ RustLogix no tiene permiso para administrar roles.",
+            ephemeral: true
+        });
+    }
 
     const perfil =
         await obtenerPerfil(
@@ -3923,247 +2122,91 @@ async function manejarModal(
         perfil.puntos <
         PRECIO_COLOR_PERSONALIZADO
     ) {
-        await interaction.reply({
+        coloresPendientes.delete(key);
+
+        return interaction.reply({
             content:
-                `❌ Ya no tienes suficientes puntos para realizar la compra.\n\n` +
-                `💰 Tienes: **${perfil.puntos} puntos**\n` +
-                `🎨 Necesitas: **${PRECIO_COLOR_PERSONALIZADO} puntos**`,
+                `❌ Ya no tienes suficientes puntos. Necesitas **${PRECIO_COLOR_PERSONALIZADO}** y tienes **${perfil.puntos}**.`,
             ephemeral: true
         });
-
-        return true;
     }
-
-    // ========================================================
-    // COMPROBAR PERMISOS
-    // ========================================================
-
-    const botMember =
-        interaction.guild.members.me;
-
-    if (!botMember) {
-        await interaction.reply({
-            content:
-                "❌ No pude comprobar al bot dentro del servidor.",
-            ephemeral: true
-        });
-
-        return true;
-    }
-
-    if (
-        !botMember.permissions.has(
-            "ManageRoles"
-        )
-    ) {
-        await interaction.reply({
-            content:
-                "❌ RustLogix necesita el permiso **Gestionar roles**.",
-            ephemeral: true
-        });
-
-        return true;
-    }
-
-    // ========================================================
-    // COMPROBAR SI YA EXISTE UN ROL CON ESE NOMBRE
-    // ========================================================
-
-    const rolExistente =
-        interaction.guild.roles.cache.find(
-            rol =>
-                rol.name ===
-                nombreRol
-        );
-
-    if (rolExistente) {
-        await interaction.reply({
-            content:
-                `❌ Ya existe un rol llamado **${nombreRol}**.\n\n` +
-                "Elige otro nombre para tu rol.",
-            ephemeral: true
-        });
-
-        return true;
-    }
-
-    // ========================================================
-    // CREAR ROL
-    // ========================================================
-
-    let rolNuevo;
 
     try {
-        rolNuevo =
+        const rol =
             await interaction.guild.roles.create({
-                name:
-                    nombreRol,
-
-                color:
-                    datosColor.valor,
-
+                name: nombreRol,
+                color: color.valor,
                 reason:
-                    `RustLogix - Compra de color personalizado por ${interaction.user.tag}`
+                    `Compra de color personalizado en RustLogix - ${interaction.user.tag}`
             });
-    } catch (error) {
-        console.error(
-            "❌ Error creando rol personalizado:",
-            error
-        );
 
-        await interaction.reply({
-            content:
-                "❌ No pude crear el rol.\n\n" +
-                "Comprueba que RustLogix tenga **Gestionar roles** y que su rol esté por encima de la posición donde Discord permite crear/asignar el rol.",
-            ephemeral: true
-        });
-
-        return true;
-    }
-
-    // ========================================================
-    // COMPROBAR POSICIÓN DEL ROL
-    // ========================================================
-
-    if (
-        rolNuevo.position >=
-        botMember.roles.highest.position
-    ) {
-        try {
-            await rolNuevo.delete(
-                "RustLogix - Rol fuera del alcance del bot"
-            );
-        } catch (error) {
-            console.error(
-                "⚠️ No pude borrar el rol creado:",
-                error.message
-            );
-        }
-
-        await interaction.reply({
-            content:
-                "❌ No puedo asignar ese rol porque la posición del rol de RustLogix no permite administrarlo.\n\n" +
-                "Mueve el rol de **RustLogix** por encima de los roles que crea.",
-            ephemeral: true
-        });
-
-        return true;
-    }
-
-    // ========================================================
-    // ASIGNAR ROL
-    // ========================================================
-
-    try {
         const miembro =
             await interaction.guild.members.fetch(
                 interaction.user.id
             );
 
         await miembro.roles.add(
-            rolNuevo,
-            "RustLogix - Compra de color personalizado"
+            rol,
+            "Compra de color personalizado en RustLogix"
         );
+
+        perfil.puntos -=
+            PRECIO_COLOR_PERSONALIZADO;
+
+        await perfil.save();
+
+        coloresPendientes.delete(key);
+
+        return interaction.reply({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle("🎨 ¡ROL CREADO!")
+                    .setDescription(
+                        [
+                            `🎨 Color: ${color.emoji} **${color.nombre}**`,
+                            `🏷️ Nombre: **${rol.name}**`,
+                            "",
+                            `👤 El rol ha sido asignado a ${interaction.user}.`,
+                            "",
+                            `💰 Precio: **${PRECIO_COLOR_PERSONALIZADO} puntos**`,
+                            `🪙 Puntos restantes: **${perfil.puntos}**`
+                        ].join("\n")
+                    )
+                    .setColor(color.valor)
+            ]
+        });
     } catch (error) {
         console.error(
-            "❌ Error asignando rol personalizado:",
+            "Error creando rol personalizado:",
             error
         );
 
-        try {
-            await rolNuevo.delete(
-                "RustLogix - No se pudo asignar al usuario"
-            );
-        } catch (deleteError) {
-            console.error(
-                "⚠️ No pude borrar el rol después del fallo:",
-                deleteError.message
-            );
-        }
+        coloresPendientes.delete(key);
 
-        await interaction.reply({
+        return interaction.reply({
             content:
-                "❌ El rol fue creado, pero no pude asignártelo. No se te descontaron puntos.",
+                "❌ No pude crear o asignar el rol. Comprueba que RustLogix tenga `Administrar roles` y que su rol esté por encima de los roles que crea.",
             ephemeral: true
         });
-
-        return true;
     }
-
-    // ========================================================
-    // COBRAR LOS 300 PUNTOS
-    // ========================================================
-
-    perfil.puntos -=
-        PRECIO_COLOR_PERSONALIZADO;
-
-    await perfil.save();
-
-    // ========================================================
-    // CONFIRMACIÓN
-    // ========================================================
-
-    const embed =
-        new EmbedBuilder()
-            .setTitle(
-                `${datosColor.emoji} ¡ROL CREADO!`
-            )
-            .setDescription(
-                "🎉 **Tu compra se realizó correctamente.**\n\n" +
-
-                `👤 **Jugador:** <@${interaction.user.id}>\n` +
-                `🏷️ **Rol:** <@&${rolNuevo.id}>\n` +
-                `${datosColor.emoji} **Color:** ${datosColor.nombre}\n\n` +
-
-                `💰 **Gastado:** ${PRECIO_COLOR_PERSONALIZADO} puntos\n` +
-                `🪙 **Puntos restantes:** ${perfil.puntos}\n\n` +
-
-                "El rol ya fue creado y asignado a tu cuenta."
-            )
-            .setColor(
-                datosColor.valor
-            )
-            .setFooter({
-                text:
-                    "RustLogix • Tienda"
-            });
-
-    const volver =
-        new ButtonBuilder()
-            .setCustomId(
-                "minijuegos_volver"
-            )
-            .setLabel(
-                "Volver a Minijuegos"
-            )
-            .setEmoji("🎮")
-            .setStyle(
-                ButtonStyle.Secondary
-            );
-
-    await interaction.reply({
-        embeds: [
-            embed
-        ],
-        components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    volver
-                )
-        ]
-    });
-
-    return true;
 }
 
 // ============================================================
-// EXPORTAR
+// EXPORTS
 // ============================================================
 
 module.exports = {
-    data,
-    execute,
+    data: new SlashCommandBuilder()
+        .setName("minijuegos")
+        .setDescription(
+            "Juega a minijuegos y consigue puntos"
+        ),
+
+    ejecutar,
+
     manejarBoton,
+
     manejarSelectMenu,
+
     manejarModal
 };
