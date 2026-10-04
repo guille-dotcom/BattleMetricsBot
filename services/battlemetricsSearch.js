@@ -341,6 +341,7 @@ function crearEstadoOffline(
         online: false,
         jugando: false,
         tiempoJugando: "0m",
+        inicioSesion: null,
         server: null,
         serverId: null,
         horasTotalesBM,
@@ -364,6 +365,7 @@ function crearEstadoError(
         online: false,
         jugando: false,
         tiempoJugando: "0m",
+        inicioSesion: null,
         server: null,
         serverId: null,
         horasTotalesBM: 0,
@@ -533,7 +535,7 @@ async function getBattleMetricsPlayerStatus(
         // --------------------------------------------------------
 
         const inicioSesion =
-            sesionActiva.attributes?.start;
+            sesionActiva.attributes?.start || null;
 
         let tiempoJugando =
             "0m";
@@ -640,6 +642,10 @@ async function getBattleMetricsPlayerStatus(
 
             // Tiempo REAL de la sesión actual
             tiempoJugando,
+
+            // IMPORTANTE:
+            // Inicio REAL de la sesión según BattleMetrics.
+            inicioSesion,
 
             server: serverName,
             serverId,

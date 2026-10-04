@@ -5,7 +5,8 @@ const {
     ButtonStyle
 } = require("discord.js");
 
-const Tracker = require("../models/TrackerSchema");
+const Tracker =
+    require("../models/TrackerSchema");
 
 const ServerConfig =
     require("../models/ServerConfig");
@@ -382,32 +383,40 @@ function crearEmbedOnline(
         );
 
     return new EmbedBuilder()
+
         .setTitle(
             "🟢 JUGADOR ONLINE"
         )
+
         .setDescription(
             `**${nombreJugador}** está actualmente conectado al servidor.`
         )
+
         .setColor(0x00ff00)
+
         .addFields(
+
             {
                 name: "👤 Jugador",
                 value:
                     `\`${nombreJugador}\``,
                 inline: false
             },
+
             {
                 name: "🎮 Servidor",
                 value:
                     servidorActual,
                 inline: false
             },
+
             {
                 name: "⏱ Jugando",
                 value:
                     tiempoJugando,
                 inline: true
             },
+
             {
                 name: "📡 Estado",
                 value:
@@ -416,6 +425,7 @@ function crearEmbedOnline(
                         : "🟡 OTRO SERVIDOR",
                 inline: true
             },
+
             {
                 name: "🎯 Tracker",
                 value:
@@ -423,7 +433,9 @@ function crearEmbedOnline(
                 inline: true
             }
         )
+
         .setTimestamp()
+
         .setFooter({
             text: "RustLogix"
         });
@@ -470,50 +482,61 @@ function crearEmbedOtroServidor(
         );
 
     return new EmbedBuilder()
+
         .setTitle(
             "🔄 CAMBIO DE SERVIDOR"
         )
+
         .setDescription(
             `**${nombreJugador}** salió del servidor y ahora está en otro servidor.`
         )
+
         .setColor(0xffff00)
+
         .addFields(
+
             {
                 name: "👤 Jugador",
                 value:
                     `\`${nombreJugador}\``,
                 inline: false
             },
+
             {
                 name: "🎮 Servidor actual",
                 value:
                     servidorActual,
                 inline: false
             },
+
             {
                 name: "🆔 Servidor actual",
                 value:
                     `\`${serverIdActual}\``,
                 inline: true
             },
+
             {
                 name: "🎯 Servidor configurado",
                 value:
                     `\`${servidorConfiguradoTexto}\``,
                 inline: true
             },
+
             {
                 name: "⏱ Jugando",
                 value:
                     tiempoJugando,
                 inline: true
             },
+
             {
                 name: "📡 Estado",
                 value:
                     "🟡 OTRO SERVIDOR",
                 inline: true
             },
+
             {
                 name: "🎯 Tracker",
                 value:
@@ -521,7 +544,9 @@ function crearEmbedOtroServidor(
                 inline: true
             }
         )
+
         .setTimestamp()
+
         .setFooter({
             text: "RustLogix"
         });
@@ -556,38 +581,47 @@ function crearEmbedOffline(
         );
 
     return new EmbedBuilder()
+
         .setTitle(
             "🔴 JUGADOR OFFLINE"
         )
+
         .setDescription(
             `**${nombreJugador}** salió del servidor y ya no aparece conectado en BattleMetrics.`
         )
+
         .setColor(0xff0000)
+
         .addFields(
+
             {
                 name: "👤 Jugador",
                 value:
                     `\`${nombreJugador}\``,
                 inline: false
             },
+
             {
                 name: "🎮 Último servidor",
                 value:
                     servidorAnterior,
                 inline: false
             },
+
             {
                 name: "⏱ Tiempo de sesión",
                 value:
                     tiempoSesion,
                 inline: true
             },
+
             {
                 name: "📡 Estado",
                 value:
                     "🔴 OFFLINE",
                 inline: true
             },
+
             {
                 name: "🎯 Tracker",
                 value:
@@ -595,7 +629,9 @@ function crearEmbedOffline(
                 inline: true
             }
         )
+
         .setTimestamp()
+
         .setFooter({
             text: "RustLogix"
         });
@@ -606,6 +642,7 @@ function crearEmbedOffline(
 // =====================================================
 
 async function registrarTracker({
+
     battlemetricsId,
     nombre,
     canalId,
@@ -615,6 +652,7 @@ async function registrarTracker({
     inicioSesionForzado,
     servidorForzado,
     serverIdForzado
+
 }) {
 
     // =================================================
@@ -735,12 +773,38 @@ async function registrarTracker({
             "offline";
     }
 
-    const inicioSesion =
+    // =================================================
+    // INICIO REAL DE LA SESIÓN
+    // =================================================
+
+    let inicioSesion = null;
+
+    if (
         inicioSesionForzado !== undefined
-            ? inicioSesionForzado
-            : estaEnServidorConfigurado
-                ? ahora
+    ) {
+
+        inicioSesion =
+            inicioSesionForzado;
+
+    } else if (
+        estaEnServidorConfigurado
+    ) {
+
+        const inicioBM =
+            status?.inicioSesion
+                ? new Date(
+                    status.inicioSesion
+                )
                 : null;
+
+        inicioSesion =
+            inicioBM &&
+            Number.isFinite(
+                inicioBM.getTime()
+            )
+                ? inicioBM
+                : ahora;
+    }
 
     const ultimoServidor =
         servidorForzado !== undefined
@@ -945,9 +1009,33 @@ async function revisarTrackers(client) {
                     tracker.ultimoEstado =
                         "online";
 
-                    tracker.inicioSesion =
-                        tracker.inicioSesion ||
-                        new Date();
+                    // Usar el inicio REAL de BattleMetrics
+                    // si está disponible.
+
+                    const inicioBM =
+                        status?.inicioSesion
+                            ? new Date(
+                                status.inicioSesion
+                            )
+                            : null;
+
+                    if (
+                        inicioBM &&
+                        Number.isFinite(
+                            inicioBM.getTime()
+                        )
+                    ) {
+
+                        tracker.inicioSesion =
+                            inicioBM;
+
+                    } else if (
+                        !tracker.inicioSesion
+                    ) {
+
+                        tracker.inicioSesion =
+                            new Date();
+                    }
 
                 } else if (estaOnline) {
 
@@ -1049,7 +1137,30 @@ async function revisarTrackers(client) {
                 tracker.ultimoEstado =
                     "online";
 
-                if (!tracker.inicioSesion) {
+                // =================================================
+                // USAR SIEMPRE EL INICIO REAL DE BATTLEMETRICS
+                // =================================================
+
+                const inicioBM =
+                    status?.inicioSesion
+                        ? new Date(
+                            status.inicioSesion
+                        )
+                        : null;
+
+                if (
+                    inicioBM &&
+                    Number.isFinite(
+                        inicioBM.getTime()
+                    )
+                ) {
+
+                    tracker.inicioSesion =
+                        inicioBM;
+
+                } else if (
+                    !tracker.inicioSesion
+                ) {
 
                     tracker.inicioSesion =
                         new Date();
@@ -1290,24 +1401,14 @@ async function revisarTrackers(client) {
 module.exports = {
 
     obtenerBattleMetricsId,
-
     obtenerServidorConfigurado,
-
     obtenerNombreSteam,
-
     buscarTrackerActivo,
-
     resolverJugadorTracker,
-
     registrarTracker,
-
     revisarTrackers,
-
     crearEmbedOnline,
-
     crearEmbedOtroServidor,
-
     crearEmbedOffline,
-
     crearBotonBattleMetrics
 };
