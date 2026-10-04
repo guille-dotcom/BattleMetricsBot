@@ -356,7 +356,7 @@ function crearEmbedOnline(
             "🟢 JUGADOR ONLINE"
         )
         .setDescription(
-            `**${nombreJugador}** está actualmente conectado al servidor configurado.`
+            `**${nombreJugador}** está actualmente conectado al servidor.`
         )
         .setColor(0x00ff00)
         .addFields(
@@ -447,7 +447,7 @@ function crearEmbedOtroServidor(
             "🔄 CAMBIO DE SERVIDOR"
         )
         .setDescription(
-            `**${nombreJugador}** salió del servidor configurado y ahora está en otro servidor.`
+            `**${nombreJugador}** salió del servidor y ahora está en otro servidor.`
         )
         .setColor(0xffff00)
         .addFields(
@@ -532,7 +532,7 @@ function crearEmbedOffline(
             "🔴 JUGADOR OFFLINE"
         )
         .setDescription(
-            `**${nombreJugador}** salió del servidor configurado y ya no aparece conectado en BattleMetrics.`
+            `**${nombreJugador}** salió del servidor y ya no aparece conectado en BattleMetrics.`
         )
         .setColor(0xff0000)
         .addFields(
@@ -853,7 +853,7 @@ async function revisarTrackers(client) {
                 estadoAnterior === "desconocido"
             ) {
                 if (
-                    estaEnServidorConfigurado
+                    estaEnServidor
                 ) {
                     tracker.ultimoEstado =
                         "online";
@@ -893,7 +893,7 @@ async function revisarTrackers(client) {
             // 1. ESTÁ EN EL SERVIDOR CONFIGURADO
             // =================================================
 
-            if (estaEnServidorConfigurado) {
+            if (estaEnServidor) {
 
                 // ---------------------------------------------
                 // OFFLINE → SERVIDOR CONFIGURADO
@@ -904,7 +904,7 @@ async function revisarTrackers(client) {
                 ) {
                     await canal.send({
                         content:
-                            `🟢 **${tracker.nombre} volvió a entrar al servidor configurado**`,
+                            `🟢 **${tracker.nombre} volvió a entrar al servidor**`,
 
                         embeds: [
                             crearEmbedOnline(
@@ -931,7 +931,7 @@ async function revisarTrackers(client) {
                 ) {
                     await canal.send({
                         content:
-                            `🟢 **${tracker.nombre} volvió al servidor configurado**`,
+                            `🟢 **${tracker.nombre} volvió al servidor**`,
 
                         embeds: [
                             crearEmbedOnline(
@@ -991,7 +991,7 @@ async function revisarTrackers(client) {
                 ) {
                     await canal.send({
                         content:
-                            `🔄 **${tracker.nombre} salió del servidor configurado y cambió de servidor**`,
+                            `🔄 **${tracker.nombre}  cambió de servidor**`,
 
                         embeds: [
                             crearEmbedOtroServidor(
@@ -1099,7 +1099,7 @@ async function revisarTrackers(client) {
 
                     await canal.send({
                         content:
-                            `🔴 **${tracker.nombre} salió del servidor configurado**`,
+                            `🔴 **${tracker.nombre} salió del servidor**`,
 
                         embeds: [
                             crearEmbedOffline(
