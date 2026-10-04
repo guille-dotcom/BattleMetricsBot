@@ -563,15 +563,25 @@ function crearEmbedTragaperras(
             "😢 No ha habido premio esta vez.";
     }
 
+    // Usamos bloque de código para que Discord
+    // respete los espacios y la combinación
+    // quede visualmente centrada.
+    const combinacion =
+        [
+            "╔══════════════╗",
+            `║    ${resultado.join("  ")}    ║`,
+            "╚══════════════╝"
+        ].join("\n");
+
     return new EmbedBuilder()
         .setTitle(
             "🎰 TRAGAPERRAS"
         )
         .setDescription(
             [
-                "╔══════════════╗",
-                `   ${resultado.join("   ")}`,
-                "╚══════════════╝",
+                "```",
+                combinacion,
+                "```",
                 "",
                 `**${mensaje}**`,
                 "",
@@ -2542,6 +2552,27 @@ async function manejarModal(
                     `Compra de color personalizado en RustLogix - ${interaction.user.tag}`
             });
 
+        // ====================================================
+        // COLOCAR EL ROL JUSTO DEBAJO DEL ROL DEL BOT
+        // ====================================================
+
+        const posicionBot =
+            botMember.roles.highest.position;
+
+        const posicionNueva =
+            Math.max(
+                1,
+                posicionBot - 1
+            );
+
+        await rol.setPosition(
+            posicionNueva,
+            {
+                reason:
+                    "Colocar rol personalizado debajo del rol de RustLogix"
+            }
+        );
+
         const miembro =
             await interaction.guild.members.fetch(
                 interaction.user.id
@@ -2612,8 +2643,6 @@ module.exports = {
             "Juega a minijuegos y consigue puntos"
         ),
 
-    // IMPORTANTE:
-    // index.js busca "execute", no "ejecutar".
     execute: ejecutar,
 
     manejarBoton,
