@@ -327,6 +327,57 @@ async function searchBattleMetricsPlayer(
 }
 
 // ============================================================
+// CREAR RESULTADO OFFLINE
+// ============================================================
+
+function crearEstadoOffline(
+    playerId,
+    nombre,
+    horasTotalesBM
+) {
+    return {
+        id: String(playerId),
+        name: nombre || "Desconocido",
+        online: false,
+        jugando: false,
+        tiempoJugando: "0m",
+        server: null,
+        serverId: null,
+        horasTotalesBM,
+        horasTotales:
+            horasTotalesBM,
+        error: false
+    };
+}
+
+// ============================================================
+// CREAR RESULTADO DE ERROR
+// ============================================================
+
+function crearEstadoError(
+    playerId,
+    nombre = "Desconocido"
+) {
+    return {
+        id: String(playerId),
+        name: nombre,
+        online: false,
+        jugando: false,
+        tiempoJugando: "0m",
+        server: null,
+        serverId: null,
+        horasTotalesBM: 0,
+        horasTotales: 0,
+
+        // IMPORTANTE:
+        // Esto permite que trackerService.js
+        // diferencie un error de API de un
+        // jugador realmente offline.
+        error: true
+    };
+}
+
+// ============================================================
 // OBTENER ESTADO ACTUAL DEL JUGADOR
 // ============================================================
 
@@ -354,16 +405,13 @@ async function getBattleMetricsPlayerStatus(
 
         if (!playerData) {
 
-            return {
-                id: String(playerId),
-                name: "Desconocido",
-                online: false,
-                jugando: false,
-                tiempoJugando: "0m",
-                server: null,
-                serverId: null,
-                horasTotalesBM: 0
-            };
+            console.warn(
+                `[BM] No se recibió información del jugador ${playerId}`
+            );
+
+            return crearEstadoError(
+                playerId
+            );
         }
 
         const nombre =
@@ -381,14 +429,26 @@ async function getBattleMetricsPlayerStatus(
                     headers: getHeaders(),
                     params: {
                         include: "server",
-                        "page[size]": 5
+                        "page[size]": 10
                     },
                     timeout: 10000
                 }
             );
 
         const sessions =
-            sessionsResponse.data?.data || [];
+            sessionsResponse.data?.data;
+
+        if (!Array.isArray(sessions)) {
+
+            console.warn(
+                `[BM] Respuesta de sesiones inválida para ${playerId}`
+            );
+
+            return crearEstadoError(
+                playerId,
+                nombre
+            );
+        }
 
         const included =
             sessionsResponse.data?.included || [];
@@ -452,23 +512,20 @@ async function getBattleMetricsPlayerStatus(
             segundosTotales / 3600;
 
         // --------------------------------------------------------
-        // OFFLINE
+        // OFFLINE REAL
         // --------------------------------------------------------
 
         if (!sesionActiva) {
 
-            return {
-                id: String(playerId),
-                name: nombre,
-                online: false,
-                jugando: false,
-                tiempoJugando: "0m",
-                server: null,
-                serverId: null,
-                horasTotalesBM,
-                horasTotales:
-                    horasTotalesBM
-            };
+            console.log(
+                `[BM] ${nombre} (${playerId}) está OFFLINE`
+            );
+
+            return crearEstadoOffline(
+                playerId,
+                nombre,
+                horasTotalesBM
+            );
         }
 
         // --------------------------------------------------------
@@ -501,7 +558,7 @@ async function getBattleMetricsPlayerStatus(
         }
 
         // --------------------------------------------------------
-        // Servidor actual
+        // SERVIDOR ACTUAL
         // --------------------------------------------------------
 
         let serverId = null;
@@ -568,8 +625,12 @@ async function getBattleMetricsPlayerStatus(
         }
 
         // --------------------------------------------------------
-        // Resultado
+        // RESULTADO ONLINE
         // --------------------------------------------------------
+
+        console.log(
+            `[BM] ${nombre} (${playerId}) ONLINE - ${serverName || "Servidor desconocido"}`
+        );
 
         return {
             id: String(playerId),
@@ -585,7 +646,9 @@ async function getBattleMetricsPlayerStatus(
 
             horasTotalesBM,
             horasTotales:
-                horasTotalesBM
+                horasTotalesBM,
+
+            error: false
         };
 
     } catch (error) {
@@ -596,16 +659,15 @@ async function getBattleMetricsPlayerStatus(
             error.response?.data || error.message
         );
 
-        return {
-            id: String(playerId),
-            name: "Desconocido",
-            online: false,
-            jugando: false,
-            tiempoJugando: "0m",
-            server: null,
-            serverId: null,
-            horasTotalesBM: 0
-        };
+        // MUY IMPORTANTE:
+        // NO devolver online:false sin marcar error.
+        //
+        // Si BattleMetrics falla y devolvemos offline,
+        // el tracker podría mandar una falsa alerta
+        // de desconexión.
+        return crearEstadoError(
+            playerId
+        );
     }
 }
 
