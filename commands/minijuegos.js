@@ -4,7 +4,10 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    StringSelectMenuBuilder
+    StringSelectMenuBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
 } = require("discord.js");
 
 const MiniGameProfile =
@@ -24,6 +27,15 @@ const TIEMPO_DUELO =
 
 const TIEMPO_CARA_CRUZ =
     60 * 1000;
+
+// ============================================================
+// TIENDA
+// ============================================================
+
+const PRECIO_COLOR_PERSONALIZADO = 300;
+
+const PREFIJO_ROL_COLOR =
+    "RustLogix Color |";
 
 // ============================================================
 // PARTIDAS ACTIVAS
@@ -116,7 +128,7 @@ function crearMenuPrincipal() {
             )
             .setDescription(
                 "¡Bienvenido a los minijuegos de RustLogix!\n\n" +
-                "Selecciona un juego en el menú de abajo.\n\n" +
+                "Selecciona una opción en el menú de abajo.\n\n" +
                 "🎲 **Dados Multijugador**\n" +
                 "Juega contra varios usuarios y lanza los dados.\n\n" +
                 "⚔️ **Duelo 1vs1**\n" +
@@ -126,7 +138,9 @@ function crearMenuPrincipal() {
                 "🃏 **21 / Blackjack**\n" +
                 "Juega contra la banca intentando acercarte a 21.\n\n" +
                 "🏆 **Mis Estadísticas**\n" +
-                "Consulta tus puntos, victorias y partidas."
+                "Consulta tus puntos, victorias y partidas.\n\n" +
+                "🛒 **Tienda**\n" +
+                "Gasta tus puntos en recompensas."
             )
             .setColor(0x5865F2)
             .setFooter({
@@ -140,7 +154,7 @@ function crearMenuPrincipal() {
                 "minijuegos_menu"
             )
             .setPlaceholder(
-                "🎮 Selecciona un minijuego"
+                "🎮 Selecciona una opción"
             )
             .addOptions([
                 {
@@ -192,6 +206,16 @@ function crearMenuPrincipal() {
                         "estadisticas",
                     emoji:
                         "🏆"
+                },
+                {
+                    label:
+                        "Tienda",
+                    description:
+                        "Gasta tus puntos en recompensas.",
+                    value:
+                        "tienda",
+                    emoji:
+                        "🛒"
                 }
             ]);
 
@@ -203,6 +227,78 @@ function crearMenuPrincipal() {
             new ActionRowBuilder()
                 .addComponents(
                     menu
+                )
+        ]
+    };
+}
+
+// ============================================================
+// MENU TIENDA
+// ============================================================
+
+async function crearMenuTienda(
+    interaction
+) {
+    const perfil =
+        await obtenerPerfil(
+            interaction.guild.id,
+            interaction.user.id
+        );
+
+    const embed =
+        new EmbedBuilder()
+            .setTitle(
+                "🛒 TIENDA RUSTLOGIX"
+            )
+            .setDescription(
+                "Gasta los puntos que consigues jugando a los minijuegos.\n\n" +
+                `💰 **Tus puntos:** **${perfil.puntos}**\n\n` +
+                "🎨 **Color personalizado**\n" +
+                `Cambia el color de tu nombre mediante un rol personalizado.\n` +
+                `💰 Precio: **${PRECIO_COLOR_PERSONALIZADO} puntos**\n\n` +
+                "Pulsa el botón para comprarlo."
+            )
+            .setColor(0xF1C40F)
+            .setFooter({
+                text:
+                    "RustLogix • Tienda"
+            });
+
+    const comprar =
+        new ButtonBuilder()
+            .setCustomId(
+                "minijuegos_tienda_color"
+            )
+            .setLabel(
+                `Color personalizado • ${PRECIO_COLOR_PERSONALIZADO} puntos`
+            )
+            .setEmoji("🎨")
+            .setStyle(
+                ButtonStyle.Primary
+            );
+
+    const volver =
+        new ButtonBuilder()
+            .setCustomId(
+                "minijuegos_volver"
+            )
+            .setLabel(
+                "Volver"
+            )
+            .setEmoji("↩️")
+            .setStyle(
+                ButtonStyle.Secondary
+            );
+
+    return {
+        embeds: [
+            embed
+        ],
+        components: [
+            new ActionRowBuilder()
+                .addComponents(
+                    comprar,
+                    volver
                 )
         ]
     };
@@ -1160,6 +1256,80 @@ async function manejarBoton(
     ) {
         await interaction.update(
             crearMenuPrincipal()
+        );
+
+        return true;
+    }
+
+    // ========================================================
+    // TIENDA - COLOR PERSONALIZADO
+    // ========================================================
+
+    if (
+        customId ===
+        "minijuegos_tienda_color"
+    ) {
+        const perfil =
+            await obtenerPerfil(
+                interaction.guild.id,
+                interaction.user.id
+            );
+
+        if (
+            perfil.puntos <
+            PRECIO_COLOR_PERSONALIZADO
+        ) {
+            await interaction.reply({
+                content:
+                    `❌ No tienes suficientes puntos.\n\n` +
+                    `💰 Tienes: **${perfil.puntos} puntos**\n` +
+                    `🎨 Necesitas: **${PRECIO_COLOR_PERSONALIZADO} puntos**\n` +
+                    `📉 Te faltan: **${PRECIO_COLOR_PERSONALIZADO - perfil.puntos} puntos**`,
+                ephemeral: true
+            });
+
+            return true;
+        }
+
+        const modal =
+            new ModalBuilder()
+                .setCustomId(
+                    "minijuegos_color_modal"
+                )
+                .setTitle(
+                    "🎨 Color personalizado"
+                );
+
+        const colorInput =
+            new TextInputBuilder()
+                .setCustomId(
+                    "minijuegos_color_hex"
+                )
+                .setLabel(
+                    "Introduce un color HEX"
+                )
+                .setPlaceholder(
+                    "#ff0000"
+                )
+                .setStyle(
+                    TextInputStyle.Short
+                )
+                .setRequired(
+                    true
+                )
+                .setMaxLength(
+                    7
+                );
+
+        modal.addComponents(
+            new ActionRowBuilder()
+                .addComponents(
+                    colorInput
+                )
+        );
+
+        await interaction.showModal(
+            modal
         );
 
         return true;
@@ -2793,6 +2963,302 @@ async function manejarBoton(
 }
 
 // ============================================================
+// MODALES
+// ============================================================
+
+async function manejarModal(
+    interaction
+) {
+    if (
+        interaction.customId !==
+        "minijuegos_color_modal"
+    ) {
+        return false;
+    }
+
+    const color =
+        interaction.fields
+            .getTextInputValue(
+                "minijuegos_color_hex"
+            )
+            .trim()
+            .toUpperCase();
+
+    // ========================================================
+    // VALIDAR HEX
+    // ========================================================
+
+    if (
+        !/^#[0-9A-F]{6}$/.test(
+            color
+        )
+    ) {
+        await interaction.reply({
+            content:
+                "❌ El color no es válido.\n\n" +
+                "Usa un color HEX de 6 caracteres, por ejemplo:\n" +
+                "`#FF0000`\n" +
+                "`#00FF00`\n" +
+                "`#5865F2`",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    // ========================================================
+    // OBTENER PERFIL
+    // ========================================================
+
+    const perfil =
+        await obtenerPerfil(
+            interaction.guild.id,
+            interaction.user.id
+        );
+
+    if (
+        perfil.puntos <
+        PRECIO_COLOR_PERSONALIZADO
+    ) {
+        await interaction.reply({
+            content:
+                `❌ Ya no tienes suficientes puntos.\n\n` +
+                `💰 Tienes: **${perfil.puntos} puntos**\n` +
+                `🎨 Necesitas: **${PRECIO_COLOR_PERSONALIZADO} puntos**`,
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    // ========================================================
+    // COMPROBAR PERMISOS DEL BOT
+    // ========================================================
+
+    const botMember =
+        interaction.guild.members.me;
+
+    if (!botMember) {
+        await interaction.reply({
+            content:
+                "❌ No pude comprobar los permisos del bot.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    if (
+        !botMember.permissions.has(
+            "ManageRoles"
+        )
+    ) {
+        await interaction.reply({
+            content:
+                "❌ RustLogix necesita el permiso **Gestionar roles** para poder darte un color personalizado.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    // ========================================================
+    // BUSCAR ROL EXISTENTE
+    // ========================================================
+
+    const nombreRol =
+        `${PREFIJO_ROL_COLOR} ${interaction.user.id}`;
+
+    let rolColor =
+        interaction.guild.roles.cache.find(
+            rol =>
+                rol.name ===
+                nombreRol
+        );
+
+    // ========================================================
+    // CREAR ROL SI NO EXISTE
+    // ========================================================
+
+    if (!rolColor) {
+        try {
+            rolColor =
+                await interaction.guild.roles.create({
+                    name:
+                        nombreRol,
+                    color:
+                        color,
+                    reason:
+                        "RustLogix - Compra de color personalizado"
+                });
+        } catch (error) {
+            console.error(
+                "❌ Error creando rol de color:",
+                error
+            );
+
+            await interaction.reply({
+                content:
+                    "❌ No pude crear tu rol de color.\n\n" +
+                    "Comprueba que el rol de RustLogix esté por encima de los roles que crea y que tenga permiso para gestionar roles.",
+                ephemeral: true
+            });
+
+            return true;
+        }
+    } else {
+        // ====================================================
+        // ACTUALIZAR COLOR
+        // ====================================================
+
+        try {
+            await rolColor.setColor(
+                color,
+                "RustLogix - Cambio de color personalizado"
+            );
+        } catch (error) {
+            console.error(
+                "❌ Error actualizando rol de color:",
+                error
+            );
+
+            await interaction.reply({
+                content:
+                    "❌ No pude actualizar tu rol de color.\n\n" +
+                    "Comprueba la posición del rol de RustLogix.",
+                ephemeral: true
+            });
+
+            return true;
+        }
+    }
+
+    // ========================================================
+    // ASIGNAR ROL
+    // ========================================================
+
+    try {
+        const miembro =
+            await interaction.guild.members.fetch(
+                interaction.user.id
+            );
+
+        const rolesColor =
+            miembro.roles.cache.filter(
+                rol =>
+                    rol.name.startsWith(
+                        PREFIJO_ROL_COLOR
+                    ) &&
+                    rol.id !==
+                        rolColor.id
+            );
+
+        for (
+            const rol of
+            rolesColor.values()
+        ) {
+            try {
+                await miembro.roles.remove(
+                    rol,
+                    "RustLogix - Reemplazo de color personalizado"
+                );
+            } catch (error) {
+                console.error(
+                    "⚠️ No se pudo quitar rol de color anterior:",
+                    error.message
+                );
+            }
+        }
+
+        if (
+            !miembro.roles.cache.has(
+                rolColor.id
+            )
+        ) {
+            await miembro.roles.add(
+                rolColor,
+                "RustLogix - Compra de color personalizado"
+            );
+        }
+    } catch (error) {
+        console.error(
+            "❌ Error asignando rol de color:",
+            error
+        );
+
+        await interaction.reply({
+            content:
+                "❌ No pude asignarte el rol de color.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    // ========================================================
+    // COBRAR PUNTOS
+    // ========================================================
+
+    perfil.puntos -=
+        PRECIO_COLOR_PERSONALIZADO;
+
+    await perfil.save();
+
+    // ========================================================
+    // CONFIRMACIÓN
+    // ========================================================
+
+    const embed =
+        new EmbedBuilder()
+            .setTitle(
+                "🎨 COLOR PERSONALIZADO"
+            )
+            .setDescription(
+                `🎉 **¡Color comprado correctamente!**\n\n` +
+                `👤 **Jugador:** <@${interaction.user.id}>\n` +
+                `🎨 **Color:** \`${color}\`\n` +
+                `💰 **Gastado:** ${PRECIO_COLOR_PERSONALIZADO} puntos\n` +
+                `🪙 **Puntos restantes:** ${perfil.puntos}\n\n` +
+                "Tu nuevo color ya está aplicado a tu nombre."
+            )
+            .setColor(
+                color
+            )
+            .setFooter({
+                text:
+                    "RustLogix • Tienda"
+            });
+
+    const volver =
+        new ButtonBuilder()
+            .setCustomId(
+                "minijuegos_volver"
+            )
+            .setLabel(
+                "Volver a Minijuegos"
+            )
+            .setEmoji("🎮")
+            .setStyle(
+                ButtonStyle.Secondary
+            );
+
+    await interaction.reply({
+        embeds: [
+            embed
+        ],
+        components: [
+            new ActionRowBuilder()
+                .addComponents(
+                    volver
+                )
+        ],
+        ephemeral: true
+    });
+
+    return true;
+}
+
+// ============================================================
 // SELECT MENUS
 // ============================================================
 
@@ -2931,6 +3397,23 @@ async function manejarSelectMenu(
         return true;
     }
 
+    // ========================================================
+    // TIENDA
+    // ========================================================
+
+    if (
+        valor ===
+        "tienda"
+    ) {
+        await interaction.update(
+            await crearMenuTienda(
+                interaction
+            )
+        );
+
+        return true;
+    }
+
     return false;
 }
 
@@ -2942,5 +3425,6 @@ module.exports = {
     data,
     execute,
     manejarBoton,
-    manejarSelectMenu
+    manejarSelectMenu,
+    manejarModal
 };
