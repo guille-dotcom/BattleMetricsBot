@@ -258,6 +258,16 @@ function crearComponentes(
             )
             .setDisabled(
                 pagina >= totalPaginas - 1
+            ),
+
+        new ButtonBuilder()
+            .setCustomId(
+                "cerrar_trackers_activos"
+            )
+            .setLabel("Cerrar")
+            .setEmoji("❌")
+            .setStyle(
+                ButtonStyle.Danger
             )
     );
 
@@ -321,7 +331,20 @@ async function crearRespuesta(
             embeds: [
                 embedVacio
             ],
-            components: []
+            components: [
+                new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(
+                                "cerrar_trackers_activos"
+                            )
+                            .setLabel("Cerrar")
+                            .setEmoji("❌")
+                            .setStyle(
+                                ButtonStyle.Danger
+                            )
+                    )
+            ]
         };
     }
 
@@ -349,7 +372,7 @@ async function crearRespuesta(
     }
 
     // =================================================
-    // AVISO DE MÁS TRACKERS
+    // CREAR EMBED
     // =================================================
 
     const embed =

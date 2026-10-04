@@ -1605,6 +1605,56 @@ client.on(
         ) {
 
             // =================================================
+            // CERRAR PANEL DE TRACKERS ACTIVOS
+            // =================================================
+
+            if (
+                interaction.customId ===
+                "cerrar_trackers_activos"
+            ) {
+
+                try {
+
+                    await interaction.message.delete();
+
+                } catch (error) {
+
+                    console.error(
+                        "❌ Error cerrando panel de trackers activos:",
+                        error
+                    );
+
+                    try {
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ No pude cerrar el panel de trackers.",
+                                ephemeral:
+                                    true
+                            });
+
+                        }
+
+                    } catch (replyError) {
+
+                        console.error(
+                            "❌ Error respondiendo cierre de trackers:",
+                            replyError.message
+                        );
+
+                    }
+
+                }
+
+                return;
+            }
+
+            // =================================================
             // MINIJUEGOS
             //
             // Aquí entran:
@@ -1830,7 +1880,7 @@ client.on(
                                     true
                             });
 
-                        }
+                            }
 
                     } catch (replyError) {
 
