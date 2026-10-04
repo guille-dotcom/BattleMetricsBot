@@ -4,7 +4,10 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    StringSelectMenuBuilder
+    StringSelectMenuBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
 } = require("discord.js");
 
 const MiniGameProfile =
@@ -25,14 +28,14 @@ const TIEMPO_DUELO =
 const TIEMPO_CARA_CRUZ =
     60 * 1000;
 
+const COOLDOWN_TRAGAPERRAS =
+    10 * 1000;
+
 // ============================================================
 // TIENDA
 // ============================================================
 
 const PRECIO_COLOR_PERSONALIZADO = 300;
-
-const PREFIJO_ROL_COLOR =
-    "RustLogix Color |";
 
 // ============================================================
 // COLORES DISPONIBLES
@@ -110,14 +113,35 @@ const partidasCaraOCruz = new Map();
 const partidasBlackjack = new Map();
 
 // ============================================================
+// COOLDOWN TRAGAPERRAS
+// ============================================================
+
+const cooldownTragaperras = new Map();
+
+// ============================================================
+// COLORES PENDIENTES DE NOMBRE
+// ============================================================
+//
+// Guarda temporalmente el color seleccionado mientras el usuario
+// escribe el nombre del rol en el Modal.
+//
+// Clave:
+// guildId:userId
+//
+// ============================================================
+
+const coloresPendientes = new Map();
+
+// ============================================================
 // COMANDO
 // ============================================================
 
-const data = new SlashCommandBuilder()
-    .setName("minijuegos")
-    .setDescription(
-        "🎮 Juega minijuegos interactivos con otros usuarios."
-    );
+const data =
+    new SlashCommandBuilder()
+        .setName("minijuegos")
+        .setDescription(
+            "🎮 Juega minijuegos interactivos con otros usuarios."
+        );
 
 // ============================================================
 // PERFIL
@@ -149,7 +173,7 @@ async function obtenerPerfil(
 }
 
 // ============================================================
-// ACTUALIZAR RESULTADO
+// REGISTRAR RESULTADO
 // ============================================================
 
 async function registrarResultado(
@@ -165,14 +189,17 @@ async function registrarResultado(
         );
 
     perfil.partidas += 1;
-
     perfil.puntos += puntos;
 
-    if (resultado === "victoria") {
+    if (
+        resultado === "victoria"
+    ) {
         perfil.victorias += 1;
     }
 
-    if (resultado === "derrota") {
+    if (
+        resultado === "derrota"
+    ) {
         perfil.derrotas += 1;
     }
 
@@ -192,16 +219,25 @@ function crearMenuPrincipal() {
             .setDescription(
                 "¡Bienvenido a los minijuegos de RustLogix!\n\n" +
                 "Selecciona una opción en el menú de abajo.\n\n" +
+
                 "🎲 **Dados Multijugador**\n" +
                 "Juega contra varios usuarios y lanza los dados.\n\n" +
+
                 "⚔️ **Duelo 1vs1**\n" +
                 "Reta a otro jugador a un duelo.\n\n" +
+
                 "🪙 **Cara o Cruz**\n" +
                 "Desafía a otro jugador en un lanzamiento de moneda.\n\n" +
+
                 "🃏 **21 / Blackjack**\n" +
                 "Juega contra la banca intentando acercarte a 21.\n\n" +
+
+                "🎰 **Tragaperras**\n" +
+                "Juega solo y consigue puntos cada 10 segundos.\n\n" +
+
                 "🏆 **Mis Estadísticas**\n" +
                 "Consulta tus puntos, victorias y partidas.\n\n" +
+
                 "🛒 **Tienda**\n" +
                 "Gasta tus puntos en recompensas."
             )
@@ -230,6 +266,7 @@ function crearMenuPrincipal() {
                     emoji:
                         "🎲"
                 },
+
                 {
                     label:
                         "Duelo 1vs1",
@@ -240,6 +277,7 @@ function crearMenuPrincipal() {
                     emoji:
                         "⚔️"
                 },
+
                 {
                     label:
                         "Cara o Cruz",
@@ -250,6 +288,7 @@ function crearMenuPrincipal() {
                     emoji:
                         "🪙"
                 },
+
                 {
                     label:
                         "21 / Blackjack",
@@ -260,6 +299,18 @@ function crearMenuPrincipal() {
                     emoji:
                         "🃏"
                 },
+
+                {
+                    label:
+                        "Tragaperras",
+                    description:
+                        "Juega solo y consigue puntos.",
+                    value:
+                        "tragaperras",
+                    emoji:
+                        "🎰"
+                },
+
                 {
                     label:
                         "Mis Estadísticas",
@@ -270,6 +321,7 @@ function crearMenuPrincipal() {
                     emoji:
                         "🏆"
                 },
+
                 {
                     label:
                         "Tienda",
@@ -315,11 +367,15 @@ async function crearMenuTienda(
             )
             .setDescription(
                 "Gasta los puntos que consigues jugando a los minijuegos.\n\n" +
+
                 `💰 **Tus puntos:** **${perfil.puntos}**\n\n` +
+
                 "🎨 **Color personalizado**\n" +
-                "Cambia el color de tu nombre mediante un rol personalizado.\n" +
+                "Crea un rol con el nombre que tú quieras y el color que elijas.\n\n" +
+
                 `💰 Precio: **${PRECIO_COLOR_PERSONALIZADO} puntos**\n\n` +
-                "Pulsa el botón para elegir tu color."
+
+                "Pulsa el botón para comenzar."
             )
             .setColor(0xF1C40F)
             .setFooter({
@@ -379,11 +435,14 @@ function crearMenuDados() {
             )
             .setDescription(
                 "Crea una partida y deja que otros jugadores se unan.\n\n" +
+
                 `👥 Máximo: **${MAX_JUGADORES} jugadores**\n` +
                 "⏱️ La partida espera 60 segundos antes de expirar.\n\n" +
+
                 "**Recompensas**\n" +
                 "🎮 Participar: **+10 puntos**\n" +
                 "🏆 Ganar: **+100 puntos adicionales**\n\n" +
+
                 "Necesitas al menos **2 jugadores** para comenzar."
             )
             .setColor(0xF1C40F)
@@ -442,7 +501,10 @@ function crearMensajePartida(
     const jugadoresTexto =
         partida.jugadores
             .map(
-                (jugador, index) =>
+                (
+                    jugador,
+                    index
+                ) =>
                     `${index + 1}. <@${jugador.userId}>`
             )
             .join("\n");
@@ -454,8 +516,10 @@ function crearMensajePartida(
             )
             .setDescription(
                 `👑 **Creador:** <@${partida.creadorId}>\n\n` +
+
                 `👥 **Jugadores (${partida.jugadores.length}/${MAX_JUGADORES})**\n` +
                 `${jugadoresTexto}\n\n` +
+
                 "🙋 Pulsa **Unirse** para entrar.\n" +
                 "🎲 El creador puede iniciar cuando haya al menos 2 jugadores."
             )
@@ -524,7 +588,7 @@ function crearMensajePartida(
 }
 
 // ============================================================
-// MENU DUELO 1VS1
+// MENU DUELO
 // ============================================================
 
 function crearMenuDuelo() {
@@ -535,11 +599,14 @@ function crearMenuDuelo() {
             )
             .setDescription(
                 "Crea un duelo y espera a que otro jugador acepte.\n\n" +
+
                 "⚔️ Cada jugador lanzará un dado de 1 a 6.\n" +
                 "🏆 El jugador con el número más alto gana.\n\n" +
+
                 "**Recompensas**\n" +
                 "🎮 Participar: **+10 puntos**\n" +
                 "🏆 Ganador: **+100 puntos adicionales**\n\n" +
+
                 "⏱️ El desafío expira después de 60 segundos."
             )
             .setColor(0xE74C3C)
@@ -602,7 +669,13 @@ function crearMensajeDuelo(
             )
             .setDescription(
                 `👤 **Jugador 1:** <@${partida.creadorId}>\n` +
-                `👤 **Jugador 2:** ${partida.oponenteId ? `<@${partida.oponenteId}>` : "**Esperando jugador...**"}\n\n` +
+
+                `👤 **Jugador 2:** ${
+                    partida.oponenteId
+                        ? `<@${partida.oponenteId}>`
+                        : "**Esperando jugador...**"
+                }\n\n` +
+
                 "⚔️ Otro jugador puede aceptar el desafío.\n" +
                 "🎲 Cuando haya dos jugadores, el creador puede comenzar."
             )
@@ -686,11 +759,14 @@ function crearMenuCaraOCruz() {
             )
             .setDescription(
                 "Crea un desafío y espera a que otro jugador se una.\n\n" +
+
                 "🪙 El creador elegirá **Cara** o **Cruz**.\n" +
                 "👤 El segundo jugador recibirá automáticamente el lado contrario.\n\n" +
+
                 "**Recompensas**\n" +
                 "🎮 Participar: **+10 puntos**\n" +
                 "🏆 Ganador: **+100 puntos adicionales**\n\n" +
+
                 "⏱️ El desafío expira después de 60 segundos."
             )
             .setColor(0x3498DB)
@@ -753,7 +829,13 @@ function crearMensajeCaraOCruz(
             )
             .setDescription(
                 `👑 **Creador:** <@${partida.creadorId}>\n` +
-                `👤 **Oponente:** ${partida.oponenteId ? `<@${partida.oponenteId}>` : "**Esperando jugador...**"}\n\n` +
+
+                `👤 **Oponente:** ${
+                    partida.oponenteId
+                        ? `<@${partida.oponenteId}>`
+                        : "**Esperando jugador...**"
+                }\n\n` +
+
                 (
                     partida.oponenteId
                         ? "🪙 El creador debe elegir **Cara** o **Cruz**."
@@ -768,7 +850,9 @@ function crearMensajeCaraOCruz(
 
     const componentes = [];
 
-    if (!partida.oponenteId) {
+    if (
+        !partida.oponenteId
+    ) {
         const unirse =
             new ButtonBuilder()
                 .setCustomId(
@@ -788,7 +872,9 @@ function crearMensajeCaraOCruz(
                     unirse
                 )
         );
-    } else if (!partida.eleccionCreador) {
+    } else if (
+        !partida.eleccionCreador
+    ) {
         const cara =
             new ButtonBuilder()
                 .setCustomId(
@@ -865,12 +951,15 @@ function crearMenuBlackjack() {
             )
             .setDescription(
                 "Juega contra la banca.\n\n" +
+
                 "🎯 Intenta acercarte a **21** sin pasarte.\n" +
                 "🃏 Puedes pedir cartas o plantarte.\n\n" +
+
                 "**Recompensas**\n" +
                 "🎮 Victoria: **+100 puntos**\n" +
                 "💀 Derrota: **-10 puntos**\n" +
                 "🤝 Empate: **+10 puntos**\n\n" +
+
                 "El Blackjack natural paga **+150 puntos**."
             )
             .setColor(0x2ECC71)
@@ -888,6 +977,78 @@ function crearMenuBlackjack() {
                 "Jugar"
             )
             .setEmoji("🃏")
+            .setStyle(
+                ButtonStyle.Success
+            );
+
+    const volver =
+        new ButtonBuilder()
+            .setCustomId(
+                "minijuegos_volver"
+            )
+            .setLabel(
+                "Volver"
+            )
+            .setEmoji("↩️")
+            .setStyle(
+                ButtonStyle.Secondary
+            );
+
+    return {
+        embeds: [
+            embed
+        ],
+        components: [
+            new ActionRowBuilder()
+                .addComponents(
+                    jugar,
+                    volver
+                )
+        ]
+    };
+}
+
+// ============================================================
+// MENU TRAGAPERRAS
+// ============================================================
+
+function crearMenuTragaperras() {
+    const embed =
+        new EmbedBuilder()
+            .setTitle(
+                "🎰 TRAGAPERRAS RUSTLOGIX"
+            )
+            .setDescription(
+                "Juega solo y consigue puntos.\n\n" +
+
+                "🎰 Pulsa **Jugar** para probar suerte.\n\n" +
+
+                "**Premios**\n" +
+                "🍒🍒🍒 → **+20 puntos**\n" +
+                "🍋🍋🍋 → **+30 puntos**\n" +
+                "🍊🍊🍊 → **+40 puntos**\n" +
+                "💎💎💎 → **+100 puntos**\n" +
+                "7️⃣7️⃣7️⃣ → **+300 puntos**\n\n" +
+
+                "❌ Cualquier otra combinación → **0 puntos**\n\n" +
+
+                "⏱️ Puedes volver a jugar cada **10 segundos**."
+            )
+            .setColor(0xF1C40F)
+            .setFooter({
+                text:
+                    "RustLogix • Tragaperras"
+            });
+
+    const jugar =
+        new ButtonBuilder()
+            .setCustomId(
+                "minijuegos_tragaperras_jugar"
+            )
+            .setLabel(
+                "Jugar"
+            )
+            .setEmoji("🎰")
             .setStyle(
                 ButtonStyle.Success
             );
@@ -1027,7 +1188,7 @@ function crearBaraja() {
 }
 
 // ============================================================
-// VALOR MANO BLACKJACK
+// VALOR MANO
 // ============================================================
 
 function calcularValorMano(
@@ -1039,14 +1200,17 @@ function calcularValorMano(
                 suma,
                 carta
             ) =>
-                suma + carta.valor,
+                suma +
+                carta.valor,
             0
         );
 
     let ases =
         mano.filter(
             carta =>
-                carta.nombre.startsWith("A")
+                carta.nombre.startsWith(
+                    "A"
+                )
         ).length;
 
     while (
@@ -1094,9 +1258,13 @@ function crearMensajeBlackjack(
             )
             .setDescription(
                 `👤 **Jugador:** <@${partida.userId}>\n\n` +
+
                 `🃏 **Tus cartas:**\n${textoMano(partida.jugador)}\n\n` +
+
                 `🎯 **Tu puntuación:** **${jugadorTotal}**\n\n` +
+
                 "🏦 **Banca:**\n🃏 Carta oculta\n\n" +
+
                 "¿Qué quieres hacer?"
             )
             .setColor(0x2ECC71)
@@ -1146,7 +1314,7 @@ function crearMensajeBlackjack(
 }
 
 // ============================================================
-// RESULTADO BLACKJACK
+// FINALIZAR BLACKJACK
 // ============================================================
 
 async function finalizarBlackjack(
@@ -1175,42 +1343,63 @@ async function finalizarBlackjack(
 
     let resultado;
     let puntos;
+    let tipoResultado;
 
     if (
         jugadorTotal > 21
     ) {
         resultado =
             "💀 **Te pasaste de 21. Has perdido.**";
+
         puntos =
             -10;
+
+        tipoResultado =
+            "derrota";
     } else if (
         bancaTotal > 21
     ) {
         resultado =
             "🏆 **La banca se pasó de 21. ¡Has ganado!**";
+
         puntos =
             100;
+
+        tipoResultado =
+            "victoria";
     } else if (
         jugadorTotal >
         bancaTotal
     ) {
         resultado =
             "🏆 **¡Has ganado!**";
+
         puntos =
             100;
+
+        tipoResultado =
+            "victoria";
     } else if (
         jugadorTotal <
         bancaTotal
     ) {
         resultado =
             "💀 **La banca gana.**";
+
         puntos =
             -10;
+
+        tipoResultado =
+            "derrota";
     } else {
         resultado =
             "🤝 **Empate.**";
+
         puntos =
             10;
+
+        tipoResultado =
+            "empate";
     }
 
     const perfil =
@@ -1223,12 +1412,15 @@ async function finalizarBlackjack(
     perfil.puntos += puntos;
 
     if (
-        resultado.includes("ganado")
+        tipoResultado ===
+        "victoria"
     ) {
         perfil.victorias += 1;
-    } else if (
-        resultado.includes("pierde") ||
-        resultado.includes("perdido")
+    }
+
+    if (
+        tipoResultado ===
+        "derrota"
     ) {
         perfil.derrotas += 1;
     }
@@ -1242,12 +1434,20 @@ async function finalizarBlackjack(
             )
             .setDescription(
                 `👤 <@${partida.userId}>\n\n` +
+
                 `🃏 **Tus cartas:**\n${textoMano(partida.jugador)}\n` +
                 `🎯 **Total:** ${jugadorTotal}\n\n` +
+
                 `🏦 **Cartas de la banca:**\n${textoMano(partida.banca)}\n` +
                 `🎯 **Total banca:** ${bancaTotal}\n\n` +
+
                 `${resultado}\n\n` +
-                `💰 **Puntos:** ${puntos >= 0 ? "+" : ""}${puntos}`
+
+                `💰 **Puntos:** ${
+                    puntos >= 0
+                        ? "+"
+                        : ""
+                }${puntos}`
             )
             .setColor(
                 puntos > 0
@@ -1304,7 +1504,7 @@ async function execute(
 }
 
 // ============================================================
-// BOTONES
+// MANEJAR BOTONES
 // ============================================================
 
 async function manejarBoton(
@@ -1329,7 +1529,7 @@ async function manejarBoton(
     }
 
     // ========================================================
-    // TIENDA - COLOR PERSONALIZADO
+    // ABRIR COMPRA DE COLOR
     // ========================================================
 
     if (
@@ -1370,11 +1570,16 @@ async function manejarBoton(
                     Object.entries(
                         COLORES_PERSONALIZADOS
                     ).map(
-                        ([valor, color]) => ({
+                        (
+                            [
+                                valor,
+                                color
+                            ]
+                        ) => ({
                             label:
                                 color.nombre,
                             description:
-                                `Comprar ${color.nombre} por ${PRECIO_COLOR_PERSONALIZADO} puntos`,
+                                `${color.nombre} • ${PRECIO_COLOR_PERSONALIZADO} puntos`,
                             value:
                                 valor,
                             emoji:
@@ -1389,14 +1594,14 @@ async function manejarBoton(
                     "🎨 ELIGE TU COLOR"
                 )
                 .setDescription(
-                    `Selecciona el color que quieres para tu nombre.\n\n` +
+                    `Selecciona el color que quieres para tu nuevo rol.\n\n` +
+
                     `💰 **Precio:** ${PRECIO_COLOR_PERSONALIZADO} puntos\n` +
                     `🪙 **Tus puntos:** ${perfil.puntos}\n\n` +
-                    "⚠️ Al seleccionar un color, se descontarán los puntos y se aplicará inmediatamente."
+
+                    "📝 Después de elegir el color, RustLogix te pedirá el **nombre que quieres ponerle al rol**."
                 )
-                .setColor(
-                    0x5865F2
-                )
+                .setColor(0x5865F2)
                 .setFooter({
                     text:
                         "RustLogix • Tienda"
@@ -1427,6 +1632,230 @@ async function manejarBoton(
                 new ActionRowBuilder()
                     .addComponents(
                         cancelar
+                    )
+            ]
+        });
+
+        return true;
+    }
+
+    // ========================================================
+    // TRAGAPERRAS
+    // ========================================================
+
+    if (
+        customId ===
+        "minijuegos_tragaperras_jugar"
+    ) {
+        const ahora =
+            Date.now();
+
+        const ultimoJuego =
+            cooldownTragaperras.get(
+                interaction.user.id
+            );
+
+        if (
+            ultimoJuego &&
+            ahora -
+                ultimoJuego <
+                COOLDOWN_TRAGAPERRAS
+        ) {
+            const restante =
+                Math.ceil(
+                    (
+                        COOLDOWN_TRAGAPERRAS -
+                        (
+                            ahora -
+                            ultimoJuego
+                        )
+                    ) /
+                        1000
+                );
+
+            await interaction.reply({
+                content:
+                    `⏱️ Debes esperar **${restante} segundos** para volver a jugar.`,
+                ephemeral: true
+            });
+
+            return true;
+        }
+
+        cooldownTragaperras.set(
+            interaction.user.id,
+            ahora
+        );
+
+        const simbolos = [
+            "🍒",
+            "🍋",
+            "🍊",
+            "💎",
+            "7️⃣"
+        ];
+
+        const resultado = [
+            simbolos[
+                Math.floor(
+                    Math.random() *
+                        simbolos.length
+                )
+            ],
+
+            simbolos[
+                Math.floor(
+                    Math.random() *
+                        simbolos.length
+                )
+            ],
+
+            simbolos[
+                Math.floor(
+                    Math.random() *
+                        simbolos.length
+                )
+            ]
+        ];
+
+        let puntos = 0;
+        let mensaje =
+            "❌ **Sin premio esta vez.**";
+
+        if (
+            resultado.every(
+                simbolo =>
+                    simbolo ===
+                    "🍒"
+            )
+        ) {
+            puntos =
+                20;
+
+            mensaje =
+                "🍒 **¡Tres cerezas! +20 puntos**";
+        } else if (
+            resultado.every(
+                simbolo =>
+                    simbolo ===
+                    "🍋"
+            )
+        ) {
+            puntos =
+                30;
+
+            mensaje =
+                "🍋 **¡Tres limones! +30 puntos**";
+        } else if (
+            resultado.every(
+                simbolo =>
+                    simbolo ===
+                    "🍊"
+            )
+        ) {
+            puntos =
+                40;
+
+            mensaje =
+                "🍊 **¡Tres naranjas! +40 puntos**";
+        } else if (
+            resultado.every(
+                simbolo =>
+                    simbolo ===
+                    "💎"
+            )
+        ) {
+            puntos =
+                100;
+
+            mensaje =
+                "💎 **¡TRES DIAMANTES! +100 puntos**";
+        } else if (
+            resultado.every(
+                simbolo =>
+                    simbolo ===
+                    "7️⃣"
+            )
+        ) {
+            puntos =
+                300;
+
+            mensaje =
+                "🎉 **¡777! PREMIO MÁXIMO +300 PUNTOS**";
+        }
+
+        const perfil =
+            await obtenerPerfil(
+                interaction.guild.id,
+                interaction.user.id
+            );
+
+        perfil.partidas += 1;
+        perfil.puntos += puntos;
+
+        await perfil.save();
+
+        const embed =
+            new EmbedBuilder()
+                .setTitle(
+                    "🎰 RESULTADO TRAGAPERRAS"
+                )
+                .setDescription(
+                    `👤 <@${interaction.user.id}>\n\n` +
+
+                    `🎰 **${resultado.join(" │ ")}**\n\n` +
+
+                    `${mensaje}\n\n` +
+
+                    `💰 **Tus puntos:** ${perfil.puntos}\n\n` +
+
+                    "⏱️ Puedes volver a jugar en **10 segundos**."
+                )
+                .setColor(
+                    puntos > 0
+                        ? 0x2ECC71
+                        : 0xE74C3C
+                )
+                .setFooter({
+                    text:
+                        "RustLogix • Tragaperras"
+                });
+
+        const jugar =
+            new ButtonBuilder()
+                .setCustomId(
+                    "minijuegos_tragaperras_jugar"
+                )
+                .setLabel(
+                    "Jugar otra vez"
+                )
+                .setEmoji("🎰")
+                .setStyle(
+                    ButtonStyle.Success
+                );
+
+        const volver =
+            new ButtonBuilder()
+                .setCustomId(
+                    "minijuegos_volver"
+                )
+                .setLabel(
+                    "Volver"
+                )
+                .setEmoji("↩️")
+                .setStyle(
+                    ButtonStyle.Secondary
+                );
+
+        await interaction.update({
+            embeds: [
+                embed
+            ],
+            components: [
+                new ActionRowBuilder()
+                    .addComponents(
+                        jugar,
+                        volver
                     )
             ]
         });
@@ -1504,14 +1933,14 @@ async function manejarBoton(
 
         setTimeout(
             async () => {
-                const partidaActual =
+                const actual =
                     partidasDados.get(
                         id
                     );
 
                 if (
-                    !partidaActual ||
-                    partidaActual.iniciada
+                    !actual ||
+                    actual.iniciada
                 ) {
                     return;
                 }
@@ -1533,10 +1962,6 @@ async function manejarBoton(
                                 .setColor(
                                     0xE74C3C
                                 )
-                                .setFooter({
-                                    text:
-                                        "RustLogix • Minijuegos"
-                                })
                         ],
                         components: []
                     });
@@ -1583,7 +2008,9 @@ async function manejarBoton(
             return true;
         }
 
-        if (partida.iniciada) {
+        if (
+            partida.iniciada
+        ) {
             await interaction.reply({
                 content:
                     "❌ La partida ya comenzó.",
@@ -1682,7 +2109,8 @@ async function manejarBoton(
         }
 
         if (
-            partida.jugadores.length < 2
+            partida.jugadores.length <
+            2
         ) {
             await interaction.reply({
                 content:
@@ -1693,7 +2121,8 @@ async function manejarBoton(
             return true;
         }
 
-        partida.iniciada = true;
+        partida.iniciada =
+            true;
 
         const resultados = [];
 
@@ -1708,7 +2137,8 @@ async function manejarBoton(
                     jugador.nombre,
                 dado:
                     Math.floor(
-                        Math.random() * 6
+                        Math.random() *
+                            6
                     ) + 1
             });
         }
@@ -1762,7 +2192,8 @@ async function manejarBoton(
                 perfil.victorias += 1;
 
                 perfil.puntos +=
-                    ganadores.length === 1
+                    ganadores.length ===
+                        1
                         ? 100
                         : 50;
             } else {
@@ -1775,7 +2206,8 @@ async function manejarBoton(
         let ganadorTexto;
 
         if (
-            ganadores.length === 1
+            ganadores.length ===
+            1
         ) {
             ganadorTexto =
                 `🏆 **Ganador:** <@${ganadores[0].userId}>\n` +
@@ -1810,19 +2242,6 @@ async function manejarBoton(
             id
         );
 
-        const volver =
-            new ButtonBuilder()
-                .setCustomId(
-                    "minijuegos_volver"
-                )
-                .setLabel(
-                    "Volver a Minijuegos"
-                )
-                .setEmoji("🎮")
-                .setStyle(
-                    ButtonStyle.Secondary
-                );
-
         await interaction.update({
             embeds: [
                 embed
@@ -1830,7 +2249,17 @@ async function manejarBoton(
             components: [
                 new ActionRowBuilder()
                     .addComponents(
-                        volver
+                        new ButtonBuilder()
+                            .setCustomId(
+                                "minijuegos_volver"
+                            )
+                            .setLabel(
+                                "Volver a Minijuegos"
+                            )
+                            .setEmoji("🎮")
+                            .setStyle(
+                                ButtonStyle.Secondary
+                            )
                     )
             ]
         });
@@ -1885,43 +2314,33 @@ async function manejarBoton(
             id
         );
 
-        const embed =
-            new EmbedBuilder()
-                .setTitle(
-                    "❌ PARTIDA CANCELADA"
-                )
-                .setDescription(
-                    "La partida de dados fue cancelada por el creador."
-                )
-                .setColor(
-                    0xE74C3C
-                )
-                .setFooter({
-                    text:
-                        "RustLogix • Minijuegos"
-                });
-
-        const volver =
-            new ButtonBuilder()
-                .setCustomId(
-                    "minijuegos_volver"
-                )
-                .setLabel(
-                    "Volver a Minijuegos"
-                )
-                .setEmoji("🎮")
-                .setStyle(
-                    ButtonStyle.Secondary
-                );
-
         await interaction.update({
             embeds: [
-                embed
+                new EmbedBuilder()
+                    .setTitle(
+                        "❌ PARTIDA CANCELADA"
+                    )
+                    .setDescription(
+                        "La partida de dados fue cancelada por el creador."
+                    )
+                    .setColor(
+                        0xE74C3C
+                    )
             ],
             components: [
                 new ActionRowBuilder()
                     .addComponents(
-                        volver
+                        new ButtonBuilder()
+                            .setCustomId(
+                                "minijuegos_volver"
+                            )
+                            .setLabel(
+                                "Volver a Minijuegos"
+                            )
+                            .setEmoji("🎮")
+                            .setStyle(
+                                ButtonStyle.Secondary
+                            )
                     )
             ]
         });
@@ -1952,7 +2371,9 @@ async function manejarBoton(
                     )
             );
 
-        if (existente) {
+        if (
+            existente
+        ) {
             await interaction.reply({
                 content:
                     "❌ Ya tienes un duelo activo.",
@@ -2080,7 +2501,9 @@ async function manejarBoton(
             return true;
         }
 
-        if (partida.oponenteId) {
+        if (
+            partida.oponenteId
+        ) {
             await interaction.reply({
                 content:
                     "❌ Este duelo ya tiene un oponente.",
@@ -2145,7 +2568,9 @@ async function manejarBoton(
             return true;
         }
 
-        if (!partida.oponenteId) {
+        if (
+            !partida.oponenteId
+        ) {
             await interaction.reply({
                 content:
                     "❌ Todavía falta un jugador.",
@@ -2155,22 +2580,28 @@ async function manejarBoton(
             return true;
         }
 
-        partida.iniciada = true;
+        partida.iniciada =
+            true;
 
         const dado1 =
             Math.floor(
-                Math.random() * 6
+                Math.random() *
+                    6
             ) + 1;
 
         const dado2 =
             Math.floor(
-                Math.random() * 6
+                Math.random() *
+                    6
             ) + 1;
 
         let resultado;
-        let ganadorId = null;
+        let ganadorId =
+            null;
 
-        if (dado1 > dado2) {
+        if (
+            dado1 > dado2
+        ) {
             ganadorId =
                 partida.creadorId;
 
@@ -2231,7 +2662,9 @@ async function manejarBoton(
                 .setDescription(
                     `👤 <@${partida.creadorId}> → 🎲 **${dado1}**\n` +
                     `👤 <@${partida.oponenteId}> → 🎲 **${dado2}**\n\n` +
+
                     `${resultado}\n\n` +
+
                     (
                         ganadorId
                             ? "💰 El ganador recibe **+110 puntos**.\n🎮 El perdedor recibe **+10 puntos**."
@@ -2242,11 +2675,7 @@ async function manejarBoton(
                     ganadorId
                         ? 0x2ECC71
                         : 0xF1C40F
-                )
-                .setFooter({
-                    text:
-                        "RustLogix • Duelo 1vs1"
-                });
+                );
 
         partidasDuelo.delete(
             id
@@ -2336,10 +2765,6 @@ async function manejarBoton(
                     .setColor(
                         0xE74C3C
                     )
-                    .setFooter({
-                        text:
-                            "RustLogix • Minijuegos"
-                    })
             ],
             components: [
                 new ActionRowBuilder()
@@ -2385,7 +2810,9 @@ async function manejarBoton(
                     )
             );
 
-        if (existente) {
+        if (
+            existente
+        ) {
             await interaction.reply({
                 content:
                     "❌ Ya tienes un desafío de Cara o Cruz activo.",
@@ -2515,7 +2942,9 @@ async function manejarBoton(
             return true;
         }
 
-        if (partida.oponenteId) {
+        if (
+            partida.oponenteId
+        ) {
             await interaction.reply({
                 content:
                     "❌ Este desafío ya tiene un jugador.",
@@ -2593,7 +3022,9 @@ async function manejarBoton(
             return true;
         }
 
-        if (!partida.oponenteId) {
+        if (
+            !partida.oponenteId
+        ) {
             await interaction.reply({
                 content:
                     "❌ Primero debe unirse otro jugador.",
@@ -2617,13 +3048,14 @@ async function manejarBoton(
                 : "cara";
 
         const resultado =
-            Math.random() < 0.5
+            Math.random() <
+                0.5
                 ? "cara"
                 : "cruz";
 
         const ganadorId =
             resultado ===
-            partida.eleccionCreador
+                partida.eleccionCreador
                 ? partida.creadorId
                 : partida.oponenteId;
 
@@ -2665,20 +3097,35 @@ async function manejarBoton(
                     "🪙 RESULTADO CARA O CRUZ"
                 )
                 .setDescription(
-                    `👤 <@${partida.creadorId}> eligió **${partida.eleccionCreador === "cara" ? "Cara 🙂" : "Cruz ✖️"}**\n` +
-                    `👤 <@${partida.oponenteId}> recibió **${eleccionOponente === "cara" ? "Cara 🙂" : "Cruz ✖️"}**\n\n` +
-                    `🪙 **La moneda cayó en: ${resultado === "cara" ? "CARA 🙂" : "CRUZ ✖️"}**\n\n` +
+                    `👤 <@${partida.creadorId}> eligió **${
+                        partida.eleccionCreador ===
+                            "cara"
+                            ? "Cara 🙂"
+                            : "Cruz ✖️"
+                    }**\n` +
+
+                    `👤 <@${partida.oponenteId}> recibió **${
+                        eleccionOponente ===
+                            "cara"
+                            ? "Cara 🙂"
+                            : "Cruz ✖️"
+                    }**\n\n` +
+
+                    `🪙 **La moneda cayó en: ${
+                        resultado ===
+                            "cara"
+                            ? "CARA 🙂"
+                            : "CRUZ ✖️"
+                    }**\n\n` +
+
                     `🏆 **Ganador:** ${ganadorTexto}\n` +
+
                     "💰 El ganador recibe **+110 puntos**.\n" +
                     "🎮 El perdedor recibe **+10 puntos**."
                 )
                 .setColor(
                     0x2ECC71
-                )
-                .setFooter({
-                    text:
-                        "RustLogix • Cara o Cruz"
-                });
+                );
 
         partidasCaraOCruz.delete(
             id
@@ -2768,10 +3215,6 @@ async function manejarBoton(
                     .setColor(
                         0xE74C3C
                     )
-                    .setFooter({
-                        text:
-                            "RustLogix • Minijuegos"
-                    })
             ],
             components: [
                 new ActionRowBuilder()
@@ -2813,7 +3256,9 @@ async function manejarBoton(
                         interaction.user.id
             );
 
-        if (existente) {
+        if (
+            existente
+        ) {
             await interaction.reply({
                 content:
                     "❌ Ya tienes una partida de Blackjack activa.",
@@ -2829,17 +3274,23 @@ async function manejarBoton(
         const partida = {
             id:
                 `${interaction.guild.id}_${Date.now()}_${interaction.user.id}`,
+
             guildId:
                 interaction.guild.id,
+
             canalId:
                 interaction.channel.id,
+
             userId:
                 interaction.user.id,
+
             baraja,
+
             jugador: [
                 baraja.pop(),
                 baraja.pop()
             ],
+
             banca: [
                 baraja.pop(),
                 baraja.pop()
@@ -2857,7 +3308,8 @@ async function manejarBoton(
             );
 
         if (
-            jugadorTotal === 21
+            jugadorTotal ===
+            21
         ) {
             partidasBlackjack.delete(
                 partida.id
@@ -2882,18 +3334,17 @@ async function manejarBoton(
                     )
                     .setDescription(
                         `👤 <@${partida.userId}>\n\n` +
+
                         `🃏 **Tus cartas:**\n${textoMano(partida.jugador)}\n\n` +
+
                         "🎯 **21 puntos**\n\n" +
+
                         "🏆 **¡Blackjack natural!**\n" +
                         "💰 **+150 puntos**"
                     )
                     .setColor(
                         0xF1C40F
-                    )
-                    .setFooter({
-                        text:
-                            "RustLogix • Blackjack"
-                    });
+                    );
 
             await interaction.update({
                 embeds: [
@@ -3102,17 +3553,12 @@ async function manejarSelectMenu(
                 content:
                     `❌ No tienes suficientes puntos.\n\n` +
                     `💰 Tienes: **${perfil.puntos} puntos**\n` +
-                    `🎨 Necesitas: **${PRECIO_COLOR_PERSONALIZADO} puntos**\n` +
-                    `📉 Te faltan: **${PRECIO_COLOR_PERSONALIZADO - perfil.puntos} puntos**`,
+                    `🎨 Necesitas: **${PRECIO_COLOR_PERSONALIZADO} puntos**`,
                 ephemeral: true
             });
 
             return true;
         }
-
-        // ====================================================
-        // COMPROBAR PERMISOS DEL BOT
-        // ====================================================
 
         const botMember =
             interaction.guild.members.me;
@@ -3134,7 +3580,7 @@ async function manejarSelectMenu(
         ) {
             await interaction.reply({
                 content:
-                    "❌ RustLogix necesita el permiso **Gestionar roles** para poder darte un color personalizado.",
+                    "❌ RustLogix necesita el permiso **Gestionar roles** para crear tu rol.",
                 ephemeral: true
             });
 
@@ -3142,196 +3588,93 @@ async function manejarSelectMenu(
         }
 
         // ====================================================
-        // BUSCAR ROL DEL USUARIO
+        // GUARDAR COLOR SELECCIONADO
         // ====================================================
 
-        const nombreRol =
-            `${PREFIJO_ROL_COLOR} ${interaction.user.id}`;
+        const clave =
+            `${interaction.guild.id}:${interaction.user.id}`;
 
-        let rolColor =
-            interaction.guild.roles.cache.find(
-                rol =>
-                    rol.name ===
-                    nombreRol
-            );
-
-        // ====================================================
-        // CREAR ROL SI NO EXISTE
-        // ====================================================
-
-        if (!rolColor) {
-            try {
-                rolColor =
-                    await interaction.guild.roles.create({
-                        name:
-                            nombreRol,
-                        color:
-                            datosColor.valor,
-                        reason:
-                            "RustLogix - Compra de color personalizado"
-                    });
-            } catch (error) {
-                console.error(
-                    "❌ Error creando rol de color:",
-                    error
-                );
-
-                await interaction.reply({
-                    content:
-                        "❌ No pude crear tu rol de color.\n\n" +
-                        "Comprueba que RustLogix tenga **Gestionar roles** y que su rol esté por encima de los roles que crea.",
-                    ephemeral: true
-                });
-
-                return true;
+        coloresPendientes.set(
+            clave,
+            {
+                color:
+                    colorSeleccionado,
+                creado:
+                    Date.now()
             }
-        } else {
-            // =================================================
-            // ACTUALIZAR COLOR DEL ROL EXISTENTE
-            // =================================================
-
-            try {
-                await rolColor.setColor(
-                    datosColor.valor,
-                    "RustLogix - Cambio de color personalizado"
-                );
-            } catch (error) {
-                console.error(
-                    "❌ Error actualizando rol de color:",
-                    error
-                );
-
-                await interaction.reply({
-                    content:
-                        "❌ No pude cambiar el color de tu rol.\n\n" +
-                        "Comprueba la posición del rol de RustLogix.",
-                    ephemeral: true
-                });
-
-                return true;
-            }
-        }
+        );
 
         // ====================================================
-        // ASIGNAR ROL
+        // CREAR MODAL
         // ====================================================
 
-        try {
-            const miembro =
-                await interaction.guild.members.fetch(
-                    interaction.user.id
-                );
-
-            const rolesColor =
-                miembro.roles.cache.filter(
-                    rol =>
-                        rol.name.startsWith(
-                            PREFIJO_ROL_COLOR
-                        ) &&
-                        rol.id !==
-                            rolColor.id
-                );
-
-            for (
-                const rol of
-                rolesColor.values()
-            ) {
-                try {
-                    await miembro.roles.remove(
-                        rol,
-                        "RustLogix - Reemplazo de color personalizado"
-                    );
-                } catch (error) {
-                    console.error(
-                        "⚠️ No se pudo quitar rol de color anterior:",
-                        error.message
-                    );
-                }
-            }
-
-            if (
-                !miembro.roles.cache.has(
-                    rolColor.id
-                )
-            ) {
-                await miembro.roles.add(
-                    rolColor,
-                    "RustLogix - Compra de color personalizado"
-                );
-            }
-        } catch (error) {
-            console.error(
-                "❌ Error asignando rol de color:",
-                error
-            );
-
-            await interaction.reply({
-                content:
-                    "❌ No pude asignarte el rol de color.",
-                ephemeral: true
-            });
-
-            return true;
-        }
-
-        // ====================================================
-        // COBRAR PUNTOS
-        // ====================================================
-
-        perfil.puntos -=
-            PRECIO_COLOR_PERSONALIZADO;
-
-        await perfil.save();
-
-        // ====================================================
-        // CONFIRMACIÓN
-        // ====================================================
-
-        const embed =
-            new EmbedBuilder()
-                .setTitle(
-                    `${datosColor.emoji} COLOR COMPRADO`
-                )
-                .setDescription(
-                    `🎉 **¡Color comprado correctamente!**\n\n` +
-                    `👤 **Jugador:** <@${interaction.user.id}>\n` +
-                    `${datosColor.emoji} **Color:** ${datosColor.nombre}\n` +
-                    `💰 **Gastado:** ${PRECIO_COLOR_PERSONALIZADO} puntos\n` +
-                    `🪙 **Puntos restantes:** ${perfil.puntos}\n\n` +
-                    "Tu nuevo color ya está aplicado a tu nombre."
-                )
-                .setColor(
-                    datosColor.valor
-                )
-                .setFooter({
-                    text:
-                        "RustLogix • Tienda"
-                });
-
-        const volver =
-            new ButtonBuilder()
+        const modal =
+            new ModalBuilder()
                 .setCustomId(
-                    "minijuegos_volver"
+                    "minijuegos_color_nombre_modal"
+                )
+                .setTitle(
+                    `🎨 Rol ${datosColor.nombre}`
+                );
+
+        const nombreRolInput =
+            new TextInputBuilder()
+                .setCustomId(
+                    "minijuegos_nombre_rol"
                 )
                 .setLabel(
-                    "Volver a Minijuegos"
+                    "¿Qué nombre quieres para tu rol?"
                 )
-                .setEmoji("🎮")
+                .setPlaceholder(
+                    "Ejemplo: VIP Naranja"
+                )
                 .setStyle(
-                    ButtonStyle.Secondary
+                    TextInputStyle.Short
+                )
+                .setMinLength(
+                    1
+                )
+                .setMaxLength(
+                    100
+                )
+                .setRequired(
+                    true
                 );
 
-        await interaction.update({
-            embeds: [
-                embed
-            ],
-            components: [
-                new ActionRowBuilder()
-                    .addComponents(
-                        volver
-                    )
-            ]
-        });
+        modal.addComponents(
+            new ActionRowBuilder()
+                .addComponents(
+                    nombreRolInput
+                )
+        );
+
+        await interaction.showModal(
+            modal
+        );
+
+        // ====================================================
+        // LIMPIAR DESPUÉS DE 5 MINUTOS
+        // ====================================================
+
+        setTimeout(
+            () => {
+                const pendiente =
+                    coloresPendientes.get(
+                        clave
+                    );
+
+                if (
+                    pendiente &&
+                    pendiente.creado ===
+                        Date.now()
+                ) {
+                    coloresPendientes.delete(
+                        clave
+                    );
+                }
+            },
+            5 * 60 * 1000
+        );
 
         return true;
     }
@@ -3350,10 +3693,6 @@ async function manejarSelectMenu(
     const valor =
         interaction.values[0];
 
-    // ========================================================
-    // DADOS
-    // ========================================================
-
     if (
         valor ===
         "dados"
@@ -3364,10 +3703,6 @@ async function manejarSelectMenu(
 
         return true;
     }
-
-    // ========================================================
-    // DUELO
-    // ========================================================
 
     if (
         valor ===
@@ -3380,10 +3715,6 @@ async function manejarSelectMenu(
         return true;
     }
 
-    // ========================================================
-    // CARA O CRUZ
-    // ========================================================
-
     if (
         valor ===
         "cara_cruz"
@@ -3394,10 +3725,6 @@ async function manejarSelectMenu(
 
         return true;
     }
-
-    // ========================================================
-    // BLACKJACK
-    // ========================================================
 
     if (
         valor ===
@@ -3410,9 +3737,16 @@ async function manejarSelectMenu(
         return true;
     }
 
-    // ========================================================
-    // ESTADÍSTICAS
-    // ========================================================
+    if (
+        valor ===
+        "tragaperras"
+    ) {
+        await interaction.update(
+            crearMenuTragaperras()
+        );
+
+        return true;
+    }
 
     if (
         valor ===
@@ -3431,6 +3765,7 @@ async function manejarSelectMenu(
                 )
                 .setDescription(
                     `👤 **Jugador:** <@${interaction.user.id}>\n\n` +
+
                     `💰 **Puntos:** ${perfil.puntos}\n` +
                     `🏆 **Victorias:** ${perfil.victorias}\n` +
                     `💀 **Derrotas:** ${perfil.derrotas}\n` +
@@ -3438,11 +3773,7 @@ async function manejarSelectMenu(
                 )
                 .setColor(
                     0x5865F2
-                )
-                .setFooter({
-                    text:
-                        "RustLogix • Minijuegos"
-                });
+                );
 
         const volver =
             new ButtonBuilder()
@@ -3472,10 +3803,6 @@ async function manejarSelectMenu(
         return true;
     }
 
-    // ========================================================
-    // TIENDA
-    // ========================================================
-
     if (
         valor ===
         "tienda"
@@ -3493,6 +3820,343 @@ async function manejarSelectMenu(
 }
 
 // ============================================================
+// MODAL - NOMBRE DEL ROL
+// ============================================================
+
+async function manejarModal(
+    interaction
+) {
+    if (
+        interaction.customId !==
+        "minijuegos_color_nombre_modal"
+    ) {
+        return false;
+    }
+
+    const clave =
+        `${interaction.guild.id}:${interaction.user.id}`;
+
+    const pendiente =
+        coloresPendientes.get(
+            clave
+        );
+
+    if (!pendiente) {
+        await interaction.reply({
+            content:
+                "❌ Esta compra expiró. Vuelve a seleccionar el color desde la tienda.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    coloresPendientes.delete(
+        clave
+    );
+
+    // ========================================================
+    // COMPROBAR COLOR
+    // ========================================================
+
+    const datosColor =
+        COLORES_PERSONALIZADOS[
+            pendiente.color
+        ];
+
+    if (!datosColor) {
+        await interaction.reply({
+            content:
+                "❌ El color seleccionado ya no está disponible.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    // ========================================================
+    // OBTENER NOMBRE
+    // ========================================================
+
+    let nombreRol =
+        interaction.fields.getTextInputValue(
+            "minijuegos_nombre_rol"
+        );
+
+    nombreRol =
+        nombreRol.trim();
+
+    if (!nombreRol) {
+        await interaction.reply({
+            content:
+                "❌ Debes escribir un nombre para el rol.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    if (
+        nombreRol.length >
+        100
+    ) {
+        await interaction.reply({
+            content:
+                "❌ El nombre del rol no puede superar los 100 caracteres.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    // ========================================================
+    // COMPROBAR PUNTOS DE NUEVO
+    // ========================================================
+
+    const perfil =
+        await obtenerPerfil(
+            interaction.guild.id,
+            interaction.user.id
+        );
+
+    if (
+        perfil.puntos <
+        PRECIO_COLOR_PERSONALIZADO
+    ) {
+        await interaction.reply({
+            content:
+                `❌ Ya no tienes suficientes puntos para realizar la compra.\n\n` +
+                `💰 Tienes: **${perfil.puntos} puntos**\n` +
+                `🎨 Necesitas: **${PRECIO_COLOR_PERSONALIZADO} puntos**`,
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    // ========================================================
+    // COMPROBAR PERMISOS
+    // ========================================================
+
+    const botMember =
+        interaction.guild.members.me;
+
+    if (!botMember) {
+        await interaction.reply({
+            content:
+                "❌ No pude comprobar al bot dentro del servidor.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    if (
+        !botMember.permissions.has(
+            "ManageRoles"
+        )
+    ) {
+        await interaction.reply({
+            content:
+                "❌ RustLogix necesita el permiso **Gestionar roles**.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    // ========================================================
+    // COMPROBAR SI YA EXISTE UN ROL CON ESE NOMBRE
+    // ========================================================
+
+    const rolExistente =
+        interaction.guild.roles.cache.find(
+            rol =>
+                rol.name ===
+                nombreRol
+        );
+
+    if (rolExistente) {
+        await interaction.reply({
+            content:
+                `❌ Ya existe un rol llamado **${nombreRol}**.\n\n` +
+                "Elige otro nombre para tu rol.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    // ========================================================
+    // CREAR ROL
+    // ========================================================
+
+    let rolNuevo;
+
+    try {
+        rolNuevo =
+            await interaction.guild.roles.create({
+                name:
+                    nombreRol,
+
+                color:
+                    datosColor.valor,
+
+                reason:
+                    `RustLogix - Compra de color personalizado por ${interaction.user.tag}`
+            });
+    } catch (error) {
+        console.error(
+            "❌ Error creando rol personalizado:",
+            error
+        );
+
+        await interaction.reply({
+            content:
+                "❌ No pude crear el rol.\n\n" +
+                "Comprueba que RustLogix tenga **Gestionar roles** y que su rol esté por encima de la posición donde Discord permite crear/asignar el rol.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    // ========================================================
+    // COMPROBAR POSICIÓN DEL ROL
+    // ========================================================
+
+    if (
+        rolNuevo.position >=
+        botMember.roles.highest.position
+    ) {
+        try {
+            await rolNuevo.delete(
+                "RustLogix - Rol fuera del alcance del bot"
+            );
+        } catch (error) {
+            console.error(
+                "⚠️ No pude borrar el rol creado:",
+                error.message
+            );
+        }
+
+        await interaction.reply({
+            content:
+                "❌ No puedo asignar ese rol porque la posición del rol de RustLogix no permite administrarlo.\n\n" +
+                "Mueve el rol de **RustLogix** por encima de los roles que crea.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    // ========================================================
+    // ASIGNAR ROL
+    // ========================================================
+
+    try {
+        const miembro =
+            await interaction.guild.members.fetch(
+                interaction.user.id
+            );
+
+        await miembro.roles.add(
+            rolNuevo,
+            "RustLogix - Compra de color personalizado"
+        );
+    } catch (error) {
+        console.error(
+            "❌ Error asignando rol personalizado:",
+            error
+        );
+
+        try {
+            await rolNuevo.delete(
+                "RustLogix - No se pudo asignar al usuario"
+            );
+        } catch (deleteError) {
+            console.error(
+                "⚠️ No pude borrar el rol después del fallo:",
+                deleteError.message
+            );
+        }
+
+        await interaction.reply({
+            content:
+                "❌ El rol fue creado, pero no pude asignártelo. No se te descontaron puntos.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    // ========================================================
+    // COBRAR LOS 300 PUNTOS
+    // ========================================================
+
+    perfil.puntos -=
+        PRECIO_COLOR_PERSONALIZADO;
+
+    await perfil.save();
+
+    // ========================================================
+    // CONFIRMACIÓN
+    // ========================================================
+
+    const embed =
+        new EmbedBuilder()
+            .setTitle(
+                `${datosColor.emoji} ¡ROL CREADO!`
+            )
+            .setDescription(
+                "🎉 **Tu compra se realizó correctamente.**\n\n" +
+
+                `👤 **Jugador:** <@${interaction.user.id}>\n` +
+                `🏷️ **Rol:** <@&${rolNuevo.id}>\n` +
+                `${datosColor.emoji} **Color:** ${datosColor.nombre}\n\n` +
+
+                `💰 **Gastado:** ${PRECIO_COLOR_PERSONALIZADO} puntos\n` +
+                `🪙 **Puntos restantes:** ${perfil.puntos}\n\n` +
+
+                "El rol ya fue creado y asignado a tu cuenta."
+            )
+            .setColor(
+                datosColor.valor
+            )
+            .setFooter({
+                text:
+                    "RustLogix • Tienda"
+            });
+
+    const volver =
+        new ButtonBuilder()
+            .setCustomId(
+                "minijuegos_volver"
+            )
+            .setLabel(
+                "Volver a Minijuegos"
+            )
+            .setEmoji("🎮")
+            .setStyle(
+                ButtonStyle.Secondary
+            );
+
+    await interaction.reply({
+        embeds: [
+            embed
+        ],
+        components: [
+            new ActionRowBuilder()
+                .addComponents(
+                    volver
+                )
+        ]
+    });
+
+    return true;
+}
+
+// ============================================================
 // EXPORTAR
 // ============================================================
 
@@ -3500,5 +4164,6 @@ module.exports = {
     data,
     execute,
     manejarBoton,
-    manejarSelectMenu
+    manejarSelectMenu,
+    manejarModal
 };
