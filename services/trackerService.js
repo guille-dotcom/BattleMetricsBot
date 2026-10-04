@@ -290,29 +290,6 @@ function formatoTiempo(ms) {
 }
 
 // =====================================================
-// OBTENER TIEMPO JUGANDO DEL TRACKER
-// =====================================================
-
-function obtenerTiempoJugando(tracker) {
-    if (!tracker?.inicioSesion) {
-        return "0m";
-    }
-
-    const inicio =
-        new Date(
-            tracker.inicioSesion
-        ).getTime();
-
-    if (Number.isNaN(inicio)) {
-        return "0m";
-    }
-
-    return formatoTiempo(
-        Date.now() - inicio
-    );
-}
-
-// =====================================================
 // BOTÓN BATTLEMETRICS
 // =====================================================
 
@@ -357,14 +334,13 @@ function crearEmbedOnline(
         );
 
     // =================================================
-    // CORRECCIÓN:
-    // Antes usaba status.jugando, que devuelve true/false.
-    // Ahora calculamos el tiempo real del tracker.
+    // TIEMPO REAL DE LA SESIÓN SEGÚN BATTLEMETRICS
     // =================================================
 
     const tiempoJugando =
-        obtenerTiempoJugando(
-            tracker
+        String(
+            status?.tiempoJugando ||
+            "0m"
         );
 
     const esServidorConfigurado =
@@ -457,13 +433,14 @@ function crearEmbedOtroServidor(
         );
 
     // =================================================
-    // En otro servidor el tracker no mantiene
-    // inicioSesion, por lo que no mostramos el
-    // booleano true/false de status.jugando.
+    // TIEMPO REAL DE LA SESIÓN SEGÚN BATTLEMETRICS
     // =================================================
 
     const tiempoJugando =
-        "0m";
+        String(
+            status?.tiempoJugando ||
+            "0m"
+        );
 
     return new EmbedBuilder()
         .setTitle(
@@ -925,16 +902,6 @@ async function revisarTrackers(client) {
                 if (
                     estadoAnterior === "offline"
                 ) {
-                    // IMPORTANTE:
-                    // Establecemos el inicio ANTES de crear
-                    // el embed para que "Jugando" no sea 0m
-                    // por falta de inicioSesion.
-
-                    if (!tracker.inicioSesion) {
-                        tracker.inicioSesion =
-                            new Date();
-                    }
-
                     await canal.send({
                         content:
                             `🟢 **${tracker.nombre} volvió a entrar al servidor configurado**`,
@@ -962,12 +929,6 @@ async function revisarTrackers(client) {
                 else if (
                     estadoAnterior === "otro_servidor"
                 ) {
-                    // Al volver al servidor configurado
-                    // comenzamos una nueva sesión.
-
-                    tracker.inicioSesion =
-                        new Date();
-
                     await canal.send({
                         content:
                             `🟢 **${tracker.nombre} volvió al servidor configurado**`,
