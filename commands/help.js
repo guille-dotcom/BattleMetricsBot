@@ -9,60 +9,78 @@ module.exports = {
         .setDescription("Muestra la lista de comandos del RustLogix"),
 
     async execute(interaction) {
-        // Diferimos la respuesta de forma efímera o pública (aquí la dejamos pública ya que es un /help)
         await interaction.deferReply();
 
         try {
-            // 1. Configuración Inicial
+            // ============================================================
+            // 1. CONFIGURACIÓN
+            // ============================================================
+
             const configuracion = new EmbedBuilder()
-                .setTitle("⚙️ Configuración Inicial")
+                .setTitle("⚙️ Configuración")
                 .setDescription(
-                    "Antes de usar los comandos, debes configurar tu entorno:\n\n" +
-                    "👉 **/configurar-servidor** — Establece el servidor de Rust activo.\n" +
-                    "👉 **/setupsheet** — Configura la planilla de Google Sheets para este servidor.\n" +
-                    "👉 **/verplanilla** — Muestra el enlace de la planilla configurada actualmente.\n\n" +
-                    "💡 **Para administradores (Planilla de Google Sheets):**\n" +
-                    "1. Crea un Google Sheet nuevo.\n" +
-                    "2. Dale permisos de **Editor** al correo:\n" +
-                    "`bot-rustlogix@solid-groove-447515-t7.iam.gserviceaccount.com`\n" +
-                    "3. Usa `/setupsheet` y pega el enlace de tu planilla."
+                    "🛠️ **/configurar-servidor** — Configura el servidor de Rust que utilizará RustLogix."
                 )
                 .setColor(0x3498DB);
 
-            // 2. Comandos del Servidor
+            // ============================================================
+            // 2. SERVIDOR Y ESTADÍSTICAS
+            // ============================================================
+
             const servidor = new EmbedBuilder()
-                .setTitle("🖥️ Comandos del Servidor")
+                .setTitle("🖥️ Servidor y Estadísticas")
                 .setDescription(
-                    "*Requieren haber ejecutado `/configurar-servidor` previamente.*\n\n" +
-                    "⏱️ **/horas** — Muestra las horas de un usuario en el servidor.\n" +
-                    "🏆 **/ranking** — Muestra el top de jugadores del servidor."
+                    "⏱️ **/horas** — Consulta las horas de un jugador por Steam ID.\n" +
+                    "📊 **/horasbm** — Consulta las horas de un jugador mediante su perfil de BattleMetrics.\n" +
+                    "🖥️ **/server** — Muestra información del servidor configurado."
                 )
                 .setColor(0xFEE75C);
 
-            // 3. Sistema Tracker
-            const tracker = new EmbedBuilder()
-                .setTitle("🎯 Sistema Tracker (24h)")
+            // ============================================================
+            // 3. TIENDA DE RUST
+            // ============================================================
+
+            const tienda = new EmbedBuilder()
+                .setTitle("🛒 Tienda de Rust")
                 .setDescription(
-                    "🎮 **/tracker** — Inicia el seguimiento de un jugador.\n" +
-                    "📋 **/trackers-activos** — Lista los jugadores bajo vigilancia.\n" +
-                    "🗑️ **/tracker-limpiar** — Elimina trackers activos."
+                    "🛍️ **/tienda** — Consulta los artículos disponibles actualmente en la tienda de Rust.\n" +
+                    "⚙️ **/configurar-tienda** — Configura el canal de Discord para el funcionamiento de la tienda de Rust."
+                )
+                .setColor(0xE67E22);
+
+            // ============================================================
+            // 4. SISTEMA TRACKER
+            // ============================================================
+
+            const tracker = new EmbedBuilder()
+                .setTitle("🎯 Sistema Tracker")
+                .setDescription(
+                    "🎮 **/tracker** — Inicia el seguimiento de un jugador durante 24 horas.\n" +
+                    "📋 **/trackers-activos** — Muestra los jugadores que están siendo rastreados actualmente.\n" +
+                    "🗑️ **/tracker-limpiar** — Elimina los trackers activos."
                 )
                 .setColor(0x57F287);
 
-            // 4. Registro y Consultas
-            const registroYConsultas = new EmbedBuilder()
-                .setTitle("📋 Registro y Consultas")
+            // ============================================================
+            // 5. INTERACCIÓN
+            // ============================================================
+
+            const interaccion = new EmbedBuilder()
+                .setTitle("🎉 Interacción")
                 .setDescription(
-                    "📝 **/registrar** — Registra un jugador en la planilla configurada.\n" +
-                    "🔎 **/horasbm** — Consulta estadísticas globales mediante un enlace de perfil."
+                    "📊 **/encuesta** — Crea una encuesta para los miembros del servidor.\n" +
+                    "🎁 **/giveaway** — Crea y gestiona sorteos en el servidor."
                 )
                 .setColor(0x9B59B6);
 
-            // 5. Utilidades / Información
-            const informacion = new EmbedBuilder()
+            // ============================================================
+            // 6. UTILIDADES
+            // ============================================================
+
+            const utilidades = new EmbedBuilder()
                 .setTitle("📡 Utilidades")
                 .setDescription(
-                    "📡 **/ping** — Comprueba el estado de latencia del bot."
+                    "🏓 **/ping** — Comprueba la latencia y el estado del bot."
                 )
                 .setColor(0x95A5A6)
                 .setFooter({
@@ -70,19 +88,24 @@ module.exports = {
                 })
                 .setTimestamp();
 
-            // Enviar todos los embeds juntos de forma segura
+            // ============================================================
+            // RESPUESTA
+            // ============================================================
+
             await interaction.editReply({
                 embeds: [
                     configuracion,
                     servidor,
+                    tienda,
                     tracker,
-                    registroYConsultas,
-                    informacion
+                    interaccion,
+                    utilidades
                 ]
             });
 
         } catch (error) {
             console.error("Error en el comando help:", error);
+
             await interaction.editReply({
                 content: "❌ Ocurrió un error al intentar mostrar la ayuda de comandos."
             });
