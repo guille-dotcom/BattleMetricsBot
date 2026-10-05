@@ -11,11 +11,17 @@ const StreamerRole =
 // CONFIGURACIÓN
 // ============================================================
 
-const KICK_CLIENT_ID = process.env.KICK_CLIENT_ID;
-const KICK_CLIENT_SECRET = process.env.KICK_CLIENT_SECRET;
+const KICK_CLIENT_ID =
+    process.env.KICK_CLIENT_ID;
 
-const KICK_API_URL = "https://api.kick.com/public/v1";
-const KICK_OAUTH_URL = "https://id.kick.com/oauth/token";
+const KICK_CLIENT_SECRET =
+    process.env.KICK_CLIENT_SECRET;
+
+const KICK_API_URL =
+    "https://api.kick.com/public/v2";
+
+const KICK_OAUTH_URL =
+    "https://id.kick.com/oauth/token";
 
 const KICK_DROPS_URL =
     "https://kick.facepunch.com/?s=WWW.RUST";
@@ -23,7 +29,8 @@ const KICK_DROPS_URL =
 const KICK_RUST_URL =
     "https://kick.com/category/rust";
 
-const INTERVALO_KICK = 60 * 1000;
+const INTERVALO_KICK =
+    60 * 1000;
 
 let kickAppToken = null;
 let kickAppTokenExpiresAt = 0;
@@ -56,7 +63,9 @@ function escaparRegExp(texto) {
 }
 
 function decodificarHtml(texto) {
-    if (!texto) return "";
+    if (!texto) {
+        return "";
+    }
 
     return String(texto)
         .replace(/&amp;/gi, "&")
@@ -71,7 +80,9 @@ function decodificarHtml(texto) {
 }
 
 function limpiarHtml(texto) {
-    if (!texto) return "";
+    if (!texto) {
+        return "";
+    }
 
     return decodificarHtml(
         String(texto)
@@ -83,22 +94,30 @@ function limpiarHtml(texto) {
 }
 
 function limpiarNombreStreamer(nombre) {
-    if (!nombre) return null;
+    if (!nombre) {
+        return null;
+    }
 
-    let limpio = limpiarHtml(nombre)
+    const limpio = limpiarHtml(nombre)
         .replace(/^@/, "")
         .replace(/\s+/g, " ")
         .trim();
 
-    if (!limpio) return null;
+    if (!limpio) {
+        return null;
+    }
 
     return limpio;
 }
 
 function limpiarUrlImagen(url) {
-    if (!url) return null;
+    if (!url) {
+        return null;
+    }
 
-    let limpio = decodificarHtml(String(url).trim());
+    let limpio = decodificarHtml(
+        String(url).trim()
+    );
 
     limpio = limpio
         .replace(/^["']/, "")
@@ -113,11 +132,20 @@ function limpiarUrlImagen(url) {
 }
 
 function esImagenValida(url) {
-    return /^https?:\/\//i.test(String(url || ""));
+    return /^https?:\/\//i.test(
+        String(url || "")
+    );
 }
 
+// ============================================================
+// TIEMPOS
+// ============================================================
+
 function convertirHoras(valor) {
-    if (valor === null || valor === undefined) {
+    if (
+        valor === null ||
+        valor === undefined
+    ) {
         return null;
     }
 
@@ -125,21 +153,38 @@ function convertirHoras(valor) {
         .replace(",", ".")
         .trim();
 
-    if (!texto) return null;
+    if (!texto) {
+        return null;
+    }
 
     const horasMatch = texto.match(
         /([\d.]+)\s*(?:hours?|hrs?|h|horas?)/i
     );
 
     if (horasMatch) {
-        const numero = Number(horasMatch[1]);
+        const numero =
+            Number(horasMatch[1]);
 
         if (Number.isFinite(numero)) {
             return numero;
         }
     }
 
-    const numero = Number(texto);
+    const minutosMatch = texto.match(
+        /([\d.]+)\s*(?:minutes?|mins?|minutos?)/i
+    );
+
+    if (minutosMatch) {
+        const minutos =
+            Number(minutosMatch[1]);
+
+        if (Number.isFinite(minutos)) {
+            return minutos / 60;
+        }
+    }
+
+    const numero =
+        Number(texto);
 
     if (Number.isFinite(numero)) {
         return numero;
@@ -149,29 +194,67 @@ function convertirHoras(valor) {
 }
 
 function formatearHoras(horas) {
-    if (horas === null || horas === undefined) {
+    if (
+        horas === null ||
+        horas === undefined
+    ) {
         return "Tiempo requerido no disponible";
     }
 
-    const numero = Number(horas);
+    const numero =
+        Number(horas);
 
     if (!Number.isFinite(numero)) {
         return "Tiempo requerido no disponible";
+    }
+
+    const minutosExactos =
+        numero * 60;
+
+    if (
+        Number.isFinite(minutosExactos) &&
+        minutosExactos > 0 &&
+        minutosExactos < 60
+    ) {
+        const minutos =
+            Math.round(minutosExactos);
+
+        return minutos === 1
+            ? "1 minuto"
+            : `${minutos} minutos`;
     }
 
     if (numero === 1) {
         return "1 hora";
     }
 
-    return `${numero} horas`;
+    if (
+        Number.isInteger(numero)
+    ) {
+        return `${numero} horas`;
+    }
+
+    const redondeado =
+        Number(numero.toFixed(2));
+
+    return `${redondeado} horas`;
 }
 
+// ============================================================
+// URL STREAMER
+// ============================================================
+
 function obtenerUrlStreamerKick(login) {
-    const limpio = normalizarLogin(login);
+    const limpio =
+        normalizarLogin(login);
 
-    if (!limpio) return null;
+    if (!limpio) {
+        return null;
+    }
 
-    return `https://kick.com/${encodeURIComponent(limpio)}`;
+    return `https://kick.com/${encodeURIComponent(
+        limpio
+    )}`;
 }
 
 // ============================================================
@@ -181,35 +264,47 @@ function obtenerUrlStreamerKick(login) {
 async function obtenerKickAppToken() {
     if (
         kickAppToken &&
-        Date.now() < kickAppTokenExpiresAt - 60 * 1000
+        Date.now() <
+            kickAppTokenExpiresAt -
+                60 * 1000
     ) {
         return kickAppToken;
     }
 
-    if (!KICK_CLIENT_ID || !KICK_CLIENT_SECRET) {
+    if (
+        !KICK_CLIENT_ID ||
+        !KICK_CLIENT_SECRET
+    ) {
         throw new Error(
             "Faltan KICK_CLIENT_ID y/o KICK_CLIENT_SECRET en las variables de entorno."
         );
     }
 
     try {
-        const response = await axios.post(
-            KICK_OAUTH_URL,
-            new URLSearchParams({
-                grant_type: "client_credentials",
-                client_id: KICK_CLIENT_ID,
-                client_secret: KICK_CLIENT_SECRET
-            }).toString(),
-            {
-                headers: {
-                    "Content-Type":
-                        "application/x-www-form-urlencoded"
-                },
-                timeout: 30000
-            }
-        );
+        const response =
+            await axios.post(
+                KICK_OAUTH_URL,
+                new URLSearchParams({
+                    grant_type:
+                        "client_credentials",
+                    client_id:
+                        KICK_CLIENT_ID,
+                    client_secret:
+                        KICK_CLIENT_SECRET
+                }).toString(),
+                {
+                    headers: {
+                        "Content-Type":
+                            "application/x-www-form-urlencoded",
+                        Accept:
+                            "application/json"
+                    },
+                    timeout: 30000
+                }
+            );
 
-        const data = response.data || {};
+        const data =
+            response.data || {};
 
         if (!data.access_token) {
             throw new Error(
@@ -217,11 +312,16 @@ async function obtenerKickAppToken() {
             );
         }
 
-        kickAppToken = data.access_token;
+        kickAppToken =
+            data.access_token;
 
         kickAppTokenExpiresAt =
             Date.now() +
-            Number(data.expires_in || 3600) * 1000;
+            Number(
+                data.expires_in ||
+                3600
+            ) *
+                1000;
 
         console.log(
             "[Kick Drops] Access token obtenido correctamente."
@@ -229,8 +329,11 @@ async function obtenerKickAppToken() {
 
         return kickAppToken;
     } catch (error) {
-        const status = error.response?.status;
-        const data = error.response?.data;
+        const status =
+            error.response?.status;
+
+        const data =
+            error.response?.data;
 
         console.error(
             "[Kick Drops] Error obteniendo App Access Token:",
@@ -246,30 +349,42 @@ async function obtenerKickAppToken() {
 // REQUEST API KICK
 // ============================================================
 
-async function kickApiGet(url, params = {}) {
-    const token = await obtenerKickAppToken();
+async function kickApiGet(
+    url,
+    params = {}
+) {
+    const token =
+        await obtenerKickAppToken();
 
     try {
-        const response = await axios.get(url, {
-            params,
-            headers: {
-                Authorization: `Bearer ${token}`,
-                Accept: "application/json"
-            },
-            timeout: 30000
-        });
+        const response =
+            await axios.get(url, {
+                params,
+                headers: {
+                    Authorization:
+                        `Bearer ${token}`,
+                    Accept:
+                        "application/json"
+                },
+                timeout: 30000
+            });
 
         return response.data;
     } catch (error) {
-        if (error.response?.status === 401) {
+        if (
+            error.response?.status ===
+            401
+        ) {
             kickAppToken = null;
             kickAppTokenExpiresAt = 0;
         }
 
         console.error(
             "[Kick Drops] Error API:",
-            error.response?.status || "",
-            error.response?.data || error.message
+            error.response?.status ||
+                "",
+            error.response?.data ||
+                error.message
         );
 
         throw error;
@@ -286,41 +401,76 @@ async function obtenerCategoriaRustKick() {
     }
 
     try {
-        const respuesta = await kickApiGet(
-            `${KICK_API_URL}/categories`,
-            {
-                query: "Rust"
-            }
+        console.log(
+            "[Kick Drops] Buscando categoría Rust en Kick..."
         );
 
+        const respuesta =
+            await kickApiGet(
+                `${KICK_API_URL}/categories`,
+                {
+                    name: "Rust",
+                    limit: 25
+                }
+            );
+
         const categorias =
-            Array.isArray(respuesta?.data)
+            Array.isArray(
+                respuesta?.data
+            )
                 ? respuesta.data
-                : Array.isArray(respuesta)
-                    ? respuesta
-                    : [];
+                : [];
 
-        const categoria = categorias.find((item) => {
-            const nombre =
-                String(item?.name || "")
-                    .trim()
-                    .toLowerCase();
+        const categoria =
+            categorias.find(
+                (item) => {
+                    const nombre =
+                        String(
+                            item?.name ||
+                                ""
+                        )
+                            .trim()
+                            .toLowerCase();
 
-            const slug =
-                String(item?.slug || "")
-                    .trim()
-                    .toLowerCase();
+                    const slug =
+                        String(
+                            item?.slug ||
+                                ""
+                        )
+                            .trim()
+                            .toLowerCase();
 
-            return nombre === "rust" || slug === "rust";
-        });
+                    return (
+                        nombre ===
+                            "rust" ||
+                        slug ===
+                            "rust"
+                    );
+                }
+            );
 
         if (!categoria?.id) {
+            console.error(
+                "[Kick Drops] Categorías recibidas:",
+                categorias.map(
+                    (item) => ({
+                        id:
+                            item?.id,
+                        name:
+                            item?.name,
+                        slug:
+                            item?.slug
+                    })
+                )
+            );
+
             throw new Error(
                 "No se encontró la categoría Rust en Kick."
             );
         }
 
-        kickRustCategoryId = categoria.id;
+        kickRustCategoryId =
+            categoria.id;
 
         console.log(
             `[Kick Drops] Categoría Rust encontrada: ${kickRustCategoryId}`
@@ -330,7 +480,8 @@ async function obtenerCategoriaRustKick() {
     } catch (error) {
         console.error(
             "[Kick Drops] No se pudo obtener la categoría Rust:",
-            error.message
+            error.response?.data ||
+                error.message
         );
 
         return null;
@@ -345,45 +496,58 @@ async function obtenerStreamsRustKick() {
     const categoriaId =
         await obtenerCategoriaRustKick();
 
+    if (!categoriaId) {
+        return [];
+    }
+
     try {
-        const params = {};
-
-        if (categoriaId) {
-            params.category_id = categoriaId;
-        }
-
-        const respuesta = await kickApiGet(
-            `${KICK_API_URL}/livestreams`,
-            params
-        );
+        const respuesta =
+            await kickApiGet(
+                `${KICK_API_URL}/livestreams`,
+                {
+                    category_id:
+                        categoriaId,
+                    limit: 100
+                }
+            );
 
         const streams =
-            Array.isArray(respuesta?.data)
+            Array.isArray(
+                respuesta?.data
+            )
                 ? respuesta.data
-                : Array.isArray(respuesta)
-                    ? respuesta
-                    : [];
+                : [];
 
-        return streams.filter((stream) => {
-            const categoria =
-                String(
-                    stream?.category?.name ||
-                    stream?.category?.slug ||
-                    ""
-                )
-                    .trim()
-                    .toLowerCase();
+        return streams.filter(
+            (stream) => {
+                const categoria =
+                    String(
+                        stream
+                            ?.category
+                            ?.name ||
+                            stream
+                                ?.category
+                                ?.slug ||
+                            ""
+                    )
+                        .trim()
+                        .toLowerCase();
 
-            return (
-                !categoriaId ||
-                stream?.category?.id == categoriaId ||
-                categoria === "rust"
-            );
-        });
+                return (
+                    stream
+                        ?.category
+                        ?.id ==
+                        categoriaId ||
+                    categoria ===
+                        "rust"
+                );
+            }
+        );
     } catch (error) {
         console.error(
             "[Kick Drops] Error obteniendo streams Rust:",
-            error.message
+            error.response?.data ||
+                error.message
         );
 
         return [];
@@ -394,26 +558,38 @@ async function obtenerStreamsRustKick() {
 // STREAMERS ONLINE EN RUST
 // ============================================================
 
-async function obtenerStreamersKickOnline(logins = []) {
+async function obtenerStreamersKickOnline(
+    logins = []
+) {
     const streams =
         await obtenerStreamsRustKick();
 
-    const buscados = new Set(
-        logins
-            .map(normalizarLogin)
-            .filter(Boolean)
-    );
+    const buscados =
+        new Set(
+            logins
+                .map(normalizarLogin)
+                .filter(Boolean)
+        );
 
     const resultados = [];
 
-    for (const stream of streams) {
-        const login = normalizarLogin(
-            stream?.slug ||
-            stream?.broadcaster?.slug ||
-            stream?.broadcaster?.username
-        );
+    for (
+        const stream of streams
+    ) {
+        const login =
+            normalizarLogin(
+                stream
+                    ?.broadcaster_user
+                    ?.username ||
+                    stream
+                        ?.channel
+                        ?.slug ||
+                    ""
+            );
 
-        if (!login) continue;
+        if (!login) {
+            continue;
+        }
 
         if (
             buscados.size > 0 &&
@@ -424,33 +600,47 @@ async function obtenerStreamersKickOnline(logins = []) {
 
         resultados.push({
             login,
+
             username:
-                stream?.broadcaster?.username ||
-                stream?.slug ||
+                stream
+                    ?.broadcaster_user
+                    ?.username ||
+                stream
+                    ?.channel
+                    ?.slug ||
                 login,
 
             userId:
-                stream?.broadcaster_user_id ||
-                stream?.broadcaster?.user_id ||
+                stream
+                    ?.broadcaster_user
+                    ?.id ||
                 null,
 
             channelId:
-                stream?.channel_id ||
+                stream
+                    ?.channel
+                    ?.slug ||
                 null,
 
             titulo:
-                stream?.stream_title ||
+                stream?.title ||
                 "",
 
             viewerCount:
-                Number(stream?.viewer_count || 0),
+                Number(
+                    stream
+                        ?.viewer_count ||
+                        0
+                ),
 
             thumbnail:
                 stream?.thumbnail ||
                 null,
 
             profilePicture:
-                stream?.profile_picture ||
+                stream
+                    ?.broadcaster_user
+                    ?.profile_picture ||
                 null,
 
             startedAt:
@@ -458,11 +648,15 @@ async function obtenerStreamersKickOnline(logins = []) {
                 null,
 
             categoria:
-                stream?.category?.name ||
+                stream
+                    ?.category
+                    ?.name ||
                 "Rust",
 
             url:
-                obtenerUrlStreamerKick(login)
+                obtenerUrlStreamerKick(
+                    login
+                )
         });
     }
 
@@ -473,7 +667,9 @@ async function obtenerStreamersKickOnline(logins = []) {
 // STREAMERS CONFIGURADOS EN RUSTLOGIX
 // ============================================================
 
-async function obtenerStreamersKickConfigurados(guildId) {
+async function obtenerStreamersKickConfigurados(
+    guildId
+) {
     if (!guildId) {
         return [];
     }
@@ -486,19 +682,24 @@ async function obtenerStreamersKickConfigurados(guildId) {
             }).lean();
 
         return registros
-            .map((registro) => ({
-                streamerName:
-                    registro.streamerName,
+            .map(
+                (registro) => ({
+                    streamerName:
+                        registro.streamerName,
 
-                login:
-                    normalizarLogin(
-                        registro.streamerName
-                    ),
+                    login:
+                        normalizarLogin(
+                            registro.streamerName
+                        ),
 
-                roleId:
-                    registro.roleId
-            }))
-            .filter((registro) => registro.login);
+                    roleId:
+                        registro.roleId
+                })
+            )
+            .filter(
+                (registro) =>
+                    registro.login
+            );
     } catch (error) {
         console.error(
             "[Kick Drops] Error leyendo streamers Kick configurados:",
@@ -515,18 +716,21 @@ async function obtenerStreamersKickConfigurados(guildId) {
 
 async function obtenerHtmlKickDrops() {
     try {
-        const response = await axios.get(
-            KICK_DROPS_URL,
-            {
-                headers: {
-                    "User-Agent":
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/154 Safari/537.36",
-                    Accept:
-                        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-                },
-                timeout: 30000
-            }
-        );
+        const response =
+            await axios.get(
+                KICK_DROPS_URL,
+                {
+                    headers: {
+                        "User-Agent":
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/154 Safari/537.36",
+
+                        Accept:
+                            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                    },
+
+                    timeout: 30000
+                }
+            );
 
         return response.data || "";
     } catch (error) {
@@ -543,7 +747,9 @@ async function obtenerHtmlKickDrops() {
 // PARSER DE DROPS
 // ============================================================
 
-function extraerJsonEmbebido(html) {
+function extraerJsonEmbebido(
+    html
+) {
     const resultados = [];
 
     if (!html) {
@@ -552,22 +758,33 @@ function extraerJsonEmbebido(html) {
 
     const patrones = [
         /<script[^>]*type=["']application\/json["'][^>]*>([\s\S]*?)<\/script>/gi,
+
         /<script[^>]*>([\s\S]*?campaign[\s\S]*?)<\/script>/gi
     ];
 
-    for (const patron of patrones) {
+    for (
+        const patron of patrones
+    ) {
         let match;
 
-        while ((match = patron.exec(html)) !== null) {
+        while (
+            (match =
+                patron.exec(html)) !==
+            null
+        ) {
             const contenido =
                 match[1]?.trim();
 
-            if (!contenido) continue;
+            if (!contenido) {
+                continue;
+            }
 
             try {
                 const json =
                     JSON.parse(
-                        decodificarHtml(contenido)
+                        decodificarHtml(
+                            contenido
+                        )
                     );
 
                 resultados.push(json);
@@ -580,20 +797,33 @@ function extraerJsonEmbebido(html) {
     return resultados;
 }
 
-function buscarObjetosDrop(objeto, salida = []) {
-    if (!objeto || typeof objeto !== "object") {
+function buscarObjetosDrop(
+    objeto,
+    salida = []
+) {
+    if (
+        !objeto ||
+        typeof objeto !==
+            "object"
+    ) {
         return salida;
     }
 
     if (Array.isArray(objeto)) {
-        for (const item of objeto) {
-            buscarObjetosDrop(item, salida);
+        for (
+            const item of objeto
+        ) {
+            buscarObjetosDrop(
+                item,
+                salida
+            );
         }
 
         return salida;
     }
 
-    const keys = Object.keys(objeto);
+    const keys =
+        Object.keys(objeto);
 
     const tieneNombre =
         keys.some((key) =>
@@ -617,25 +847,37 @@ function buscarObjetosDrop(objeto, salida = []) {
             ].includes(key)
         );
 
-    if (tieneNombre && pareceDrop) {
+    if (
+        tieneNombre &&
+        pareceDrop
+    ) {
         salida.push(objeto);
     }
 
-    for (const key of keys) {
-        const valor = objeto[key];
+    for (
+        const key of keys
+    ) {
+        const valor =
+            objeto[key];
 
         if (
             valor &&
-            typeof valor === "object"
+            typeof valor ===
+                "object"
         ) {
-            buscarObjetosDrop(valor, salida);
+            buscarObjetosDrop(
+                valor,
+                salida
+            );
         }
     }
 
     return salida;
 }
 
-function extraerImagenDeObjeto(objeto) {
+function extraerImagenDeObjeto(
+    objeto
+) {
     const posibles = [
         objeto?.image,
         objeto?.image_url,
@@ -649,10 +891,17 @@ function extraerImagenDeObjeto(objeto) {
         objeto?.reward?.image_url
     ];
 
-    for (const valor of posibles) {
-        const url = limpiarUrlImagen(valor);
+    for (
+        const valor of posibles
+    ) {
+        const url =
+            limpiarUrlImagen(
+                valor
+            );
 
-        if (esImagenValida(url)) {
+        if (
+            esImagenValida(url)
+        ) {
             return url;
         }
     }
@@ -660,7 +909,9 @@ function extraerImagenDeObjeto(objeto) {
     return null;
 }
 
-function extraerStreamersDeObjeto(objeto) {
+function extraerStreamersDeObjeto(
+    objeto
+) {
     const candidatos = [];
 
     const posibles = [
@@ -674,12 +925,25 @@ function extraerStreamersDeObjeto(objeto) {
         objeto?.requiredStreamer
     ];
 
-    for (const valor of posibles) {
+    for (
+        const valor of posibles
+    ) {
         if (Array.isArray(valor)) {
-            for (const item of valor) {
-                if (typeof item === "string") {
-                    candidatos.push(item);
-                } else if (item && typeof item === "object") {
+            for (
+                const item of valor
+            ) {
+                if (
+                    typeof item ===
+                    "string"
+                ) {
+                    candidatos.push(
+                        item
+                    );
+                } else if (
+                    item &&
+                    typeof item ===
+                        "object"
+                ) {
                     candidatos.push(
                         item.slug ||
                         item.username ||
@@ -688,11 +952,17 @@ function extraerStreamersDeObjeto(objeto) {
                     );
                 }
             }
-        } else if (typeof valor === "string") {
-            candidatos.push(valor);
+        } else if (
+            typeof valor ===
+            "string"
+        ) {
+            candidatos.push(
+                valor
+            );
         } else if (
             valor &&
-            typeof valor === "object"
+            typeof valor ===
+                "object"
         ) {
             candidatos.push(
                 valor.slug ||
@@ -706,14 +976,20 @@ function extraerStreamersDeObjeto(objeto) {
     return [
         ...new Set(
             candidatos
-                .map(limpiarNombreStreamer)
+                .map(
+                    limpiarNombreStreamer
+                )
                 .filter(Boolean)
-                .map(normalizarLogin)
+                .map(
+                    normalizarLogin
+                )
         )
     ];
 }
 
-function extraerHorasDeObjeto(objeto) {
+function extraerHorasDeObjeto(
+    objeto
+) {
     const posibles = [
         objeto?.hours,
         objeto?.required_hours,
@@ -722,20 +998,27 @@ function extraerHorasDeObjeto(objeto) {
         objeto?.watchHours
     ];
 
-    for (const valor of posibles) {
+    for (
+        const valor of posibles
+    ) {
         const horas =
-            convertirHoras(valor);
+            convertirHoras(
+                valor
+            );
 
-        if (horas !== null) {
+        if (
+            horas !== null
+        ) {
             return horas;
         }
     }
 
-    const minutos = Number(
-        objeto?.minutes ??
-        objeto?.required_minutes ??
-        objeto?.requiredMinutes
-    );
+    const minutos =
+        Number(
+            objeto?.minutes ??
+            objeto?.required_minutes ??
+            objeto?.requiredMinutes
+        );
 
     if (
         Number.isFinite(minutos) &&
@@ -744,18 +1027,25 @@ function extraerHorasDeObjeto(objeto) {
         return minutos / 60;
     }
 
-    const duracion = String(
-        objeto?.duration || ""
-    );
+    const duracion =
+        String(
+            objeto?.duration ||
+                ""
+        );
 
     if (duracion) {
-        return convertirHoras(duracion);
+        return convertirHoras(
+            duracion
+        );
     }
 
     return null;
 }
 
-function convertirObjetoEnDrop(objeto, indice) {
+function convertirObjetoEnDrop(
+    objeto,
+    indice
+) {
     const nombre =
         objeto?.name ||
         objeto?.display_name ||
@@ -765,13 +1055,19 @@ function convertirObjetoEnDrop(objeto, indice) {
         `Drop de Rust #${indice + 1}`;
 
     const streamers =
-        extraerStreamersDeObjeto(objeto);
+        extraerStreamersDeObjeto(
+            objeto
+        );
 
     const horas =
-        extraerHorasDeObjeto(objeto);
+        extraerHorasDeObjeto(
+            objeto
+        );
 
     const imagen =
-        extraerImagenDeObjeto(objeto);
+        extraerImagenDeObjeto(
+            objeto
+        );
 
     const id =
         String(
@@ -779,7 +1075,9 @@ function convertirObjetoEnDrop(objeto, indice) {
             objeto?.drop_id ||
             objeto?.dropId ||
             objeto?.reward?.id ||
-            `${normalizarLogin(nombre)}-${indice}`
+            `${normalizarLogin(
+                nombre
+            )}-${indice}`
         );
 
     return {
@@ -787,7 +1085,9 @@ function convertirObjetoEnDrop(objeto, indice) {
 
         nombre:
             normalizarTexto(
-                decodificarHtml(nombre)
+                decodificarHtml(
+                    nombre
+                )
             ),
 
         horas,
@@ -804,8 +1104,8 @@ function convertirObjetoEnDrop(objeto, indice) {
         enlace:
             streamers.length > 0
                 ? obtenerUrlStreamerKick(
-                    streamers[0]
-                )
+                      streamers[0]
+                  )
                 : KICK_DROPS_URL,
 
         streamerEspecifico:
@@ -817,13 +1117,19 @@ function convertirObjetoEnDrop(objeto, indice) {
     };
 }
 
-function extraerDropsDesdeJson(html) {
+function extraerDropsDesdeJson(
+    html
+) {
     const scripts =
-        extraerJsonEmbebido(html);
+        extraerJsonEmbebido(
+            html
+        );
 
     const candidatos = [];
 
-    for (const json of scripts) {
+    for (
+        const json of scripts
+    ) {
         buscarObjetosDrop(
             json,
             candidatos
@@ -832,7 +1138,11 @@ function extraerDropsDesdeJson(html) {
 
     const drops = [];
 
-    for (let i = 0; i < candidatos.length; i++) {
+    for (
+        let i = 0;
+        i < candidatos.length;
+        i++
+    ) {
         const drop =
             convertirObjetoEnDrop(
                 candidatos[i],
@@ -849,22 +1159,32 @@ function extraerDropsDesdeJson(html) {
     return drops;
 }
 
-function extraerAtributo(html, atributo) {
+function extraerAtributo(
+    html,
+    atributo
+) {
     const patron =
         new RegExp(
-            `${escaparRegExp(atributo)}\\s*=\\s*["']([^"']+)["']`,
+            `${escaparRegExp(
+                atributo
+            )}\\s*=\\s*["']([^"']+)["']`,
             "i"
         );
 
     const match =
-        String(html || "").match(patron);
+        String(html || "")
+            .match(patron);
 
     return match
-        ? decodificarHtml(match[1])
+        ? decodificarHtml(
+              match[1]
+          )
         : null;
 }
 
-function extraerDropsDesdeHtml(html) {
+function extraerDropsDesdeHtml(
+    html
+) {
     const drops = [];
 
     if (!html) {
@@ -875,8 +1195,7 @@ function extraerDropsDesdeHtml(html) {
      * Fallback genérico:
      *
      * Busca bloques que contengan nombres de recompensas
-     * y datos de tiempo. No dependemos de una clase CSS concreta,
-     * porque Facepunch puede cambiar el diseño de la página.
+     * y datos de tiempo.
      */
 
     const bloques =
@@ -884,13 +1203,19 @@ function extraerDropsDesdeHtml(html) {
             /<(?:article|section|div|li)[^>]*>[\s\S]{0,8000}?<\/(?:article|section|div|li)>/gi
         ) || [];
 
-    for (let i = 0; i < bloques.length; i++) {
+    for (
+        let i = 0;
+        i < bloques.length;
+        i++
+    ) {
         const bloque =
             bloques[i];
 
         const texto =
             normalizarTexto(
-                limpiarHtml(bloque)
+                limpiarHtml(
+                    bloque
+                )
             );
 
         if (!texto) {
@@ -903,7 +1228,7 @@ function extraerDropsDesdeHtml(html) {
             );
 
         const tieneTiempo =
-            /hours?|horas?|mins?|minutes?/i.test(
+            /hours?|horas?|mins?|minutes?|minutos?/i.test(
                 texto
             );
 
@@ -925,26 +1250,35 @@ function extraerDropsDesdeHtml(html) {
             );
 
         let horas =
-            convertirHoras(texto);
+            convertirHoras(
+                texto
+            );
 
         if (horas === null) {
             const minutosMatch =
                 texto.match(
-                    /(\d+(?:[.,]\d+)?)\s*(?:minutes?|mins?)/i
+                    /(\d+(?:[.,]\d+)?)\s*(?:minutes?|mins?|minutos?)/i
                 );
 
-            if (minutosMatch) {
+            if (
+                minutosMatch
+            ) {
                 horas =
                     Number(
                         minutosMatch[1]
-                            .replace(",", ".")
+                            .replace(
+                                ",",
+                                "."
+                            )
                     ) / 60;
             }
         }
 
         if (
             horas === null &&
-            !/drop/i.test(texto)
+            !/drop/i.test(
+                texto
+            )
         ) {
             continue;
         }
@@ -958,26 +1292,31 @@ function extraerDropsDesdeHtml(html) {
             [
                 ...new Set(
                     streamerMatches
-                        .map((valor) =>
-                            valor
-                                .replace(
-                                    /^.*kick\.com\//i,
-                                    ""
-                                )
-                                .replace(
-                                    /^@/,
-                                    ""
-                                )
+                        .map(
+                            (valor) =>
+                                valor
+                                    .replace(
+                                        /^.*kick\.com\//i,
+                                        ""
+                                    )
+                                    .replace(
+                                        /^@/,
+                                        ""
+                                    )
                         )
-                        .map(normalizarLogin)
-                        .filter(Boolean)
+                        .map(
+                            normalizarLogin
+                        )
+                        .filter(
+                            Boolean
+                        )
                 )
             ];
 
         const nombre =
             texto
                 .replace(
-                    /(?:\d+(?:[.,]\d+)?)\s*(?:hours?|horas?|minutes?|mins?)/gi,
+                    /(?:\d+(?:[.,]\d+)?)\s*(?:hours?|horas?|minutes?|mins?|minutos?)/gi,
                     ""
                 )
                 .slice(0, 120)
@@ -989,25 +1328,30 @@ function extraerDropsDesdeHtml(html) {
 
         drops.push({
             id:
-                `${normalizarLogin(nombre)}-${i}`,
+                `${normalizarLogin(
+                    nombre
+                )}-${i}`,
 
             nombre,
 
             horas,
 
             streamer:
-                streamers[0] || null,
+                streamers[0] ||
+                null,
 
             streamers,
 
             imagen:
-                limpiarUrlImagen(imagen),
+                limpiarUrlImagen(
+                    imagen
+                ),
 
             enlace:
                 streamers[0]
                     ? obtenerUrlStreamerKick(
-                        streamers[0]
-                    )
+                          streamers[0]
+                      )
                     : KICK_DROPS_URL,
 
             streamerEspecifico:
@@ -1032,15 +1376,17 @@ function extraerCampana(html) {
             limpiarHtml(html)
         );
 
-    let nombre =
-        null;
+    let nombre = null;
 
     const patronesNombre = [
         /(?:campaign|campaña)\s*[:\-]\s*([^|]{3,120})/i,
+
         /(?:active campaign|campaña activa)\s*[:\-]\s*([^|]{3,120})/i
     ];
 
-    for (const patron of patronesNombre) {
+    for (
+        const patron of patronesNombre
+    ) {
         const match =
             texto.match(patron);
 
@@ -1056,9 +1402,10 @@ function extraerCampana(html) {
 
     if (!nombre) {
         const titleMatch =
-            String(html || "").match(
-                /<title[^>]*>([\s\S]*?)<\/title>/i
-            );
+            String(html || "")
+                .match(
+                    /<title[^>]*>([\s\S]*?)<\/title>/i
+                );
 
         if (titleMatch?.[1]) {
             nombre =
@@ -1075,45 +1422,60 @@ function extraerCampana(html) {
             nombre ||
             "Rust Drops en Kick",
 
-        theme:
-            null,
+        theme: null,
 
-        fechaInicio:
-            null,
+        fechaInicio: null,
 
-        fechaFin:
-            null
+        fechaFin: null
     };
 }
 
-function crearCampaignKey(campana, drops) {
+function crearCampaignKey(
+    campana,
+    drops
+) {
     const contenido =
         JSON.stringify({
             nombre:
-                campana?.nombre || "",
+                campana?.nombre ||
+                "",
 
             theme:
-                campana?.theme || "",
+                campana?.theme ||
+                "",
 
             fechaInicio:
-                campana?.fechaInicio || null,
+                campana?.fechaInicio ||
+                null,
 
             fechaFin:
-                campana?.fechaFin || null,
+                campana?.fechaFin ||
+                null,
 
             drops:
-                (drops || []).map((drop) => ({
-                    id: drop.id,
-                    nombre: drop.nombre,
-                    horas: drop.horas,
-                    streamers:
-                        drop.streamers
-                }))
+                (drops || []).map(
+                    (drop) => ({
+                        id: drop.id,
+
+                        nombre:
+                            drop.nombre,
+
+                        horas:
+                            drop.horas,
+
+                        streamers:
+                            drop.streamers
+                    })
+                )
         });
 
     let hash = 0;
 
-    for (let i = 0; i < contenido.length; i++) {
+    for (
+        let i = 0;
+        i < contenido.length;
+        i++
+    ) {
         hash =
             (hash << 5) -
             hash +
@@ -1122,7 +1484,9 @@ function crearCampaignKey(campana, drops) {
         hash |= 0;
     }
 
-    return `kick-${Math.abs(hash)}`;
+    return `kick-${Math.abs(
+        hash
+    )}`;
 }
 
 // ============================================================
@@ -1136,51 +1500,74 @@ async function obtenerDropsKick() {
     if (!html) {
         return {
             campaignKey: null,
+
             campaignName:
                 "Rust Drops en Kick",
+
             campaignTheme: null,
+
             fechaInicio: null,
+
             fechaFin: null,
+
             drops: []
         };
     }
 
     let drops =
-        extraerDropsDesdeJson(html);
+        extraerDropsDesdeJson(
+            html
+        );
 
-    if (drops.length === 0) {
+    if (
+        drops.length === 0
+    ) {
         drops =
-            extraerDropsDesdeHtml(html);
+            extraerDropsDesdeHtml(
+                html
+            );
     }
 
     /*
-     * El parser puede encontrar el mismo Drop más de una vez
-     * si Facepunch incluye el objeto en diferentes scripts.
+     * El parser puede encontrar el mismo Drop
+     * más de una vez si Facepunch incluye el
+     * objeto en diferentes scripts.
      */
-    const vistos = new Set();
+
+    const vistos =
+        new Set();
 
     drops =
-        drops.filter((drop) => {
-            const key =
-                [
-                    normalizarLogin(
-                        drop.nombre
-                    ),
-                    drop.horas,
-                    ...(drop.streamers || [])
-                ].join("|");
+        drops.filter(
+            (drop) => {
+                const key =
+                    [
+                        normalizarLogin(
+                            drop.nombre
+                        ),
 
-            if (vistos.has(key)) {
-                return false;
+                        drop.horas,
+
+                        ...(drop.streamers ||
+                            [])
+                    ].join("|");
+
+                if (
+                    vistos.has(key)
+                ) {
+                    return false;
+                }
+
+                vistos.add(key);
+
+                return true;
             }
-
-            vistos.add(key);
-
-            return true;
-        });
+        );
 
     const campana =
-        extraerCampana(html);
+        extraerCampana(
+            html
+        );
 
     const campaignKey =
         crearCampaignKey(
@@ -1214,7 +1601,9 @@ async function obtenerDropsKick() {
 async function actualizarEstadoDrops(
     datos
 ) {
-    if (!datos?.drops?.length) {
+    if (
+        !datos?.drops?.length
+    ) {
         return datos;
     }
 
@@ -1223,7 +1612,8 @@ async function actualizarEstadoDrops(
             ...new Set(
                 datos.drops.flatMap(
                     (drop) =>
-                        drop.streamers || []
+                        drop.streamers ||
+                        []
                 )
             )
         ];
@@ -1235,15 +1625,19 @@ async function actualizarEstadoDrops(
 
     const onlineMap =
         new Map(
-            streams.map((stream) => [
-                normalizarLogin(
-                    stream.login
-                ),
-                stream
-            ])
+            streams.map(
+                (stream) => [
+                    normalizarLogin(
+                        stream.login
+                    ),
+                    stream
+                ]
+            )
         );
 
-    for (const drop of datos.drops) {
+    for (
+        const drop of datos.drops
+    ) {
         const streamers =
             drop.streamers || [];
 
@@ -1251,7 +1645,9 @@ async function actualizarEstadoDrops(
             streamers.filter(
                 (login) =>
                     onlineMap.has(
-                        normalizarLogin(login)
+                        normalizarLogin(
+                            login
+                        )
                     )
             );
 
@@ -1259,7 +1655,8 @@ async function actualizarEstadoDrops(
             canalesOnline;
 
         drop.online =
-            canalesOnline.length > 0;
+            canalesOnline.length >
+            0;
     }
 
     return datos;
@@ -1281,19 +1678,25 @@ function crearEmbedKickDrop(
     const embed =
         new EmbedBuilder()
             .setColor(color)
+
             .setTitle(
-                `🎯 ${drop.nombre || "Drop de Rust"}`
+                `🎯 ${
+                    drop.nombre ||
+                    "Drop de Rust"
+                }`
             )
+
             .setURL(
                 drop.enlace ||
-                KICK_DROPS_URL
+                    KICK_DROPS_URL
             )
+
             .setDescription(
                 drop.horas !== null &&
                 drop.horas !== undefined
                     ? `⏱️ **${formatearHoras(
-                        drop.horas
-                    )}**`
+                          drop.horas
+                      )}**`
                     : "⏱️ Tiempo requerido no disponible"
             );
 
@@ -1302,20 +1705,23 @@ function crearEmbedKickDrop(
     ) {
         const nombres =
             drop.streamers
-                .map((login) => {
-                    const online =
-                        drop.canalesOnline?.includes(
-                            login
-                        );
+                .map(
+                    (login) => {
+                        const online =
+                            drop.canalesOnline?.includes(
+                                login
+                            );
 
-                    return online
-                        ? `🟢 [${login}](https://kick.com/${encodeURIComponent(
-                            login
-                        )})`
-                        : `⚫ [${login}](https://kick.com/${encodeURIComponent(
-                            login
-                        )})`;
-                })
+                        const url =
+                            obtenerUrlStreamerKick(
+                                login
+                            );
+
+                        return online
+                            ? `🟢 [${login}](${url})`
+                            : `⚫ [${login}](${url})`;
+                    }
+                )
                 .join("\n");
 
         embed.addFields({
@@ -1323,22 +1729,29 @@ function crearEmbedKickDrop(
                 drop.streamerEspecifico
                     ? "🎥 Streamer requerido"
                     : "🎥 Streamers",
+
             value:
                 nombres ||
                 "No disponible",
+
             inline: false
         });
     } else {
         embed.addFields({
-            name: "📺 Dónde conseguirlo",
+            name:
+                "📺 Dónde conseguirlo",
+
             value:
                 `[Todos los streams de Rust con Drops Enabled](${KICK_RUST_URL})`,
+
             inline: false
         });
     }
 
     if (
-        esImagenValida(drop.imagen)
+        esImagenValida(
+            drop.imagen
+        )
     ) {
         embed.setImage(
             drop.imagen
@@ -1346,14 +1759,18 @@ function crearEmbedKickDrop(
     }
 
     const cantidadOnline =
-        drop.canalesOnline?.length || 0;
+        drop.canalesOnline?.length ||
+        0;
 
     embed.addFields({
-        name: "📡 Estado",
+        name:
+            "📡 Estado",
+
         value:
             cantidadOnline > 0
                 ? `🟢 ${cantidadOnline} streamer(s) online en Rust`
                 : "⚫ Ningún streamer específico online",
+
         inline: false
     });
 
@@ -1376,7 +1793,9 @@ function crearEmbedKickDrop(
 function crearEmbedsKickDrops(
     datos
 ) {
-    if (!datos?.drops?.length) {
+    if (
+        !datos?.drops?.length
+    ) {
         return [];
     }
 
@@ -1393,20 +1812,26 @@ function crearGruposMensajesKickDrops(
     datos
 ) {
     const embeds =
-        crearEmbedsKickDrops(datos);
+        crearEmbedsKickDrops(
+            datos
+        );
 
     const grupos = [];
 
     /*
      * Discord permite hasta 10 embeds por mensaje.
      */
+
     for (
         let i = 0;
         i < embeds.length;
         i += 10
     ) {
         grupos.push(
-            embeds.slice(i, i + 10)
+            embeds.slice(
+                i,
+                i + 10
+            )
         );
     }
 
@@ -1423,20 +1848,30 @@ function estadosOnlineCambiarion(
 ) {
     const anteriorMap =
         new Map(
-            anteriores.map((drop) => [
-                drop.id,
-                Boolean(drop.online)
-            ])
+            anteriores.map(
+                (drop) => [
+                    drop.id,
+                    Boolean(
+                        drop.online
+                    )
+                ]
+            )
         );
 
     const cambios = [];
 
-    for (const drop of nuevos) {
+    for (
+        const drop of nuevos
+    ) {
         const anterior =
-            anteriorMap.get(drop.id);
+            anteriorMap.get(
+                drop.id
+            );
 
         const actual =
-            Boolean(drop.online);
+            Boolean(
+                drop.online
+            );
 
         if (
             anterior !== undefined &&
@@ -1469,14 +1904,20 @@ async function enviarAvisoStreamerOnlineKick(
     }
 
     const lineas =
-        streams.map((stream) => {
-            const viewers =
-                Number(
-                    stream.viewerCount || 0
-                );
+        streams.map(
+            (stream) => {
+                const viewers =
+                    Number(
+                        stream.viewerCount ||
+                            0
+                    );
 
-            return `🟢 **${stream.username}** está **ONLINE EN RUST en Kick** — ${viewers} espectador(es)\n🔗 ${stream.url}`;
-        });
+                return (
+                    `🟢 **${stream.username}** está **ONLINE EN RUST en Kick** — ${viewers} espectador(es)\n` +
+                    `🔗 ${stream.url}`
+                );
+            }
+        );
 
     await channel.send({
         content:
@@ -1503,7 +1944,9 @@ async function publicarKickDropsEnCanal(
 
     if (
         !datos ||
-        !Array.isArray(datos.drops) ||
+        !Array.isArray(
+            datos.drops
+        ) ||
         datos.drops.length === 0
     ) {
         return null;
@@ -1519,10 +1962,13 @@ async function publicarKickDropsEnCanal(
     }
 
     let monitor =
-        await KickDropsMonitor.findOne({
-            guildId,
-            channelId: channel.id
-        });
+        await KickDropsMonitor.findOne(
+            {
+                guildId,
+                channelId:
+                    channel.id
+            }
+        );
 
     const grupos =
         crearGruposMensajesKickDrops(
@@ -1532,9 +1978,12 @@ async function publicarKickDropsEnCanal(
     const mensajesExistentes =
         [];
 
-    if (monitor?.messageIds?.length) {
+    if (
+        monitor?.messageIds?.length
+    ) {
         for (
-            const messageId of monitor.messageIds
+            const messageId of
+                monitor.messageIds
         ) {
             try {
                 const mensaje =
@@ -1574,7 +2023,8 @@ async function publicarKickDropsEnCanal(
                 mensajesExistentes[i];
 
             await mensaje.edit({
-                embeds: grupos[i]
+                embeds:
+                    grupos[i]
             });
 
             nuevosIds.push(
@@ -1616,8 +2066,10 @@ async function publicarKickDropsEnCanal(
      * Borramos únicamente los mensajes que RustLogix
      * tenía registrados.
      */
+
     for (
-        const mensaje of mensajesExistentes
+        const mensaje of
+            mensajesExistentes
     ) {
         try {
             await mensaje.delete();
@@ -1626,9 +2078,12 @@ async function publicarKickDropsEnCanal(
         }
     }
 
-    const nuevosMensajes = [];
+    const nuevosMensajes =
+        [];
 
-    for (const embeds of grupos) {
+    for (
+        const embeds of grupos
+    ) {
         const mensaje =
             await channel.send({
                 embeds
@@ -1643,7 +2098,8 @@ async function publicarKickDropsEnCanal(
         monitor =
             new KickDropsMonitor({
                 guildId,
-                channelId: channel.id
+                channelId:
+                    channel.id
             });
     }
 
@@ -1674,7 +2130,9 @@ async function publicarKickDropsEnCanal(
     monitor.active =
         true;
 
-    if (opciones.creadoPor) {
+    if (
+        opciones.creadoPor
+    ) {
         monitor.creadoPor =
             opciones.creadoPor;
     }
@@ -1732,7 +2190,8 @@ async function editarMensajesMonitorKick(
                 );
 
             await mensaje.edit({
-                embeds: grupos[i]
+                embeds:
+                    grupos[i]
             });
         } catch (error) {
             console.error(
@@ -1757,7 +2216,7 @@ async function eliminarMensajesMonitorKick(
 
     for (
         const messageId of
-        monitor.messageIds || []
+            monitor.messageIds || []
     ) {
         try {
             const mensaje =
@@ -1817,7 +2276,9 @@ async function revisarKickDropsAutomaticos(
                 datosBase
             );
 
-        for (const monitor of monitores) {
+        for (
+            const monitor of monitores
+        ) {
             try {
                 const guild =
                     await client.guilds.fetch(
@@ -1840,6 +2301,7 @@ async function revisarKickDropsAutomaticos(
                 /*
                  * Si es una campaña nueva, republicamos.
                  */
+
                 if (
                     monitor.campaignKey !==
                     datos.campaignKey
@@ -1856,23 +2318,33 @@ async function revisarKickDropsAutomaticos(
                  * Detectamos cambios online/offline
                  * en los drops específicos.
                  */
+
                 const cambios =
                     estadosOnlineCambiarion(
-                        monitor.drops || [],
-                        datos.drops || []
+                        monitor.drops ||
+                            [],
+                        datos.drops ||
+                            []
                     );
 
                 const streamersOnline =
                     [];
 
-                for (const cambio of cambios) {
+                for (
+                    const cambio of
+                        cambios
+                ) {
                     if (
                         cambio.actual &&
-                        cambio.drop.streamers?.length
+                        cambio.drop
+                            .streamers
+                            ?.length
                     ) {
                         const streams =
                             await obtenerStreamersKickOnline(
-                                cambio.drop.streamers
+                                cambio
+                                    .drop
+                                    .streamers
                             );
 
                         streamersOnline.push(
@@ -1884,6 +2356,7 @@ async function revisarKickDropsAutomaticos(
                 /*
                  * Actualizamos los embeds.
                  */
+
                 await editarMensajesMonitorKick(
                     channel,
                     monitor,
@@ -1891,8 +2364,10 @@ async function revisarKickDropsAutomaticos(
                 );
 
                 /*
-                 * Avisamos solamente en OFFLINE -> ONLINE.
+                 * Avisamos solamente en
+                 * OFFLINE -> ONLINE.
                  */
+
                 if (
                     monitor.notificacionesStreamer !==
                         false &&
@@ -1902,7 +2377,9 @@ async function revisarKickDropsAutomaticos(
                         [
                             ...new Map(
                                 streamersOnline.map(
-                                    (stream) => [
+                                    (
+                                        stream
+                                    ) => [
                                         normalizarLogin(
                                             stream.login
                                         ),
