@@ -506,10 +506,6 @@ function calcularPremioTragaperras(
         c
     ] = resultado;
 
-    // ========================================================
-    // TRES IGUALES
-    // ========================================================
-
     if (
         a === b &&
         b === c
@@ -531,10 +527,6 @@ function calcularPremioTragaperras(
                 return 800;
         }
     }
-
-    // ========================================================
-    // DOS IGUALES
-    // ========================================================
 
     if (
         a === b ||
@@ -683,7 +675,7 @@ async function jugarTragaperras(
             premio
         );
 
-    await interaction.update({
+    return interaction.update({
         embeds: [
             crearEmbedTragaperras(
                 resultado,
@@ -780,6 +772,9 @@ function crearBotonesDados(
 async function iniciarDados(
     interaction
 ) {
+    const messageId =
+        interaction.message.id;
+
     const partida = {
         creador:
             interaction.user.id,
@@ -799,74 +794,44 @@ async function iniciarDados(
         timeout: null
     };
 
-    await interaction.update({
-        embeds: [
-            crearEmbedDados(partida)
-        ],
-        components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(
-                            "minijuegos_dados_unirse"
-                        )
-                        .setLabel("Unirse")
-                        .setEmoji("➕")
-                        .setStyle(
-                            ButtonStyle.Success
-                        ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            "minijuegos_dados_empezar"
-                        )
-                        .setLabel("Empezar")
-                        .setEmoji("🎲")
-                        .setStyle(
-                            ButtonStyle.Primary
-                        ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            "minijuegos_dados_cancelar"
-                        )
-                        .setLabel("Cancelar")
-                        .setEmoji("❌")
-                        .setStyle(
-                            ButtonStyle.Danger
-                        )
-                )
-        ]
-    });
-
-    const message =
-        await interaction.fetchReply();
-
     partidasDados.set(
-        message.id,
+        messageId,
         partida
     );
+
+    try {
+        await interaction.update({
+            embeds: [
+                crearEmbedDados(partida)
+            ],
+            components: [
+                crearBotonesDados(
+                    messageId
+                )
+            ]
+        });
+    } catch (error) {
+        console.error(
+            "❌ Error iniciando Dados:",
+            error
+        );
+
+        partidasDados.delete(
+            messageId
+        );
+
+        return;
+    }
 
     partida.timeout =
         setTimeout(
             () =>
                 terminarDados(
                     interaction.channel,
-                    message.id
+                    messageId
                 ),
             TIEMPO_ESPERA_PARTIDA
         );
-
-    await message.edit({
-        embeds: [
-            crearEmbedDados(partida)
-        ],
-        components: [
-            crearBotonesDados(
-                message.id
-            )
-        ]
-    });
 }
 
 async function terminarDados(
@@ -1103,6 +1068,9 @@ function crearBotonesDuelo(
 async function iniciarDuelo(
     interaction
 ) {
+    const messageId =
+        interaction.message.id;
+
     const partida = {
         creador:
             interaction.user.id,
@@ -1122,45 +1090,44 @@ async function iniciarDuelo(
         timeout: null
     };
 
-    await interaction.update({
-        embeds: [
-            crearEmbedDuelo(partida)
-        ],
-        components: [
-            crearBotonesDuelo(
-                "pendiente"
-            )
-        ]
-    });
-
-    const message =
-        await interaction.fetchReply();
-
     partidasDuelo.set(
-        message.id,
+        messageId,
         partida
     );
+
+    try {
+        await interaction.update({
+            embeds: [
+                crearEmbedDuelo(partida)
+            ],
+            components: [
+                crearBotonesDuelo(
+                    messageId
+                )
+            ]
+        });
+    } catch (error) {
+        console.error(
+            "❌ Error iniciando duelo:",
+            error
+        );
+
+        partidasDuelo.delete(
+            messageId
+        );
+
+        return;
+    }
 
     partida.timeout =
         setTimeout(
             () =>
                 cancelarDueloPorTiempo(
                     interaction.channel,
-                    message.id
+                    messageId
                 ),
             TIEMPO_DUELO
         );
-
-    await message.edit({
-        embeds: [
-            crearEmbedDuelo(partida)
-        ],
-        components: [
-            crearBotonesDuelo(
-                message.id
-            )
-        ]
-    });
 }
 
 async function comenzarDuelo(
@@ -1287,7 +1254,7 @@ async function comenzarDuelo(
                 `${nombre2}: 🎲 **${dado2}**`
             ].join("\n");
 
-    await interaction.update({
+    return interaction.update({
         embeds: [
             new EmbedBuilder()
                 .setTitle(
@@ -1449,6 +1416,9 @@ function crearBotonesCaraOCruz(
 async function iniciarCaraOCruz(
     interaction
 ) {
+    const messageId =
+        interaction.message.id;
+
     const partida = {
         creador:
             interaction.user.id,
@@ -1466,98 +1436,51 @@ async function iniciarCaraOCruz(
 
         elecciones: new Map(),
 
+        empezada: false,
         finalizada: false,
         timeout: null
     };
 
-    await interaction.update({
-        embeds: [
-            crearEmbedCaraOCruz(partida)
-        ],
-        components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(
-                            "minijuegos_cara_unirse"
-                        )
-                        .setLabel("Unirse")
-                        .setEmoji("➕")
-                        .setStyle(
-                            ButtonStyle.Success
-                        ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            "minijuegos_cara_elegir_cara"
-                        )
-                        .setLabel("Cara")
-                        .setEmoji("🙂")
-                        .setStyle(
-                            ButtonStyle.Primary
-                        ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            "minijuegos_cara_elegir_cruz"
-                        )
-                        .setLabel("Cruz")
-                        .setEmoji("✖️")
-                        .setStyle(
-                            ButtonStyle.Primary
-                        ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            "minijuegos_cara_empezar"
-                        )
-                        .setLabel("Empezar")
-                        .setEmoji("🪙")
-                        .setStyle(
-                            ButtonStyle.Secondary
-                        ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            "minijuegos_cara_cancelar"
-                        )
-                        .setLabel("Cancelar")
-                        .setEmoji("❌")
-                        .setStyle(
-                            ButtonStyle.Danger
-                        )
-                )
-        ]
-    });
-
-    const message =
-        await interaction.fetchReply();
-
     partidasCaraOCruz.set(
-        message.id,
+        messageId,
         partida
     );
+
+    try {
+        await interaction.update({
+            embeds: [
+                crearEmbedCaraOCruz(
+                    partida
+                )
+            ],
+            components: [
+                crearBotonesCaraOCruz(
+                    messageId
+                )
+            ]
+        });
+    } catch (error) {
+        console.error(
+            "❌ Error iniciando Cara o Cruz:",
+            error
+        );
+
+        partidasCaraOCruz.delete(
+            messageId
+        );
+
+        return;
+    }
 
     partida.timeout =
         setTimeout(
             () =>
                 terminarCaraOCruz(
                     interaction.channel,
-                    message.id
+                    messageId
                 ),
             TIEMPO_CARA_CRUZ
         );
-
-    await message.edit({
-        embeds: [
-            crearEmbedCaraOCruz(partida)
-        ],
-        components: [
-            crearBotonesCaraOCruz(
-                message.id
-            )
-        ]
-    });
 }
 
 async function terminarCaraOCruz(
@@ -1811,6 +1734,9 @@ function crearBotonesBlackjack(
 async function iniciarBlackjack(
     interaction
 ) {
+    const messageId =
+        interaction.message.id;
+
     const partida = {
         creador:
             interaction.user.id,
@@ -1845,94 +1771,46 @@ async function iniciarBlackjack(
         }
     );
 
-    await interaction.update({
-        embeds: [
-            crearEmbedBlackjack(partida)
-        ],
-        components: [
-            new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(
-                            "minijuegos_blackjack_unirse"
-                        )
-                        .setLabel("Unirse")
-                        .setEmoji("➕")
-                        .setStyle(
-                            ButtonStyle.Success
-                        ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            "minijuegos_blackjack_pedir"
-                        )
-                        .setLabel("Pedir")
-                        .setEmoji("🃏")
-                        .setStyle(
-                            ButtonStyle.Primary
-                        ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            "minijuegos_blackjack_plantarse"
-                        )
-                        .setLabel("Plantarse")
-                        .setEmoji("🛑")
-                        .setStyle(
-                            ButtonStyle.Success
-                        ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            "minijuegos_blackjack_empezar"
-                        )
-                        .setLabel("Empezar")
-                        .setEmoji("🃏")
-                        .setStyle(
-                            ButtonStyle.Secondary
-                        ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            "minijuegos_blackjack_cancelar"
-                        )
-                        .setLabel("Cancelar")
-                        .setEmoji("❌")
-                        .setStyle(
-                            ButtonStyle.Danger
-                        )
-                )
-        ]
-    });
-
-    const message =
-        await interaction.fetchReply();
-
     partidasBlackjack.set(
-        message.id,
+        messageId,
         partida
     );
+
+    try {
+        await interaction.update({
+            embeds: [
+                crearEmbedBlackjack(
+                    partida
+                )
+            ],
+            components: [
+                crearBotonesBlackjack(
+                    messageId
+                )
+            ]
+        });
+    } catch (error) {
+        console.error(
+            "❌ Error iniciando Blackjack:",
+            error
+        );
+
+        partidasBlackjack.delete(
+            messageId
+        );
+
+        return;
+    }
 
     partida.timeout =
         setTimeout(
             () =>
                 terminarBlackjack(
                     interaction.channel,
-                    message.id
+                    messageId
                 ),
             TIEMPO_BLACKJACK
         );
-
-    await message.edit({
-        embeds: [
-            crearEmbedBlackjack(partida)
-        ],
-        components: [
-            crearBotonesBlackjack(
-                message.id
-            )
-        ]
-    });
 }
 
 async function terminarBlackjack(
@@ -2116,10 +1994,14 @@ async function manejarSelectMenu(
             );
         }
 
+        // ====================================================
+        // TRAGAPERRAS INDIVIDUAL
+        // ====================================================
+
         if (
             opcion === "tragaperras"
         ) {
-            return interaction.update({
+            return interaction.reply({
                 embeds: [
                     new EmbedBuilder()
                         .setTitle(
@@ -2149,7 +2031,8 @@ async function manejarSelectMenu(
                 ],
                 components: [
                     crearMenuTragaperras()
-                ]
+                ],
+                ephemeral: true
             });
         }
 
@@ -2840,6 +2723,26 @@ async function manejarBoton(
                 )
             ]
         });
+
+        // Si todos los jugadores ya eligieron,
+        // terminamos automáticamente.
+        const todosHanElegido =
+            partida.jugadores.every(
+                userId =>
+                    partida.elecciones.has(
+                        userId
+                    )
+            );
+
+        if (
+            todosHanElegido &&
+            partida.jugadores.length >= 2
+        ) {
+            return terminarCaraOCruz(
+                interaction.channel,
+                messageId
+            );
+        }
 
         return;
     }
