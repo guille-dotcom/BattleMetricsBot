@@ -22,6 +22,8 @@ const MAX_JUGADORES = 10;
 
 const TIEMPO_ESPERA_PARTIDA = 60 * 1000;
 const TIEMPO_DUELO = 60 * 1000;
+const TIEMPO_CARA_CRUZ = 60 * 1000;
+const TIEMPO_BLACKJACK = 60 * 1000;
 
 const COOLDOWN_TRAGAPERRAS = 10 * 1000;
 
@@ -183,8 +185,8 @@ function crearEmbedPrincipal() {
                 "",
                 "🎲 **Dados Multijugador**",
                 "⚔️ **Duelo 1vs1**",
-                "🪙 **Cara o Cruz**",
-                "🃏 **21 / Blackjack**",
+                "🪙 **Cara o Cruz Multijugador**",
+                "🃏 **21 / Blackjack Multijugador**",
                 "🎰 **Tragaperras**",
                 "🏆 **Mis Estadísticas**",
                 "🛒 **Tienda**",
@@ -223,16 +225,16 @@ function crearMenuPrincipal() {
                         emoji: "⚔️"
                     },
                     {
-                        label: "Cara o Cruz",
+                        label: "Cara o Cruz Multijugador",
                         description:
-                            "Apuesta por cara o cruz",
+                            "Juega con otros jugadores",
                         value: "cara_cruz",
                         emoji: "🪙"
                     },
                     {
-                        label: "21 / Blackjack",
+                        label: "21 / Blackjack Multijugador",
                         description:
-                            "Intenta acercarte a 21",
+                            "Juega con otros jugadores",
                         value: "blackjack",
                         emoji: "🃏"
                     },
@@ -563,9 +565,6 @@ function crearEmbedTragaperras(
             "😢 No ha habido premio esta vez.";
     }
 
-    // Usamos bloque de código para que Discord
-    // respete los espacios y la combinación
-    // quede visualmente centrada.
     const combinacion =
         [
             "╔══════════════╗",
@@ -699,7 +698,7 @@ async function jugarTragaperras(
 }
 
 // ============================================================
-// DADOS
+// DADOS MULTIJUGADOR
 // ============================================================
 
 function crearEmbedDados(
@@ -1353,33 +1352,61 @@ async function cancelarDueloPorTiempo(
 }
 
 // ============================================================
-// CARA O CRUZ
+// CARA O CRUZ MULTIJUGADOR
 // ============================================================
 
-function crearEmbedCaraOCruz() {
+function crearEmbedCaraOCruz(
+    partida
+) {
+    const jugadores =
+        partida.jugadores
+            .map(
+                (id, index) =>
+                    `${index + 1}. ${partida.nombres.get(id) || "Jugador"}`
+            )
+            .join("\n");
+
     return new EmbedBuilder()
         .setTitle(
-            "🪙 CARA O CRUZ"
+            "🪙 CARA O CRUZ MULTIJUGADOR"
         )
         .setDescription(
             [
-                "Elige una opción.",
+                `Jugadores: **${partida.jugadores.length}/${MAX_JUGADORES}**`,
+                "",
+                jugadores,
+                "",
+                "Todos los jugadores deben elegir **Cara** o **Cruz**.",
                 "",
                 "🙂 **Cara** → +20 puntos si aciertas",
                 "✖️ **Cruz** → +20 puntos si aciertas",
                 "",
-                "❌ Si fallas, no ganas puntos."
+                "❌ Si fallas, no ganas puntos.",
+                "",
+                "⏱️ La partida termina cuando todos hayan elegido o después de 60 segundos."
             ].join("\n")
         )
         .setColor(0xF1C40F);
 }
 
-function crearBotonesCaraOCruz() {
+function crearBotonesCaraOCruz(
+    messageId
+) {
     return new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
                 .setCustomId(
-                    "minijuegos_cara"
+                    `minijuegos_cara_unirse_${messageId}`
+                )
+                .setLabel("Unirse")
+                .setEmoji("➕")
+                .setStyle(
+                    ButtonStyle.Success
+                ),
+
+            new ButtonBuilder()
+                .setCustomId(
+                    `minijuegos_cara_elegir_cara_${messageId}`
                 )
                 .setLabel("Cara")
                 .setEmoji("🙂")
@@ -1389,7 +1416,7 @@ function crearBotonesCaraOCruz() {
 
             new ButtonBuilder()
                 .setCustomId(
-                    "minijuegos_cruz"
+                    `minijuegos_cara_elegir_cruz_${messageId}`
                 )
                 .setLabel("Cruz")
                 .setEmoji("✖️")
@@ -1399,75 +1426,252 @@ function crearBotonesCaraOCruz() {
 
             new ButtonBuilder()
                 .setCustomId(
-                    "minijuegos_volver"
+                    `minijuegos_cara_empezar_${messageId}`
                 )
-                .setLabel("Volver")
-                .setEmoji("↩️")
+                .setLabel("Empezar")
+                .setEmoji("🪙")
                 .setStyle(
                     ButtonStyle.Secondary
+                ),
+
+            new ButtonBuilder()
+                .setCustomId(
+                    `minijuegos_cara_cancelar_${messageId}`
+                )
+                .setLabel("Cancelar")
+                .setEmoji("❌")
+                .setStyle(
+                    ButtonStyle.Danger
                 )
         );
 }
 
-async function jugarCaraOCruz(
-    interaction,
-    eleccion
+async function iniciarCaraOCruz(
+    interaction
 ) {
+    const partida = {
+        creador:
+            interaction.user.id,
+
+        jugadores: [
+            interaction.user.id
+        ],
+
+        nombres: new Map([
+            [
+                interaction.user.id,
+                interaction.user.username
+            ]
+        ]),
+
+        elecciones: new Map(),
+
+        finalizada: false,
+        timeout: null
+    };
+
+    await interaction.update({
+        embeds: [
+            crearEmbedCaraOCruz(partida)
+        ],
+        components: [
+            new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_cara_unirse"
+                        )
+                        .setLabel("Unirse")
+                        .setEmoji("➕")
+                        .setStyle(
+                            ButtonStyle.Success
+                        ),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_cara_elegir_cara"
+                        )
+                        .setLabel("Cara")
+                        .setEmoji("🙂")
+                        .setStyle(
+                            ButtonStyle.Primary
+                        ),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_cara_elegir_cruz"
+                        )
+                        .setLabel("Cruz")
+                        .setEmoji("✖️")
+                        .setStyle(
+                            ButtonStyle.Primary
+                        ),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_cara_empezar"
+                        )
+                        .setLabel("Empezar")
+                        .setEmoji("🪙")
+                        .setStyle(
+                            ButtonStyle.Secondary
+                        ),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_cara_cancelar"
+                        )
+                        .setLabel("Cancelar")
+                        .setEmoji("❌")
+                        .setStyle(
+                            ButtonStyle.Danger
+                        )
+                )
+        ]
+    });
+
+    const message =
+        await interaction.fetchReply();
+
+    partidasCaraOCruz.set(
+        message.id,
+        partida
+    );
+
+    partida.timeout =
+        setTimeout(
+            () =>
+                terminarCaraOCruz(
+                    interaction.channel,
+                    message.id
+                ),
+            TIEMPO_CARA_CRUZ
+        );
+
+    await message.edit({
+        embeds: [
+            crearEmbedCaraOCruz(partida)
+        ],
+        components: [
+            crearBotonesCaraOCruz(
+                message.id
+            )
+        ]
+    });
+}
+
+async function terminarCaraOCruz(
+    channel,
+    messageId
+) {
+    const partida =
+        partidasCaraOCruz.get(
+            messageId
+        );
+
+    if (
+        !partida ||
+        partida.finalizada
+    ) {
+        return;
+    }
+
+    partida.finalizada = true;
+
+    if (partida.timeout) {
+        clearTimeout(
+            partida.timeout
+        );
+    }
+
+    partidasCaraOCruz.delete(
+        messageId
+    );
+
     const resultado =
         Math.random() < 0.5
             ? "cara"
             : "cruz";
 
-    const acierto =
-        eleccion === resultado;
+    const resultados = [];
 
-    const puntos =
-        acierto
-            ? 20
-            : 0;
+    for (
+        const userId of partida.jugadores
+    ) {
+        const eleccion =
+            partida.elecciones.get(
+                userId
+            );
 
-    const perfil =
+        const acierto =
+            eleccion === resultado;
+
+        const puntos =
+            acierto
+                ? 20
+                : 0;
+
         await registrarResultado(
-            interaction.guild.id,
-            interaction.user.id,
+            channel.guild.id,
+            userId,
             acierto
                 ? "victoria"
                 : "derrota",
             puntos
         );
 
-    await interaction.update({
-        embeds: [
-            new EmbedBuilder()
-                .setTitle(
-                    "🪙 RESULTADO CARA O CRUZ"
-                )
-                .setDescription(
-                    [
-                        `Tu elección: **${eleccion === "cara" ? "🙂 Cara" : "✖️ Cruz"}**`,
-                        `Resultado: **${resultado === "cara" ? "🙂 Cara" : "✖️ Cruz"}**`,
-                        "",
-                        acierto
-                            ? "🎉 **¡Has acertado! +20 puntos**"
-                            : "❌ **Has fallado.**",
-                        "",
-                        `🪙 Puntos actuales: **${perfil.puntos}**`
-                    ].join("\n")
-                )
-                .setColor(
-                    acierto
-                        ? 0x57F287
-                        : 0xED4245
-                )
-        ],
-        components: [
-            crearBotonesCaraOCruz()
-        ]
-    });
+        resultados.push({
+            userId,
+            nombre:
+                partida.nombres.get(
+                    userId
+                ) || "Jugador",
+            eleccion,
+            acierto,
+            puntos
+        });
+    }
+
+    const texto =
+        resultados
+            .map(
+                jugador =>
+                    `${jugador.acierto ? "🏆" : "❌"} **${jugador.nombre}** → ${jugador.eleccion ? jugador.eleccion === "cara" ? "🙂 Cara" : "✖️ Cruz" : "⏭️ No eligió"} ${jugador.acierto ? "+20" : "+0"} puntos`
+            )
+            .join("\n");
+
+    try {
+        const message =
+            await channel.messages.fetch(
+                messageId
+            );
+
+        await message.edit({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle(
+                        "🪙 RESULTADO CARA O CRUZ"
+                    )
+                    .setDescription(
+                        [
+                            `🪙 Resultado: **${resultado === "cara" ? "🙂 Cara" : "✖️ Cruz"}**`,
+                            "",
+                            texto,
+                            "",
+                            "🏆 Los jugadores que acertaron reciben +20 puntos."
+                        ].join("\n")
+                    )
+                    .setColor(
+                        0xF1C40F
+                    )
+            ],
+            components: []
+        });
+    } catch {}
 }
 
 // ============================================================
-// BLACKJACK
+// BLACKJACK MULTIJUGADOR
 // ============================================================
 
 function cartaAleatoria() {
@@ -1491,32 +1695,80 @@ function calcularMano(
 function crearEmbedBlackjack(
     partida
 ) {
+    const jugadores =
+        partida.jugadores
+            .map(
+                (id, index) => {
+                    const jugador =
+                        partida.manos.get(
+                            id
+                        );
+
+                    const estado =
+                        jugador.finalizada
+                            ? jugador.plantado
+                                ? "🛑 Plantado"
+                                : jugador.cartas.length > 0 &&
+                                    calcularMano(jugador.cartas) > 21
+                                    ? "💥 Perdió"
+                                    : jugador.cartas.length > 0 &&
+                                        calcularMano(jugador.cartas) === 21
+                                        ? "🎯 21"
+                                        : "✅ Terminado"
+                            : "🎮 Jugando";
+
+                    return [
+                        `**${index + 1}. ${partida.nombres.get(id) || "Jugador"}**`,
+                        `🃏 ${jugador.cartas.join(" • ")}`,
+                        `🎯 Total: **${calcularMano(jugador.cartas)}**`,
+                        `Estado: ${estado}`
+                    ].join("\n");
+                }
+            )
+            .join("\n\n");
+
     return new EmbedBuilder()
         .setTitle(
-            "🃏 21 / BLACKJACK"
+            "🃏 21 / BLACKJACK MULTIJUGADOR"
         )
         .setDescription(
             [
-                `Tus cartas: **${partida.cartas.join(" • ")}**`,
+                `Jugadores: **${partida.jugadores.length}/${MAX_JUGADORES}**`,
                 "",
-                `🎯 Total: **${calcularMano(partida.cartas)}**`,
+                jugadores,
+                "",
+                "Cada jugador controla únicamente sus propias cartas.",
                 "",
                 "🃏 **Pedir** → roba otra carta",
-                "🛑 **Plantarse** → termina la partida",
+                "🛑 **Plantarse** → termina tu partida",
                 "",
                 "🎯 Llegar a 21: **+100 puntos**",
-                "🏆 Plantarse: **+50 puntos**"
+                "🏆 Plantarse con 17+: **+50 puntos**",
+                "",
+                "⏱️ La partida termina cuando todos terminen o después de 60 segundos."
             ].join("\n")
         )
         .setColor(0x9B59B6);
 }
 
-function crearBotonesBlackjack() {
+function crearBotonesBlackjack(
+    messageId
+) {
     return new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
                 .setCustomId(
-                    "minijuegos_blackjack_pedir"
+                    `minijuegos_blackjack_unirse_${messageId}`
+                )
+                .setLabel("Unirse")
+                .setEmoji("➕")
+                .setStyle(
+                    ButtonStyle.Success
+                ),
+
+            new ButtonBuilder()
+                .setCustomId(
+                    `minijuegos_blackjack_pedir_${messageId}`
                 )
                 .setLabel("Pedir")
                 .setEmoji("🃏")
@@ -1526,7 +1778,7 @@ function crearBotonesBlackjack() {
 
             new ButtonBuilder()
                 .setCustomId(
-                    "minijuegos_blackjack_plantarse"
+                    `minijuegos_blackjack_plantarse_${messageId}`
                 )
                 .setLabel("Plantarse")
                 .setEmoji("🛑")
@@ -1536,12 +1788,22 @@ function crearBotonesBlackjack() {
 
             new ButtonBuilder()
                 .setCustomId(
-                    "minijuegos_volver"
+                    `minijuegos_blackjack_empezar_${messageId}`
                 )
-                .setLabel("Volver")
-                .setEmoji("↩️")
+                .setLabel("Empezar")
+                .setEmoji("🃏")
                 .setStyle(
                     ButtonStyle.Secondary
+                ),
+
+            new ButtonBuilder()
+                .setCustomId(
+                    `minijuegos_blackjack_cancelar_${messageId}`
+                )
+                .setLabel("Cancelar")
+                .setEmoji("❌")
+                .setStyle(
+                    ButtonStyle.Danger
                 )
         );
 }
@@ -1550,88 +1812,249 @@ async function iniciarBlackjack(
     interaction
 ) {
     const partida = {
-        userId:
+        creador:
             interaction.user.id,
 
-        cartas: [
-            cartaAleatoria(),
-            cartaAleatoria()
+        jugadores: [
+            interaction.user.id
         ],
 
-        finalizada: false
+        nombres: new Map([
+            [
+                interaction.user.id,
+                interaction.user.username
+            ]
+        ]),
+
+        manos: new Map(),
+
+        empezada: false,
+        finalizada: false,
+        timeout: null
     };
+
+    partida.manos.set(
+        interaction.user.id,
+        {
+            cartas: [
+                cartaAleatoria(),
+                cartaAleatoria()
+            ],
+            finalizada: false,
+            plantado: false
+        }
+    );
 
     await interaction.update({
         embeds: [
-            crearEmbedBlackjack(
-                partida
-            )
+            crearEmbedBlackjack(partida)
         ],
         components: [
-            crearBotonesBlackjack()
+            new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_blackjack_unirse"
+                        )
+                        .setLabel("Unirse")
+                        .setEmoji("➕")
+                        .setStyle(
+                            ButtonStyle.Success
+                        ),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_blackjack_pedir"
+                        )
+                        .setLabel("Pedir")
+                        .setEmoji("🃏")
+                        .setStyle(
+                            ButtonStyle.Primary
+                        ),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_blackjack_plantarse"
+                        )
+                        .setLabel("Plantarse")
+                        .setEmoji("🛑")
+                        .setStyle(
+                            ButtonStyle.Success
+                        ),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_blackjack_empezar"
+                        )
+                        .setLabel("Empezar")
+                        .setEmoji("🃏")
+                        .setStyle(
+                            ButtonStyle.Secondary
+                        ),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "minijuegos_blackjack_cancelar"
+                        )
+                        .setLabel("Cancelar")
+                        .setEmoji("❌")
+                        .setStyle(
+                            ButtonStyle.Danger
+                        )
+                )
         ]
     });
 
-    const reply =
+    const message =
         await interaction.fetchReply();
 
     partidasBlackjack.set(
-        reply.id,
+        message.id,
         partida
     );
+
+    partida.timeout =
+        setTimeout(
+            () =>
+                terminarBlackjack(
+                    interaction.channel,
+                    message.id
+                ),
+            TIEMPO_BLACKJACK
+        );
+
+    await message.edit({
+        embeds: [
+            crearEmbedBlackjack(partida)
+        ],
+        components: [
+            crearBotonesBlackjack(
+                message.id
+            )
+        ]
+    });
 }
 
-async function finalizarBlackjack(
-    interaction,
-    partida,
-    resultado,
-    puntos
+async function terminarBlackjack(
+    channel,
+    messageId
 ) {
+    const partida =
+        partidasBlackjack.get(
+            messageId
+        );
+
+    if (
+        !partida ||
+        partida.finalizada
+    ) {
+        return;
+    }
+
     partida.finalizada = true;
 
-    const perfil =
+    if (partida.timeout) {
+        clearTimeout(
+            partida.timeout
+        );
+    }
+
+    partidasBlackjack.delete(
+        messageId
+    );
+
+    const resultados = [];
+
+    for (
+        const userId of partida.jugadores
+    ) {
+        const jugador =
+            partida.manos.get(
+                userId
+            );
+
+        if (!jugador) {
+            continue;
+        }
+
+        const total =
+            calcularMano(
+                jugador.cartas
+            );
+
+        let resultado;
+        let puntos;
+
+        if (total === 21) {
+            resultado = "victoria";
+            puntos = 100;
+        } else if (
+            jugador.plantado &&
+            total >= 17 &&
+            total <= 21
+        ) {
+            resultado = "victoria";
+            puntos = 50;
+        } else {
+            resultado = "derrota";
+            puntos = 0;
+        }
+
         await registrarResultado(
-            interaction.guild.id,
-            interaction.user.id,
+            channel.guild.id,
+            userId,
             resultado,
             puntos
         );
 
-    partidasBlackjack.delete(
-        interaction.message.id
-    );
+        resultados.push({
+            nombre:
+                partida.nombres.get(
+                    userId
+                ) || "Jugador",
+            cartas:
+                jugador.cartas,
+            total,
+            resultado,
+            puntos
+        });
+    }
 
-    await interaction.update({
-        embeds: [
-            new EmbedBuilder()
-                .setTitle(
-                    "🃏 RESULTADO BLACKJACK"
-                )
-                .setDescription(
-                    [
-                        `Tus cartas: **${partida.cartas.join(" • ")}**`,
-                        "",
-                        `🎯 Total: **${calcularMano(partida.cartas)}**`,
-                        "",
-                        resultado ===
-                            "victoria"
-                            ? `🎉 **¡Has ganado! +${puntos} puntos**`
-                            : "❌ **Has perdido.**",
-                        "",
-                        `🪙 Puntos actuales: **${perfil.puntos}**`
-                    ].join("\n")
-                )
-                .setColor(
-                    resultado ===
-                        "victoria"
-                        ? 0x57F287
-                        : 0xED4245
-                )
-        ],
-        components: [
-            botonVolver()
-        ]
-    });
+    const texto =
+        resultados
+            .map(
+                jugador =>
+                    `${jugador.resultado === "victoria" ? "🏆" : "❌"} **${jugador.nombre}** → ${jugador.cartas.join(" • ")} = **${jugador.total}** ${jugador.puntos > 0 ? `(+${jugador.puntos})` : ""}`
+            )
+            .join("\n");
+
+    try {
+        const message =
+            await channel.messages.fetch(
+                messageId
+            );
+
+        await message.edit({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle(
+                        "🃏 RESULTADO BLACKJACK"
+                    )
+                    .setDescription(
+                        [
+                            texto,
+                            "",
+                            "🎯 21 → +100 puntos",
+                            "🏆 Plantarse con 17+ → +50 puntos"
+                        ].join("\n")
+                    )
+                    .setColor(
+                        0x57F287
+                    )
+            ],
+            components: []
+        });
+    } catch {}
 }
 
 // ============================================================
@@ -1680,14 +2103,9 @@ async function manejarSelectMenu(
         if (
             opcion === "cara_cruz"
         ) {
-            return interaction.update({
-                embeds: [
-                    crearEmbedCaraOCruz()
-                ],
-                components: [
-                    crearBotonesCaraOCruz()
-                ]
-            });
+            return iniciarCaraOCruz(
+                interaction
+            );
         }
 
         if (
@@ -1720,7 +2138,9 @@ async function manejarSelectMenu(
                                 "🔸 Dos iguales → **+40 puntos**",
                                 "🔸 Todo diferente → **0 puntos**",
                                 "",
-                                "⏱️ Puedes jugar cada **10 segundos**."
+                                "⏱️ Puedes jugar cada **10 segundos**.",
+                                "",
+                                "🎰 Este juego es **individual**."
                             ].join("\n")
                         )
                         .setColor(
@@ -2253,27 +2673,464 @@ async function manejarBoton(
     }
 
     // ========================================================
-    // CARA O CRUZ
+    // CARA O CRUZ - UNIRSE
     // ========================================================
 
     if (
-        id ===
-        "minijuegos_cara"
+        id.startsWith(
+            "minijuegos_cara_unirse_"
+        )
     ) {
-        return jugarCaraOCruz(
-            interaction,
-            "cara"
+        const messageId =
+            id.replace(
+                "minijuegos_cara_unirse_",
+                ""
+            );
+
+        const partida =
+            partidasCaraOCruz.get(
+                messageId
+            );
+
+        if (
+            !partida ||
+            partida.finalizada
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Esta partida ya ha terminado.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            partida.jugadores.includes(
+                interaction.user.id
+            )
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Ya estás dentro de esta partida.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            partida.jugadores.length >=
+            MAX_JUGADORES
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ La partida está llena.",
+                ephemeral: true
+            });
+        }
+
+        if (partida.empezada) {
+            return interaction.reply({
+                content:
+                    "❌ La partida ya comenzó.",
+                ephemeral: true
+            });
+        }
+
+        partida.jugadores.push(
+            interaction.user.id
+        );
+
+        partida.nombres.set(
+            interaction.user.id,
+            interaction.user.username
+        );
+
+        return interaction.update({
+            embeds: [
+                crearEmbedCaraOCruz(
+                    partida
+                )
+            ],
+            components: [
+                crearBotonesCaraOCruz(
+                    messageId
+                )
+            ]
+        });
+    }
+
+    // ========================================================
+    // CARA O CRUZ - ELEGIR
+    // ========================================================
+
+    if (
+        id.startsWith(
+            "minijuegos_cara_elegir_cara_"
+        ) ||
+        id.startsWith(
+            "minijuegos_cara_elegir_cruz_"
+        )
+    ) {
+        const esCara =
+            id.startsWith(
+                "minijuegos_cara_elegir_cara_"
+            );
+
+        const prefijo =
+            esCara
+                ? "minijuegos_cara_elegir_cara_"
+                : "minijuegos_cara_elegir_cruz_";
+
+        const messageId =
+            id.replace(
+                prefijo,
+                ""
+            );
+
+        const partida =
+            partidasCaraOCruz.get(
+                messageId
+            );
+
+        if (
+            !partida ||
+            partida.finalizada
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Esta partida ya ha terminado.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            !partida.jugadores.includes(
+                interaction.user.id
+            )
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Primero debes unirte a la partida.",
+                ephemeral: true
+            });
+        }
+
+        if (partida.empezada) {
+            return interaction.reply({
+                content:
+                    "❌ La partida ya comenzó.",
+                ephemeral: true
+            });
+        }
+
+        partida.elecciones.set(
+            interaction.user.id,
+            esCara
+                ? "cara"
+                : "cruz"
+        );
+
+        await interaction.update({
+            embeds: [
+                crearEmbedCaraOCruz(
+                    partida
+                )
+            ],
+            components: [
+                crearBotonesCaraOCruz(
+                    messageId
+                )
+            ]
+        });
+
+        return;
+    }
+
+    // ========================================================
+    // CARA O CRUZ - EMPEZAR
+    // ========================================================
+
+    if (
+        id.startsWith(
+            "minijuegos_cara_empezar_"
+        )
+    ) {
+        const messageId =
+            id.replace(
+                "minijuegos_cara_empezar_",
+                ""
+            );
+
+        const partida =
+            partidasCaraOCruz.get(
+                messageId
+            );
+
+        if (!partida) {
+            return interaction.reply({
+                content:
+                    "❌ Esta partida ya terminó.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            partida.creador !==
+            interaction.user.id
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Solo el creador puede iniciar la partida.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            partida.jugadores.length < 2
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Necesitas al menos 2 jugadores.",
+                ephemeral: true
+            });
+        }
+
+        partida.empezada = true;
+
+        return terminarCaraOCruz(
+            interaction.channel,
+            messageId
         );
     }
 
+    // ========================================================
+    // CARA O CRUZ - CANCELAR
+    // ========================================================
+
     if (
-        id ===
-        "minijuegos_cruz"
+        id.startsWith(
+            "minijuegos_cara_cancelar_"
+        )
     ) {
-        return jugarCaraOCruz(
-            interaction,
-            "cruz"
+        const messageId =
+            id.replace(
+                "minijuegos_cara_cancelar_",
+                ""
+            );
+
+        const partida =
+            partidasCaraOCruz.get(
+                messageId
+            );
+
+        if (!partida) {
+            return interaction.reply({
+                content:
+                    "❌ Esta partida ya terminó.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            partida.creador !==
+            interaction.user.id
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Solo el creador puede cancelar la partida.",
+                ephemeral: true
+            });
+        }
+
+        partida.finalizada = true;
+
+        if (partida.timeout) {
+            clearTimeout(
+                partida.timeout
+            );
+        }
+
+        partidasCaraOCruz.delete(
+            messageId
         );
+
+        return interaction.update({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle(
+                        "🪙 CARA O CRUZ"
+                    )
+                    .setDescription(
+                        "❌ La partida ha sido cancelada."
+                    )
+                    .setColor(
+                        0xED4245
+                    )
+            ],
+            components: []
+        });
+    }
+
+    // ========================================================
+    // BLACKJACK - UNIRSE
+    // ========================================================
+
+    if (
+        id.startsWith(
+            "minijuegos_blackjack_unirse_"
+        )
+    ) {
+        const messageId =
+            id.replace(
+                "minijuegos_blackjack_unirse_",
+                ""
+            );
+
+        const partida =
+            partidasBlackjack.get(
+                messageId
+            );
+
+        if (
+            !partida ||
+            partida.finalizada
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Esta partida ya ha terminado.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            partida.empezada
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ La partida ya comenzó.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            partida.jugadores.includes(
+                interaction.user.id
+            )
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Ya estás dentro de esta partida.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            partida.jugadores.length >=
+            MAX_JUGADORES
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ La partida está llena.",
+                ephemeral: true
+            });
+        }
+
+        partida.jugadores.push(
+            interaction.user.id
+        );
+
+        partida.nombres.set(
+            interaction.user.id,
+            interaction.user.username
+        );
+
+        partida.manos.set(
+            interaction.user.id,
+            {
+                cartas: [
+                    cartaAleatoria(),
+                    cartaAleatoria()
+                ],
+                finalizada: false,
+                plantado: false
+            }
+        );
+
+        return interaction.update({
+            embeds: [
+                crearEmbedBlackjack(
+                    partida
+                )
+            ],
+            components: [
+                crearBotonesBlackjack(
+                    messageId
+                )
+            ]
+        });
+    }
+
+    // ========================================================
+    // BLACKJACK - EMPEZAR
+    // ========================================================
+
+    if (
+        id.startsWith(
+            "minijuegos_blackjack_empezar_"
+        )
+    ) {
+        const messageId =
+            id.replace(
+                "minijuegos_blackjack_empezar_",
+                ""
+            );
+
+        const partida =
+            partidasBlackjack.get(
+                messageId
+            );
+
+        if (!partida) {
+            return interaction.reply({
+                content:
+                    "❌ Esta partida ya terminó.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            partida.creador !==
+            interaction.user.id
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Solo el creador puede iniciar la partida.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            partida.jugadores.length < 2
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Necesitas al menos 2 jugadores.",
+                ephemeral: true
+            });
+        }
+
+        partida.empezada = true;
+
+        return interaction.update({
+            embeds: [
+                crearEmbedBlackjack(
+                    partida
+                )
+            ],
+            components: [
+                crearBotonesBlackjack(
+                    messageId
+                )
+            ]
+        });
     }
 
     // ========================================================
@@ -2281,12 +3138,19 @@ async function manejarBoton(
     // ========================================================
 
     if (
-        id ===
-        "minijuegos_blackjack_pedir"
+        id.startsWith(
+            "minijuegos_blackjack_pedir_"
+        )
     ) {
+        const messageId =
+            id.replace(
+                "minijuegos_blackjack_pedir_",
+                ""
+            );
+
         const partida =
             partidasBlackjack.get(
-                interaction.message.id
+                messageId
             );
 
         if (
@@ -2300,41 +3164,80 @@ async function manejarBoton(
             });
         }
 
-        if (
-            partida.userId !==
-            interaction.user.id
-        ) {
+        if (!partida.empezada) {
             return interaction.reply({
                 content:
-                    "❌ Esta partida pertenece a otro jugador.",
+                    "❌ La partida todavía no ha comenzado.",
                 ephemeral: true
             });
         }
 
-        partida.cartas.push(
+        if (
+            !partida.jugadores.includes(
+                interaction.user.id
+            )
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ No estás dentro de esta partida.",
+                ephemeral: true
+            });
+        }
+
+        const jugador =
+            partida.manos.get(
+                interaction.user.id
+            );
+
+        if (
+            !jugador ||
+            jugador.finalizada
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Ya has terminado tu turno.",
+                ephemeral: true
+            });
+        }
+
+        jugador.cartas.push(
             cartaAleatoria()
         );
 
         const total =
             calcularMano(
-                partida.cartas
+                jugador.cartas
             );
 
         if (total > 21) {
-            return finalizarBlackjack(
-                interaction,
-                partida,
-                "derrota",
-                0
-            );
+            jugador.finalizada = true;
+            jugador.plantado = false;
         }
 
         if (total === 21) {
-            return finalizarBlackjack(
-                interaction,
-                partida,
-                "victoria",
-                100
+            jugador.finalizada = true;
+            jugador.plantado = true;
+        }
+
+        const todosTerminados =
+            partida.jugadores.every(
+                userId => {
+                    const mano =
+                        partida.manos.get(
+                            userId
+                        );
+
+                    return (
+                        mano &&
+                        mano.finalizada
+                    );
+                }
+            );
+
+        if (todosTerminados) {
+            return terminarBlackjack(
+                interaction.channel,
+                messageId
             );
         }
 
@@ -2345,7 +3248,9 @@ async function manejarBoton(
                 )
             ],
             components: [
-                crearBotonesBlackjack()
+                crearBotonesBlackjack(
+                    messageId
+                )
             ]
         });
     }
@@ -2355,12 +3260,19 @@ async function manejarBoton(
     // ========================================================
 
     if (
-        id ===
-        "minijuegos_blackjack_plantarse"
+        id.startsWith(
+            "minijuegos_blackjack_plantarse_"
+        )
     ) {
+        const messageId =
+            id.replace(
+                "minijuegos_blackjack_plantarse_",
+                ""
+            );
+
         const partida =
             partidasBlackjack.get(
-                interaction.message.id
+                messageId
             );
 
         if (
@@ -2374,37 +3286,147 @@ async function manejarBoton(
             });
         }
 
-        if (
-            partida.userId !==
-            interaction.user.id
-        ) {
+        if (!partida.empezada) {
             return interaction.reply({
                 content:
-                    "❌ Esta partida pertenece a otro jugador.",
+                    "❌ La partida todavía no ha comenzado.",
                 ephemeral: true
             });
         }
 
-        const total =
-            calcularMano(
-                partida.cartas
+        if (
+            !partida.jugadores.includes(
+                interaction.user.id
+            )
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ No estás dentro de esta partida.",
+                ephemeral: true
+            });
+        }
+
+        const jugador =
+            partida.manos.get(
+                interaction.user.id
             );
 
-        if (total >= 17) {
-            return finalizarBlackjack(
-                interaction,
-                partida,
-                "victoria",
-                50
+        if (
+            !jugador ||
+            jugador.finalizada
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Ya has terminado tu turno.",
+                ephemeral: true
+            });
+        }
+
+        jugador.finalizada = true;
+        jugador.plantado = true;
+
+        const todosTerminados =
+            partida.jugadores.every(
+                userId => {
+                    const mano =
+                        partida.manos.get(
+                            userId
+                        );
+
+                    return (
+                        mano &&
+                        mano.finalizada
+                    );
+                }
+            );
+
+        if (todosTerminados) {
+            return terminarBlackjack(
+                interaction.channel,
+                messageId
             );
         }
 
-        return finalizarBlackjack(
-            interaction,
-            partida,
-            "derrota",
-            0
+        return interaction.update({
+            embeds: [
+                crearEmbedBlackjack(
+                    partida
+                )
+            ],
+            components: [
+                crearBotonesBlackjack(
+                    messageId
+                )
+            ]
+        });
+    }
+
+    // ========================================================
+    // BLACKJACK - CANCELAR
+    // ========================================================
+
+    if (
+        id.startsWith(
+            "minijuegos_blackjack_cancelar_"
+        )
+    ) {
+        const messageId =
+            id.replace(
+                "minijuegos_blackjack_cancelar_",
+                ""
+            );
+
+        const partida =
+            partidasBlackjack.get(
+                messageId
+            );
+
+        if (!partida) {
+            return interaction.reply({
+                content:
+                    "❌ Esta partida ya terminó.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            partida.creador !==
+            interaction.user.id
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Solo el creador puede cancelar la partida.",
+                ephemeral: true
+            });
+        }
+
+        partida.finalizada = true;
+
+        if (partida.timeout) {
+            clearTimeout(
+                partida.timeout
+            );
+        }
+
+        partidasBlackjack.delete(
+            messageId
         );
+
+        return interaction.update({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle(
+                        "🃏 BLACKJACK"
+                    )
+                    .setDescription(
+                        "❌ La partida ha sido cancelada."
+                    )
+                    .setColor(
+                        0xED4245
+                    )
+            ],
+            components: []
+        });
     }
 
     return false;
