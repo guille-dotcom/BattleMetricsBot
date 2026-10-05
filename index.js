@@ -44,6 +44,14 @@ const {
 } = require("./services/twitchDropsService");
 
 // ======================
+// KICK DROPS
+// ======================
+
+const {
+    iniciarKickDropsAutomaticos
+} = require("./services/kickDropsService");
+
+// ======================
 // TIENDA RUST AUTOMÁTICA
 // ======================
 
@@ -909,6 +917,44 @@ client.once(
 
             console.error(
                 "❌ Error iniciando Twitch Drops automáticos:",
+                error
+            );
+
+        }
+
+        // ======================
+        // KICK DROPS AUTOMÁTICOS
+        // ======================
+
+        console.log(
+            "🟢 Iniciando sistema automático de Kick Drops..."
+        );
+
+        try {
+
+            if (
+                typeof iniciarKickDropsAutomaticos !==
+                "function"
+            ) {
+
+                throw new Error(
+                    "iniciarKickDropsAutomaticos no está exportada desde kickDropsService.js"
+                );
+
+            }
+
+            iniciarKickDropsAutomaticos(
+                client
+            );
+
+            console.log(
+                "🟢 Sistema automático de Kick Drops iniciado correctamente."
+            );
+
+        } catch (error) {
+
+            console.error(
+                "❌ Error iniciando Kick Drops automáticos:",
                 error
             );
 
@@ -1880,7 +1926,7 @@ client.on(
                                     true
                             });
 
-                            }
+                        }
 
                     } catch (replyError) {
 
