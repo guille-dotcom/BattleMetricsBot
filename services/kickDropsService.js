@@ -98,10 +98,11 @@ function limpiarNombreStreamer(nombre) {
         return null;
     }
 
-    const limpio = limpiarHtml(nombre)
-        .replace(/^@/, "")
-        .replace(/\s+/g, " ")
-        .trim();
+    const limpio =
+        limpiarHtml(nombre)
+            .replace(/^@/, "")
+            .replace(/\s+/g, " ")
+            .trim();
 
     if (!limpio) {
         return null;
@@ -115,16 +116,21 @@ function limpiarUrlImagen(url) {
         return null;
     }
 
-    let limpio = decodificarHtml(
-        String(url).trim()
-    );
+    let limpio =
+        decodificarHtml(
+            String(url).trim()
+        );
 
     limpio = limpio
         .replace(/^["']/, "")
         .replace(/["']$/, "")
         .trim();
 
-    if (!/^https?:\/\//i.test(limpio)) {
+    if (
+        !/^https?:\/\//i.test(
+            limpio
+        )
+    ) {
         return null;
     }
 
@@ -149,36 +155,51 @@ function convertirHoras(valor) {
         return null;
     }
 
-    const texto = String(valor)
-        .replace(",", ".")
-        .trim();
+    const texto =
+        String(valor)
+            .replace(",", ".")
+            .trim();
 
     if (!texto) {
         return null;
     }
 
-    const horasMatch = texto.match(
-        /([\d.]+)\s*(?:hours?|hrs?|h|horas?)/i
-    );
+    const horasMatch =
+        texto.match(
+            /([\d.]+)\s*(?:hours?|hrs?|h|horas?)/i
+        );
 
     if (horasMatch) {
         const numero =
-            Number(horasMatch[1]);
+            Number(
+                horasMatch[1]
+            );
 
-        if (Number.isFinite(numero)) {
+        if (
+            Number.isFinite(
+                numero
+            )
+        ) {
             return numero;
         }
     }
 
-    const minutosMatch = texto.match(
-        /([\d.]+)\s*(?:minutes?|mins?|minutos?)/i
-    );
+    const minutosMatch =
+        texto.match(
+            /([\d.]+)\s*(?:minutes?|mins?|minutos?)/i
+        );
 
     if (minutosMatch) {
         const minutos =
-            Number(minutosMatch[1]);
+            Number(
+                minutosMatch[1]
+            );
 
-        if (Number.isFinite(minutos)) {
+        if (
+            Number.isFinite(
+                minutos
+            )
+        ) {
             return minutos / 60;
         }
     }
@@ -186,7 +207,9 @@ function convertirHoras(valor) {
     const numero =
         Number(texto);
 
-    if (Number.isFinite(numero)) {
+    if (
+        Number.isFinite(numero)
+    ) {
         return numero;
     }
 
@@ -204,7 +227,9 @@ function formatearHoras(horas) {
     const numero =
         Number(horas);
 
-    if (!Number.isFinite(numero)) {
+    if (
+        !Number.isFinite(numero)
+    ) {
         return "Tiempo requerido no disponible";
     }
 
@@ -212,12 +237,13 @@ function formatearHoras(horas) {
         numero * 60;
 
     if (
-        Number.isFinite(minutosExactos) &&
         minutosExactos > 0 &&
         minutosExactos < 60
     ) {
         const minutos =
-            Math.round(minutosExactos);
+            Math.round(
+                minutosExactos
+            );
 
         return minutos === 1
             ? "1 minuto"
@@ -234,17 +260,18 @@ function formatearHoras(horas) {
         return `${numero} horas`;
     }
 
-    const redondeado =
-        Number(numero.toFixed(2));
-
-    return `${redondeado} horas`;
+    return `${Number(
+        numero.toFixed(2)
+    )} horas`;
 }
 
 // ============================================================
 // URL STREAMER
 // ============================================================
 
-function obtenerUrlStreamerKick(login) {
+function obtenerUrlStreamerKick(
+    login
+) {
     const limpio =
         normalizarLogin(login);
 
@@ -281,7 +308,7 @@ async function obtenerKickAppToken() {
     }
 
     try {
-        const response =
+        const respuesta =
             await axios.post(
                 KICK_OAUTH_URL,
                 new URLSearchParams({
@@ -304,9 +331,11 @@ async function obtenerKickAppToken() {
             );
 
         const data =
-            response.data || {};
+            respuesta.data || {};
 
-        if (!data.access_token) {
+        if (
+            !data.access_token
+        ) {
             throw new Error(
                 "Kick no devolvió access_token."
             );
@@ -319,7 +348,7 @@ async function obtenerKickAppToken() {
             Date.now() +
             Number(
                 data.expires_in ||
-                3600
+                    3600
             ) *
                 1000;
 
@@ -329,16 +358,12 @@ async function obtenerKickAppToken() {
 
         return kickAppToken;
     } catch (error) {
-        const status =
-            error.response?.status;
-
-        const data =
-            error.response?.data;
-
         console.error(
             "[Kick Drops] Error obteniendo App Access Token:",
-            status || "",
-            data || error.message
+            error.response?.status ||
+                "",
+            error.response?.data ||
+                error.message
         );
 
         throw error;
@@ -357,19 +382,22 @@ async function kickApiGet(
         await obtenerKickAppToken();
 
     try {
-        const response =
-            await axios.get(url, {
-                params,
-                headers: {
-                    Authorization:
-                        `Bearer ${token}`,
-                    Accept:
-                        "application/json"
-                },
-                timeout: 30000
-            });
+        const respuesta =
+            await axios.get(
+                url,
+                {
+                    params,
+                    headers: {
+                        Authorization:
+                            `Bearer ${token}`,
+                        Accept:
+                            "application/json"
+                    },
+                    timeout: 30000
+                }
+            );
 
-        return response.data;
+        return respuesta.data;
     } catch (error) {
         if (
             error.response?.status ===
@@ -441,29 +469,13 @@ async function obtenerCategoriaRustKick() {
                             .toLowerCase();
 
                     return (
-                        nombre ===
-                            "rust" ||
-                        slug ===
-                            "rust"
+                        nombre === "rust" ||
+                        slug === "rust"
                     );
                 }
             );
 
         if (!categoria?.id) {
-            console.error(
-                "[Kick Drops] Categorías recibidas:",
-                categorias.map(
-                    (item) => ({
-                        id:
-                            item?.id,
-                        name:
-                            item?.name,
-                        slug:
-                            item?.slug
-                    })
-                )
-            );
-
             throw new Error(
                 "No se encontró la categoría Rust en Kick."
             );
@@ -489,7 +501,7 @@ async function obtenerCategoriaRustKick() {
 }
 
 // ============================================================
-// STREAMS RUST ONLINE
+// STREAMS RUST
 // ============================================================
 
 async function obtenerStreamsRustKick() {
@@ -511,38 +523,11 @@ async function obtenerStreamsRustKick() {
                 }
             );
 
-        const streams =
-            Array.isArray(
-                respuesta?.data
-            )
-                ? respuesta.data
-                : [];
-
-        return streams.filter(
-            (stream) => {
-                const categoria =
-                    String(
-                        stream
-                            ?.category
-                            ?.name ||
-                            stream
-                                ?.category
-                                ?.slug ||
-                            ""
-                    )
-                        .trim()
-                        .toLowerCase();
-
-                return (
-                    stream
-                        ?.category
-                        ?.id ==
-                        categoriaId ||
-                    categoria ===
-                        "rust"
-                );
-            }
-        );
+        return Array.isArray(
+            respuesta?.data
+        )
+            ? respuesta.data
+            : [];
     } catch (error) {
         console.error(
             "[Kick Drops] Error obteniendo streams Rust:",
@@ -628,8 +613,7 @@ async function obtenerStreamersKickOnline(
 
             viewerCount:
                 Number(
-                    stream
-                        ?.viewer_count ||
+                    stream?.viewer_count ||
                         0
                 ),
 
@@ -664,7 +648,7 @@ async function obtenerStreamersKickOnline(
 }
 
 // ============================================================
-// STREAMERS CONFIGURADOS EN RUSTLOGIX
+// STREAMERS CONFIGURADOS
 // ============================================================
 
 async function obtenerStreamersKickConfigurados(
@@ -711,12 +695,12 @@ async function obtenerStreamersKickConfigurados(
 }
 
 // ============================================================
-// RUST DROPS - DESCARGA DE FACEPUNCH
+// DESCARGAR PÁGINA DE FACEPUNCH
 // ============================================================
 
 async function obtenerHtmlKickDrops() {
     try {
-        const response =
+        const respuesta =
             await axios.get(
                 KICK_DROPS_URL,
                 {
@@ -732,7 +716,7 @@ async function obtenerHtmlKickDrops() {
                 }
             );
 
-        return response.data || "";
+        return respuesta.data || "";
     } catch (error) {
         console.error(
             "[Kick Drops] Error descargando página de Facepunch:",
@@ -744,7 +728,7 @@ async function obtenerHtmlKickDrops() {
 }
 
 // ============================================================
-// PARSER DE DROPS
+// JSON EMBEBIDO
 // ============================================================
 
 function extraerJsonEmbebido(
@@ -756,50 +740,138 @@ function extraerJsonEmbebido(
         return resultados;
     }
 
-    const patrones = [
-        /<script[^>]*type=["']application\/json["'][^>]*>([\s\S]*?)<\/script>/gi,
+    /*
+     * Solamente consideramos scripts que realmente
+     * estén declarados como JSON.
+     *
+     * Ya NO buscamos cualquier <script> que contenga
+     * "campaign", porque eso podía capturar contenido
+     * interno de la página.
+     */
 
-        /<script[^>]*>([\s\S]*?campaign[\s\S]*?)<\/script>/gi
-    ];
+    const regex =
+        /<script[^>]*type=["']application\/json["'][^>]*>([\s\S]*?)<\/script>/gi;
 
-    for (
-        const patron of patrones
+    let match;
+
+    while (
+        (match =
+            regex.exec(html)) !== null
     ) {
-        let match;
+        const contenido =
+            match[1]?.trim();
 
-        while (
-            (match =
-                patron.exec(html)) !==
-            null
-        ) {
-            const contenido =
-                match[1]?.trim();
+        if (!contenido) {
+            continue;
+        }
 
-            if (!contenido) {
-                continue;
-            }
+        try {
+            const json =
+                JSON.parse(
+                    decodificarHtml(
+                        contenido
+                    )
+                );
 
-            try {
-                const json =
-                    JSON.parse(
-                        decodificarHtml(
-                            contenido
-                        )
-                    );
-
-                resultados.push(json);
-            } catch {
-                // Algunos scripts no son JSON válido.
-            }
+            resultados.push(json);
+        } catch {
+            // JSON inválido: ignorar.
         }
     }
 
     return resultados;
 }
 
+// ============================================================
+// BUSCAR ESTRUCTURAS REALES DE DROP
+// ============================================================
+
+function objetoTieneCampoDrop(
+    objeto
+) {
+    if (
+        !objeto ||
+        typeof objeto !==
+            "object" ||
+        Array.isArray(objeto)
+    ) {
+        return false;
+    }
+
+    /*
+     * Un Drop real necesita una combinación de
+     * propiedades que indiquen que es una recompensa.
+     *
+     * No basta con "name + hours".
+     */
+
+    const tieneId =
+        Boolean(
+            objeto.id ||
+            objeto.drop_id ||
+            objeto.dropId ||
+            objeto.reward_id ||
+            objeto.rewardId
+        );
+
+    const tieneReward =
+        Boolean(
+            objeto.reward ||
+            objeto.item ||
+            objeto.item_id ||
+            objeto.itemId ||
+            objeto.reward_id ||
+            objeto.rewardId
+        );
+
+    const tieneWatchTime =
+        objeto.hours !==
+            undefined ||
+        objeto.required_hours !==
+            undefined ||
+        objeto.requiredHours !==
+            undefined ||
+        objeto.watch_hours !==
+            undefined ||
+        objeto.watchHours !==
+            undefined ||
+        objeto.minutes !==
+            undefined ||
+        objeto.required_minutes !==
+            undefined ||
+        objeto.requiredMinutes !==
+            undefined;
+
+    const tieneNombre =
+        Boolean(
+            objeto.name ||
+            objeto.display_name ||
+            objeto.displayName ||
+            objeto.title
+        );
+
+    /*
+     * La combinación mínima aceptada:
+     *
+     * 1) ID + nombre + tiempo
+     * o
+     * 2) reward/item + nombre + tiempo
+     *
+     * Así evitamos coger textos genéricos de la página.
+     */
+
+    return (
+        tieneNombre &&
+        tieneWatchTime &&
+        (tieneId ||
+            tieneReward)
+    );
+}
+
 function buscarObjetosDrop(
     objeto,
-    salida = []
+    salida = [],
+    visitados = new WeakSet()
 ) {
     if (
         !objeto ||
@@ -809,53 +881,46 @@ function buscarObjetosDrop(
         return salida;
     }
 
-    if (Array.isArray(objeto)) {
+    if (
+        !Array.isArray(objeto)
+    ) {
+        if (
+            visitados.has(objeto)
+        ) {
+            return salida;
+        }
+
+        visitados.add(objeto);
+    }
+
+    if (
+        Array.isArray(objeto)
+    ) {
         for (
             const item of objeto
         ) {
             buscarObjetosDrop(
                 item,
-                salida
+                salida,
+                visitados
             );
         }
 
         return salida;
     }
 
-    const keys =
-        Object.keys(objeto);
-
-    const tieneNombre =
-        keys.some((key) =>
-            [
-                "name",
-                "display_name",
-                "displayName",
-                "title"
-            ].includes(key)
-        );
-
-    const pareceDrop =
-        keys.some((key) =>
-            [
-                "hours",
-                "required_hours",
-                "requiredHours",
-                "duration",
-                "minutes",
-                "reward"
-            ].includes(key)
-        );
-
     if (
-        tieneNombre &&
-        pareceDrop
+        objetoTieneCampoDrop(
+            objeto
+        )
     ) {
         salida.push(objeto);
     }
 
     for (
-        const key of keys
+        const key of Object.keys(
+            objeto
+        )
     ) {
         const valor =
             objeto[key];
@@ -867,13 +932,18 @@ function buscarObjetosDrop(
         ) {
             buscarObjetosDrop(
                 valor,
-                salida
+                salida,
+                visitados
             );
         }
     }
 
     return salida;
 }
+
+// ============================================================
+// IMAGEN
+// ============================================================
 
 function extraerImagenDeObjeto(
     objeto
@@ -887,8 +957,14 @@ function extraerImagenDeObjeto(
         objeto?.thumbnailUrl,
         objeto?.icon,
         objeto?.icon_url,
+
         objeto?.reward?.image,
-        objeto?.reward?.image_url
+        objeto?.reward?.image_url,
+        objeto?.reward?.imageUrl,
+
+        objeto?.item?.image,
+        objeto?.item?.image_url,
+        objeto?.item?.imageUrl
     ];
 
     for (
@@ -909,6 +985,10 @@ function extraerImagenDeObjeto(
     return null;
 }
 
+// ============================================================
+// STREAMERS DEL DROP
+// ============================================================
+
 function extraerStreamersDeObjeto(
     objeto
 ) {
@@ -922,13 +1002,18 @@ function extraerStreamersDeObjeto(
         objeto?.creator,
         objeto?.broadcaster,
         objeto?.required_streamer,
-        objeto?.requiredStreamer
+        objeto?.requiredStreamer,
+
+        objeto?.reward?.streamer,
+        objeto?.reward?.streamers
     ];
 
     for (
         const valor of posibles
     ) {
-        if (Array.isArray(valor)) {
+        if (
+            Array.isArray(valor)
+        ) {
             for (
                 const item of valor
             ) {
@@ -983,9 +1068,14 @@ function extraerStreamersDeObjeto(
                 .map(
                     normalizarLogin
                 )
+                .filter(Boolean)
         )
     ];
 }
+
+// ============================================================
+// HORAS
+// ============================================================
 
 function extraerHorasDeObjeto(
     objeto
@@ -1007,7 +1097,8 @@ function extraerHorasDeObjeto(
             );
 
         if (
-            horas !== null
+            horas !== null &&
+            horas > 0
         ) {
             return horas;
         }
@@ -1016,31 +1107,44 @@ function extraerHorasDeObjeto(
     const minutos =
         Number(
             objeto?.minutes ??
-            objeto?.required_minutes ??
-            objeto?.requiredMinutes
+                objeto?.required_minutes ??
+                objeto?.requiredMinutes
         );
 
     if (
-        Number.isFinite(minutos) &&
+        Number.isFinite(
+            minutos
+        ) &&
         minutos > 0
     ) {
         return minutos / 60;
     }
 
-    const duracion =
-        String(
-            objeto?.duration ||
-                ""
-        );
+    /*
+     * También revisamos el reward/item
+     * por si el tiempo está anidado.
+     */
 
-    if (duracion) {
-        return convertirHoras(
-            duracion
+    const reward =
+        objeto?.reward ||
+        objeto?.item;
+
+    if (
+        reward &&
+        typeof reward ===
+            "object"
+    ) {
+        return extraerHorasDeObjeto(
+            reward
         );
     }
 
     return null;
 }
+
+// ============================================================
+// CONVERTIR DROP
+// ============================================================
 
 function convertirObjetoEnDrop(
     objeto,
@@ -1052,15 +1156,27 @@ function convertirObjetoEnDrop(
         objeto?.displayName ||
         objeto?.title ||
         objeto?.reward?.name ||
-        `Drop de Rust #${indice + 1}`;
+        objeto?.item?.name ||
+        null;
 
-    const streamers =
-        extraerStreamersDeObjeto(
-            objeto
-        );
+    if (!nombre) {
+        return null;
+    }
 
     const horas =
         extraerHorasDeObjeto(
+            objeto
+        );
+
+    if (
+        horas === null ||
+        horas <= 0
+    ) {
+        return null;
+    }
+
+    const streamers =
+        extraerStreamersDeObjeto(
             objeto
         );
 
@@ -1072,12 +1188,16 @@ function convertirObjetoEnDrop(
     const id =
         String(
             objeto?.id ||
-            objeto?.drop_id ||
-            objeto?.dropId ||
-            objeto?.reward?.id ||
-            `${normalizarLogin(
-                nombre
-            )}-${indice}`
+                objeto?.drop_id ||
+                objeto?.dropId ||
+                objeto?.reward_id ||
+                objeto?.rewardId ||
+                objeto?.reward?.id ||
+                objeto?.item_id ||
+                objeto?.itemId ||
+                `${normalizarLogin(
+                    nombre
+                )}-${indice}`
         );
 
     return {
@@ -1106,7 +1226,7 @@ function convertirObjetoEnDrop(
                 ? obtenerUrlStreamerKick(
                       streamers[0]
                   )
-                : KICK_DROPS_URL,
+                : KICK_RUST_URL,
 
         streamerEspecifico:
             streamers.length > 0,
@@ -1116,6 +1236,10 @@ function convertirObjetoEnDrop(
         canalesOnline: []
     };
 }
+
+// ============================================================
+// DROPS DESDE JSON
+// ============================================================
 
 function extraerDropsDesdeJson(
     html
@@ -1149,7 +1273,44 @@ function extraerDropsDesdeJson(
                 i
             );
 
-        if (!drop.nombre) {
+        if (!drop) {
+            continue;
+        }
+
+        /*
+         * El nombre no puede ser una frase de la FAQ,
+         * una instrucción o una estadística.
+         */
+
+        const nombre =
+            String(
+                drop.nombre || ""
+            ).toLowerCase();
+
+        const textoProhibido = [
+            "how it works",
+            "getting drops",
+            "drops metrics",
+            "current campaign statistics",
+            "frequently asked questions",
+            "which streams do i need",
+            "is there any way",
+            "how long does it take",
+            "what are crates used",
+            "connect accounts",
+            "participating players",
+            "drops claimed",
+            "getting drops"
+        ];
+
+        if (
+            textoProhibido.some(
+                (texto) =>
+                    nombre.includes(
+                        texto
+                    )
+            )
+        ) {
             continue;
         }
 
@@ -1158,6 +1319,10 @@ function extraerDropsDesdeJson(
 
     return drops;
 }
+
+// ============================================================
+// ATRIBUTOS HTML
+// ============================================================
 
 function extraerAtributo(
     html,
@@ -1182,238 +1347,120 @@ function extraerAtributo(
         : null;
 }
 
+// ============================================================
+// FALLBACK HTML
+// ============================================================
+
 function extraerDropsDesdeHtml(
     html
 ) {
-    const drops = [];
-
-    if (!html) {
-        return drops;
-    }
-
     /*
-     * Fallback genérico:
+     * IMPORTANTE:
      *
-     * Busca bloques que contengan nombres de recompensas
-     * y datos de tiempo.
+     * Este fallback queda desactivado.
+     *
+     * La versión anterior buscaba cualquier bloque que
+     * contuviera "drop" + "hours/minutes", y eso podía
+     * interpretar contenido de la FAQ como un Drop.
+     *
+     * Si Facepunch cambia la estructura HTML tendremos
+     * que adaptar un parser específico, pero es preferible
+     * devolver 0 Drops antes que publicar falsos Drops.
      */
 
-    const bloques =
-        html.match(
-            /<(?:article|section|div|li)[^>]*>[\s\S]{0,8000}?<\/(?:article|section|div|li)>/gi
-        ) || [];
-
-    for (
-        let i = 0;
-        i < bloques.length;
-        i++
-    ) {
-        const bloque =
-            bloques[i];
-
-        const texto =
-            normalizarTexto(
-                limpiarHtml(
-                    bloque
-                )
-            );
-
-        if (!texto) {
-            continue;
-        }
-
-        const tieneDrop =
-            /drop|reward|recompensa/i.test(
-                texto
-            );
-
-        const tieneTiempo =
-            /hours?|horas?|mins?|minutes?|minutos?/i.test(
-                texto
-            );
-
-        if (
-            !tieneDrop ||
-            !tieneTiempo
-        ) {
-            continue;
-        }
-
-        const imagen =
-            extraerAtributo(
-                bloque,
-                "src"
-            ) ||
-            extraerAtributo(
-                bloque,
-                "data-src"
-            );
-
-        let horas =
-            convertirHoras(
-                texto
-            );
-
-        if (horas === null) {
-            const minutosMatch =
-                texto.match(
-                    /(\d+(?:[.,]\d+)?)\s*(?:minutes?|mins?|minutos?)/i
-                );
-
-            if (
-                minutosMatch
-            ) {
-                horas =
-                    Number(
-                        minutosMatch[1]
-                            .replace(
-                                ",",
-                                "."
-                            )
-                    ) / 60;
-            }
-        }
-
-        if (
-            horas === null &&
-            !/drop/i.test(
-                texto
-            )
-        ) {
-            continue;
-        }
-
-        const streamerMatches =
-            texto.match(
-                /(?:kick\.com\/|@)([a-zA-Z0-9_.-]{2,50})/g
-            ) || [];
-
-        const streamers =
-            [
-                ...new Set(
-                    streamerMatches
-                        .map(
-                            (valor) =>
-                                valor
-                                    .replace(
-                                        /^.*kick\.com\//i,
-                                        ""
-                                    )
-                                    .replace(
-                                        /^@/,
-                                        ""
-                                    )
-                        )
-                        .map(
-                            normalizarLogin
-                        )
-                        .filter(
-                            Boolean
-                        )
-                )
-            ];
-
-        const nombre =
-            texto
-                .replace(
-                    /(?:\d+(?:[.,]\d+)?)\s*(?:hours?|horas?|minutes?|mins?|minutos?)/gi,
-                    ""
-                )
-                .slice(0, 120)
-                .trim();
-
-        if (!nombre) {
-            continue;
-        }
-
-        drops.push({
-            id:
-                `${normalizarLogin(
-                    nombre
-                )}-${i}`,
-
-            nombre,
-
-            horas,
-
-            streamer:
-                streamers[0] ||
-                null,
-
-            streamers,
-
-            imagen:
-                limpiarUrlImagen(
-                    imagen
-                ),
-
-            enlace:
-                streamers[0]
-                    ? obtenerUrlStreamerKick(
-                          streamers[0]
-                      )
-                    : KICK_DROPS_URL,
-
-            streamerEspecifico:
-                streamers.length > 0,
-
-            online: false,
-
-            canalesOnline: []
-        });
-    }
-
-    return drops;
+    return [];
 }
 
 // ============================================================
 // CAMPAÑA
 // ============================================================
 
-function extraerCampana(html) {
-    const texto =
-        normalizarTexto(
-            limpiarHtml(html)
-        );
+function extraerCampana(
+    html
+) {
+    /*
+     * No usamos el <title> como nombre de campaña.
+     *
+     * La página actualmente puede tener solamente el
+     * contenido general de Kick Drops aunque no exista
+     * ninguna campaña activa.
+     */
+
+    if (!html) {
+        return {
+            nombre:
+                "Rust Drops en Kick",
+
+            theme: null,
+
+            fechaInicio: null,
+
+            fechaFin: null
+        };
+    }
 
     let nombre = null;
 
-    const patronesNombre = [
-        /(?:campaign|campaña)\s*[:\-]\s*([^|]{3,120})/i,
+    /*
+     * Buscamos solamente propiedades explícitas
+     * relacionadas con una campaña dentro de JSON.
+     */
 
-        /(?:active campaign|campaña activa)\s*[:\-]\s*([^|]{3,120})/i
-    ];
+    const scripts =
+        extraerJsonEmbebido(
+            html
+        );
 
     for (
-        const patron of patronesNombre
+        const json of scripts
     ) {
-        const match =
-            texto.match(patron);
+        const encontrados = [];
 
-        if (match?.[1]) {
-            nombre =
+        buscarObjetosCampana(
+            json,
+            encontrados
+        );
+
+        for (
+            const campana of
+                encontrados
+        ) {
+            const posibleNombre =
+                campana?.name ||
+                campana?.campaign_name ||
+                campana?.campaignName ||
+                campana?.title;
+
+            if (
+                typeof posibleNombre !==
+                "string"
+            ) {
+                continue;
+            }
+
+            const limpio =
                 normalizarTexto(
-                    match[1]
+                    decodificarHtml(
+                        posibleNombre
+                    )
                 );
+
+            if (
+                !limpio ||
+                esTextoGenericoFacepunch(
+                    limpio
+                )
+            ) {
+                continue;
+            }
+
+            nombre = limpio;
 
             break;
         }
-    }
 
-    if (!nombre) {
-        const titleMatch =
-            String(html || "")
-                .match(
-                    /<title[^>]*>([\s\S]*?)<\/title>/i
-                );
-
-        if (titleMatch?.[1]) {
-            nombre =
-                normalizarTexto(
-                    limpiarHtml(
-                        titleMatch[1]
-                    )
-                );
+        if (nombre) {
+            break;
         }
     }
 
@@ -1429,6 +1476,121 @@ function extraerCampana(html) {
         fechaFin: null
     };
 }
+
+function buscarObjetosCampana(
+    objeto,
+    salida = [],
+    visitados = new WeakSet()
+) {
+    if (
+        !objeto ||
+        typeof objeto !==
+            "object"
+    ) {
+        return salida;
+    }
+
+    if (
+        !Array.isArray(objeto)
+    ) {
+        if (
+            visitados.has(objeto)
+        ) {
+            return salida;
+        }
+
+        visitados.add(objeto);
+    }
+
+    if (
+        Array.isArray(objeto)
+    ) {
+        for (
+            const item of objeto
+        ) {
+            buscarObjetosCampana(
+                item,
+                salida,
+                visitados
+            );
+        }
+
+        return salida;
+    }
+
+    const keys =
+        Object.keys(objeto);
+
+    const pareceCampana =
+        keys.some((key) =>
+            [
+                "campaign_id",
+                "campaignId",
+                "campaign_name",
+                "campaignName",
+                "start_date",
+                "startDate",
+                "end_date",
+                "endDate"
+            ].includes(key)
+        );
+
+    if (pareceCampana) {
+        salida.push(objeto);
+    }
+
+    for (
+        const key of keys
+    ) {
+        const valor =
+            objeto[key];
+
+        if (
+            valor &&
+            typeof valor ===
+                "object"
+        ) {
+            buscarObjetosCampana(
+                valor,
+                salida,
+                visitados
+            );
+        }
+    }
+
+    return salida;
+}
+
+function esTextoGenericoFacepunch(
+    texto
+) {
+    const valor =
+        String(texto || "")
+            .trim()
+            .toLowerCase();
+
+    const prohibidos = [
+        "drops on kick",
+        "getting drops",
+        "how it works",
+        "drops metrics",
+        "current campaign statistics",
+        "frequently asked questions",
+        "connect accounts",
+        "rust | kick drops",
+        "kick drops"
+    ];
+
+    return prohibidos.some(
+        (frase) =>
+            valor === frase ||
+            valor.includes(frase)
+    );
+}
+
+// ============================================================
+// CAMPAIGN KEY
+// ============================================================
 
 function crearCampaignKey(
     campana,
@@ -1514,24 +1676,20 @@ async function obtenerDropsKick() {
         };
     }
 
+    /*
+     * SOLAMENTE usamos JSON estructurado.
+     *
+     * El fallback HTML está desactivado para evitar
+     * falsos positivos.
+     */
+
     let drops =
         extraerDropsDesdeJson(
             html
         );
 
-    if (
-        drops.length === 0
-    ) {
-        drops =
-            extraerDropsDesdeHtml(
-                html
-            );
-    }
-
     /*
-     * El parser puede encontrar el mismo Drop
-     * más de una vez si Facepunch incluye el
-     * objeto en diferentes scripts.
+     * Eliminar duplicados.
      */
 
     const vistos =
@@ -1542,6 +1700,10 @@ async function obtenerDropsKick() {
             (drop) => {
                 const key =
                     [
+                        String(
+                            drop.id || ""
+                        ),
+
                         normalizarLogin(
                             drop.nombre
                         ),
@@ -1569,11 +1731,43 @@ async function obtenerDropsKick() {
             html
         );
 
+    /*
+     * Si no hay Drops reales, NO hay campaña
+     * publicable aunque la página tenga estadísticas.
+     */
+
+    if (
+        drops.length === 0
+    ) {
+        console.log(
+            "[Kick Drops] Facepunch no muestra una campaña activa."
+        );
+
+        return {
+            campaignKey: null,
+
+            campaignName:
+                "Rust Drops en Kick",
+
+            campaignTheme: null,
+
+            fechaInicio: null,
+
+            fechaFin: null,
+
+            drops: []
+        };
+    }
+
     const campaignKey =
         crearCampaignKey(
             campana,
             drops
         );
+
+    console.log(
+        `[Kick Drops] ${drops.length} Drop(s) reales detectados.`
+    );
 
     return {
         campaignKey,
@@ -1595,7 +1789,7 @@ async function obtenerDropsKick() {
 }
 
 // ============================================================
-// ESTADO ONLINE DE LOS DROPS
+// ESTADO ONLINE
 // ============================================================
 
 async function actualizarEstadoDrops(
@@ -1617,6 +1811,13 @@ async function actualizarEstadoDrops(
                 )
             )
         ];
+
+    if (
+        todosLosStreamers.length ===
+        0
+    ) {
+        return datos;
+    }
 
     const streams =
         await obtenerStreamersKickOnline(
@@ -1663,7 +1864,7 @@ async function actualizarEstadoDrops(
 }
 
 // ============================================================
-// EMBED INDIVIDUAL
+// EMBED
 // ============================================================
 
 function crearEmbedKickDrop(
@@ -1726,9 +1927,7 @@ function crearEmbedKickDrop(
 
         embed.addFields({
             name:
-                drop.streamerEspecifico
-                    ? "🎥 Streamer requerido"
-                    : "🎥 Streamers",
+                "🎥 Streamer requerido",
 
             value:
                 nombres ||
@@ -1776,11 +1975,7 @@ function crearEmbedKickDrop(
 
     embed.setFooter({
         text:
-            `RustLogix • Kick Drops${
-                datos?.campaignName
-                    ? ` • ${datos.campaignName}`
-                    : ""
-            }`
+            "RustLogix • Kick Drops"
     });
 
     return embed;
@@ -1818,10 +2013,6 @@ function crearGruposMensajesKickDrops(
 
     const grupos = [];
 
-    /*
-     * Discord permite hasta 10 embeds por mensaje.
-     */
-
     for (
         let i = 0;
         i < embeds.length;
@@ -1839,7 +2030,7 @@ function crearGruposMensajesKickDrops(
 }
 
 // ============================================================
-// COMPARACIÓN DE ESTADO
+// CAMBIOS ONLINE
 // ============================================================
 
 function estadosOnlineCambiarion(
@@ -1889,7 +2080,7 @@ function estadosOnlineCambiarion(
 }
 
 // ============================================================
-// MENSAJE DE STREAMER ONLINE
+// AVISO STREAMER ONLINE
 // ============================================================
 
 async function enviarAvisoStreamerOnlineKick(
@@ -1928,7 +2119,7 @@ async function enviarAvisoStreamerOnlineKick(
 }
 
 // ============================================================
-// PUBLICAR / ACTUALIZAR DROPS
+// PUBLICAR DROPS
 // ============================================================
 
 async function publicarKickDropsEnCanal(
@@ -1997,7 +2188,7 @@ async function publicarKickDropsEnCanal(
                     );
                 }
             } catch {
-                // El mensaje pudo haber sido eliminado.
+                // Mensaje eliminado.
             }
         }
     }
@@ -2060,12 +2251,6 @@ async function publicarKickDropsEnCanal(
 
         return monitor;
     }
-
-    /*
-     * Campaña nueva o cantidad de mensajes diferente.
-     * Borramos únicamente los mensajes que RustLogix
-     * tenía registrados.
-     */
 
     for (
         const mensaje of
@@ -2151,7 +2336,7 @@ async function publicarKickDropsEnCanal(
 }
 
 // ============================================================
-// EDITAR MENSAJES EXISTENTES
+// EDITAR MONITOR
 // ============================================================
 
 async function editarMensajesMonitorKick(
@@ -2226,7 +2411,7 @@ async function eliminarMensajesMonitorKick(
 
             await mensaje.delete();
         } catch {
-            // Ya eliminado o no accesible.
+            // Ya eliminado.
         }
     }
 
@@ -2265,7 +2450,7 @@ async function revisarKickDropsAutomaticos(
             !datosBase?.drops?.length
         ) {
             console.log(
-                "[Kick Drops] No se encontraron Drops activos."
+                "[Kick Drops] No hay campaña activa. No se publica ningún Drop."
             );
 
             return;
@@ -2298,10 +2483,6 @@ async function revisarKickDropsAutomaticos(
                     continue;
                 }
 
-                /*
-                 * Si es una campaña nueva, republicamos.
-                 */
-
                 if (
                     monitor.campaignKey !==
                     datos.campaignKey
@@ -2313,11 +2494,6 @@ async function revisarKickDropsAutomaticos(
 
                     continue;
                 }
-
-                /*
-                 * Detectamos cambios online/offline
-                 * en los drops específicos.
-                 */
 
                 const cambios =
                     estadosOnlineCambiarion(
@@ -2333,40 +2509,31 @@ async function revisarKickDropsAutomaticos(
                 for (
                     const cambio of
                         cambios
-                ) {
-                    if (
-                        cambio.actual &&
-                        cambio.drop
-                            .streamers
-                            ?.length
                     ) {
-                        const streams =
-                            await obtenerStreamersKickOnline(
-                                cambio
-                                    .drop
-                                    .streamers
+                        if (
+                            cambio.actual &&
+                            cambio.drop
+                                .streamers
+                                ?.length
+                        ) {
+                            const streams =
+                                await obtenerStreamersKickOnline(
+                                    cambio
+                                        .drop
+                                        .streamers
+                                );
+
+                            streamersOnline.push(
+                                ...streams
                             );
-
-                        streamersOnline.push(
-                            ...streams
-                        );
+                        }
                     }
-                }
-
-                /*
-                 * Actualizamos los embeds.
-                 */
 
                 await editarMensajesMonitorKick(
                     channel,
                     monitor,
                     datos
                 );
-
-                /*
-                 * Avisamos solamente en
-                 * OFFLINE -> ONLINE.
-                 */
 
                 if (
                     monitor.notificacionesStreamer !==
@@ -2488,6 +2655,10 @@ async function publicarRustDropsKick(
     if (
         !datos?.drops?.length
     ) {
+        console.log(
+            "[Kick Drops] No hay Drops activos para publicar."
+        );
+
         return null;
     }
 
