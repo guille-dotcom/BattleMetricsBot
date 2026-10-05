@@ -395,10 +395,12 @@ module.exports = {
 
             try {
 
-                await interaction.deferReply({
-                    ephemeral:
-                        true
-                });
+                // ====================================================
+                // IMPORTANTE:
+                // /drops rust ES PÚBLICO
+                // ====================================================
+
+                await interaction.deferReply();
 
                 // ====================================================
                 // DATOS DE TWITCH

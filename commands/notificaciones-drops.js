@@ -87,9 +87,7 @@ module.exports = {
 
                 return interaction.reply({
                     content:
-                        "❌ Este servidor todavía no tiene configurado el sistema de Drops de Twitch ni de Kick.",
-                    ephemeral:
-                        true
+                        "❌ Este servidor todavía no tiene configurado el sistema de Drops de Twitch ni de Kick."
                 });
 
             }
@@ -198,12 +196,14 @@ module.exports = {
                     })
                     .setTimestamp();
 
+            // ====================================================
+            // RESPUESTA PÚBLICA
+            // ====================================================
+
             await interaction.reply({
                 embeds: [
                     embed
-                ],
-                ephemeral:
-                    true
+                ]
             });
 
             console.log(
@@ -226,18 +226,14 @@ module.exports = {
 
                 await interaction.followUp({
                     content:
-                        "❌ Ocurrió un error al cambiar las notificaciones de Drops.",
-                    ephemeral:
-                        true
+                        "❌ Ocurrió un error al cambiar las notificaciones de Drops."
                 }).catch(() => {});
 
             } else {
 
                 await interaction.reply({
                     content:
-                        "❌ Ocurrió un error al cambiar las notificaciones de Drops.",
-                    ephemeral:
-                        true
+                        "❌ Ocurrió un error al cambiar las notificaciones de Drops."
                 }).catch(() => {});
 
             }
