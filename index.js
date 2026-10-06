@@ -513,7 +513,8 @@ const client =
         intents: [
             GatewayIntentBits.Guilds,
             GatewayIntentBits.GuildMembers,
-            GatewayIntentBits.GuildPresences
+            GatewayIntentBits.GuildPresences,
+            GatewayIntentBits.GuildVoiceStates
         ]
     });
 
