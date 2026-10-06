@@ -1,6 +1,6 @@
 const {
     SlashCommandBuilder,
-    EmbedBuilder,
+    EmbedBuilder
 } = require('discord.js');
 
 const {
@@ -12,7 +12,7 @@ const {
     AudioPlayerStatus,
     NoSubscriberBehavior,
     StreamType,
-    getVoiceConnection,
+    getVoiceConnection
 } = require('@discordjs/voice');
 
 const { YtDlp } = require('ytdlp-nodejs');
@@ -22,7 +22,6 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-
 // ============================================================
 // CONFIGURACIÓN
 // ============================================================
@@ -31,84 +30,38 @@ const guildPlayers = new Map();
 const guildConnections = new Map();
 const guildResources = new Map();
 const guildStreams = new Map();
-const guildCookieFiles = new Map();
 
+let ytdlpInstance = null;
+
+// Ruta donde instalamos bgutil durante el Build Command
+const BGUTIL_SERVER_HOME = path.join(
+    process.cwd(),
+    'bgutil-ytdlp-pot-provider',
+    'server'
+);
 
 // ============================================================
-// UTILIDADES
+// YT-DLP
 // ============================================================
 
-function normalizeYouTubeUrl(input) {
-    if (!input) return null;
-
-    let value = String(input).trim();
-
-    // Si entregan directamente un ID de YouTube
-    if (/^[a-zA-Z0-9_-]{11}$/.test(value)) {
-        return `https://www.youtube.com/watch?v=${value}`;
+function getYtDlp() {
+    if (ytdlpInstance) {
+        return ytdlpInstance;
     }
 
-    try {
-        const url = new URL(value);
+    console.log('🎬 Inicializando yt-dlp...');
 
-        if (
-            url.hostname === 'youtube.com' ||
-            url.hostname === 'www.youtube.com' ||
-            url.hostname === 'm.youtube.com'
-        ) {
-            const videoId = url.searchParams.get('v');
+    ytdlpInstance = new YtDlp({
+        binaryPath: undefined
+    });
 
-            if (videoId) {
-                return `https://www.youtube.com/watch?v=${videoId}`;
-            }
-        }
+    console.log('✅ yt-dlp listo.');
 
-        if (url.hostname === 'youtu.be') {
-            const videoId = url.pathname.replace('/', '').trim();
-
-            if (videoId) {
-                return `https://www.youtube.com/watch?v=${videoId}`;
-            }
-        }
-
-        return value;
-    } catch {
-        return value;
-    }
+    return ytdlpInstance;
 }
 
-
-function getYouTubeVideoId(url) {
-    if (!url) return null;
-
-    try {
-        const parsed = new URL(url);
-
-        if (parsed.hostname === 'youtu.be') {
-            return parsed.pathname.replace('/', '').trim();
-        }
-
-        if (
-            parsed.hostname === 'youtube.com' ||
-            parsed.hostname === 'www.youtube.com' ||
-            parsed.hostname === 'm.youtube.com'
-        ) {
-            return parsed.searchParams.get('v');
-        }
-    } catch {
-        // Nada
-    }
-
-    const match = String(url).match(
-        /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
-    );
-
-    return match ? match[1] : null;
-}
-
-
 // ============================================================
-// COOKIES YOUTUBE
+// COOKIES OPCIONALES
 // ============================================================
 
 function prepareYouTubeCookies() {
@@ -116,103 +69,58 @@ function prepareYouTubeCookies() {
 
     if (!base64) {
         console.log('🍪 YOUTUBE_COOKIES_B64 no configurado.');
+        console.log('🍪 Continuando sin cookies.');
         return null;
     }
 
     try {
-        const cookieContent = Buffer
-            .from(base64.trim(), 'base64')
-            .toString('utf8');
+        console.log('🍪 YOUTUBE_COOKIES_B64 detectado.');
+        console.log(`🍪 Tamaño recibido: ${base64.length} caracteres.`);
 
-        if (!cookieContent.trim()) {
-            console.log('⚠️ YOUTUBE_COOKIES_B64 está vacío.');
-            return null;
-        }
+        const cookieData = Buffer.from(base64, 'base64');
 
-        // Validación básica del formato Netscape/Mozilla
-        const firstLine = cookieContent
-            .replace(/^\uFEFF/, '')
+        const firstLines = cookieData
+            .toString('utf8')
             .split(/\r?\n/)
-            .find(line => line.trim().length > 0);
+            .filter(Boolean)
+            .slice(0, 3);
 
-        if (
-            firstLine !== '# HTTP Cookie File' &&
-            firstLine !== '# Netscape HTTP Cookie File'
-        ) {
-            console.log(
-                '⚠️ La cookie no parece estar en formato Netscape/Mozilla.'
-            );
+        const validFormat = firstLines.some(line =>
+            line.includes('# Netscape HTTP Cookie File') ||
+            line.includes('# HTTP Cookie File')
+        );
 
-            console.log(
-                '⚠️ Primera línea detectada:',
-                firstLine || '(vacía)'
-            );
-
-            return null;
+        if (!validFormat) {
+            console.log('⚠️ El archivo de cookies no parece tener formato Netscape.');
+        } else {
+            console.log('✅ Formato Netscape detectado.');
         }
 
-        const filePath = path.join(
+        const cookiePath = path.join(
             os.tmpdir(),
             `rustlogix-youtube-cookies-${process.pid}.txt`
         );
 
-        fs.writeFileSync(
-            filePath,
-            cookieContent,
-            {
-                encoding: 'utf8',
-                mode: 0o600,
-            }
-        );
+        fs.writeFileSync(cookiePath, cookieData, {
+            mode: 0o600
+        });
 
-        console.log('🍪 Cookies de YouTube preparadas.');
-        console.log(`🍪 Archivo temporal: ${filePath}`);
+        console.log(`🍪 Archivo de cookies creado: ${cookiePath}`);
+        console.log(`🍪 Tamaño decodificado: ${cookieData.length} bytes.`);
 
-        return filePath;
+        return cookiePath;
 
     } catch (error) {
-        console.error(
-            '❌ Error preparando cookies de YouTube:',
-            error.message
-        );
-
+        console.error('❌ Error preparando cookies:', error.message);
         return null;
     }
 }
 
-
 // ============================================================
-// LIMPIAR COOKIES
-// ============================================================
-
-function cleanupCookieFile(guildId) {
-    const cookieFile = guildCookieFiles.get(guildId);
-
-    if (!cookieFile) return;
-
-    try {
-        if (fs.existsSync(cookieFile)) {
-            fs.unlinkSync(cookieFile);
-        }
-    } catch (error) {
-        console.log(
-            '⚠️ No se pudo eliminar archivo de cookies:',
-            error.message
-        );
-    }
-
-    guildCookieFiles.delete(guildId);
-}
-
-
-// ============================================================
-// LIMPIAR STREAM
+// LIMPIEZA
 // ============================================================
 
 function cleanupGuildStream(guildId) {
-    console.log('');
-    console.log('==========================================');
-    console.log(`🧹 Cerrando stream (${guildId})...`);
 
     const stream = guildStreams.get(guildId);
 
@@ -221,135 +129,242 @@ function cleanupGuildStream(guildId) {
             if (typeof stream.destroy === 'function') {
                 stream.destroy();
             }
-        } catch (error) {
-            console.log(
-                '⚠️ Error cerrando stream:',
-                error.message
-            );
-        }
-    }
+        } catch (_) {}
 
-    guildStreams.delete(guildId);
-
-    const resource = guildResources.get(guildId);
-
-    if (resource) {
-        try {
-            if (
-                resource.playStream &&
-                typeof resource.playStream.destroy === 'function'
-            ) {
-                resource.playStream.destroy();
-            }
-        } catch {
-            // Ignorar
-        }
+        guildStreams.delete(guildId);
     }
 
     guildResources.delete(guildId);
-
-    cleanupCookieFile(guildId);
-
-    console.log('🧹 Stream limpiado.');
-    console.log('==========================================');
 }
-
 
 // ============================================================
 // DETENER AUDIO
 // ============================================================
 
 function stopGuildAudio(guildId) {
+
     const player = guildPlayers.get(guildId);
 
     if (player) {
         try {
             player.stop(true);
-        } catch {
-            // Ignorar
-        }
+        } catch (_) {}
     }
 
     cleanupGuildStream(guildId);
 }
 
+// ============================================================
+// URL YOUTUBE
+// ============================================================
+
+function normalizeYouTubeUrl(input) {
+
+    try {
+
+        const url = new URL(input);
+
+        if (
+            url.hostname.includes('youtube.com') ||
+            url.hostname.includes('youtu.be')
+        ) {
+
+            // Eliminamos parámetros de playlist/radio
+            url.searchParams.delete('list');
+            url.searchParams.delete('start_radio');
+            url.searchParams.delete('index');
+            url.searchParams.delete('pp');
+
+            return url.toString();
+        }
+
+    } catch (_) {}
+
+    return input;
+}
 
 // ============================================================
-// CREAR CONEXIÓN DE VOZ
+// VIDEO ID
 // ============================================================
 
-async function connectToVoiceChannel(voiceChannel) {
-    const guildId = voiceChannel.guild.id;
+function getYouTubeVideoId(input) {
 
-    console.log('');
-    console.log('==========================================');
-    console.log('🔊 INICIANDO CONEXIÓN DE VOZ');
-    console.log('==========================================');
+    try {
 
-    console.log(`🔊 Canal: ${voiceChannel.name}`);
-    console.log(`🔊 Channel ID: ${voiceChannel.id}`);
-    console.log(`🏠 Guild ID: ${guildId}`);
+        const url = new URL(input);
 
-    // Si ya existe una conexión, intentamos reutilizarla
-    let connection = getVoiceConnection(guildId);
+        if (url.hostname.includes('youtu.be')) {
+            return url.pathname.replace('/', '');
+        }
 
-    if (
-        connection &&
-        connection.state.status !== VoiceConnectionStatus.Destroyed
-    ) {
-        console.log('🔊 Ya existe conexión de voz.');
+        if (url.hostname.includes('youtube.com')) {
+            return url.searchParams.get('v');
+        }
+
+    } catch (_) {}
+
+    return null;
+}
+
+// ============================================================
+// DURACIÓN
+// ============================================================
+
+function formatDuration(seconds) {
+
+    if (!seconds || !Number.isFinite(seconds)) {
+        return 'Desconocida';
+    }
+
+    const total = Math.floor(seconds);
+
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+
+    if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    return `${minutes}:${String(secs).padStart(2, '0')}`;
+}
+
+// ============================================================
+// COMANDO
+// ============================================================
+
+module.exports = {
+
+    data: new SlashCommandBuilder()
+        .setName('play')
+        .setDescription('Reproduce audio de YouTube en tu canal de voz.')
+        .addStringOption(option =>
+            option
+                .setName('consulta')
+                .setDescription('URL de YouTube')
+                .setRequired(true)
+        ),
+
+    async execute(interaction) {
+
+        console.log('');
+        console.log('==========================================');
+        console.log('🎯 EJECUTANDO /PLAY');
+        console.log('==========================================');
+
+        const guild = interaction.guild;
+
+        if (!guild) {
+            return interaction.reply({
+                content: '❌ Este comando solo puede utilizarse dentro de un servidor.',
+                ephemeral: true
+            });
+        }
+
+        const member = interaction.member;
+
+        const voiceChannel = member?.voice?.channel;
+
+        if (!voiceChannel) {
+
+            return interaction.reply({
+                content: '❌ Primero debes entrar a un canal de voz.',
+                ephemeral: true
+            });
+        }
+
+        const query = interaction.options.getString('consulta');
+
+        console.log(`🔊 Canal de voz: ${voiceChannel.name} (${voiceChannel.id})`);
+        console.log(`🎯 Consulta recibida: ${query}`);
+
+        await interaction.deferReply();
+
+        console.log('✅ Interacción diferida.');
+
+        // ====================================================
+        // URL
+        // ====================================================
+
+        const url = normalizeYouTubeUrl(query);
+
+        const videoId = getYouTubeVideoId(url);
+
+        console.log(`🔗 URL normalizada: ${url}`);
+        console.log(`🆔 Video ID: ${videoId || 'desconocido'}`);
+
+        if (!videoId) {
+
+            return interaction.editReply(
+                '❌ Debes proporcionar una URL válida de YouTube.'
+            );
+        }
+
+        // ====================================================
+        // VOZ
+        // ====================================================
+
+        console.log('');
+        console.log('🔊 PASO 1/3 — CONECTANDO A VOZ');
+        console.log('');
+
+        let connection = getVoiceConnection(guild.id);
+
+        if (connection) {
+
+            console.log('🔊 Ya existe una conexión de voz.');
+
+            if (connection.joinConfig.channelId !== voiceChannel.id) {
+
+                try {
+                    connection.destroy();
+                } catch (_) {}
+
+                connection = null;
+            }
+        }
+
+        if (!connection) {
+
+            console.log('🔊 Creando conexión explícita...');
+
+            connection = joinVoiceChannel({
+                channelId: voiceChannel.id,
+                guildId: guild.id,
+                adapterCreator: guild.voiceAdapterCreator,
+
+                // MUY IMPORTANTE
+                selfDeaf: false,
+                selfMute: false
+            });
+
+            guildConnections.set(guild.id, connection);
+
+            console.log('🔊 Conexión creada.');
+        }
 
         try {
+
             await entersState(
                 connection,
                 VoiceConnectionStatus.Ready,
-                15000
+                30000
             );
 
-            guildConnections.set(guildId, connection);
+        } catch (error) {
 
-            console.log('✅ Conexión existente lista.');
-
-            return connection;
-
-        } catch {
-            console.log(
-                '⚠️ La conexión existente no está lista. Recreando...'
-            );
+            console.error('❌ No se pudo conectar a voz:', error);
 
             try {
                 connection.destroy();
-            } catch {
-                // Ignorar
-            }
+            } catch (_) {}
 
-            guildConnections.delete(guildId);
+            guildConnections.delete(guild.id);
+
+            return interaction.editReply(
+                '❌ No pude conectarme al canal de voz.'
+            );
         }
-    }
-
-    console.log('🔊 Creando conexión explícita...');
-
-    connection = joinVoiceChannel({
-        channelId: voiceChannel.id,
-        guildId: guildId,
-        adapterCreator: voiceChannel.guild.voiceAdapterCreator,
-
-        // MUY IMPORTANTE
-        selfDeaf: false,
-        selfMute: false,
-    });
-
-    guildConnections.set(guildId, connection);
-
-    console.log('🔊 Conexión creada.');
-    console.log('⏳ Esperando estado READY de Discord...');
-
-    try {
-        await entersState(
-            connection,
-            VoiceConnectionStatus.Ready,
-            20000
-        );
 
         console.log('');
         console.log('==========================================');
@@ -360,706 +375,302 @@ async function connectToVoiceChannel(voiceChannel) {
         console.log('🔇 Muteado: NO');
         console.log('==========================================');
 
-        return connection;
+        // ====================================================
+        // PLAYER
+        // ====================================================
 
-    } catch (error) {
-        console.error('');
-        console.error('==========================================');
-        console.error('❌ NO SE PUDO CONECTAR A VOZ');
-        console.error('==========================================');
-        console.error(error.message);
+        console.log('');
+        console.log('🎧 PASO 2/3 — PREPARANDO STREAM');
 
-        try {
-            connection.destroy();
-        } catch {
-            // Ignorar
-        }
+        stopGuildAudio(guild.id);
 
-        guildConnections.delete(guildId);
+        console.log(`🎵 Creando AudioPlayer para ${guild.id}...`);
 
-        throw new Error(
-            'No pude conectarme al canal de voz.'
-        );
-    }
-}
+        const player = createAudioPlayer({
+            behaviors: {
+                noSubscriber: NoSubscriberBehavior.Play
+            }
+        });
 
+        guildPlayers.set(guild.id, player);
 
-// ============================================================
-// CREAR PLAYER
-// ============================================================
+        // ====================================================
+        // EVENTOS PLAYER
+        // ====================================================
 
-function getOrCreatePlayer(guildId) {
-    let player = guildPlayers.get(guildId);
+        player.on(
+            AudioPlayerStatus.Buffering,
+            () => {
 
-    if (player) {
-        return player;
-    }
-
-    console.log(
-        `🎵 Creando AudioPlayer para ${guildId}...`
-    );
-
-    player = createAudioPlayer({
-        behaviors: {
-            noSubscriber: NoSubscriberBehavior.Play,
-        },
-    });
-
-    player.on(
-        AudioPlayerStatus.Playing,
-        () => {
-            console.log(
-                `▶️ AudioPlayer: PLAYING (${guildId})`
-            );
-        }
-    );
-
-    player.on(
-        AudioPlayerStatus.Buffering,
-        () => {
-            console.log(
-                `⏳ AudioPlayer: BUFFERING (${guildId})`
-            );
-        }
-    );
-
-    player.on(
-        AudioPlayerStatus.Idle,
-        () => {
-            console.log(
-                `⏹️ AudioPlayer: IDLE (${guildId})`
-            );
-
-            // Solo limpiamos si sigue siendo el stream actual
-            setTimeout(() => {
-                const currentPlayer =
-                    guildPlayers.get(guildId);
-
-                if (
-                    currentPlayer === player &&
-                    player.state.status === AudioPlayerStatus.Idle
-                ) {
-                    cleanupGuildStream(guildId);
-                }
-            }, 1000);
-        }
-    );
-
-    player.on(
-        'error',
-        (error) => {
-            console.error('');
-            console.error('==========================================');
-            console.error('❌ ERROR DEL AUDIO PLAYER');
-            console.error('==========================================');
-            console.error(error);
-            console.error('==========================================');
-
-            cleanupGuildStream(guildId);
-        }
-    );
-
-    guildPlayers.set(guildId, player);
-
-    return player;
-}
-
-
-// ============================================================
-// CREAR YT-DLP
-// ============================================================
-
-function createYtDlp() {
-    console.log('🎬 Inicializando yt-dlp...');
-
-    const ytdlp = new YtDlp({
-        ffmpegPath,
-    });
-
-    console.log('✅ yt-dlp listo.');
-
-    return ytdlp;
-}
-
-
-// ============================================================
-// CREAR STREAM DE YOUTUBE
-// ============================================================
-
-function createYouTubeStream(ytdlp, url, guildId) {
-    console.log('');
-    console.log('==========================================');
-    console.log('🎧 CREANDO STREAM DE YOUTUBE');
-    console.log('==========================================');
-
-    console.log(`🔗 URL: ${url}`);
-
-    const cookieFile = prepareYouTubeCookies();
-
-    if (cookieFile) {
-        guildCookieFiles.set(
-            guildId,
-            cookieFile
+                console.log(
+                    `⏳ AudioPlayer: BUFFERING (${guild.id})`
+                );
+            }
         );
 
-        console.log('🍪 yt-dlp utilizará cookies de YouTube.');
-    } else {
-        console.log(
-            '🍪 yt-dlp funcionará sin cookies.'
-        );
-    }
+        player.on(
+            AudioPlayerStatus.Playing,
+            () => {
 
-    /*
-     * IMPORTANTE:
-     *
-     * No usamos getInfoAsync().
-     *
-     * Eso obligaría a realizar una petición previa
-     * de información y en YouTube puede activar
-     * inmediatamente el bloqueo anti-bot.
-     *
-     * Vamos directamente al stream.
-     */
-
-    let streamBuilder = ytdlp
-        .stream(url)
-        .filter('audioonly')
-        .quality(5)
-        .type('opus');
-
-    // --------------------------------------------------------
-    // ARGUMENTOS DIRECTOS DE YT-DLP
-    // --------------------------------------------------------
-
-    streamBuilder = streamBuilder.addArgs(
-        '--no-playlist',
-        '--no-part',
-        '--no-cache-dir',
-        '--no-warnings',
-        '--quiet'
-    );
-
-    /*
-     * Clientes de YouTube que intentamos utilizar.
-     *
-     * Si YouTube cambia sus restricciones, las cookies
-     * siguen siendo la vía principal de autenticación.
-     */
-    streamBuilder = streamBuilder.addArgs(
-        '--extractor-args',
-        'youtube:player_client=tv_simply,tv,web_embedded'
-    );
-
-    // --------------------------------------------------------
-    // COOKIES
-    // --------------------------------------------------------
-
-    if (cookieFile) {
-        streamBuilder = streamBuilder.addArgs(
-            '--cookies',
-            cookieFile
-        );
-    }
-
-    // --------------------------------------------------------
-    // USER AGENT OPCIONAL
-    // --------------------------------------------------------
-
-    if (process.env.YOUTUBE_USER_AGENT) {
-        streamBuilder = streamBuilder.addArgs(
-            '--user-agent',
-            process.env.YOUTUBE_USER_AGENT
+                console.log('');
+                console.log('▶️ AudioPlayer: PLAYING');
+                console.log(`🎵 Guild: ${guild.id}`);
+                console.log('');
+            }
         );
 
-        console.log(
-            '🌐 User-Agent personalizado habilitado.'
+        player.on(
+            AudioPlayerStatus.Idle,
+            () => {
+
+                console.log(
+                    `⏹️ AudioPlayer: IDLE (${guild.id})`
+                );
+
+                cleanupGuildStream(guild.id);
+            }
         );
-    }
 
-    // --------------------------------------------------------
-    // EVENTOS
-    // --------------------------------------------------------
+        player.on(
+            'error',
+            error => {
 
-    streamBuilder.on(
-        'start',
-        () => {
-            console.log(
-                '🚀 yt-dlp comenzó a procesar el audio.'
-            );
-        }
-    );
-
-    streamBuilder.on(
-        'error',
-        (error) => {
-            console.error('');
-            console.error('==========================================');
-            console.error('❌ ERROR DEL STREAM YT-DLP');
-            console.error('==========================================');
-
-            const message =
-                error?.message ||
-                String(error);
-
-            console.error(message);
-
-            if (
-                message.includes(
-                    'Sign in to confirm you’re not a bot'
-                ) ||
-                message.includes(
-                    "Sign in to confirm you're not a bot"
-                ) ||
-                message.includes(
-                    'Use --cookies-from-browser'
-                ) ||
-                message.includes(
-                    'Use --cookies'
-                )
-            ) {
                 console.error('');
-                console.error(
-                    '🍪 YOUTUBE ESTÁ BLOQUEANDO LA EXTRACCIÓN.'
-                );
-                console.error(
-                    '🍪 Revisa YOUTUBE_COOKIES_B64 en Render.'
-                );
-            }
+                console.error('==========================================');
+                console.error('❌ ERROR DEL AUDIO PLAYER');
+                console.error('==========================================');
+                console.error(error);
+                console.error('==========================================');
 
-            console.error(
-                '=========================================='
+                cleanupGuildStream(guild.id);
+            }
+        );
+
+        // ====================================================
+        // YT-DLP
+        // ====================================================
+
+        const yt = getYtDlp();
+
+        const cookiePath = prepareYouTubeCookies();
+
+        console.log('');
+        console.log('==========================================');
+        console.log('🎧 CREANDO STREAM DE YOUTUBE');
+        console.log('==========================================');
+        console.log(`🔗 URL: ${url}`);
+
+        console.log('');
+        console.log('🤖 PO TOKEN PROVIDER');
+        console.log(`📁 BGUTIL: ${BGUTIL_SERVER_HOME}`);
+        console.log(`📁 Existe: ${fs.existsSync(BGUTIL_SERVER_HOME) ? 'SÍ' : 'NO'}`);
+
+        const streamBuilder = yt
+            .stream(url)
+            .filter('audioonly')
+            .quality(5)
+            .type('opus');
+
+        // ====================================================
+        // ARGUMENTOS YT-DLP
+        // ====================================================
+
+        streamBuilder.addArgs(
+            '--no-playlist',
+            '--no-part',
+            '--no-cache-dir',
+            '--no-warnings',
+            '--quiet',
+
+            // Cliente recomendado actualmente para PO Tokens
+            '--extractor-args',
+            'youtube:player-client=mweb',
+
+            // BGUTIL
+            '--extractor-args',
+            `youtubepot-bgutilscript:server_home=${BGUTIL_SERVER_HOME}`,
+
+            // Runtime JS
+            '--js-runtimes',
+            `node:${process.execPath}`
+        );
+
+        // ====================================================
+        // COOKIES OPCIONALES
+        // ====================================================
+
+        if (cookiePath) {
+
+            console.log('🍪 yt-dlp utilizará cookies.');
+
+            streamBuilder.addArgs(
+                '--cookies',
+                cookiePath
             );
 
-            cleanupGuildStream(guildId);
-        }
-    );
+        } else {
 
-    streamBuilder.on(
-        'end',
-        () => {
             console.log(
-                `🏁 Stream de YouTube terminado (${guildId})`
+                '🍪 yt-dlp funcionará sin cookies.'
             );
         }
-    );
 
-    const audioStream =
-        streamBuilder.getStream();
+        // ====================================================
+        // USER AGENT OPCIONAL
+        // ====================================================
 
-    if (!audioStream) {
-        throw new Error(
-            'yt-dlp no pudo crear el stream de audio.'
-        );
-    }
+        if (process.env.YOUTUBE_USER_AGENT) {
 
-    audioStream.on(
-        'error',
-        (error) => {
-            console.error('');
-            console.error(
-                `❌ Error del stream de audio (${guildId}):`
+            console.log('🌐 Usando YOUTUBE_USER_AGENT.');
+
+            streamBuilder.addArgs(
+                '--user-agent',
+                process.env.YOUTUBE_USER_AGENT
             );
-            console.error(error.message);
-
-            cleanupGuildStream(guildId);
-        }
-    );
-
-    guildStreams.set(
-        guildId,
-        audioStream
-    );
-
-    console.log(
-        '🎧 Stream yt-dlp preparado.'
-    );
-
-    return audioStream;
-}
-
-
-// ============================================================
-// COMANDO /PLAY
-// ============================================================
-
-module.exports = {
-    data: new SlashCommandBuilder()
-        .setName('play')
-        .setDescription(
-            'Reproduce música de YouTube en tu canal de voz.'
-        )
-        .addStringOption(option =>
-            option
-                .setName('cancion')
-                .setDescription(
-                    'URL de YouTube o ID del vídeo.'
-                )
-                .setRequired(true)
-        ),
-
-    async execute(interaction) {
-        console.log('');
-        console.log('==========================================');
-        console.log('🎯 EJECUTANDO /PLAY');
-        console.log('==========================================');
-
-        const guildId =
-            interaction.guild?.id;
-
-        if (!guildId) {
-            return interaction.reply({
-                content:
-                    '❌ Este comando solo puede utilizarse dentro de un servidor.',
-                ephemeral: true,
-            });
         }
 
-        const member =
-            interaction.member;
+        // ====================================================
+        // STREAM
+        // ====================================================
 
-        const voiceChannel =
-            member?.voice?.channel;
-
-        if (!voiceChannel) {
-            return interaction.reply({
-                content:
-                    '❌ Primero debes entrar a un canal de voz.',
-                ephemeral: true,
-            });
-        }
-
-        if (!voiceChannel.joinable) {
-            return interaction.reply({
-                content:
-                    '❌ No tengo permisos para entrar a ese canal de voz.',
-                ephemeral: true,
-            });
-        }
-
-        if (!voiceChannel.speakable) {
-            return interaction.reply({
-                content:
-                    '❌ No tengo permiso para hablar en ese canal de voz.',
-                ephemeral: true,
-            });
-        }
-
-        const query =
-            interaction.options.getString(
-                'cancion',
-                true
-            );
-
-        console.log(
-            `🔊 Canal de voz: ${voiceChannel.name} (${voiceChannel.id})`
-        );
-
-        console.log(
-            `🎯 Consulta recibida: ${query}`
-        );
-
-        // ----------------------------------------------------
-        // URL
-        // ----------------------------------------------------
-
-        const youtubeUrl =
-            normalizeYouTubeUrl(query);
-
-        const videoId =
-            getYouTubeVideoId(youtubeUrl);
-
-        if (!videoId) {
-            return interaction.reply({
-                content:
-                    '❌ No pude reconocer un vídeo de YouTube válido.',
-                ephemeral: true,
-            });
-        }
-
-        console.log(
-            `🔗 URL normalizada: ${youtubeUrl}`
-        );
-
-        console.log(
-            `🆔 Video ID: ${videoId}`
-        );
-
-        // ----------------------------------------------------
-        // DEFER
-        // ----------------------------------------------------
-
-        try {
-            await interaction.deferReply();
-        } catch (error) {
-            console.error(
-                '❌ Error haciendo deferReply:',
-                error.message
-            );
-
-            return;
-        }
-
-        console.log(
-            '✅ Interacción diferida.'
-        );
-
-        // ----------------------------------------------------
-        // PASO 1
-        // ----------------------------------------------------
-
-        console.log('');
-        console.log(
-            '🔊 PASO 1/3 — CONECTANDO A VOZ'
-        );
-
-        let connection;
-
-        try {
-            connection =
-                await connectToVoiceChannel(
-                    voiceChannel
-                );
-        } catch (error) {
-            console.error(error);
-
-            try {
-                await interaction.editReply({
-                    content:
-                        `❌ No pude conectarme al canal de voz.\n\`${error.message}\``,
-                });
-            } catch {
-                // Ignorar
-            }
-
-            return;
-        }
-
-        // ----------------------------------------------------
-        // PASO 2
-        // ----------------------------------------------------
-
-        console.log('');
-        console.log(
-            '🎧 PASO 2/3 — PREPARANDO STREAM'
-        );
-
-        let player;
         let audioStream;
 
         try {
-            player =
-                getOrCreatePlayer(guildId);
 
-            console.log(
-                '🎬 Inicializando yt-dlp...'
+            console.log('');
+            console.log('🚀 Iniciando yt-dlp...');
+            console.log('🤖 Solicitando PO Token mediante bgutil...');
+            console.log('');
+
+            audioStream = streamBuilder.getStream();
+
+            guildStreams.set(
+                guild.id,
+                audioStream
             );
 
-            const ytdlp =
-                createYtDlp();
-
-            audioStream =
-                createYouTubeStream(
-                    ytdlp,
-                    youtubeUrl,
-                    guildId
-                );
-
-            console.log(
-                '✅ Stream de audio obtenido.'
-            );
+            console.log('🎧 Stream yt-dlp preparado.');
+            console.log('⏳ Esperando datos de audio...');
 
         } catch (error) {
+
             console.error('');
-            console.error(
-                '❌ ERROR PREPARANDO AUDIO'
-            );
+            console.error('==========================================');
+            console.error('❌ ERROR CREANDO STREAM');
+            console.error('==========================================');
             console.error(error);
+            console.error('==========================================');
 
-            cleanupGuildStream(
-                guildId
-            );
-
-            try {
-                await interaction.editReply({
-                    content:
-                        `❌ No pude obtener el audio de YouTube.\n\`${error.message}\``,
-                });
-            } catch {
-                // Ignorar
+            if (cookiePath) {
+                try {
+                    fs.unlinkSync(cookiePath);
+                } catch (_) {}
             }
 
-            return;
+            return interaction.editReply(
+                `❌ No pude obtener el audio de YouTube.\n\`${error.message?.slice(0, 900) || 'Error desconocido'}\``
+            );
         }
 
-        // ----------------------------------------------------
+        // ====================================================
         // AUDIO RESOURCE
-        // ----------------------------------------------------
+        // ====================================================
 
-        let resource;
+        console.log('🎵 Creando AudioResource...');
 
-        try {
-            resource =
-                createAudioResource(
-                    audioStream,
-                    {
-                        inputType:
-                            StreamType.WebmOpus,
-
-                        metadata: {
-                            guildId,
-                            videoId,
-                            url: youtubeUrl,
-                        },
-                    }
-                );
-
-            guildResources.set(
-                guildId,
-                resource
-            );
-
-        } catch (error) {
-            console.error(
-                '❌ Error creando AudioResource:',
-                error
-            );
-
-            cleanupGuildStream(
-                guildId
-            );
-
-            try {
-                await interaction.editReply({
-                    content:
-                        `❌ No pude preparar el audio.\n\`${error.message}\``,
-                });
-            } catch {
-                // Ignorar
+        const resource = createAudioResource(
+            audioStream,
+            {
+                inputType: StreamType.WebmOpus,
+                metadata: {
+                    videoId,
+                    url
+                }
             }
-
-            return;
-        }
-
-        // ----------------------------------------------------
-        // SUBSCRIBE
-        // ----------------------------------------------------
-
-        try {
-            console.log(
-                '🔊 Suscribiendo player a Discord...'
-            );
-
-            connection.subscribe(
-                player
-            );
-
-        } catch (error) {
-            console.error(
-                '❌ Error suscribiendo AudioPlayer:',
-                error
-            );
-
-            cleanupGuildStream(
-                guildId
-            );
-
-            return;
-        }
-
-        // ----------------------------------------------------
-        // PASO 3
-        // ----------------------------------------------------
-
-        console.log('');
-        console.log(
-            '▶️ PASO 3/3 — REPRODUCIENDO'
         );
 
-        try {
-            player.play(
-                resource
-            );
+        guildResources.set(
+            guild.id,
+            resource
+        );
 
-        } catch (error) {
-            console.error(
-                '❌ Error iniciando reproducción:',
-                error
-            );
+        // ====================================================
+        // SUSCRIBIR
+        // ====================================================
 
-            cleanupGuildStream(
-                guildId
-            );
+        console.log('🔊 Suscribiendo player a Discord...');
 
-            try {
-                await interaction.editReply({
-                    content:
-                        `❌ No pude iniciar la reproducción.\n\`${error.message}\``,
-                });
-            } catch {
-                // Ignorar
-            }
+        connection.subscribe(player);
 
-            return;
-        }
+        // ====================================================
+        // PLAY
+        // ====================================================
 
-        // ----------------------------------------------------
+        console.log('');
+        console.log('▶️ PASO 3/3 — REPRODUCIENDO');
+
+        player.play(resource);
+
+        console.log('');
+        console.log('==========================================');
+        console.log('🎵 REPRODUCCIÓN INICIADA');
+        console.log(`🆔 Video: ${videoId}`);
+        console.log(`🔊 Canal: ${voiceChannel.name}`);
+        console.log('🎧 Ensordecido: NO');
+        console.log('🔇 Muteado: NO');
+        console.log('==========================================');
+
+        // ====================================================
         // EMBED
-        // ----------------------------------------------------
+        // ====================================================
 
-        const embed =
-            new EmbedBuilder()
-                .setTitle(
-                    'PP RustLogix'
-                )
-                .setDescription(
-                    '[**🎵**](https://discord.com/assets/4bb732e8f1a0286d.svg) **Reproduciendo**\n\n' +
-                    `[Abrir vídeo en YouTube](https://www.youtube.com/watch?v=${videoId} "Abrir vídeo en YouTube")\n\n` +
-                    '[**🆔**](https://discord.com/assets/e205e5f16fab825d.svg) **Vídeo**\n\n' +
-                    `${videoId}\n\n` +
-                    '[**🔊**](https://discord.com/assets/6446faea65f88f9b.svg) **Canal**\n\n' +
-                    `${voiceChannel.name}`
-                )
-                .setFooter({
-                    text:
-                        'RustLogix • Reproductor ligero',
-                });
-
-        try {
-            await interaction.editReply({
-                embeds: [embed],
+        const embed = new EmbedBuilder()
+            .setTitle('🎵 Reproduciendo')
+            .setDescription(
+                `[Abrir vídeo en YouTube](${url})`
+            )
+            .addFields(
+                {
+                    name: '🆔 Vídeo',
+                    value: videoId,
+                    inline: true
+                },
+                {
+                    name: '🔊 Canal',
+                    value: voiceChannel.name,
+                    inline: true
+                }
+            )
+            .setFooter({
+                text: 'RustLogix • Reproductor ligero'
             });
-        } catch (error) {
-            console.error(
-                '⚠️ No se pudo actualizar el embed:',
-                error.message
-            );
-        }
 
+        await interaction.editReply({
+            embeds: [embed]
+        });
+
+        console.log('✅ /play terminado');
         console.log('');
-        console.log(
-            '=========================================='
-        );
-        console.log(
-            '🎵 REPRODUCCIÓN INICIADA'
-        );
-        console.log(
-            `🆔 Video: ${videoId}`
-        );
-        console.log(
-            `🔊 Canal: ${voiceChannel.name}`
-        );
-        console.log(
-            '🎧 Ensordecido: NO'
-        );
-        console.log(
-            '🔇 Muteado: NO'
-        );
-        console.log(
-            '=========================================='
-        );
 
-        console.log(
-            '✅ /play terminado'
-        );
-    },
+        // ====================================================
+        // LIMPIEZA COOKIES
+        // ====================================================
+
+        const cleanupCookies = () => {
+
+            if (cookiePath) {
+
+                try {
+                    if (fs.existsSync(cookiePath)) {
+                        fs.unlinkSync(cookiePath);
+                        console.log('🍪 Archivo temporal de cookies eliminado.');
+                    }
+                } catch (_) {}
+            }
+        };
+
+        audioStream.once?.('close', cleanupCookies);
+        audioStream.once?.('end', cleanupCookies);
+        audioStream.once?.('error', cleanupCookies);
+    }
 };
