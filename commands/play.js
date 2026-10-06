@@ -1,7 +1,9 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { Player } = require('discord-player');
-const { DefaultExtractors } = require('@discord-player/extractor');
-const { YouTubeDlpExtractor, setFFmpegPath } = require('discord-player-youtubedlp');
+const {
+    YouTubeDlpExtractor,
+    setFFmpegPath
+} = require('discord-player-youtubedlp');
 const ffmpegPath = require('ffmpeg-static');
 
 let playerPromise = null;
@@ -13,26 +15,36 @@ async function getPlayer(client) {
 
     if (!playerPromise) {
         playerPromise = (async () => {
+            console.log('🎵 Inicializando reproductor...');
+
             setFFmpegPath(ffmpegPath);
 
-            const player = new Player(client);
+            const player = new Player(client, {
+                ffmpegPath
+            });
 
-            await player.extractors.loadMulti(DefaultExtractors);
+            console.log('🎵 Registrando extractor YouTube-DLP...');
 
             await player.extractors.register(YouTubeDlpExtractor, {
                 searchLimit: 1,
-                playlistSearchLimit: 100,
-                relatedLimit: 5,
+                playlistSearchLimit: 10,
+                relatedLimit: 0,
+
                 enableProtocols: true,
+
                 searchTimeoutMs: 6000,
                 videoTimeoutMs: 7000,
-                playlistTimeoutMs: 25000,
-                ytdlpTimeoutMs: 25000,
-                infoCacheTtlMs: 120000,
+                playlistTimeoutMs: 15000,
+                ytdlpTimeoutMs: 15000,
+
+                infoCacheTtlMs: 60000,
+
                 debug: false
             });
 
             client.musicPlayer = player;
+
+            console.log('✅ Reproductor de música listo.');
 
             return player;
         })();
@@ -67,26 +79,39 @@ module.exports = {
         await interaction.deferReply();
 
         try {
+            console.log(`🎯 Ejecutando /play: ${query}`);
+
             const player = await getPlayer(interaction.client);
 
-            const { track } = await player.play(voiceChannel, query, {
-                nodeOptions: {
-                    metadata: interaction.channel,
-                    bufferingTimeout: 15000,
-                    leaveOnStop: true,
-                    leaveOnStopCooldown: 5000,
-                    leaveOnEnd: true,
-                    leaveOnEndCooldown: 15000,
-                    leaveOnEmpty: true,
-                    leaveOnEmptyCooldown: 300000,
-                    skipOnNoStream: true
+            const { track } = await player.play(
+                voiceChannel,
+                query,
+                {
+                    nodeOptions: {
+                        metadata: interaction.channel,
+
+                        bufferingTimeout: 15000,
+
+                        leaveOnStop: true,
+                        leaveOnStopCooldown: 5000,
+
+                        leaveOnEnd: true,
+                        leaveOnEndCooldown: 15000,
+
+                        leaveOnEmpty: true,
+                        leaveOnEmptyCooldown: 300000,
+
+                        skipOnNoStream: true
+                    }
                 }
-            });
+            );
 
             const embed = new EmbedBuilder()
                 .setColor(0x57F287)
                 .setTitle('🎵 Canción añadida')
-                .setDescription(`**[${track.title}](${track.url})**`)
+                .setDescription(
+                    `**[${track.title}](${track.url})**`
+                )
                 .addFields(
                     {
                         name: '👤 Artista',
@@ -108,7 +133,7 @@ module.exports = {
             });
 
         } catch (error) {
-            console.error('Error en /play:', error);
+            console.error('❌ Error en /play:', error);
 
             return interaction.editReply(
                 '❌ No pude encontrar o reproducir esa canción.'
