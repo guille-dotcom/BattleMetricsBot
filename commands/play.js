@@ -1,6 +1,4 @@
-const {
-    SlashCommandBuilder,
-} = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 
 const {
     joinVoiceChannel,
@@ -20,13 +18,12 @@ const os = require('os');
 const { spawn } = require('child_process');
 
 const { YtDlp } = require('ytdlp-nodejs');
-
 const FFMPEG_PATH = require('ffmpeg-static');
 
-const players = new Map();
-const streams = new Map();
-const ffmpegProcesses = new Map();
-const cookieFiles = new Map();
+
+// ============================================================
+// CONFIGURACIÓN
+// ============================================================
 
 const BGUTIL_SERVER_HOME =
     process.env.BGUTIL_SERVER_HOME ||
@@ -36,9 +33,19 @@ const BGUTIL_SERVER_HOME =
         'server'
     );
 
-const TEMP_DIR = path.join(os.tmpdir(), 'rustlogix-play');
+const TEMP_DIR = path.join(
+    os.tmpdir(),
+    'rustlogix-play'
+);
 
-const MAX_START_TIME = 30000;
+const START_TIMEOUT = 30000;
+
+
+// ============================================================
+// ESTADO
+// ============================================================
+
+const guildState = new Map();
 
 
 // ============================================================
@@ -49,20 +56,19 @@ function normalizeYouTubeUrl(input) {
     try {
         const url = new URL(input);
 
-        if (
-            url.hostname.includes('youtube.com') ||
-            url.hostname.includes('youtu.be')
-        ) {
-            const videoId =
-                url.searchParams.get('v') ||
-                (
-                    url.hostname.includes('youtu.be')
-                        ? url.pathname.replace('/', '')
-                        : null
-                );
+        if (url.hostname.includes('youtu.be')) {
+            const id = url.pathname.replace(/^\/+/, '').split('/')[0];
 
-            if (videoId) {
-                return `https://www.youtube.com/watch?v=${videoId}`;
+            if (id) {
+                return `https://www.youtube.com/watch?v=${id}`;
+            }
+        }
+
+        if (url.hostname.includes('youtube.com')) {
+            const id = url.searchParams.get('v');
+
+            if (id) {
+                return `https://www.youtube.com/watch?v=${id}`;
             }
         }
     } catch (_) {}
@@ -78,7 +84,7 @@ function normalizeYouTubeUrl(input) {
 function prepareCookies(guildId) {
     const base64 = process.env.YOUTUBE_COOKIES_B64;
 
-    if (!base64) {
+    if (!base64 || !base64.trim()) {
         console.log('🍪 YOUTUBE_COOKIES_B64 no configurado.');
         return null;
     }
@@ -94,28 +100,27 @@ function prepareCookies(guildId) {
             `youtube-cookies-${process.pid}-${guildId}.txt`
         );
 
-        const cookies = Buffer.from(
+        const buffer = Buffer.from(
             base64.trim(),
             'base64'
         );
 
         fs.writeFileSync(
             filePath,
-            cookies,
+            buffer,
             {
                 mode: 0o600,
             }
         );
 
-        cookieFiles.set(guildId, filePath);
-
         console.log('🍪 Cookies de YouTube preparadas.');
         console.log(`🍪 Archivo temporal: ${filePath}`);
 
         return filePath;
+
     } catch (error) {
         console.error(
-            '❌ No se pudieron preparar las cookies:',
+            '❌ Error preparando cookies:',
             error.message
         );
 
@@ -125,53 +130,51 @@ function prepareCookies(guildId) {
 
 
 // ============================================================
-// CLEANUP
+// LIMPIEZA
 // ============================================================
 
 function cleanupGuild(guildId) {
-    console.log(`🧹 Limpiando recursos (${guildId})`);
+    const state = guildState.get(guildId);
 
-    const ffmpeg = ffmpegProcesses.get(guildId);
-
-    if (ffmpeg) {
-        try {
-            ffmpeg.kill('SIGKILL');
-        } catch (_) {}
-
-        ffmpegProcesses.delete(guildId);
+    if (!state) {
+        return;
     }
 
-    const stream = streams.get(guildId);
+    console.log(
+        `🧹 Limpiando recursos (${guildId})`
+    );
 
-    if (stream) {
+    if (state.ffmpeg) {
         try {
-            stream.destroy();
+            state.ffmpeg.kill('SIGKILL');
         } catch (_) {}
-
-        streams.delete(guildId);
     }
 
-    const player = players.get(guildId);
-
-    if (player) {
+    if (state.youtubeStream) {
         try {
-            player.stop(true);
+            state.youtubeStream.destroy();
         } catch (_) {}
-
-        players.delete(guildId);
     }
 
-    const cookieFile = cookieFiles.get(guildId);
-
-    if (cookieFile) {
+    if (state.player) {
         try {
-            fs.unlinkSync(cookieFile);
+            state.player.stop(true);
         } catch (_) {}
-
-        cookieFiles.delete(guildId);
     }
 
-    console.log('🧹 Limpieza terminada.');
+    if (state.cookieFile) {
+        try {
+            fs.unlinkSync(
+                state.cookieFile
+            );
+        } catch (_) {}
+    }
+
+    guildState.delete(guildId);
+
+    console.log(
+        '🧹 Limpieza terminada.'
+    );
 }
 
 
@@ -179,68 +182,112 @@ function cleanupGuild(guildId) {
 // YT-DLP
 // ============================================================
 
-async function createYouTubeStream(url, guildId) {
+async function createYouTubeStream(
+    url,
+    guildId
+) {
     console.log('');
-    console.log('==========================================');
-    console.log('🎧 CREANDO STREAM DE YOUTUBE');
-    console.log('==========================================');
-    console.log(`🔗 URL: ${url}`);
+    console.log(
+        '=========================================='
+    );
+    console.log(
+        '🎧 CREANDO STREAM DE YOUTUBE'
+    );
+    console.log(
+        '=========================================='
+    );
+    console.log(
+        `🔗 URL: ${url}`
+    );
+
+    const bgutilExists =
+        fs.existsSync(
+            BGUTIL_SERVER_HOME
+        );
+
     console.log('');
-
-    const bgutilExists = fs.existsSync(BGUTIL_SERVER_HOME);
-
-    console.log('🤖 PO TOKEN PROVIDER');
-    console.log(`📁 BGUTIL: ${BGUTIL_SERVER_HOME}`);
-    console.log(`📁 Existe: ${bgutilExists ? 'SÍ' : 'NO'}`);
+    console.log(
+        '🤖 PO TOKEN PROVIDER'
+    );
+    console.log(
+        `📁 BGUTIL: ${BGUTIL_SERVER_HOME}`
+    );
+    console.log(
+        `📁 Existe: ${bgutilExists ? 'SÍ' : 'NO'}`
+    );
 
     if (!bgutilExists) {
         throw new Error(
-            'No se encontró bgutil-ytdlp-pot-provider.'
+            'No se encontró bgutil-ytdlp-pot-provider/server.'
         );
     }
 
-    const cookieFile = prepareCookies(guildId);
+    const cookieFile =
+        prepareCookies(guildId);
 
     if (cookieFile) {
-        console.log('🍪 Cookies agregadas a yt-dlp.');
-    } else {
-        console.log('🍪 yt-dlp funcionará sin cookies.');
+        console.log(
+            '🍪 Cookies agregadas a yt-dlp.'
+        );
     }
 
-    console.log('🎬 Inicializando yt-dlp...');
+    console.log(
+        '🎬 Inicializando yt-dlp...'
+    );
 
     const yt = new YtDlp();
 
-    console.log('✅ yt-dlp listo.');
-    console.log('🚀 Construyendo stream de audio...');
+    console.log(
+        '✅ yt-dlp listo.'
+    );
+
+    console.log(
+        '🚀 Construyendo stream...'
+    );
+
+    /*
+     * IMPORTANTE:
+     *
+     * No forzamos mweb.
+     *
+     * Dejamos que yt-dlp utilice sus clientes
+     * actuales y únicamente configuramos bgutil.
+     */
 
     let builder = yt
         .stream(url)
         .filter('audioonly')
-        .quality('highest')
-        .type('webm');
+        .quality('highest');
 
     // --------------------------------------------------------
-    // IMPORTANTE:
-    // bgutil PO Token
+    // Argumentos básicos
     // --------------------------------------------------------
 
     builder = builder.addArgs(
         '--no-playlist',
         '--no-part',
         '--no-cache-dir',
-        '--no-warnings',
-        '--quiet',
 
-        '--extractor-args',
-        'youtube:player-client=mweb',
+        /*
+         * NO usamos:
+         * --quiet
+         * --no-warnings
+         *
+         * Queremos ver el error real.
+         */
 
-        '--extractor-args',
-        `youtubepot-bgutilscript:server_home=${BGUTIL_SERVER_HOME}`,
+        '--newline',
 
         '--js-runtimes',
-        `node:${process.execPath}`
+        `node:${process.execPath}`,
+
+        '--extractor-args',
+        `youtubepot-bgutilscript:server_home=${BGUTIL_SERVER_HOME}`
     );
+
+    // --------------------------------------------------------
+    // Cookies
+    // --------------------------------------------------------
 
     if (cookieFile) {
         builder = builder.addArgs(
@@ -249,6 +296,10 @@ async function createYouTubeStream(url, guildId) {
         );
     }
 
+    // --------------------------------------------------------
+    // User Agent opcional
+    // --------------------------------------------------------
+
     if (process.env.YOUTUBE_USER_AGENT) {
         builder = builder.addArgs(
             '--user-agent',
@@ -256,36 +307,96 @@ async function createYouTubeStream(url, guildId) {
         );
     }
 
-    console.log('🤖 PO Token configurado.');
-
     console.log(
-        '🤖 Solicitando PO Token mediante bgutil...'
+        '🤖 PO Token configurado.'
     );
 
-    const ytStream = builder.getStream();
+    console.log(
+        '🍪 Cookies:',
+        cookieFile ? 'SÍ' : 'NO'
+    );
 
-    streams.set(guildId, ytStream);
+    console.log(
+        '🔍 Modo diagnóstico yt-dlp: ACTIVADO'
+    );
 
-    ytStream.on('data', () => {
-        // El evento data confirma que YouTube
-        // realmente está entregando audio.
-    });
+    console.log(
+        '🚀 Iniciando stream de yt-dlp...'
+    );
 
-    ytStream.on('error', (error) => {
-        console.error(
-            '❌ ERROR DEL STREAM YT-DLP:',
-            error.message
-        );
-    });
+    /*
+     * getStream() devuelve el stream real
+     * generado por yt-dlp.
+     */
 
-    ytStream.on('end', () => {
-        console.log('🏁 Stream de YouTube finalizado.');
-    });
+    const stream =
+        builder.getStream();
 
-    console.log('🎧 Stream yt-dlp preparado.');
-    console.log('✅ Stream de audio obtenido.');
+    const state =
+        guildState.get(guildId);
 
-    return ytStream;
+    if (state) {
+        state.youtubeStream = stream;
+    }
+
+    // --------------------------------------------------------
+    // Eventos
+    // --------------------------------------------------------
+
+    stream.on(
+        'error',
+        (error) => {
+
+            console.error('');
+            console.error(
+                '=========================================='
+            );
+            console.error(
+                '❌ ERROR REAL DE YT-DLP'
+            );
+            console.error(
+                '=========================================='
+            );
+
+            console.error(
+                error?.stack ||
+                error?.message ||
+                error
+            );
+
+            console.error(
+                '=========================================='
+            );
+        }
+    );
+
+    stream.on(
+        'end',
+        () => {
+            console.log(
+                '🏁 yt-dlp terminó el stream.'
+            );
+        }
+    );
+
+    stream.on(
+        'data',
+        () => {
+            console.log(
+                '🎵 yt-dlp está entregando audio.'
+            );
+
+            stream.removeAllListeners(
+                'data'
+            );
+        }
+    );
+
+    console.log(
+        '🎧 Stream yt-dlp preparado.'
+    );
+
+    return stream;
 }
 
 
@@ -293,204 +404,381 @@ async function createYouTubeStream(url, guildId) {
 // FFMPEG
 // ============================================================
 
-function createFFmpegStream(inputStream, guildId) {
-    return new Promise((resolve, reject) => {
+function createFFmpegStream(
+    inputStream,
+    guildId
+) {
+    return new Promise(
+        (resolve, reject) => {
 
-        console.log('');
-        console.log('🎬 Preparando conversión FFmpeg...');
-        console.log(`🎬 FFmpeg: ${FFMPEG_PATH}`);
-
-        if (!FFMPEG_PATH) {
-            reject(
-                new Error('FFmpeg no está disponible.')
-            );
-
-            return;
-        }
-
-        /*
-         * YouTube entrega WebM/Opus.
-         *
-         * Discord acepta Opus, pero usamos FFmpeg para garantizar
-         * un flujo compatible y estable con @discordjs/voice.
-         */
-
-        const ffmpeg = spawn(
-            FFMPEG_PATH,
-            [
-                '-hide_banner',
-                '-loglevel',
-                'error',
-
-                '-i',
-                'pipe:0',
-
-                '-vn',
-
-                '-c:a',
-                'libopus',
-
-                '-b:a',
-                '128k',
-
-                '-ar',
-                '48000',
-
-                '-ac',
-                '2',
-
-                '-f',
-                'ogg',
-
-                'pipe:1',
-            ],
-            {
-                stdio: [
-                    'pipe',
-                    'pipe',
-                    'pipe',
-                ],
-            }
-        );
-
-        ffmpegProcesses.set(
-            guildId,
-            ffmpeg
-        );
-
-        let settled = false;
-        let firstAudioReceived = false;
-
-        const timeout = setTimeout(() => {
-
-            if (settled) {
-                return;
-            }
-
-            console.error(
-                '❌ FFmpeg no recibió audio dentro del tiempo esperado.'
-            );
-
-            try {
-                ffmpeg.kill('SIGKILL');
-            } catch (_) {}
-
-            reject(
-                new Error(
-                    'FFmpeg no recibió audio de YouTube.'
-                )
-            );
-
-        }, MAX_START_TIME);
-
-        ffmpeg.stdout.once('data', () => {
-
-            if (firstAudioReceived) {
-                return;
-            }
-
-            firstAudioReceived = true;
-
+            console.log('');
             console.log(
-                '🎵 FFmpeg comenzó a producir audio.'
+                '🎬 PREPARANDO FFMPEG'
             );
-
-            clearTimeout(timeout);
-
-            if (!settled) {
-                settled = true;
-                resolve(ffmpeg.stdout);
-            }
-        });
-
-        ffmpeg.stderr.on('data', (data) => {
-
-            const message = data
-                .toString()
-                .trim();
-
-            if (message) {
-                console.error(
-                    `🎬 FFmpeg: ${message}`
-                );
-            }
-        });
-
-        ffmpeg.on('error', (error) => {
-
-            clearTimeout(timeout);
-
-            if (!settled) {
-                settled = true;
-                reject(error);
-            }
-        });
-
-        ffmpeg.on('close', (code, signal) => {
-
-            clearTimeout(timeout);
-
             console.log(
-                `🎬 FFmpeg finalizado. Código: ${code} Señal: ${signal || 'ninguna'}`
+                `🎬 FFmpeg: ${FFMPEG_PATH}`
             );
 
-            if (
-                !firstAudioReceived &&
-                !settled
-            ) {
-                settled = true;
-
+            if (!FFMPEG_PATH) {
                 reject(
                     new Error(
-                        `FFmpeg terminó sin producir audio. Código: ${code}`
+                        'ffmpeg-static no está disponible.'
                     )
                 );
+
+                return;
             }
-        });
 
-        /*
-         * Conectamos yt-dlp directamente al stdin de FFmpeg.
-         *
-         * Esto evita buffers completos en memoria.
-         */
+            const ffmpeg =
+                spawn(
+                    FFMPEG_PATH,
+                    [
+                        '-hide_banner',
 
-        inputStream.pipe(
-            ffmpeg.stdin
-        );
+                        /*
+                         * IMPORTANTE:
+                         * error para ver exactamente
+                         * qué está pasando.
+                         */
+                        '-loglevel',
+                        'warning',
 
-        inputStream.on('error', (error) => {
+                        '-i',
+                        'pipe:0',
 
-            console.error(
-                '❌ Error del input de FFmpeg:',
-                error.message
+                        '-vn',
+
+                        '-c:a',
+                        'libopus',
+
+                        '-b:a',
+                        '128k',
+
+                        '-ar',
+                        '48000',
+
+                        '-ac',
+                        '2',
+
+                        '-f',
+                        'ogg',
+
+                        'pipe:1',
+                    ],
+                    {
+                        stdio: [
+                            'pipe',
+                            'pipe',
+                            'pipe',
+                        ],
+                    }
+                );
+
+            const state =
+                guildState.get(guildId);
+
+            if (state) {
+                state.ffmpeg = ffmpeg;
+            }
+
+            let resolved = false;
+            let firstData = false;
+
+            const timeout =
+                setTimeout(
+                    () => {
+
+                        if (firstData) {
+                            return;
+                        }
+
+                        console.error('');
+                        console.error(
+                            '=========================================='
+                        );
+                        console.error(
+                            '❌ FFmpeg NO RECIBIÓ AUDIO'
+                        );
+                        console.error(
+                            '=========================================='
+                        );
+
+                        try {
+                            ffmpeg.kill(
+                                'SIGKILL'
+                            );
+                        } catch (_) {}
+
+                        if (!resolved) {
+                            resolved = true;
+
+                            reject(
+                                new Error(
+                                    'FFmpeg no recibió audio de yt-dlp dentro del tiempo esperado.'
+                                )
+                            );
+                        }
+
+                    },
+                    START_TIMEOUT
+                );
+
+            // ------------------------------------------------
+            // AUDIO
+            // ------------------------------------------------
+
+            ffmpeg.stdout.once(
+                'data',
+                () => {
+
+                    firstData = true;
+
+                    clearTimeout(
+                        timeout
+                    );
+
+                    console.log(
+                        '🎵 FFmpeg comenzó a producir audio.'
+                    );
+
+                    if (!resolved) {
+                        resolved = true;
+
+                        resolve(
+                            ffmpeg.stdout
+                        );
+                    }
+                }
             );
 
-            try {
-                ffmpeg.stdin.destroy();
-            } catch (_) {}
+            // ------------------------------------------------
+            // STDERR
+            // ------------------------------------------------
 
-            clearTimeout(timeout);
+            ffmpeg.stderr.on(
+                'data',
+                (data) => {
 
-            if (!settled) {
-                settled = true;
-                reject(error);
-            }
-        });
-    });
+                    const text =
+                        data
+                            .toString()
+                            .trim();
+
+                    if (text) {
+                        console.error(
+                            `🎬 FFmpeg: ${text}`
+                        );
+                    }
+                }
+            );
+
+            // ------------------------------------------------
+            // ERROR
+            // ------------------------------------------------
+
+            ffmpeg.on(
+                'error',
+                (error) => {
+
+                    clearTimeout(
+                        timeout
+                    );
+
+                    console.error(
+                        '❌ Error de proceso FFmpeg:',
+                        error.message
+                    );
+
+                    if (!resolved) {
+                        resolved = true;
+                        reject(error);
+                    }
+                }
+            );
+
+            // ------------------------------------------------
+            // CLOSE
+            // ------------------------------------------------
+
+            ffmpeg.on(
+                'close',
+                (code, signal) => {
+
+                    clearTimeout(
+                        timeout
+                    );
+
+                    console.log(
+                        `🎬 FFmpeg finalizado. Código: ${code} Señal: ${signal || 'ninguna'}`
+                    );
+
+                    if (
+                        !firstData &&
+                        !resolved
+                    ) {
+                        resolved = true;
+
+                        reject(
+                            new Error(
+                                `FFmpeg terminó sin producir audio. Código: ${code}`
+                            )
+                        );
+                    }
+                }
+            );
+
+            // ------------------------------------------------
+            // YT-DLP -> FFMPEG
+            // ------------------------------------------------
+
+            inputStream.on(
+                'error',
+                (error) => {
+
+                    console.error('');
+                    console.error(
+                        '=========================================='
+                    );
+                    console.error(
+                        '❌ ERROR DEL STREAM YT-DLP'
+                    );
+                    console.error(
+                        '=========================================='
+                    );
+
+                    console.error(
+                        error?.stack ||
+                        error?.message ||
+                        error
+                    );
+
+                    console.error(
+                        '=========================================='
+                    );
+
+                    try {
+                        ffmpeg.stdin.destroy(
+                            error
+                        );
+                    } catch (_) {}
+
+                    clearTimeout(
+                        timeout
+                    );
+
+                    if (!resolved) {
+                        resolved = true;
+                        reject(error);
+                    }
+                }
+            );
+
+            inputStream.pipe(
+                ffmpeg.stdin
+            );
+        }
+    );
 }
 
 
 // ============================================================
-// PLAY
+// ESPERAR PLAYING
 // ============================================================
 
-async function execute(interaction) {
+function waitForPlaying(
+    player,
+    timeoutMs = 15000
+) {
+    return new Promise(
+        (resolve, reject) => {
 
-    const guildId = interaction.guild.id;
+            if (
+                player.state.status ===
+                AudioPlayerStatus.Playing
+            ) {
+                resolve();
+                return;
+            }
+
+            const timeout =
+                setTimeout(
+                    () => {
+
+                        cleanup();
+
+                        reject(
+                            new Error(
+                                'Discord no comenzó a reproducir el audio.'
+                            )
+                        );
+
+                    },
+                    timeoutMs
+                );
+
+            const onPlaying =
+                () => {
+
+                    cleanup();
+                    resolve();
+                };
+
+            const onError =
+                (error) => {
+
+                    cleanup();
+                    reject(error);
+                };
+
+            function cleanup() {
+
+                clearTimeout(
+                    timeout
+                );
+
+                player.off(
+                    AudioPlayerStatus.Playing,
+                    onPlaying
+                );
+
+                player.off(
+                    'error',
+                    onError
+                );
+            }
+
+            player.once(
+                AudioPlayerStatus.Playing,
+                onPlaying
+            );
+
+            player.once(
+                'error',
+                onError
+            );
+        }
+    );
+}
+
+
+// ============================================================
+// EXECUTE
+// ============================================================
+
+async function execute(
+    interaction
+) {
+
+    const guildId =
+        interaction.guild.id;
 
     console.log('');
-    console.log('🎯 EJECUTANDO /PLAY');
-    console.log('==========================================');
+    console.log(
+        '🎯 EJECUTANDO /PLAY'
+    );
+    console.log(
+        '=========================================='
+    );
 
     const voiceChannel =
         interaction.member?.voice?.channel;
@@ -500,28 +788,30 @@ async function execute(interaction) {
         await interaction.reply({
             content:
                 '❌ Debes estar conectado a un canal de voz.',
-            ephemeral: true,
         });
 
         return;
     }
 
     const query =
-        interaction.options.getString('consulta');
+        interaction.options.getString(
+            'consulta'
+        );
 
     if (!query) {
 
         await interaction.reply({
             content:
                 '❌ Debes indicar una canción o URL de YouTube.',
-            ephemeral: true,
         });
 
         return;
     }
 
     const url =
-        normalizeYouTubeUrl(query);
+        normalizeYouTubeUrl(
+            query
+        );
 
     console.log(
         `🔊 Canal de voz: ${voiceChannel.name} (${voiceChannel.id})`
@@ -537,22 +827,35 @@ async function execute(interaction) {
 
     try {
 
-        if (!interaction.deferred && !interaction.replied) {
-            await interaction.deferReply({
-                ephemeral: true,
-            });
-        }
+        await interaction.deferReply({
+            ephemeral: true,
+        });
 
-        /*
-         * Si ya había reproducción en este servidor,
-         * la detenemos antes de comenzar otra.
-         */
+        // ----------------------------------------------------
+        // LIMPIAR REPRODUCCIÓN ANTERIOR
+        // ----------------------------------------------------
 
-        cleanupGuild(guildId);
+        cleanupGuild(
+            guildId
+        );
 
-        // ====================================================
-        // VOZ
-        // ====================================================
+        // ----------------------------------------------------
+        // ESTADO
+        // ----------------------------------------------------
+
+        guildState.set(
+            guildId,
+            {
+                player: null,
+                youtubeStream: null,
+                ffmpeg: null,
+                cookieFile: null,
+            }
+        );
+
+        // ----------------------------------------------------
+        // VOICE
+        // ----------------------------------------------------
 
         console.log('');
         console.log(
@@ -560,19 +863,26 @@ async function execute(interaction) {
         );
 
         let connection =
-            getVoiceConnection(guildId);
+            getVoiceConnection(
+                guildId
+            );
 
         if (!connection) {
 
-            connection = joinVoiceChannel({
-                channelId: voiceChannel.id,
-                guildId,
-                adapterCreator:
-                    interaction.guild.voiceAdapterCreator,
+            connection =
+                joinVoiceChannel({
+                    channelId:
+                        voiceChannel.id,
 
-                selfDeaf: false,
-                selfMute: false,
-            });
+                    guildId,
+
+                    adapterCreator:
+                        interaction.guild
+                            .voiceAdapterCreator,
+
+                    selfDeaf: false,
+                    selfMute: false,
+                });
         }
 
         await entersState(
@@ -585,9 +895,9 @@ async function execute(interaction) {
             '🔊 CONECTADO A VOZ CORRECTAMENTE'
         );
 
-        // ====================================================
-        // AUDIO PLAYER
-        // ====================================================
+        // ----------------------------------------------------
+        // PLAYER
+        // ----------------------------------------------------
 
         const player =
             createAudioPlayer({
@@ -597,10 +907,13 @@ async function execute(interaction) {
                 },
             });
 
-        players.set(
-            guildId,
-            player
-        );
+        const state =
+            guildState.get(
+                guildId
+            );
+
+        state.player =
+            player;
 
         player.on(
             AudioPlayerStatus.Playing,
@@ -632,23 +945,33 @@ async function execute(interaction) {
         player.on(
             'error',
             (error) => {
+
+                console.error('');
                 console.error(
-                    '❌ ERROR DEL AUDIO PLAYER:',
+                    '=========================================='
+                );
+                console.error(
+                    '❌ ERROR DEL AUDIO PLAYER'
+                );
+                console.error(
+                    '=========================================='
+                );
+
+                console.error(
+                    error?.stack ||
+                    error?.message ||
                     error
                 );
             }
         );
 
-        connection.subscribe(player);
-
-        // ====================================================
-        // YOUTUBE
-        // ====================================================
-
-        console.log('');
-        console.log(
-            '🎧 OBTENIENDO AUDIO DE YOUTUBE'
+        connection.subscribe(
+            player
         );
+
+        // ----------------------------------------------------
+        // YOUTUBE
+        // ----------------------------------------------------
 
         const youtubeStream =
             await createYouTubeStream(
@@ -656,9 +979,9 @@ async function execute(interaction) {
                 guildId
             );
 
-        // ====================================================
+        // ----------------------------------------------------
         // FFMPEG
-        // ====================================================
+        // ----------------------------------------------------
 
         const audioStream =
             await createFFmpegStream(
@@ -666,9 +989,9 @@ async function execute(interaction) {
                 guildId
             );
 
-        // ====================================================
-        // DISCORD RESOURCE
-        // ====================================================
+        // ----------------------------------------------------
+        // AUDIO RESOURCE
+        // ----------------------------------------------------
 
         console.log(
             '🎵 Creando AudioResource...'
@@ -681,23 +1004,45 @@ async function execute(interaction) {
                     inputType:
                         StreamType.OggOpus,
 
-                    inlineVolume: false,
+                    inlineVolume:
+                        false,
                 }
             );
 
+        // ----------------------------------------------------
+        // PLAY
+        // ----------------------------------------------------
+
         console.log(
-            '🔊 Reproduciendo en Discord...'
+            '🔊 Enviando audio a Discord...'
         );
 
-        player.play(resource);
+        player.play(
+            resource
+        );
+
+        await waitForPlaying(
+            player,
+            15000
+        );
+
+        console.log(
+            '=========================================='
+        );
+        console.log(
+            '✅ /PLAY FUNCIONANDO'
+        );
+        console.log(
+            '=========================================='
+        );
 
         /*
-         * No necesitamos mantener la interacción abierta
-         * esperando toda la canción.
+         * El usuario solo recibe esto.
          */
 
         await interaction.editReply({
-            content: '▶️ Reproduciendo.',
+            content:
+                '▶️ Reproduciendo.',
         });
 
     } catch (error) {
@@ -712,21 +1057,27 @@ async function execute(interaction) {
         console.error(
             '=========================================='
         );
-        console.error(error);
 
-        cleanupGuild(guildId);
+        console.error(
+            error?.stack ||
+            error?.message ||
+            error
+        );
+
+        console.error(
+            '=========================================='
+        );
+
+        cleanupGuild(
+            guildId
+        );
 
         try {
 
-            if (
-                interaction.deferred &&
-                !interaction.replied
-            ) {
-                await interaction.editReply({
-                    content:
-                        '❌ No se pudo reproducir la canción.',
-                });
-            }
+            await interaction.editReply({
+                content:
+                    '❌ No se pudo reproducir la canción.',
+            });
 
         } catch (_) {}
     }
@@ -741,7 +1092,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('play')
         .setDescription(
-            'Reproduce una canción de YouTube en tu canal de voz'
+            'Reproduce una canción de YouTube'
         )
         .addStringOption(
             option =>
@@ -754,6 +1105,8 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        return execute(interaction);
+        return execute(
+            interaction
+        );
     },
 };
