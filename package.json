@@ -12,19 +12,14 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@discord-player/extractor": "^7.2.0",
-    "@discordjs/voice": "^0.19.2",
     "@liamcottle/rustplus.js": "^2.5.0",
     "@sparticuz/chromium": "^149.0.0",
     "@tesseract.js-data/chi_sim": "^1.0.0",
     "axios": "^1.18.1",
     "cheerio": "^1.2.0",
-    "discord-player": "^7.2.0",
-    "discord-player-youtubedlp": "^1.2.2",
     "discord.js": "^14.27.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "ffmpeg-static": "^5.3.0",
     "fs-extra": "^11.3.6",
     "googleapis": "^174.0.0",
     "mongoose": "^9.8.1",
@@ -34,13 +29,10 @@
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "sharp": "^0.35.4",
-    "tesseract.js": "^7.0.0",
-    "ytdlp-nodejs": "^3.4.5"
+    "tesseract.js": "^7.0.0"
   },
   "allowScripts": {
     "puppeteer@25.3.0": true,
-    "tesseract.js@7.0.0": true,
-    "ffmpeg-static@5.3.0": true,
-    "ytdlp-nodejs@3.4.5": true
+    "tesseract.js@7.0.0": true
   }
 }
