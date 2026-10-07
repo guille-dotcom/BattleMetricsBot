@@ -784,18 +784,14 @@ async function obtenerTopServidoresRust(
     ahora
 ) {
 
-    const servidores =
-        new Map();
+    const servidores = new Map();
 
 
     // --------------------------------------------------------
-    // SERVIDORES INCLUIDOS
+    // SERVIDORES CONOCIDOS
     // --------------------------------------------------------
 
-    for (
-        const servidor of
-        servidoresMap.values()
-    ) {
+    for (const servidor of servidoresMap.values()) {
 
         if (
             servidor &&
@@ -804,9 +800,7 @@ async function obtenerTopServidoresRust(
         ) {
 
             servidores.set(
-                String(
-                    servidor.id
-                ),
+                String(servidor.id),
                 {
                     ...servidor
                 }
@@ -816,34 +810,28 @@ async function obtenerTopServidoresRust(
 
 
     // --------------------------------------------------------
-    // SERVIDORES EN SESIONES
+    // SERVIDORES DE LAS SESIONES
     // --------------------------------------------------------
 
-    for (
-        const session of
-        todasLasSesiones
-    ) {
+    for (const session of todasLasSesiones) {
 
         const serverId =
-            obtenerServerIdDeSesion(
-                session
-            );
+            obtenerServerIdDeSesion(session);
 
         if (!serverId) {
             continue;
         }
 
-        if (
-            servidores.has(
-                serverId
-            )
-        ) {
+        const id =
+            String(serverId);
+
+        if (servidores.has(id)) {
             continue;
         }
 
         const servidor =
             await obtenerInfoServidor(
-                serverId,
+                id,
                 servidoresMap
             );
 
@@ -853,7 +841,7 @@ async function obtenerTopServidoresRust(
         ) {
 
             servidores.set(
-                String(serverId),
+                id,
                 servidor
             );
         }
@@ -861,92 +849,96 @@ async function obtenerTopServidoresRust(
 
 
     // --------------------------------------------------------
-    // RANKING
+    // CALCULAR HORAS POR SERVIDOR
     // --------------------------------------------------------
 
     const resultados = [];
 
-    for (
-        const servidor of
-        servidores.values()
-    ) {
+    for (const servidor of servidores.values()) {
 
-        let segundos =
-            Number(
-                servidor.timePlayed
-            ) || 0;
+        const serverId =
+            String(servidor.id);
 
+        let segundos = 0;
+
+
+        // ----------------------------------------------------
+        // SUMAR TODAS LAS SESIONES DE ESTE SERVIDOR
+        // ----------------------------------------------------
+
+        for (const session of todasLasSesiones) {
+
+            const sessionServerId =
+                obtenerServerIdDeSesion(session);
+
+            if (
+                !sessionServerId ||
+                String(sessionServerId) !== serverId
+            ) {
+                continue;
+            }
+
+            const a =
+                session.attributes || {};
+
+            if (!a.start) {
+                continue;
+            }
+
+            const inicio =
+                new Date(a.start).getTime();
+
+            let fin;
+
+            if (a.stop) {
+
+                fin =
+                    new Date(a.stop).getTime();
+
+            } else if (
+                esSesionActiva(session)
+            ) {
+
+                fin =
+                    ahora.getTime();
+
+            } else {
+
+                continue;
+            }
+
+            if (
+                !Number.isFinite(inicio) ||
+                !Number.isFinite(fin) ||
+                fin <= inicio
+            ) {
+                continue;
+            }
+
+            segundos +=
+                Math.floor(
+                    (fin - inicio) / 1000
+                );
+        }
+
+
+        // ----------------------------------------------------
+        // SI NO HAY SESIONES, USAR EL DATO DE BM
+        // ----------------------------------------------------
 
         if (segundos <= 0) {
 
-            for (
-                const session of
-                todasLasSesiones
-            ) {
-
-                const serverId =
-                    obtenerServerIdDeSesion(
-                        session
-                    );
-
-                if (
-                    String(serverId) !==
-                    String(servidor.id)
-                ) {
-                    continue;
-                }
-
-                const a =
-                    session.attributes || {};
-
-                if (!a.start) {
-                    continue;
-                }
-
-                const inicio =
-                    new Date(
-                        a.start
-                    ).getTime();
-
-                let fin;
-
-                if (a.stop) {
-
-                    fin =
-                        new Date(
-                            a.stop
-                        ).getTime();
-
-                } else {
-
-                    fin =
-                        ahora.getTime();
-                }
-
-                if (
-                    Number.isFinite(inicio) &&
-                    Number.isFinite(fin) &&
-                    fin > inicio
-                ) {
-
-                    segundos +=
-                        Math.floor(
-                            (
-                                fin -
-                                inicio
-                            ) / 1000
-                        );
-                }
-            }
+            segundos =
+                Number(
+                    servidor.timePlayed
+                ) || 0;
         }
 
 
         resultados.push({
 
             id:
-                String(
-                    servidor.id
-                ),
+                serverId,
 
             nombre:
                 servidor.nombre,
@@ -957,24 +949,27 @@ async function obtenerTopServidoresRust(
             segundos,
 
             tiempo:
-                segundosAHoras(
-                    segundos
-                )
+                segundosAHoras(segundos)
         });
     }
 
 
+    // --------------------------------------------------------
+    // ORDENAR POR MAYOR CANTIDAD DE HORAS
+    // --------------------------------------------------------
+
     resultados.sort(
         (a, b) =>
-            b.segundos -
-            a.segundos
+            Number(b.segundos || 0) -
+            Number(a.segundos || 0)
     );
 
 
-    return resultados.slice(
-        0,
-        10
-    );
+    // --------------------------------------------------------
+    // TOP 10
+    // --------------------------------------------------------
+
+    return resultados.slice(0, 10);
 }
 
 
