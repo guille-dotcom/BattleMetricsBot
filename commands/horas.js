@@ -351,8 +351,7 @@ module.exports = {
         // =====================================================
         // DATOS DETALLADOS BATTLEMETRICS
         //
-        // IMPORTANTE:
-        // PASAMOS EL SERVIDOR CONFIGURADO.
+        // PASAMOS EL SERVIDOR CONFIGURADO
         // =====================================================
 
         let datosFinales = null;
@@ -473,9 +472,8 @@ module.exports = {
 
 
             // -------------------------------------------------
-            // SEGURIDAD:
             // COMPROBAR QUE EL ID ES EXACTAMENTE
-            // EL SERVIDOR CONFIGURADO.
+            // EL SERVIDOR CONFIGURADO
             // -------------------------------------------------
 
             if (
@@ -487,29 +485,17 @@ module.exports = {
                 )
             ) {
 
-                // ---------------------------------------------
-                // BUSCAR HORAS HISTÓRICAS POR ID
+                // -------------------------------------------------
+                // HORAS ESPECÍFICAS DEL SERVIDOR CONFIGURADO
                 //
-                // NUNCA POR NOMBRE.
-                // ---------------------------------------------
-
-                const servidorHistorico =
-                    datosFinales.topServidoresRust &&
-                    datosFinales.topServidoresRust.find(
-                        servidor =>
-                            String(
-                                servidor.id
-                            ) ===
-                            String(
-                                serverId
-                            )
-                    );
-
+                // YA NO SE BUSCAN EN EL TOP 10.
+                // VIENEN DE LA CONSULTA DIRECTA DE BM.
+                // -------------------------------------------------
 
                 const horasServidorActual =
-                    servidorHistorico &&
-                    servidorHistorico.tiempo
-                        ? servidorHistorico.tiempo
+                    datosFinales.horasServidorConfigurado &&
+                    datosFinales.horasServidorConfigurado.tiempo
+                        ? datosFinales.horasServidorConfigurado.tiempo
                         : null;
 
 
@@ -522,6 +508,7 @@ module.exports = {
                 console.log(
                     `⚠️ /horas | BM devolvió servidor ${servidorActual.id}, pero el configurado es ${serverId}`
                 );
+
 
                 servidorActualTexto =
                     "`🔴 El jugador no está en el servidor configurado`";
