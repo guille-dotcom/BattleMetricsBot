@@ -355,83 +355,37 @@ function detectarRust(
 
 
     // -------------------------------------------------
-    // MÉTODO 1
-    // attributes.game
+    // GAME DIRECTO
     // -------------------------------------------------
 
-    const game =
-        normalizarTexto(
-            attributes.game
-        );
+    const valoresGame = [
 
-    if (
-        game === "rust" ||
-        game.includes("rust")
-    ) {
+        attributes.game,
 
-        return true;
-    }
+        attributes.gameId,
 
+        attributes.gameName,
 
-    // -------------------------------------------------
-    // MÉTODO 2
-    // attributes.gameId
-    // -------------------------------------------------
-
-    const gameId =
-        normalizarTexto(
-            attributes.gameId
-        );
-
-    if (
-        gameId === "rust" ||
-        gameId.includes("rust")
-    ) {
-
-        return true;
-    }
-
-
-    // -------------------------------------------------
-    // MÉTODO 3
-    // attributes.gameName
-    // -------------------------------------------------
-
-    const gameName =
-        normalizarTexto(
-            attributes.gameName
-        );
-
-    if (
-        gameName === "rust" ||
-        gameName.includes("rust")
-    ) {
-
-        return true;
-    }
-
-
-    // -------------------------------------------------
-    // MÉTODO 4
-    // relationships.game
-    // -------------------------------------------------
-
-    const relationshipGame =
         serverData.relationships
             ?.game
-            ?.data;
+            ?.data
+            ?.id,
+
+        serverData.meta?.game,
+
+        serverData.meta?.gameId
+
+    ];
 
 
-    if (relationshipGame) {
+    for (const valor of valoresGame) {
 
-        const relationId =
-            normalizarTexto(
-                relationshipGame.id
-            );
+        const texto =
+            normalizarTexto(valor);
 
         if (
-            relationId === "rust" ||
-            relationId.includes("rust")
+            texto === "rust" ||
+            texto.includes("rust")
         ) {
 
             return true;
@@ -440,18 +394,20 @@ function detectarRust(
 
 
     // -------------------------------------------------
-    // MÉTODO 5
-    // RESOURCE GAME INCLUIDO
+    // RESOURCE GAME
     // -------------------------------------------------
 
-    const gameResource =
-        included.find(
-            item =>
-                item.type === "game"
-        );
+    for (
+        const gameResource
+        of included
+    ) {
 
-
-    if (gameResource) {
+        if (
+            gameResource?.type !==
+            "game"
+        ) {
+            continue;
+        }
 
         const gameAttributes =
             gameResource.attributes || {};
@@ -475,19 +431,18 @@ function detectarRust(
 
 
     // -------------------------------------------------
-    // MÉTODO 6
-    // META
+    // FALLBACK POR NOMBRE
     // -------------------------------------------------
 
-    const metaGame =
+    const nombreServidor =
         normalizarTexto(
-            serverData.meta?.game ||
-            serverData.meta?.gameId
+            attributes.name ||
+            serverData.name ||
+            ""
         );
 
     if (
-        metaGame === "rust" ||
-        metaGame.includes("rust")
+        nombreServidor.includes("rust")
     ) {
 
         return true;
@@ -516,14 +471,11 @@ async function obtenerInfoServidor(
     }
 
 
-    try {
+    // =================================================
+    // PRIMER INTENTO
+    // =================================================
 
-        /*
-         * IMPORTANTE:
-         *
-         * Ahora pedimos también "game".
-         * Antes solamente pedíamos el servidor.
-         */
+    try {
 
         const response =
             await axios.get(
@@ -540,12 +492,131 @@ async function obtenerInfoServidor(
                 }
             );
 
-
         const data =
             response.data?.data;
 
         const included =
             response.data?.included || [];
+
+
+        if (data) {
+
+            const attributes =
+                data.attributes || {};
+
+
+            let game =
+                attributes.game ||
+                attributes.gameId ||
+                attributes.gameName ||
+                data.relationships
+                    ?.game
+                    ?.data
+                    ?.id ||
+                null;
+
+
+            const gameResource =
+                included.find(
+                    item =>
+                        item.type === "game"
+                );
+
+
+            if (
+                !game &&
+                gameResource
+            ) {
+
+                game =
+                    gameResource.attributes?.name ||
+                    gameResource.attributes?.slug ||
+                    gameResource.attributes?.identifier ||
+                    gameResource.id ||
+                    null;
+            }
+
+
+            const info = {
+
+                id:
+                    data.id ||
+                    serverId,
+
+                name:
+                    attributes.name ||
+                    "Servidor desconocido",
+
+                game:
+                    String(
+                        game || ""
+                    ).toLowerCase(),
+
+                esRust:
+                    detectarRust(
+                        data,
+                        included
+                    ),
+
+                ip:
+                    attributes.ip ||
+                    null,
+
+                port:
+                    attributes.port ||
+                    null,
+
+                timePlayed:
+                    Number(
+                        data.meta?.timePlayed
+                    ) || 0
+            };
+
+
+            console.log(
+                `🖥️ BM | Servidor ${serverId} | ${info.name} | game=${info.game || "N/A"} | Rust=${info.esRust}`
+            );
+
+
+            cache.set(
+                serverId,
+                info
+            );
+
+
+            return info;
+        }
+
+    } catch (error) {
+
+        console.log(
+            `⚠️ BM | Primer intento servidor ${serverId}:`,
+            error.response?.status ||
+            error.message
+        );
+    }
+
+
+    // =================================================
+    // SEGUNDO INTENTO SIN INCLUDE
+    // =================================================
+
+    try {
+
+        const response =
+            await axios.get(
+                `${BM_API}/servers/${serverId}`,
+                {
+                    headers:
+                        getHeaders(),
+
+                    timeout: 7000
+                }
+            );
+
+
+        const data =
+            response.data?.data;
 
 
         if (!data) {
@@ -563,50 +634,15 @@ async function obtenerInfoServidor(
             data.attributes || {};
 
 
-        // =================================================
-        // BUSCAR JUEGO
-        // =================================================
-
-        let game =
-            attributes.game ||
-            attributes.gameId ||
-            attributes.gameName ||
-            data.relationships
-                ?.game
-                ?.data
-                ?.id ||
-            null;
-
-
-        // -------------------------------------------------
-        // Buscar resource game incluido
-        // -------------------------------------------------
-
-        const gameResource =
-            included.find(
-                item =>
-                    item.type === "game"
-            );
-
-
-        if (
-            !game &&
-            gameResource
-        ) {
-
-            game =
-                gameResource.attributes?.name ||
-                gameResource.attributes?.slug ||
-                gameResource.attributes?.identifier ||
-                gameResource.id ||
-                null;
-        }
+        const nombre =
+            attributes.name ||
+            "Servidor desconocido";
 
 
         const esRust =
             detectarRust(
                 data,
-                included
+                []
             );
 
 
@@ -617,12 +653,14 @@ async function obtenerInfoServidor(
                 serverId,
 
             name:
-                attributes.name ||
-                "Servidor desconocido",
+                nombre,
 
             game:
                 String(
-                    game || ""
+                    attributes.game ||
+                    attributes.gameId ||
+                    attributes.gameName ||
+                    ""
                 ).toLowerCase(),
 
             esRust:
@@ -634,12 +672,17 @@ async function obtenerInfoServidor(
 
             port:
                 attributes.port ||
-                null
+                null,
+
+            timePlayed:
+                Number(
+                    data.meta?.timePlayed
+                ) || 0
         };
 
 
         console.log(
-            `🖥️ BM | Servidor ${serverId} | ${info.name} | game=${info.game || "N/A"} | Rust=${info.esRust}`
+            `🖥️ BM | Fallback servidor ${serverId} | ${info.name} | Rust=${info.esRust}`
         );
 
 
@@ -655,7 +698,7 @@ async function obtenerInfoServidor(
     } catch (error) {
 
         console.log(
-            `⚠️ BM | No se pudo obtener servidor ${serverId}:`,
+            `❌ BM | No se pudo obtener servidor ${serverId}:`,
             error.response?.status ||
             error.message
         );
@@ -698,6 +741,67 @@ function segundosAHorasTexto(segundos) {
 
 
 // =====================================================
+// OBTENER ID SERVIDOR DE SESIÓN
+// =====================================================
+
+function obtenerServerIdSesion(sesion) {
+
+    return (
+        sesion?.relationships
+            ?.server
+            ?.data
+            ?.id ||
+
+        sesion?.attributes
+            ?.serverId ||
+
+        null
+    );
+}
+
+
+// =====================================================
+// SESIÓN ACTIVA
+// =====================================================
+
+function esSesionActiva(sesion) {
+
+    if (!sesion) {
+        return false;
+    }
+
+    const attributes =
+        sesion.attributes || {};
+
+
+    // Caso habitual de BattleMetrics
+    if (
+        attributes.stop === null ||
+        attributes.stop === undefined
+    ) {
+
+        return true;
+    }
+
+
+    // Algunos payloads pueden utilizar otros
+    // indicadores de estado.
+
+    if (
+        attributes.active === true ||
+        attributes.online === true ||
+        attributes.connected === true
+    ) {
+
+        return true;
+    }
+
+
+    return false;
+}
+
+
+// =====================================================
 // TOP 5 SERVIDORES RUST
 // =====================================================
 
@@ -712,7 +816,7 @@ async function obtenerTopServidoresRust(
 
 
     // =================================================
-    // GUARDAR SERVIDORES YA INCLUIDOS
+    // SERVIDORES INCLUIDOS
     // =================================================
 
     for (
@@ -729,57 +833,57 @@ async function obtenerTopServidoresRust(
             servidor.attributes || {};
 
 
-        let game =
-            attributes.game ||
-            attributes.gameId ||
-            attributes.gameName ||
-            servidor.relationships
-                ?.game
-                ?.data
-                ?.id ||
-            null;
+        const info = {
 
+            id:
+                servidor.id,
 
-        const esRust =
-            detectarRust(
-                servidor,
-                []
-            );
+            name:
+                attributes.name ||
+                "Servidor desconocido",
+
+            game:
+                String(
+                    attributes.game ||
+                    attributes.gameId ||
+                    attributes.gameName ||
+                    servidor.relationships
+                        ?.game
+                        ?.data
+                        ?.id ||
+                    ""
+                ).toLowerCase(),
+
+            esRust:
+                detectarRust(
+                    servidor,
+                    []
+                ),
+
+            ip:
+                attributes.ip ||
+                null,
+
+            port:
+                attributes.port ||
+                null,
+
+            timePlayed:
+                Number(
+                    servidor.meta?.timePlayed
+                ) || 0
+        };
 
 
         servidorCache.set(
             servidor.id,
-            {
-
-                id:
-                    servidor.id,
-
-                name:
-                    attributes.name ||
-                    "Servidor desconocido",
-
-                game:
-                    String(
-                        game || ""
-                    ).toLowerCase(),
-
-                esRust:
-                    esRust,
-
-                ip:
-                    attributes.ip ||
-                    null,
-
-                port:
-                    attributes.port ||
-                    null
-            }
+            info
         );
     }
 
 
     // =================================================
-    // IDS DE SERVIDORES DESDE SESIONES
+    // SERVIDORES DE LAS SESIONES
     // =================================================
 
     const serverIds =
@@ -787,14 +891,7 @@ async function obtenerTopServidoresRust(
             ...new Set(
                 todasLasSesiones
                     .map(
-                        sesion =>
-                            sesion.relationships
-                                ?.server
-                                ?.data
-                                ?.id ||
-                            sesion.attributes
-                                ?.serverId ||
-                            null
+                        obtenerServerIdSesion
                     )
                     .filter(Boolean)
             )
@@ -848,115 +945,10 @@ async function obtenerTopServidoresRust(
 
 
     // =================================================
-    // ACUMULAR HORAS
-    // =================================================
-
-    const tiempoPorServidor =
-        new Map();
-
-
-    for (
-        const sesion
-        of todasLasSesiones
-    ) {
-
-        const atributos =
-            sesion.attributes || {};
-
-
-        if (!atributos.start) {
-            continue;
-        }
-
-
-        const serverId =
-            sesion.relationships
-                ?.server
-                ?.data
-                ?.id ||
-            atributos.serverId ||
-            null;
-
-
-        if (!serverId) {
-            continue;
-        }
-
-
-        const inicio =
-            new Date(
-                atributos.start
-            );
-
-
-        if (
-            isNaN(
-                inicio.getTime()
-            )
-        ) {
-            continue;
-        }
-
-
-        let fin;
-
-
-        if (atributos.stop) {
-
-            fin =
-                new Date(
-                    atributos.stop
-                );
-
-        } else {
-
-            fin =
-                ahora;
-        }
-
-
-        if (
-            !fin ||
-            isNaN(
-                fin.getTime()
-            )
-        ) {
-            continue;
-        }
-
-
-        const duracion =
-            Math.max(
-                0,
-                Math.floor(
-                    (
-                        fin -
-                        inicio
-                    ) / 1000
-                )
-            );
-
-
-        if (duracion <= 0) {
-            continue;
-        }
-
-
-        const anterior =
-            tiempoPorServidor.get(
-                serverId
-            ) || 0;
-
-
-        tiempoPorServidor.set(
-            serverId,
-            anterior + duracion
-        );
-    }
-
-
-    // =================================================
-    // FILTRAR RUST
+    // IMPORTANTE:
+    //
+    // TOP HISTÓRICO USA server.meta.timePlayed
+    // Y NO LA SUMA DE LAS SESIONES.
     // =================================================
 
     const resultados = [];
@@ -965,32 +957,113 @@ async function obtenerTopServidoresRust(
     for (
         const [
             serverId,
-            segundos
+            servidor
         ]
-        of tiempoPorServidor
+        of servidorCache
     ) {
-
-        const servidor =
-            servidorCache.get(
-                serverId
-            );
-
 
         if (!servidor) {
             continue;
         }
 
 
-        /*
-         * AQUÍ ESTÁ EL CAMBIO PRINCIPAL:
-         *
-         * Ya no dependemos solamente de attributes.game.
-         */
+        if (!servidor.esRust) {
+            continue;
+        }
+
+
+        let segundos =
+            Number(
+                servidor.timePlayed
+            ) || 0;
+
+
+        // -------------------------------------------------
+        // FALLBACK:
+        // si no existe timePlayed, sumar sesiones.
+        // -------------------------------------------------
 
         if (
-            !servidor.esRust
+            segundos <= 0
         ) {
 
+            for (
+                const sesion
+                of todasLasSesiones
+            ) {
+
+                const idSesion =
+                    obtenerServerIdSesion(
+                        sesion
+                    );
+
+
+                if (
+                    idSesion !==
+                    serverId
+                ) {
+                    continue;
+                }
+
+
+                const atributos =
+                    sesion.attributes || {};
+
+
+                if (!atributos.start) {
+                    continue;
+                }
+
+
+                const inicio =
+                    new Date(
+                        atributos.start
+                    );
+
+
+                if (
+                    isNaN(
+                        inicio.getTime()
+                    )
+                ) {
+                    continue;
+                }
+
+
+                const fin =
+                    atributos.stop
+                        ? new Date(
+                            atributos.stop
+                        )
+                        : ahora;
+
+
+                if (
+                    isNaN(
+                        fin.getTime()
+                    )
+                ) {
+                    continue;
+                }
+
+
+                segundos +=
+                    Math.max(
+                        0,
+                        Math.floor(
+                            (
+                                fin -
+                                inicio
+                            ) / 1000
+                        )
+                    );
+            }
+        }
+
+
+        if (
+            segundos <= 0
+        ) {
             continue;
         }
 
@@ -1073,7 +1146,7 @@ async function getBattleMetricsPlayerStatus(
 
 
         // =================================================
-        // JUGADOR
+        // JUGADOR + SERVIDORES
         // =================================================
 
         const playerResponse =
@@ -1139,7 +1212,9 @@ async function getBattleMetricsPlayerStatus(
                 ) || 0;
 
 
-            if (tiempo > 0) {
+            if (
+                tiempo > 0
+            ) {
 
                 segundosTotales +=
                     tiempo;
@@ -1268,7 +1343,7 @@ async function getBattleMetricsPlayerStatus(
 
 
         // =================================================
-        // CACHE SERVIDORES
+        // CACHE
         // =================================================
 
         const serverInfoCache =
@@ -1276,7 +1351,7 @@ async function getBattleMetricsPlayerStatus(
 
 
         // =================================================
-        // SESIÓN ACTIVA RUST
+        // DETECTAR SESIÓN ACTIVA RUST
         // =================================================
 
         let sesionActivaRust = null;
@@ -1286,17 +1361,13 @@ async function getBattleMetricsPlayerStatus(
 
         const sesionesActivas =
             todasLasSesiones.filter(
-                sesion => {
-
-                    const stop =
-                        sesion.attributes?.stop;
-
-                    return (
-                        stop === null ||
-                        stop === undefined
-                    );
-                }
+                esSesionActiva
             );
+
+
+        console.log(
+            `🟢 BM | Sesiones activas detectadas: ${sesionesActivas.length}`
+        );
 
 
         for (
@@ -1305,13 +1376,9 @@ async function getBattleMetricsPlayerStatus(
         ) {
 
             const serverId =
-                sesion.relationships
-                    ?.server
-                    ?.data
-                    ?.id ||
-                sesion.attributes
-                    ?.serverId ||
-                null;
+                obtenerServerIdSesion(
+                    sesion
+                );
 
 
             if (!serverId) {
@@ -1343,6 +1410,93 @@ async function getBattleMetricsPlayerStatus(
                 info;
 
             break;
+        }
+
+
+        // =================================================
+        // FALLBACK:
+        //
+        // SI LA SESIÓN ACTIVA EXISTE PERO EL SERVIDOR
+        // ESTÁ EN LOS SERVIDORES INCLUIDOS, USARLO
+        // DIRECTAMENTE.
+        // =================================================
+
+        if (
+            !sesionActivaRust
+        ) {
+
+            for (
+                const sesion
+                of sesionesActivas
+            ) {
+
+                const serverId =
+                    obtenerServerIdSesion(
+                        sesion
+                    );
+
+
+                if (!serverId) {
+                    continue;
+                }
+
+
+                const incluido =
+                    servidoresIncluidos.find(
+                        servidor =>
+                            servidor.id ===
+                            serverId
+                    );
+
+
+                if (!incluido) {
+                    continue;
+                }
+
+
+                const info = {
+
+                    id:
+                        incluido.id,
+
+                    name:
+                        incluido.attributes?.name ||
+                        "Servidor desconocido",
+
+                    game:
+                        String(
+                            incluido.attributes?.game ||
+                            incluido.attributes?.gameId ||
+                            incluido.attributes?.gameName ||
+                            ""
+                        ).toLowerCase(),
+
+                    esRust:
+                        detectarRust(
+                            incluido,
+                            []
+                        ),
+
+                    timePlayed:
+                        Number(
+                            incluido.meta?.timePlayed
+                        ) || 0
+                };
+
+
+                if (!info.esRust) {
+                    continue;
+                }
+
+
+                sesionActivaRust =
+                    sesion;
+
+                servidorActualRust =
+                    info;
+
+                break;
+            }
         }
 
 
@@ -1754,13 +1908,9 @@ async function getBattleMetricsPlayerStatus(
         ) {
 
             const serverId =
-                sesion.relationships
-                    ?.server
-                    ?.data
-                    ?.id ||
-                sesion.attributes
-                    ?.serverId ||
-                null;
+                obtenerServerIdSesion(
+                    sesion
+                );
 
 
             if (
