@@ -444,17 +444,45 @@ module.exports = {
         // SERVIDOR ACTUAL
         // =====================================================
 
-        const servidorActualTexto =
+        let servidorActualTexto =
+            "`🔴 No está jugando Rust ahora`";
+
+
+        if (
             datosFinales.online &&
             datosFinales.servidorActualRust
+        ) {
 
-                ? `[${datosFinales.servidorActualRust.nombre}](https://www.battlemetrics.com/servers/${datosFinales.servidorActualRust.id})`
+            const servidorActual =
+                datosFinales.servidorActualRust;
 
-                : "`🔴 No está jugando Rust ahora`";
+
+            // Buscar las horas históricas del servidor actual
+            // dentro de los servidores Rust calculados.
+            const servidorHistorico =
+                datosFinales.topServidoresRust &&
+                datosFinales.topServidoresRust.find(
+                    servidor =>
+                        String(servidor.id) ===
+                        String(servidorActual.id)
+                );
+
+
+            const horasServidorActual =
+                servidorHistorico &&
+                servidorHistorico.tiempo
+                    ? servidorHistorico.tiempo
+                    : null;
+
+
+            servidorActualTexto =
+                `[${servidorActual.nombre}](https://www.battlemetrics.com/servers/${servidorActual.id})` +
+                `\n⏱️ ${horasServidorActual || "Horas no disponibles"} en este servidor`;
+        }
 
 
         // =====================================================
-        // TOP 5 RUST
+        // TOP 10 RUST
         // =====================================================
 
         let topRustTexto =
@@ -468,6 +496,7 @@ module.exports = {
 
             topRustTexto =
                 datosFinales.topServidoresRust
+                    .slice(0, 10)
                     .map(
                         (servidor, index) => {
 
@@ -517,12 +546,12 @@ module.exports = {
 
 
                     // -----------------------------------------
-                    // TOP 5 SERVIDORES RUST
+                    // TOP 10 SERVIDORES RUST
                     // -----------------------------------------
 
                     {
                         name:
-                            "🏆 Top 5 servidores de Rust",
+                            "🏆 Top 10 servidores de Rust",
 
                         value:
                             topRustTexto,

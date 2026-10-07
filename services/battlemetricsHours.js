@@ -802,7 +802,7 @@ function esSesionActiva(sesion) {
 
 
 // =====================================================
-// TOP 5 SERVIDORES RUST
+// TOP 10 SERVIDORES RUST
 // =====================================================
 
 async function obtenerTopServidoresRust(
@@ -1112,9 +1112,13 @@ async function obtenerTopServidoresRust(
     );
 
 
+    // =================================================
+    // MOSTRAR TOP 10 EN LOG
+    // =================================================
+
     for (
         const servidor
-        of resultados.slice(0, 5)
+        of resultados.slice(0, 10)
     ) {
 
         console.log(
@@ -1123,9 +1127,13 @@ async function obtenerTopServidoresRust(
     }
 
 
+    // =================================================
+    // DEVOLVER TOP 10
+    // =================================================
+
     return resultados.slice(
         0,
-        5
+        10
     );
 }
 
@@ -1852,7 +1860,7 @@ async function getBattleMetricsPlayerStatus(
 
 
         // =================================================
-        // TOP 5 RUST
+        // TOP 10 RUST
         // =================================================
 
         let topServidoresRust = [];
@@ -1870,7 +1878,7 @@ async function getBattleMetricsPlayerStatus(
         } catch (error) {
 
             console.error(
-                "❌ BM | Error obteniendo Top 5 Rust:",
+                "❌ BM | Error obteniendo Top 10 Rust:",
                 error.message
             );
 
