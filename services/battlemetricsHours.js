@@ -353,11 +353,6 @@ function detectarRust(
     const attributes =
         serverData.attributes || {};
 
-
-    // -------------------------------------------------
-    // GAME DIRECTO
-    // -------------------------------------------------
-
     const valoresGame = [
 
         attributes.game,
@@ -377,7 +372,6 @@ function detectarRust(
 
     ];
 
-
     for (const valor of valoresGame) {
 
         const texto =
@@ -391,11 +385,6 @@ function detectarRust(
             return true;
         }
     }
-
-
-    // -------------------------------------------------
-    // RESOURCE GAME
-    // -------------------------------------------------
 
     for (
         const gameResource
@@ -429,11 +418,6 @@ function detectarRust(
         }
     }
 
-
-    // -------------------------------------------------
-    // FALLBACK POR NOMBRE
-    // -------------------------------------------------
-
     const nombreServidor =
         normalizarTexto(
             attributes.name ||
@@ -447,7 +431,6 @@ function detectarRust(
 
         return true;
     }
-
 
     return false;
 }
@@ -469,7 +452,6 @@ async function obtenerInfoServidor(
     if (cache.has(serverId)) {
         return cache.get(serverId);
     }
-
 
     // =================================================
     // PRIMER INTENTO
@@ -498,12 +480,10 @@ async function obtenerInfoServidor(
         const included =
             response.data?.included || [];
 
-
         if (data) {
 
             const attributes =
                 data.attributes || {};
-
 
             let game =
                 attributes.game ||
@@ -515,13 +495,11 @@ async function obtenerInfoServidor(
                     ?.id ||
                 null;
 
-
             const gameResource =
                 included.find(
                     item =>
                         item.type === "game"
                 );
-
 
             if (
                 !game &&
@@ -535,7 +513,6 @@ async function obtenerInfoServidor(
                     gameResource.id ||
                     null;
             }
-
 
             const info = {
 
@@ -572,17 +549,14 @@ async function obtenerInfoServidor(
                     ) || 0
             };
 
-
             console.log(
                 `🖥️ BM | Servidor ${serverId} | ${info.name} | game=${info.game || "N/A"} | Rust=${info.esRust}`
             );
-
 
             cache.set(
                 serverId,
                 info
             );
-
 
             return info;
         }
@@ -595,7 +569,6 @@ async function obtenerInfoServidor(
             error.message
         );
     }
-
 
     // =================================================
     // SEGUNDO INTENTO SIN INCLUDE
@@ -614,10 +587,8 @@ async function obtenerInfoServidor(
                 }
             );
 
-
         const data =
             response.data?.data;
-
 
         if (!data) {
 
@@ -629,22 +600,18 @@ async function obtenerInfoServidor(
             return null;
         }
 
-
         const attributes =
             data.attributes || {};
-
 
         const nombre =
             attributes.name ||
             "Servidor desconocido";
-
 
         const esRust =
             detectarRust(
                 data,
                 []
             );
-
 
         const info = {
 
@@ -680,20 +647,16 @@ async function obtenerInfoServidor(
                 ) || 0
         };
 
-
         console.log(
             `🖥️ BM | Fallback servidor ${serverId} | ${info.name} | Rust=${info.esRust}`
         );
-
 
         cache.set(
             serverId,
             info
         );
 
-
         return info;
-
 
     } catch (error) {
 
@@ -773,8 +736,6 @@ function esSesionActiva(sesion) {
     const attributes =
         sesion.attributes || {};
 
-
-    // Caso habitual de BattleMetrics
     if (
         attributes.stop === null ||
         attributes.stop === undefined
@@ -782,10 +743,6 @@ function esSesionActiva(sesion) {
 
         return true;
     }
-
-
-    // Algunos payloads pueden utilizar otros
-    // indicadores de estado.
 
     if (
         attributes.active === true ||
@@ -795,7 +752,6 @@ function esSesionActiva(sesion) {
 
         return true;
     }
-
 
     return false;
 }
@@ -814,7 +770,6 @@ async function obtenerTopServidoresRust(
     const servidorCache =
         new Map();
 
-
     // =================================================
     // SERVIDORES INCLUIDOS
     // =================================================
@@ -828,10 +783,8 @@ async function obtenerTopServidoresRust(
             continue;
         }
 
-
         const attributes =
             servidor.attributes || {};
-
 
         const info = {
 
@@ -874,13 +827,11 @@ async function obtenerTopServidoresRust(
                 ) || 0
         };
 
-
         servidorCache.set(
             servidor.id,
             info
         );
     }
-
 
     // =================================================
     // SERVIDORES DE LAS SESIONES
@@ -897,15 +848,9 @@ async function obtenerTopServidoresRust(
             )
         ];
 
-
     console.log(
         `🖥️ BM | Servidores únicos en sesiones: ${serverIds.length}`
     );
-
-
-    // =================================================
-    // CONSULTAR SERVIDORES FALTANTES
-    // =================================================
 
     const faltantes =
         serverIds.filter(
@@ -913,9 +858,7 @@ async function obtenerTopServidoresRust(
                 !servidorCache.has(id)
         );
 
-
     const CONCURRENCIA = 5;
-
 
     for (
         let i = 0;
@@ -928,7 +871,6 @@ async function obtenerTopServidoresRust(
                 i,
                 i + CONCURRENCIA
             );
-
 
         await Promise.all(
             grupo.map(
@@ -943,16 +885,11 @@ async function obtenerTopServidoresRust(
         );
     }
 
-
     // =================================================
-    // IMPORTANTE:
-    //
-    // TOP HISTÓRICO USA server.meta.timePlayed
-    // Y NO LA SUMA DE LAS SESIONES.
+    // TOP HISTÓRICO
     // =================================================
 
     const resultados = [];
-
 
     for (
         const [
@@ -966,21 +903,17 @@ async function obtenerTopServidoresRust(
             continue;
         }
 
-
         if (!servidor.esRust) {
             continue;
         }
-
 
         let segundos =
             Number(
                 servidor.timePlayed
             ) || 0;
 
-
         // -------------------------------------------------
-        // FALLBACK:
-        // si no existe timePlayed, sumar sesiones.
+        // FALLBACK SESIONES
         // -------------------------------------------------
 
         if (
@@ -997,7 +930,6 @@ async function obtenerTopServidoresRust(
                         sesion
                     );
 
-
                 if (
                     idSesion !==
                     serverId
@@ -1005,21 +937,17 @@ async function obtenerTopServidoresRust(
                     continue;
                 }
 
-
                 const atributos =
                     sesion.attributes || {};
-
 
                 if (!atributos.start) {
                     continue;
                 }
 
-
                 const inicio =
                     new Date(
                         atributos.start
                     );
-
 
                 if (
                     isNaN(
@@ -1029,14 +957,12 @@ async function obtenerTopServidoresRust(
                     continue;
                 }
 
-
                 const fin =
                     atributos.stop
                         ? new Date(
                             atributos.stop
                         )
                         : ahora;
-
 
                 if (
                     isNaN(
@@ -1045,7 +971,6 @@ async function obtenerTopServidoresRust(
                 ) {
                     continue;
                 }
-
 
                 segundos +=
                     Math.max(
@@ -1060,13 +985,11 @@ async function obtenerTopServidoresRust(
             }
         }
 
-
         if (
             segundos <= 0
         ) {
             continue;
         }
-
 
         resultados.push({
 
@@ -1095,26 +1018,15 @@ async function obtenerTopServidoresRust(
         });
     }
 
-
-    // =================================================
-    // ORDENAR
-    // =================================================
-
     resultados.sort(
         (a, b) =>
             b.segundos -
             a.segundos
     );
 
-
     console.log(
         `🏆 BM | Servidores Rust encontrados: ${resultados.length}`
     );
-
-
-    // =================================================
-    // MOSTRAR TOP 10 EN LOG
-    // =================================================
 
     for (
         const servidor
@@ -1126,11 +1038,6 @@ async function obtenerTopServidoresRust(
         );
     }
 
-
-    // =================================================
-    // DEVOLVER TOP 10
-    // =================================================
-
     return resultados.slice(
         0,
         10
@@ -1140,10 +1047,17 @@ async function obtenerTopServidoresRust(
 
 // =====================================================
 // STATUS JUGADOR
+//
+// IMPORTANTE:
+// configuredServerId = SERVIDOR CONFIGURADO PARA
+// ESTA GUILD.
+//
+// NO SE COMPARA POR NOMBRE.
 // =====================================================
 
 async function getBattleMetricsPlayerStatus(
-    playerId
+    playerId,
+    configuredServerId = null
 ) {
 
     try {
@@ -1152,6 +1066,9 @@ async function getBattleMetricsPlayerStatus(
             `🔎 BM | Consultando jugador ${playerId}...`
         );
 
+        console.log(
+            `🎯 BM | Servidor configurado: ${configuredServerId || "NO CONFIGURADO"}`
+        );
 
         // =================================================
         // JUGADOR + SERVIDORES
@@ -1172,10 +1089,8 @@ async function getBattleMetricsPlayerStatus(
                 }
             );
 
-
         const player =
             playerResponse.data?.data;
-
 
         if (!player) {
 
@@ -1186,10 +1101,8 @@ async function getBattleMetricsPlayerStatus(
             return null;
         }
 
-
         const playerAttributes =
             player.attributes || {};
-
 
         // =================================================
         // SERVIDORES INCLUIDOS
@@ -1201,13 +1114,11 @@ async function getBattleMetricsPlayerStatus(
                     item.type === "server"
             ) || [];
 
-
         // =================================================
         // HORAS TOTALES BM
         // =================================================
 
         let segundosTotales = 0;
-
 
         for (
             const servidor
@@ -1219,7 +1130,6 @@ async function getBattleMetricsPlayerStatus(
                     servidor.meta?.timePlayed
                 ) || 0;
 
-
             if (
                 tiempo > 0
             ) {
@@ -1228,7 +1138,6 @@ async function getBattleMetricsPlayerStatus(
                     tiempo;
             }
         }
-
 
         // =================================================
         // SESIONES
@@ -1242,7 +1151,6 @@ async function getBattleMetricsPlayerStatus(
 
         let nextUrl =
             `${BM_API}/players/${playerId}/relationships/sessions?page[size]=100`;
-
 
         while (
             nextUrl &&
@@ -1262,11 +1170,9 @@ async function getBattleMetricsPlayerStatus(
                         }
                     );
 
-
                 const sesiones =
                     sessionResponse.data?.data ||
                     [];
-
 
                 if (
                     sesiones.length === 0
@@ -1275,19 +1181,15 @@ async function getBattleMetricsPlayerStatus(
                     break;
                 }
 
-
                 todasLasSesiones.push(
                     ...sesiones
                 );
-
 
                 nextUrl =
                     sessionResponse.data?.links?.next ||
                     null;
 
-
                 pagina++;
-
 
             } catch (error) {
 
@@ -1301,11 +1203,9 @@ async function getBattleMetricsPlayerStatus(
             }
         }
 
-
         console.log(
             `📊 BM | Sesiones obtenidas: ${todasLasSesiones.length}`
         );
-
 
         // =================================================
         // FECHAS
@@ -1323,7 +1223,6 @@ async function getBattleMetricsPlayerStatus(
             obtenerInicioMesChile(
                 ahora
             );
-
 
         // =================================================
         // ORDENAR SESIONES
@@ -1349,7 +1248,6 @@ async function getBattleMetricsPlayerStatus(
             }
         );
 
-
         // =================================================
         // CACHE
         // =================================================
@@ -1357,81 +1255,37 @@ async function getBattleMetricsPlayerStatus(
         const serverInfoCache =
             new Map();
 
-
         // =================================================
-        // DETECTAR SESIÓN ACTIVA RUST
+        // SESIÓN ACTIVA
+        //
+        // SOLO CONSIDERAMOS EL SERVER CONFIGURADO
         // =================================================
 
         let sesionActivaRust = null;
 
         let servidorActualRust = null;
 
-
         const sesionesActivas =
             todasLasSesiones.filter(
                 esSesionActiva
             );
 
-
         console.log(
             `🟢 BM | Sesiones activas detectadas: ${sesionesActivas.length}`
         );
 
-
-        for (
-            const sesion
-            of sesionesActivas
-        ) {
-
-            const serverId =
-                obtenerServerIdSesion(
-                    sesion
-                );
-
-
-            if (!serverId) {
-                continue;
-            }
-
-
-            const info =
-                await obtenerInfoServidor(
-                    serverId,
-                    serverInfoCache
-                );
-
-
-            if (!info) {
-                continue;
-            }
-
-
-            if (!info.esRust) {
-                continue;
-            }
-
-
-            sesionActivaRust =
-                sesion;
-
-            servidorActualRust =
-                info;
-
-            break;
-        }
-
-
         // =================================================
-        // FALLBACK:
-        //
-        // SI LA SESIÓN ACTIVA EXISTE PERO EL SERVIDOR
-        // ESTÁ EN LOS SERVIDORES INCLUIDOS, USARLO
-        // DIRECTAMENTE.
+        // BUSCAR EXCLUSIVAMENTE EL SERVIDOR CONFIGURADO
         // =================================================
 
         if (
-            !sesionActivaRust
+            configuredServerId
         ) {
+
+            const configuredId =
+                String(
+                    configuredServerId
+                );
 
             for (
                 const sesion
@@ -1443,59 +1297,31 @@ async function getBattleMetricsPlayerStatus(
                         sesion
                     );
 
-
                 if (!serverId) {
                     continue;
                 }
 
+                // -----------------------------------------
+                // AQUÍ ESTÁ LA ASOCIACIÓN REAL
+                // -----------------------------------------
 
-                const incluido =
-                    servidoresIncluidos.find(
-                        servidor =>
-                            servidor.id ===
-                            serverId
+                if (
+                    String(serverId) !==
+                    configuredId
+                ) {
+
+                    continue;
+                }
+
+                const info =
+                    await obtenerInfoServidor(
+                        serverId,
+                        serverInfoCache
                     );
 
-
-                if (!incluido) {
+                if (!info) {
                     continue;
                 }
-
-
-                const info = {
-
-                    id:
-                        incluido.id,
-
-                    name:
-                        incluido.attributes?.name ||
-                        "Servidor desconocido",
-
-                    game:
-                        String(
-                            incluido.attributes?.game ||
-                            incluido.attributes?.gameId ||
-                            incluido.attributes?.gameName ||
-                            ""
-                        ).toLowerCase(),
-
-                    esRust:
-                        detectarRust(
-                            incluido,
-                            []
-                        ),
-
-                    timePlayed:
-                        Number(
-                            incluido.meta?.timePlayed
-                        ) || 0
-                };
-
-
-                if (!info.esRust) {
-                    continue;
-                }
-
 
                 sesionActivaRust =
                     sesion;
@@ -1503,10 +1329,28 @@ async function getBattleMetricsPlayerStatus(
                 servidorActualRust =
                     info;
 
+                console.log(
+                    `🎯 BM | Jugador está en el servidor configurado ${configuredId}`
+                );
+
                 break;
             }
         }
 
+        // =================================================
+        // SI NO HAY SERVER CONFIGURADO
+        //
+        // NO INVENTAMOS UN SERVIDOR ACTUAL.
+        // =================================================
+
+        if (
+            !configuredServerId
+        ) {
+
+            console.log(
+                "⚠️ BM | No se recibió battleMetricsServerId configurado."
+            );
+        }
 
         // =================================================
         // ESTADO
@@ -1518,7 +1362,6 @@ async function getBattleMetricsPlayerStatus(
 
         let servidorActual = null;
 
-
         if (
             sesionActivaRust &&
             servidorActualRust
@@ -1526,13 +1369,11 @@ async function getBattleMetricsPlayerStatus(
 
             online = true;
 
-
             const inicio =
                 new Date(
                     sesionActivaRust
                         .attributes?.start
                 );
-
 
             if (
                 !isNaN(
@@ -1551,13 +1392,11 @@ async function getBattleMetricsPlayerStatus(
                         )
                     );
 
-
                 const horas =
                     Math.floor(
                         segundosJugando /
                         3600
                     );
-
 
                 const minutos =
                     Math.floor(
@@ -1567,18 +1406,15 @@ async function getBattleMetricsPlayerStatus(
                         ) / 60
                     );
 
-
                 tiempoJugando =
                     horas > 0
                         ? `${horas}h ${minutos}m`
                         : `${minutos}m`;
             }
 
-
             servidorActual =
                 servidorActualRust.name;
         }
-
 
         // =================================================
         // TOTALES DE SESIONES
@@ -1592,7 +1428,6 @@ async function getBattleMetricsPlayerStatus(
 
         let ultimaConexion = null;
 
-
         for (
             const sesion
             of todasLasSesiones
@@ -1601,17 +1436,14 @@ async function getBattleMetricsPlayerStatus(
             const atributos =
                 sesion.attributes || {};
 
-
             if (!atributos.start) {
                 continue;
             }
-
 
             const inicio =
                 new Date(
                     atributos.start
                 );
-
 
             if (
                 isNaN(
@@ -1621,9 +1453,7 @@ async function getBattleMetricsPlayerStatus(
                 continue;
             }
 
-
             let fin = null;
-
 
             if (atributos.stop) {
 
@@ -1638,7 +1468,6 @@ async function getBattleMetricsPlayerStatus(
                     ahora;
             }
 
-
             if (
                 !fin ||
                 isNaN(
@@ -1647,7 +1476,6 @@ async function getBattleMetricsPlayerStatus(
             ) {
                 continue;
             }
-
 
             const duracion =
                 Math.max(
@@ -1660,10 +1488,8 @@ async function getBattleMetricsPlayerStatus(
                     )
                 );
 
-
             segundosSesionesTotales +=
                 duracion;
-
 
             // ---------------------------------------------
             // SEMANA
@@ -1680,13 +1506,11 @@ async function getBattleMetricsPlayerStatus(
                         ? inicioSemana
                         : inicio;
 
-
                 const finReal =
                     fin >
                     ahora
                         ? ahora
                         : fin;
-
 
                 segundosSemana +=
                     Math.max(
@@ -1699,7 +1523,6 @@ async function getBattleMetricsPlayerStatus(
                         )
                     );
             }
-
 
             // ---------------------------------------------
             // MES
@@ -1716,13 +1539,11 @@ async function getBattleMetricsPlayerStatus(
                         ? inicioMes
                         : inicio;
 
-
                 const finReal =
                     fin >
                     ahora
                         ? ahora
                         : fin;
-
 
                 segundosMes +=
                     Math.max(
@@ -1735,7 +1556,6 @@ async function getBattleMetricsPlayerStatus(
                         )
                     );
             }
-
 
             // ---------------------------------------------
             // ÚLTIMA CONEXIÓN
@@ -1755,7 +1575,6 @@ async function getBattleMetricsPlayerStatus(
             }
         }
 
-
         // =================================================
         // TOMAR MAYOR VALOR
         // =================================================
@@ -1769,7 +1588,6 @@ async function getBattleMetricsPlayerStatus(
                 segundosSesionesTotales;
         }
 
-
         // =================================================
         // HORAS
         // =================================================
@@ -1780,13 +1598,11 @@ async function getBattleMetricsPlayerStatus(
                 3600
             );
 
-
         const horasSemana =
             Math.floor(
                 segundosSemana /
                 3600
             );
-
 
         const horasMes =
             Math.floor(
@@ -1794,19 +1610,16 @@ async function getBattleMetricsPlayerStatus(
                 3600
             );
 
-
         const ultimaConexionTexto =
             formatearFechaChile(
                 ultimaConexion
             );
-
 
         // =================================================
         // HISTORIAL NOMBRES
         // =================================================
 
         let historialNombres = [];
-
 
         try {
 
@@ -1825,11 +1638,9 @@ async function getBattleMetricsPlayerStatus(
                     }
                 );
 
-
             const identifiers =
                 identifiersResponse.data?.data ||
                 [];
-
 
             const nombres =
                 identifiers
@@ -1841,7 +1652,6 @@ async function getBattleMetricsPlayerStatus(
                     )
                     .filter(Boolean);
 
-
             historialNombres =
                 [
                     ...new Set(
@@ -1852,19 +1662,16 @@ async function getBattleMetricsPlayerStatus(
                     3
                 );
 
-
         } catch {
 
             historialNombres = [];
         }
-
 
         // =================================================
         // TOP 10 RUST
         // =================================================
 
         let topServidoresRust = [];
-
 
         try {
 
@@ -1885,14 +1692,12 @@ async function getBattleMetricsPlayerStatus(
             topServidoresRust = [];
         }
 
-
         // =================================================
         // MAPA SERVIDORES
         // =================================================
 
         const servidoresMap =
             new Map();
-
 
         for (
             const servidor
@@ -1909,7 +1714,6 @@ async function getBattleMetricsPlayerStatus(
             }
         }
 
-
         for (
             const sesion
             of todasLasSesiones
@@ -1919,7 +1723,6 @@ async function getBattleMetricsPlayerStatus(
                 obtenerServerIdSesion(
                     sesion
                 );
-
 
             if (
                 serverId &&
@@ -1935,10 +1738,8 @@ async function getBattleMetricsPlayerStatus(
             }
         }
 
-
         const servidoresEncontrados =
             servidoresMap.size;
-
 
         // =================================================
         // RESULTADO
@@ -1986,6 +1787,10 @@ async function getBattleMetricsPlayerStatus(
                 servidorActual ||
                 "Desconocido",
 
+            // =================================================
+            // SERVIDOR ACTUAL CONFIGURADO
+            // =================================================
+
             servidorActualRust:
                 servidorActualRust
                     ? {
@@ -1998,6 +1803,17 @@ async function getBattleMetricsPlayerStatus(
                         game:
                             servidorActualRust.game
                     }
+                    : null,
+
+            // =================================================
+            // ID DEL SERVIDOR CONFIGURADO
+            // =================================================
+
+            battleMetricsServerId:
+                configuredServerId
+                    ? String(
+                        configuredServerId
+                    )
                     : null,
 
             topServidoresRust:
@@ -2022,7 +1838,6 @@ async function getBattleMetricsPlayerStatus(
                 historialNombres
         };
 
-
         console.log(
             `✅ BM | ${resultado.nombre} | ` +
             `${resultado.horasTotalesBM}h | ` +
@@ -2032,14 +1847,15 @@ async function getBattleMetricsPlayerStatus(
             `${resultado.servidor}`
         );
 
+        console.log(
+            `🎯 BM | Server configurado: ${configuredServerId || "N/A"}`
+        );
 
         console.log(
             `🏆 BM | Top Rust encontrados: ${resultado.topServidoresRust.length}`
         );
 
-
         return resultado;
-
 
     } catch (error) {
 
@@ -2059,24 +1875,23 @@ async function getBattleMetricsPlayerStatus(
 // =====================================================
 
 async function getBattleMetricsHours(
-    playerId
+    playerId,
+    configuredServerId = null
 ) {
 
     console.log(
         `⏱️ BM | Obteniendo horas del jugador ${playerId}...`
     );
 
-
     const datos =
         await getBattleMetricsPlayerStatus(
-            playerId
+            playerId,
+            configuredServerId
         );
-
 
     if (!datos) {
         return null;
     }
-
 
     return datos;
 }
@@ -2107,11 +1922,9 @@ async function getServerLeaderboard(
                 }
             );
 
-
         const included =
             response.data?.included ||
             [];
-
 
         const players =
             included.filter(
@@ -2119,14 +1932,12 @@ async function getServerLeaderboard(
                     item.type === "player"
             );
 
-
         if (
             players.length === 0
         ) {
 
             return [];
         }
-
 
         const validResults =
             players.map(
@@ -2146,16 +1957,13 @@ async function getServerLeaderboard(
                 })
             );
 
-
         validResults.sort(
             (a, b) =>
                 b.timePlayedSeconds -
                 a.timePlayedSeconds
         );
 
-
         return validResults;
-
 
     } catch (error) {
 

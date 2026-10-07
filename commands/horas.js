@@ -72,8 +72,15 @@ module.exports = {
             ) {
 
                 serverId =
-                    dbConfig.battleMetricsServerId;
+                    String(
+                        dbConfig.battleMetricsServerId
+                    );
             }
+
+
+            console.log(
+                `🎯 /horas | Servidor configurado: ${serverId}`
+            );
 
 
         } catch (error) {
@@ -186,6 +193,8 @@ module.exports = {
 
         // =====================================================
         // BUSCAR EN BATTLEMETRICS
+        //
+        // SIEMPRE EN EL SERVIDOR CONFIGURADO
         // =====================================================
 
         let jugadorBM = null;
@@ -341,6 +350,9 @@ module.exports = {
 
         // =====================================================
         // DATOS DETALLADOS BATTLEMETRICS
+        //
+        // IMPORTANTE:
+        // PASAMOS EL SERVIDOR CONFIGURADO.
         // =====================================================
 
         let datosFinales = null;
@@ -350,7 +362,8 @@ module.exports = {
 
             datosFinales =
                 await getBattleMetricsPlayerStatus(
-                    jugadorBM.id
+                    jugadorBM.id,
+                    serverId
                 );
 
 
@@ -442,10 +455,12 @@ module.exports = {
 
         // =====================================================
         // SERVIDOR ACTUAL
+        //
+        // SOLO EL SERVIDOR CONFIGURADO
         // =====================================================
 
         let servidorActualTexto =
-            "`🔴 No está jugando Rust ahora`";
+            "`🔴 No está jugando en el servidor configurado`";
 
 
         if (
@@ -457,27 +472,60 @@ module.exports = {
                 datosFinales.servidorActualRust;
 
 
-            // Buscar las horas históricas del servidor actual
-            // dentro de los servidores Rust calculados.
-            const servidorHistorico =
-                datosFinales.topServidoresRust &&
-                datosFinales.topServidoresRust.find(
-                    servidor =>
-                        String(servidor.id) ===
-                        String(servidorActual.id)
+            // -------------------------------------------------
+            // SEGURIDAD:
+            // COMPROBAR QUE EL ID ES EXACTAMENTE
+            // EL SERVIDOR CONFIGURADO.
+            // -------------------------------------------------
+
+            if (
+                String(
+                    servidorActual.id
+                ) ===
+                String(
+                    serverId
+                )
+            ) {
+
+                // ---------------------------------------------
+                // BUSCAR HORAS HISTÓRICAS POR ID
+                //
+                // NUNCA POR NOMBRE.
+                // ---------------------------------------------
+
+                const servidorHistorico =
+                    datosFinales.topServidoresRust &&
+                    datosFinales.topServidoresRust.find(
+                        servidor =>
+                            String(
+                                servidor.id
+                            ) ===
+                            String(
+                                serverId
+                            )
+                    );
+
+
+                const horasServidorActual =
+                    servidorHistorico &&
+                    servidorHistorico.tiempo
+                        ? servidorHistorico.tiempo
+                        : null;
+
+
+                servidorActualTexto =
+                    `[${servidorActual.nombre}](https://www.battlemetrics.com/servers/${serverId})` +
+                    `\n⏱️ ${horasServidorActual || "Horas no disponibles"} en este servidor`;
+
+            } else {
+
+                console.log(
+                    `⚠️ /horas | BM devolvió servidor ${servidorActual.id}, pero el configurado es ${serverId}`
                 );
 
-
-            const horasServidorActual =
-                servidorHistorico &&
-                servidorHistorico.tiempo
-                    ? servidorHistorico.tiempo
-                    : null;
-
-
-            servidorActualTexto =
-                `[${servidorActual.nombre}](https://www.battlemetrics.com/servers/${servidorActual.id})` +
-                `\n⏱️ ${horasServidorActual || "Horas no disponibles"} en este servidor`;
+                servidorActualTexto =
+                    "`🔴 El jugador no está en el servidor configurado`";
+            }
         }
 
 
