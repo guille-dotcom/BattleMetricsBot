@@ -1,34 +1,84 @@
 require("dotenv").config();
 const axios = require("axios");
 
-async function test() {
+const TOKEN = process.env.BATTLEMETRICS_TOKEN;
+const SERVER_ID = "41243073";
+
+const endpoints = [
+    `/servers/${SERVER_ID}/relationships/players`,
+    `/servers/${SERVER_ID}/relationships/sessions`,
+    `/players?filter[servers]=${SERVER_ID}&page[size]=100`,
+];
+
+async function testEndpoint(endpoint) {
+    console.log("\n==========================================");
+    console.log("TEST:", endpoint);
+    console.log("==========================================");
+
     try {
-        const res = await axios.get(
-            "https://api.battlemetrics.com/activity",
+        const response = await axios.get(
+            `https://api.battlemetrics.com${endpoint}`,
             {
                 headers: {
-                    Authorization: `Bearer ${process.env.BATTLEMETRICS_TOKEN}`
+                    Authorization: `Bearer ${TOKEN}`,
+                    Accept: "application/json",
                 },
-                params: {
-                    "page[size]": 1
-                }
+                timeout: 30000,
             }
         );
 
-        console.log("✅ Token válido");
-        console.log("Status:", res.status);
-        console.log("Datos recibidos:", res.data);
+        console.log("HTTP:", response.status);
 
-    } catch (err) {
-        console.log("❌ Error");
+        const data = response.data;
 
-        if (err.response) {
-            console.log("Status:", err.response.status);
-            console.log(err.response.data);
+        if (Array.isArray(data?.data)) {
+            console.log("DATA:", data.data.length);
+
+            for (const player of data.data.slice(0, 10)) {
+                console.log(
+                    JSON.stringify(player, null, 2)
+                );
+            }
         } else {
-            console.log(err.message);
+            console.log(
+                JSON.stringify(data, null, 2)
+            );
+        }
+
+    } catch (error) {
+        console.log(
+            "HTTP:",
+            error.response?.status || "SIN RESPUESTA"
+        );
+
+        if (error.response?.data) {
+            console.log(
+                JSON.stringify(
+                    error.response.data,
+                    null,
+                    2
+                )
+            );
+        } else {
+            console.log(error.message);
         }
     }
 }
 
-test();
+async function main() {
+    if (!TOKEN) {
+        console.error(
+            "❌ BATTLEMETRICS_TOKEN no está configurado"
+        );
+        process.exit(1);
+    }
+
+    console.log("Token: CARGADO");
+    console.log("Servidor:", SERVER_ID);
+
+    for (const endpoint of endpoints) {
+        await testEndpoint(endpoint);
+    }
+}
+
+main();

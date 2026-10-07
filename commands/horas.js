@@ -1,41 +1,54 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const {
+    SlashCommandBuilder,
+    EmbedBuilder
+} = require("discord.js");
 
-const { getSteamProfile } = require("../services/steam.js");
+const {
+    getSteamProfile
+} = require("../services/steam.js");
 
 const {
     searchBattleMetricsPlayer,
     getBattleMetricsPlayerStatus
 } = require("../services/battlemetricsHours.js");
 
-const ServerConfig = require("../models/ServerConfig");
+const ServerConfig =
+    require("../models/ServerConfig");
+
 
 module.exports = {
 
-    data: new SlashCommandBuilder()
+    data:
 
-        .setName("horas")
+        new SlashCommandBuilder()
 
-        .setDescription(
-            "Obtiene las horas de BattleMetrics buscando al usuario de Steam en el servidor"
-        )
+            .setName("horas")
 
-        .addStringOption(option =>
-            option
-                .setName("steamid")
-                .setDescription(
-                    "El SteamID del jugador (Ej: 76561198818187993)"
-                )
-                .setRequired(true)
-        ),
+            .setDescription(
+                "Obtiene las horas de BattleMetrics buscando al usuario de Steam en el servidor"
+            )
+
+            .addStringOption(
+                option =>
+                    option
+                        .setName("steamid")
+                        .setDescription(
+                            "El SteamID del jugador (Ej: 76561198818187993)"
+                        )
+                        .setRequired(true)
+            ),
+
 
     async execute(interaction) {
 
         await interaction.deferReply();
 
+
         const steamId =
             interaction.options
                 .getString("steamid")
                 .trim();
+
 
         let serverId = "433255";
 
@@ -48,8 +61,10 @@ module.exports = {
 
             const dbConfig =
                 await ServerConfig.findOne({
-                    guildId: interaction.guild.id
+                    guildId:
+                        interaction.guild.id
                 });
+
 
             if (
                 dbConfig &&
@@ -59,6 +74,7 @@ module.exports = {
                 serverId =
                     dbConfig.battleMetricsServerId;
             }
+
 
         } catch (error) {
 
@@ -75,10 +91,14 @@ module.exports = {
 
         let perfilSteam;
 
+
         try {
 
             perfilSteam =
-                await getSteamProfile(steamId);
+                await getSteamProfile(
+                    steamId
+                );
+
 
         } catch (err) {
 
@@ -86,6 +106,7 @@ module.exports = {
                 "Error API Steam:",
                 err.message
             );
+
 
             return await interaction.editReply(
                 "❌ Error al conectar con la API de Steam."
@@ -169,6 +190,7 @@ module.exports = {
 
         let jugadorBM = null;
 
+
         try {
 
             jugadorBM =
@@ -176,6 +198,7 @@ module.exports = {
                     perfilSteam.name,
                     serverId
                 );
+
 
         } catch (err) {
 
@@ -227,44 +250,62 @@ module.exports = {
                     .addFields(
 
                         {
-                            name: "🆔 Steam ID",
+                            name:
+                                "🆔 Steam ID",
+
                             value:
                                 `[${steamId}](https://steamcommunity.com/profiles/${steamId})`,
+
                             inline: true
                         },
 
                         {
-                            name: "📊 Horas Steam",
+                            name:
+                                "📊 Horas Steam",
+
                             value:
                                 horasSteamTexto,
+
                             inline: true
                         },
 
                         {
-                            name: "🖥️ Estado",
+                            name:
+                                "🖥️ Estado",
+
                             value:
                                 "`🔴 Desconocido / Offline`",
+
                             inline: true
                         },
 
                         {
-                            name: "🌍 País",
+                            name:
+                                "🌍 País",
+
                             value:
                                 paisTexto,
+
                             inline: true
                         },
 
                         {
-                            name: "🛡️ Baneos",
+                            name:
+                                "🛡️ Baneos",
+
                             value:
                                 `\`${vacTexto}\``,
+
                             inline: true
                         },
 
                         {
-                            name: "📅 Antigüedad",
+                            name:
+                                "📅 Antigüedad",
+
                             value:
                                 `\`${creacionSteamTexto}\``,
+
                             inline: true
                         }
 
@@ -273,7 +314,8 @@ module.exports = {
                     .setTimestamp()
 
                     .setFooter({
-                        text: "RustLogix"
+                        text:
+                            "RustLogix"
                     });
 
 
@@ -290,7 +332,9 @@ module.exports = {
 
 
             return await interaction.editReply({
-                embeds: [embedOffline]
+                embeds: [
+                    embedOffline
+                ]
             });
         }
 
@@ -301,12 +345,14 @@ module.exports = {
 
         let datosFinales = null;
 
+
         try {
 
             datosFinales =
                 await getBattleMetricsPlayerStatus(
                     jugadorBM.id
                 );
+
 
         } catch (err) {
 
@@ -334,20 +380,6 @@ module.exports = {
                 datosFinales.horasTotalesBM
             ) || 0;
 
-
-        /*
-         * =====================================================
-         * IMPORTANTE
-         *
-         * La diferencia es únicamente:
-         *
-         * |Horas Steam - Horas BattleMetrics|
-         *
-         * NO utiliza:
-         * - horas semanales
-         * - horas mensuales
-         * =====================================================
-         */
 
         const diferenciaTexto =
             horasSteamNum > 0
@@ -409,6 +441,48 @@ module.exports = {
 
 
         // =====================================================
+        // SERVIDOR ACTUAL
+        // =====================================================
+
+        const servidorActualTexto =
+            datosFinales.online &&
+            datosFinales.servidorActualRust
+
+                ? `[${datosFinales.servidorActualRust.nombre}](https://www.battlemetrics.com/servers/${datosFinales.servidorActualRust.id})`
+
+                : "`🔴 No está jugando Rust ahora`";
+
+
+        // =====================================================
+        // TOP 5 RUST
+        // =====================================================
+
+        let topRustTexto =
+            "`No hay historial de servidores Rust disponible`";
+
+
+        if (
+            datosFinales.topServidoresRust &&
+            datosFinales.topServidoresRust.length > 0
+        ) {
+
+            topRustTexto =
+                datosFinales.topServidoresRust
+                    .map(
+                        (servidor, index) => {
+
+                            return (
+                                `**${index + 1}.** ` +
+                                `[${servidor.nombre}](https://www.battlemetrics.com/servers/${servidor.id})` +
+                                ` — \`${servidor.tiempo}\``
+                            );
+                        }
+                    )
+                    .join("\n");
+        }
+
+
+        // =====================================================
         // EMBED
         // =====================================================
 
@@ -428,14 +502,31 @@ module.exports = {
                 .addFields(
 
                     // -----------------------------------------
-                    // SERVIDOR
+                    // SERVIDOR ACTUAL RUST
                     // -----------------------------------------
 
                     {
-                        name: "🎮 Servidor",
+                        name:
+                            "🎮 Servidor actual",
+
                         value:
-                            datosFinales.server ||
-                            "Desconocido",
+                            servidorActualTexto,
+
+                        inline: false
+                    },
+
+
+                    // -----------------------------------------
+                    // TOP 5 SERVIDORES RUST
+                    // -----------------------------------------
+
+                    {
+                        name:
+                            "🏆 Top 5 servidores de Rust",
+
+                        value:
+                            topRustTexto,
+
                         inline: false
                     },
 
@@ -445,16 +536,22 @@ module.exports = {
                     // -----------------------------------------
 
                     {
-                        name: "🆔 BattleMetrics",
+                        name:
+                            "🆔 BattleMetrics",
+
                         value:
                             `[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})`,
+
                         inline: true
                     },
 
                     {
-                        name: "🆔 Steam ID",
+                        name:
+                            "🆔 Steam ID",
+
                         value:
                             `[${steamId}](https://steamcommunity.com/profiles/${steamId})`,
+
                         inline: true
                     },
 
@@ -464,9 +561,12 @@ module.exports = {
                     // -----------------------------------------
 
                     {
-                        name: "🎮 Estado",
+                        name:
+                            "🎮 Estado",
+
                         value:
                             `\`${estadoActual}\``,
+
                         inline: true
                     },
 
@@ -476,23 +576,32 @@ module.exports = {
                     // -----------------------------------------
 
                     {
-                        name: "📈 Horas (BM)",
+                        name:
+                            "📈 Horas (BM)",
+
                         value:
                             `\`${datosFinales.horasTotalesBM}h\``,
+
                         inline: true
                     },
 
                     {
-                        name: "📊 Horas (Steam)",
+                        name:
+                            "📊 Horas (Steam)",
+
                         value:
                             horasSteamTexto,
+
                         inline: true
                     },
 
                     {
-                        name: "⚖️ Diferencia",
+                        name:
+                            "⚖️ Diferencia",
+
                         value:
                             diferenciaTexto,
+
                         inline: true
                     },
 
@@ -502,23 +611,32 @@ module.exports = {
                     // -----------------------------------------
 
                     {
-                        name: "📈 Esta Semana",
+                        name:
+                            "📈 Esta Semana",
+
                         value:
                             `\`${horasSemana}h\``,
+
                         inline: true
                     },
 
                     {
-                        name: "📆 Este Mes",
+                        name:
+                            "📆 Este Mes",
+
                         value:
                             `\`${horasMes}h\``,
+
                         inline: true
                     },
 
                     {
-                        name: "🕐 Última Conexión",
+                        name:
+                            "🕐 Última Conexión",
+
                         value:
                             `\`${ultimaConexion}\``,
+
                         inline: true
                     },
 
@@ -528,23 +646,32 @@ module.exports = {
                     // -----------------------------------------
 
                     {
-                        name: "🌍 País",
+                        name:
+                            "🌍 País",
+
                         value:
                             paisTexto,
+
                         inline: true
                     },
 
                     {
-                        name: "🛡️ Estado Baneos",
+                        name:
+                            "🛡️ Estado Baneos",
+
                         value:
                             `\`${vacTexto}\``,
+
                         inline: true
                     },
 
                     {
-                        name: "📅 Antigüedad",
+                        name:
+                            "📅 Antigüedad",
+
                         value:
                             `\`${creacionSteamTexto}\``,
+
                         inline: true
                     },
 
@@ -554,9 +681,12 @@ module.exports = {
                     // -----------------------------------------
 
                     {
-                        name: "📝 Historial de Nombres",
+                        name:
+                            "📝 Historial de Nombres",
+
                         value:
                             historialTexto,
+
                         inline: false
                     }
 
@@ -565,7 +695,8 @@ module.exports = {
                 .setTimestamp()
 
                 .setFooter({
-                    text: "RustLogix"
+                    text:
+                        "RustLogix"
                 });
 
 
@@ -586,11 +717,13 @@ module.exports = {
 
 
         // =====================================================
-        // ENVIAR RESPUESTA
+        // ENVIAR
         // =====================================================
 
         return await interaction.editReply({
-            embeds: [embedOnline]
+            embeds: [
+                embedOnline
+            ]
         });
     }
 };
