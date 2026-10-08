@@ -5,7 +5,7 @@ const {
 
 const {
     getBattleMetricsHours
-} = require("../battlemetricsHours");
+} = require("../services/battlemetricsHours");
 
 module.exports = {
 
@@ -55,9 +55,7 @@ module.exports = {
             // ============================================================
 
             const datos =
-                await getBattleMetricsHours(
-                    playerId
-                );
+                await getBattleMetricsHours(playerId);
 
             if (!datos) {
 
@@ -95,8 +93,7 @@ module.exports = {
             // SESIÓN ACTUAL
             // ============================================================
 
-            let sesionActual =
-                "Offline";
+            let sesionActual = "Offline";
 
             if (
                 datos.online ||
@@ -112,11 +109,6 @@ module.exports = {
 
             // ============================================================
             // HORAS BATTLEMETRICS
-            //
-            // totalHoras ya viene convertido:
-            // "2763h 34m"
-            //
-            // NO usamos horasTotalesBM porque ese valor son segundos.
             // ============================================================
 
             const horas =
@@ -126,11 +118,6 @@ module.exports = {
 
             // ============================================================
             // SERVIDORES JUGADOS
-            //
-            // cantidadServidoresRust = cantidad real de servidores.
-            //
-            // servidoresEncontrados puede contener el array del Top 10,
-            // por eso nunca lo mostramos directamente.
             // ============================================================
 
             let servidoresJugados = 0;
@@ -154,12 +141,10 @@ module.exports = {
                 }
             }
 
-            // Fallback por si cantidadServidoresRust no existe
+            // Fallback
             if (
                 servidoresJugados === 0 &&
-                Array.isArray(
-                    datos.servidoresEncontrados
-                )
+                Array.isArray(datos.servidoresEncontrados)
             ) {
 
                 servidoresJugados =
@@ -277,14 +262,10 @@ module.exports = {
             // ============================================================
 
             const top10 =
-                Array.isArray(
-                    datos.top10
-                )
+                Array.isArray(datos.top10)
                     ? datos.top10
                     : (
-                        Array.isArray(
-                            datos.topServidoresRust
-                        )
+                        Array.isArray(datos.topServidoresRust)
                             ? datos.topServidoresRust
                             : []
                     );
@@ -365,9 +346,7 @@ module.exports = {
             // ============================================================
 
             if (
-                Array.isArray(
-                    datos.historialNombres
-                ) &&
+                Array.isArray(datos.historialNombres) &&
                 datos.historialNombres.length > 0
             ) {
 
