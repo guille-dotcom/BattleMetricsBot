@@ -32,6 +32,15 @@ module.exports = {
             const perfil =
                 interaction.options.getString("perfil");
 
+            if (!perfil) {
+
+                return interaction.editReply(
+                    "❌ Debes ingresar el enlace del perfil de BattleMetrics.\n\n" +
+                    "Ejemplo:\n" +
+                    "https://www.battlemetrics.com/players/103232202"
+                );
+            }
+
             const match =
                 perfil.match(
                     /battlemetrics\.com\/players\/(\d+)/i
