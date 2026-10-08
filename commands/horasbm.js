@@ -26,13 +26,33 @@ module.exports = {
         try {
 
             // ============================================================
-            // LINK DEL PERFIL
+            // OBTENER LINK DEL PERFIL
             // ============================================================
 
-            const perfil =
+            let perfil =
                 interaction.options.getString("perfil");
 
+            // Fallback por si Discord entrega la opción directamente
+            // dentro de interaction.options.data
             if (!perfil) {
+
+                const opcionPerfil =
+                    interaction.options.data.find(
+                        option => option.name === "perfil"
+                    );
+
+                if (opcionPerfil) {
+                    perfil = opcionPerfil.value;
+                }
+            }
+
+            console.log(
+                "🔎 /horasbm perfil recibido:",
+                perfil
+            );
+
+            if (!perfil) {
+
                 return interaction.editReply(
                     "❌ Debes ingresar el enlace del perfil de BattleMetrics.\n\n" +
                     "Ejemplo:\n" +
@@ -40,12 +60,17 @@ module.exports = {
                 );
             }
 
+            // ============================================================
+            // EXTRAER ID DEL JUGADOR
+            // ============================================================
+
             const match =
-                perfil.match(
+                String(perfil).match(
                     /battlemetrics\.com\/players\/(\d+)/i
                 );
 
             if (!match) {
+
                 return interaction.editReply(
                     "❌ Debes ingresar un enlace válido de BattleMetrics.\n\n" +
                     "Ejemplo:\n" +
@@ -56,14 +81,19 @@ module.exports = {
             const playerId =
                 match[1];
 
+            console.log(
+                `🔎 /horasbm playerId: ${playerId}`
+            );
+
             // ============================================================
-            // OBTENER DATOS
+            // OBTENER DATOS DE BATTLEMETRICS
             // ============================================================
 
             const datos =
                 await getBattleMetricsHours(playerId);
 
             if (!datos) {
+
                 return interaction.editReply(
                     "❌ No se pudieron obtener los datos de BattleMetrics."
                 );
@@ -101,6 +131,7 @@ module.exports = {
                 datos.online ||
                 datos.jugando
             ) {
+
                 sesionActual =
                     datos.jugando ||
                     servidor ||
@@ -144,6 +175,7 @@ module.exports = {
                 servidoresJugados === 0 &&
                 Array.isArray(datos.servidoresEncontrados)
             ) {
+
                 servidoresJugados =
                     datos.servidoresEncontrados.length;
             }
@@ -182,7 +214,7 @@ module.exports = {
                     : 0xED4245;
 
             // ============================================================
-            // EMBED
+            // EMBED PRINCIPAL
             // ============================================================
 
             const embed =
@@ -190,54 +222,63 @@ module.exports = {
                     .setColor(color)
                     .setTitle("🎮 Perfil BattleMetrics")
                     .addFields(
+
                         {
                             name: "👤 Jugador",
                             value:
                                 `[${nombre}](${jugadorUrl})`,
                             inline: false
                         },
+
                         {
                             name: "🌐 Servidor Actual",
                             value:
                                 servidor,
                             inline: false
                         },
+
                         {
                             name: "⏱️ Sesión Actual",
                             value:
                                 `\`${sesionActual}\``,
                             inline: false
                         },
+
                         {
                             name: "📈 Horas BattleMetrics",
                             value:
                                 `\`${horas}\``,
                             inline: true
                         },
+
                         {
                             name: "🖥️ Servidores Jugados",
                             value:
                                 `\`${servidoresJugados}\``,
                             inline: true
                         },
+
                         {
                             name: "📅 Esta Semana",
                             value:
                                 `\`${semana}\``,
                             inline: true
                         },
+
                         {
                             name: "📆 Este Mes",
                             value:
                                 `\`${mes}\``,
                             inline: true
                         },
+
                         {
                             name: "🕐 Última Conexión",
                             value:
                                 `\`${ultimaConexion}\``,
                             inline: true
                         }
+
                     );
 
             // ============================================================
@@ -278,8 +319,12 @@ module.exports = {
                                     server.duracion ||
                                     "0h";
 
+                                // ------------------------------------------------
                                 // SIN ID
+                                // ------------------------------------------------
+
                                 if (!serverId) {
+
                                     return (
                                         `**${index + 1}.** ` +
                                         `${serverName} — ` +
@@ -287,7 +332,10 @@ module.exports = {
                                     );
                                 }
 
+                                // ------------------------------------------------
                                 // CON ID
+                                // ------------------------------------------------
+
                                 const serverUrl =
                                     `https://www.battlemetrics.com/servers/${serverId}`;
 
@@ -301,10 +349,13 @@ module.exports = {
                         .join("\n");
 
                 embed.addFields({
+
                     name:
                         "🏆 Top 10 servidores de Rust",
+
                     value:
                         listaTop,
+
                     inline: false
                 });
             }
@@ -328,10 +379,13 @@ module.exports = {
                         .join("\n");
 
                 embed.addFields({
+
                     name:
                         "📝 Historial de nombres",
+
                     value:
                         historial,
+
                     inline: false
                 });
             }
@@ -341,6 +395,7 @@ module.exports = {
             // ============================================================
 
             embed.setFooter({
+
                 text:
                     "RustLogix • BattleMetrics"
             });
@@ -352,7 +407,10 @@ module.exports = {
             // ============================================================
 
             await interaction.editReply({
-                embeds: [embed]
+
+                embeds: [
+                    embed
+                ]
             });
 
             console.log(
