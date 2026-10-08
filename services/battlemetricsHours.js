@@ -981,10 +981,30 @@ async function obtenerTopServidoresRust(
     );
 
 
+    // --------------------------------------------------------
+    // TOTAL REAL DE TODOS LOS SERVIDORES
+    // --------------------------------------------------------
+
+    const totalSegundos =
+        resultados.reduce(
+            (total, servidor) =>
+                total +
+                (
+                    Number(
+                        servidor.segundos
+                    ) || 0
+                ),
+            0
+        );
+
+
+    const top10 =
+        resultados.slice(0, 10);
+
+
     console.log(
         "🏆 BM | Top servidores calculado:",
-        resultados
-            .slice(0, 10)
+        top10
             .map(
                 (x, i) =>
                     `${i + 1}. ${x.nombre} -> ${x.tiempo}`
@@ -993,7 +1013,15 @@ async function obtenerTopServidoresRust(
     );
 
 
-    return resultados.slice(0, 10);
+    console.log(
+        `🧮 BM | Total real de todos los servidores: ${segundosAHoras(totalSegundos)}`
+    );
+
+
+    return {
+        top10,
+        totalSegundos
+    };
 }
 
 
@@ -1480,10 +1508,10 @@ async function getBattleMetricsPlayerStatus(
 
 
         // =====================================================
-        // TOP 10 RUST
+        // TOP 10 RUST + TOTAL
         // =====================================================
 
-        const topServidoresRust =
+        const resultadoServidores =
             await obtenerTopServidoresRust(
                 playerId,
                 todasLasSesiones,
@@ -1491,30 +1519,24 @@ async function getBattleMetricsPlayerStatus(
             );
 
 
+        const topServidoresRust =
+            resultadoServidores.top10;
+
+
         // =====================================================
         // TOTAL BM REAL
         // =====================================================
 
-        /*
-         * Sumamos las horas reales del jugador de cada servidor
-         * obtenidas mediante /players/:player/servers/:server.
-         *
-         * Si por alguna razón un servidor no pudo entregar horas,
-         * usamos las sesiones como respaldo.
-         */
-
         let horasTotalesBM =
-            topServidoresRust.reduce(
-                (total, servidor) =>
-                    total +
-                    (
-                        Number(
-                            servidor.segundos
-                        ) || 0
-                    ),
-                0
-            );
+            Number(
+                resultadoServidores.totalSegundos
+            ) || 0;
 
+
+        /*
+         * Solo usamos las sesiones como último respaldo
+         * si no conseguimos ningún tiempo directo.
+         */
 
         if (
             horasTotalesBM <= 0
