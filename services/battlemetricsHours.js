@@ -1865,9 +1865,6 @@ async function getBattleMetricsPlayerStatus(
 
         // =====================================================
         // SI ESTÁ ONLINE Y NO HAY SESIONES
-        //
-        // BM ya confirmó presencia actual, por lo que no
-        // debemos mostrarlo como offline.
         // =====================================================
 
         if (
@@ -2166,7 +2163,18 @@ async function getBattleMetricsPlayerStatus(
 
             jugandoServidorConfigurado,
 
+            // =================================================
+            // TOP 10
+            // =================================================
+
             topServidoresRust,
+
+            top10:
+                topServidoresRust,
+
+            // =================================================
+            // COMPATIBILIDAD
+            // =================================================
 
             servidoresEncontrados:
                 topServidoresRust,
@@ -2178,6 +2186,9 @@ async function getBattleMetricsPlayerStatus(
                     datos: {
 
                         servidoresEncontrados:
+                            topServidoresRust,
+
+                        top10:
                             topServidoresRust
                     }
                 }
@@ -2220,8 +2231,38 @@ async function getBattleMetricsHours(
 
     return {
 
+        // =====================================================
+        // IDENTIFICACIÓN
+        // =====================================================
+
+        id:
+            datos.id,
+
+        nombre:
+            datos.nombre,
+
+        name:
+            datos.name,
+
+        // =====================================================
+        // ESTADO
+        // =====================================================
+
+        online:
+            datos.online,
+
+        jugando:
+            datos.jugando,
+
+        // =====================================================
+        // HORAS
+        // =====================================================
+
         totalHoras:
             datos.totalHoras,
+
+        horasTotalesBM:
+            datos.horasTotalesBM,
 
         horasSemana:
             datos.horasSemana,
@@ -2229,17 +2270,58 @@ async function getBattleMetricsHours(
         horasMes:
             datos.horasMes,
 
+        // =====================================================
+        // ÚLTIMA CONEXIÓN
+        // =====================================================
+
         ultimaConexion:
             datos.ultimaConexion,
+
+        // =====================================================
+        // SERVIDOR
+        // =====================================================
 
         servidor:
             datos.servidor,
 
+        server:
+            datos.server,
+
+        servidorActualRust:
+            datos.servidorActualRust,
+
         horasServidorConfigurado:
             datos.horasServidorConfigurado,
 
+        jugandoServidorConfigurado:
+            datos.jugandoServidorConfigurado,
+
+        // =====================================================
+        // SERVIDORES RUST
+        // =====================================================
+
         cantidadServidoresRust:
-            datos.cantidadServidoresRust
+            datos.cantidadServidoresRust,
+
+        servidoresEncontrados:
+            datos.servidoresEncontrados,
+
+        // =====================================================
+        // TOP 10 SERVIDORES
+        // =====================================================
+
+        topServidoresRust:
+            datos.topServidoresRust,
+
+        top10:
+            datos.topServidoresRust,
+
+        // =====================================================
+        // HISTORIAL DE NOMBRES
+        // =====================================================
+
+        historialNombres:
+            datos.historialNombres
     };
 }
 

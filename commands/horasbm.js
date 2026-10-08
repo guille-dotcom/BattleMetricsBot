@@ -7,7 +7,6 @@ const {
     getBattleMetricsHours
 } = require("../services/battlemetricsHours.js");
 
-
 // =====================================================
 // COMANDO /HORASBM
 // =====================================================
@@ -16,70 +15,49 @@ module.exports = {
 
     data:
         new SlashCommandBuilder()
-
-            .setName(
-                "horasbm"
-            )
-
+            .setName("horasbm")
             .setDescription(
                 "Muestra las horas y estadísticas de BattleMetrics mediante el link del perfil"
             )
-
             .addStringOption(
                 option =>
                     option
-                        .setName(
-                            "link"
-                        )
-
+                        .setName("link")
                         .setDescription(
                             "Link del perfil de BattleMetrics"
                         )
-
-                        .setRequired(
-                            true
-                        )
+                        .setRequired(true)
             ),
-
 
     // =================================================
     // EXECUTE
     // =================================================
 
-    async execute(
-        interaction
-    ) {
+    async execute(interaction) {
 
         const linkInput =
             interaction.options
-                .getString(
-                    "link"
-                )
+                .getString("link")
                 ?.trim();
 
-
         await interaction.deferReply();
-
 
         // =================================================
         // VALIDAR LINK
         // =================================================
 
-        if (
-            !linkInput
-        ) {
+        if (!linkInput) {
 
             return await interaction.editReply(
                 "❌ Debes proporcionar un link de perfil de BattleMetrics."
             );
-        }
 
+        }
 
         /*
          * Acepta:
          *
          * https://www.battlemetrics.com/players/123456789
-         *
          * https://battlemetrics.com/players/123456789
          *
          * También acepta texto adicional después del ID.
@@ -90,23 +68,17 @@ module.exports = {
                 /battlemetrics\.com\/players\/(\d+)/i
             );
 
-
-        if (
-            !match ||
-            !match[1]
-        ) {
+        if (!match || !match[1]) {
 
             return await interaction.editReply(
                 "❌ El enlace proporcionado no es válido.\n\n" +
                 "Usa un enlace como:\n" +
                 "`https://www.battlemetrics.com/players/123456789`"
             );
+
         }
 
-
-        const playerId =
-            match[1];
-
+        const playerId = match[1];
 
         // =================================================
         // CONSULTAR BATTLEMETRICS
@@ -118,25 +90,21 @@ module.exports = {
                 `🎯 /horasbm solicitado → Player ID: ${playerId}`
             );
 
-
             const datos =
                 await getBattleMetricsHours(
                     playerId
                 );
 
-
-            if (
-                !datos
-            ) {
+            if (!datos) {
 
                 return await interaction.editReply(
                     "❌ No se pudieron encontrar datos para ese jugador en BattleMetrics."
                 );
+
             }
 
-
             // =================================================
-            // DATOS
+            // DATOS PRINCIPALES
             // =================================================
 
             const nombre =
@@ -144,62 +112,106 @@ module.exports = {
                 datos.name ||
                 "Desconocido";
 
-
             const servidor =
                 datos.servidor ||
                 datos.server ||
                 "Desconocido";
 
-
             const horas =
-                Number(
-                    datos.horasTotalesBM ??
-                    datos.totalHoras ??
-                    0
-                );
-
+                datos.horasTotalesBM ??
+                datos.totalHoras ??
+                "0h";
 
             const horasSemana =
-                Number(
-                    datos.horasSemana ||
-                    0
-                );
-
+                datos.horasSemana ??
+                "0h";
 
             const horasMes =
-                Number(
-                    datos.horasMes ||
-                    0
-                );
-
+                datos.horasMes ??
+                "0h";
 
             const servidoresEncontrados =
                 datos.servidoresEncontrados ??
+                datos.cantidadServidoresRust ??
                 datos.servidores?.rust?.datos
                     ?.servidoresEncontrados ??
                 "N/A";
 
-
             const online =
-                Boolean(
-                    datos.online
-                );
-
+                Boolean(datos.online);
 
             const sesionTexto =
                 online
                     ? (
                         datos.jugando ||
-                        "0m"
+                        "Jugando"
                     )
                     : "Offline";
-
 
             const tituloServidor =
                 online
                     ? "🌐 Servidor Actual"
                     : "🌐 Último Servidor Jugado";
 
+            // =================================================
+            // TOP 10 SERVIDORES
+            // =================================================
+
+            const top10 =
+                Array.isArray(datos.top10)
+                    ? datos.top10
+                    : Array.isArray(datos.topServidoresRust)
+                        ? datos.topServidoresRust
+                        : Array.isArray(
+                            datos.servidores?.rust?.top10
+                        )
+                            ? datos.servidores.rust.top10
+                            : [];
+
+            let top10Texto =
+                "No disponible";
+
+            if (top10.length > 0) {
+
+                top10Texto =
+                    top10
+                        .slice(0, 10)
+                        .map((server, index) => {
+
+                            const serverId =
+                                server.id ||
+                                server.serverId;
+
+                            const serverName =
+                                server.nombre ||
+                                server.name ||
+                                "Servidor desconocido";
+
+                            const tiempo =
+                                server.tiempo ||
+                                server.horas ||
+                                server.duracion ||
+                                "0h";
+
+                            const url =
+                                serverId
+                                    ? `https://www.battlemetrics.com/servers/${serverId}`
+                                    : null;
+
+                            const nombreFormateado =
+                                url
+                                    ? `[${serverName}](${url})`
+                                    : serverName;
+
+                            return (
+                                `**${index + 1}.** ` +
+                                `${nombreFormateado} — \`${tiempo}\``
+                            );
+
+                        })
+                        .join("\n");
+
+            }
 
             // =================================================
             // COLOR
@@ -210,6 +222,13 @@ module.exports = {
                     ? 0x57F287
                     : 0xED4245;
 
+            // =================================================
+            // ID BATTLEMETRICS
+            // =================================================
+
+            const battleMetricsId =
+                datos.id ||
+                playerId;
 
             // =================================================
             // EMBED
@@ -217,39 +236,33 @@ module.exports = {
 
             const embed =
                 new EmbedBuilder()
-
                     .setTitle(
                         "🎮 Perfil BattleMetrics"
                     )
-
                     .setColor(
                         color
                     )
-
 
                     // =================================================
                     // JUGADOR
                     // =================================================
 
                     .addFields({
-
                         name:
                             "👤 Jugador",
 
                         value:
-                            `[${nombre}](https://www.battlemetrics.com/players/${datos.id || playerId})`,
+                            `[${nombre}](https://www.battlemetrics.com/players/${battleMetricsId})`,
 
                         inline:
                             false
                     })
-
 
                     // =================================================
                     // SERVIDOR
                     // =================================================
 
                     .addFields({
-
                         name:
                             tituloServidor,
 
@@ -260,13 +273,11 @@ module.exports = {
                             false
                     })
 
-
                     // =================================================
                     // SESIÓN ACTUAL
                     // =================================================
 
                     .addFields({
-
                         name:
                             "⏱️ Sesión Actual",
 
@@ -277,30 +288,26 @@ module.exports = {
                             true
                     })
 
-
                     // =================================================
                     // HORAS TOTALES
                     // =================================================
 
                     .addFields({
-
                         name:
                             "📈 Horas BattleMetrics",
 
                         value:
-                            `\`${horas}h\``,
+                            `\`${horas}\``,
 
                         inline:
                             true
                     })
-
 
                     // =================================================
                     // SERVIDORES
                     // =================================================
 
                     .addFields({
-
                         name:
                             "🖥️ Servidores Jugados",
 
@@ -311,47 +318,41 @@ module.exports = {
                             true
                     })
 
-
                     // =================================================
                     // SEMANA
                     // =================================================
 
                     .addFields({
-
                         name:
                             "📅 Esta Semana",
 
                         value:
-                            `\`${horasSemana}h\``,
+                            `\`${horasSemana}\``,
 
                         inline:
                             true
                     })
-
 
                     // =================================================
                     // MES
                     // =================================================
 
                     .addFields({
-
                         name:
                             "📆 Este Mes",
 
                         value:
-                            `\`${horasMes}h\``,
+                            `\`${horasMes}\``,
 
                         inline:
                             true
                     })
-
 
                     // =================================================
                     // ÚLTIMA CONEXIÓN
                     // =================================================
 
                     .addFields({
-
                         name:
                             "🕐 Última Conexión",
 
@@ -362,6 +363,20 @@ module.exports = {
                             false
                     })
 
+                    // =================================================
+                    // TOP 10
+                    // =================================================
+
+                    .addFields({
+                        name:
+                            "🏆 Top 10 servidores de Rust",
+
+                        value:
+                            top10Texto,
+
+                        inline:
+                            false
+                    })
 
                     // =================================================
                     // FOOTER
@@ -373,7 +388,6 @@ module.exports = {
                         text:
                             "RustLogix • BattleMetrics"
                     });
-
 
             // =================================================
             // HISTORIAL DE NOMBRES
@@ -387,7 +401,6 @@ module.exports = {
             ) {
 
                 embed.addFields({
-
                     name:
                         "📝 Historial de nombres",
 
@@ -402,26 +415,22 @@ module.exports = {
                     inline:
                         false
                 });
-            }
 
+            }
 
             // =================================================
             // RESPUESTA
             // =================================================
 
             await interaction.editReply({
-
                 embeds: [
                     embed
                 ]
-
             });
 
-
             console.log(
-                `✅ /horasbm completado → ${nombre} (${horas}h)`
+                `✅ /horasbm completado → ${nombre} (${horas})`
             );
-
 
         } catch (error) {
 
@@ -432,26 +441,24 @@ module.exports = {
                 error.message
             );
 
-
             try {
 
                 await interaction.editReply({
-
                     content:
                         "❌ Ocurrió un error al intentar conectar con BattleMetrics. Inténtalo de nuevo más tarde."
-
                 });
 
-            } catch (
-                errorRespuesta
-            ) {
+            } catch (errorRespuesta) {
 
                 console.error(
                     "❌ No se pudo enviar el mensaje de error:",
                     errorRespuesta.message
                 );
+
             }
+
         }
+
     }
 
 };
