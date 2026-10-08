@@ -317,14 +317,6 @@ function obtenerInicioSemanaChile(
     const diaSemana =
         fechaChile.getUTCDay();
 
-    /*
-     * Semana empieza el lunes.
-     *
-     * Domingo = 6 días atrás
-     * Lunes   = 0 días atrás
-     * Martes  = 1 día atrás
-     */
-
     const diferencia =
         diaSemana === 0
             ? 6
@@ -824,6 +816,176 @@ async function obtenerInfoServidor(
 
 
 // ============================================================
+// OBTENER TODOS LOS SERVIDORES DEL JUGADOR
+// ============================================================
+
+async function obtenerTodosLosServidoresJugador(
+    playerId,
+    servidoresMap
+) {
+
+    try {
+
+        let nextUrl =
+            `/players/${playerId}/relationships/servers`;
+
+        let pagina = 0;
+
+        while (
+            nextUrl &&
+            pagina < 100
+        ) {
+
+            const response =
+                await axiosBM.get(
+                    nextUrl,
+                    {
+                        params:
+                            pagina === 0
+                                ? {
+                                    "page[size]":
+                                        100
+                                }
+                                : undefined
+                    }
+                );
+
+            const data =
+                Array.isArray(
+                    response.data.data
+                )
+                    ? response.data.data
+                    : [];
+
+            if (
+                data.length === 0
+            ) {
+
+                break;
+            }
+
+            for (
+                const servidor of
+                data
+            ) {
+
+                if (
+                    !servidor ||
+                    !servidor.id
+                ) {
+
+                    continue;
+                }
+
+                const id =
+                    String(
+                        servidor.id
+                    );
+
+                const attributes =
+                    servidor.attributes ||
+                    {};
+
+                const relationships =
+                    servidor.relationships ||
+                    {};
+
+                let game =
+                    attributes.game ||
+                    "";
+
+                if (
+                    !game &&
+                    relationships.game &&
+                    relationships.game.data
+                ) {
+
+                    game =
+                        relationships.game.data.id ||
+                        "";
+                }
+
+                const nombre =
+                    attributes.name ||
+                    `Servidor ${id}`;
+
+                const esRust =
+                    String(
+                        game
+                    )
+                        .toLowerCase()
+                        .includes("rust") ||
+                    nombre
+                        .toLowerCase()
+                        .includes("rust");
+
+                const timePlayed =
+                    servidor.meta &&
+                    typeof servidor.meta.timePlayed !==
+                    "undefined"
+                        ? Number(
+                            servidor.meta.timePlayed
+                        )
+                        : 0;
+
+                servidoresMap.set(
+                    id,
+                    {
+                        id,
+
+                        nombre,
+
+                        game,
+
+                        esRust,
+
+                        ip:
+                            attributes.ip ||
+                            null,
+
+                        port:
+                            attributes.port ||
+                            null,
+
+                        timePlayed
+                    }
+                );
+            }
+
+            const next =
+                response.data.links &&
+                response.data.links.next
+                    ? response.data.links.next
+                    : null;
+
+            if (!next) {
+                break;
+            }
+
+            nextUrl =
+                next;
+
+            pagina++;
+        }
+
+        console.log(
+            `🖥️ BM | Servidores asociados al jugador: ${servidoresMap.size}`
+        );
+
+    } catch (error) {
+
+        console.log(
+            "⚠️ BM | No se pudo obtener relación completa de servidores:",
+            error.response?.data ||
+            error.message
+        );
+    }
+
+    return servidoresMap;
+}
+
+
+// ============================================================
 // TODAS LAS SESIONES
 // ============================================================
 
@@ -842,7 +1004,7 @@ async function obtenerTodasLasSesiones(
 
         while (
             nextUrl &&
-            pagina < 50
+            pagina < 100
         ) {
 
             const response =
@@ -894,15 +1056,6 @@ async function obtenerTodasLasSesiones(
 
                 break;
             }
-
-            /*
-             * BattleMetrics entrega el siguiente
-             * enlace de paginación en links.next.
-             *
-             * No usamos page[number], porque
-             * BattleMetrics está rechazando ese
-             * parámetro en este endpoint.
-             */
 
             const next =
                 response.data.links &&
@@ -1250,6 +1403,16 @@ async function obtenerTopServidoresRust(
 
 
     // ---------------------------------------------------------
+    // INTENTAR OBTENER TODOS LOS SERVIDORES DEL JUGADOR
+    // ---------------------------------------------------------
+
+    await obtenerTodosLosServidoresJugador(
+        playerId,
+        servidoresMap
+    );
+
+
+    // ---------------------------------------------------------
     // SERVIDORES CONOCIDOS
     // ---------------------------------------------------------
 
@@ -1554,13 +1717,9 @@ async function obtenerTopServidoresRust(
 
         totalSegundos,
 
-        // IMPORTANTE:
-        // cantidad de servidores Rust que realmente
-        // fueron encontrados y procesados.
         cantidadServidoresRust:
             resultados.length,
 
-        // Todos los servidores, no solamente Top 10.
         servidoresEncontrados:
             resultados
     };
@@ -2041,9 +2200,6 @@ async function getBattleMetricsPlayerStatus(
 
             // -------------------------------------------------
             // ÚLTIMA CONEXIÓN
-            //
-            // IMPORTANTE:
-            // Se usa FIN de la sesión.
             // -------------------------------------------------
 
             if (
