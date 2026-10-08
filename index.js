@@ -1540,9 +1540,6 @@ client.on(
 
         // =====================================================
         // MINIJUEGOS - MODALES
-        //
-        // Esto permite que Duelo 1vs1, Blackjack/21 y futuros
-        // minijuegos puedan utilizar formularios.
         // =====================================================
 
         if (
@@ -1651,10 +1648,6 @@ client.on(
             interaction.isButton()
         ) {
 
-            // =================================================
-            // CERRAR PANEL DE TRACKERS ACTIVOS
-            // =================================================
-
             if (
                 interaction.customId ===
                 "cerrar_trackers_activos"
@@ -1700,16 +1693,6 @@ client.on(
 
                 return;
             }
-
-            // =================================================
-            // MINIJUEGOS
-            //
-            // Aquí entran:
-            // - Duelo 1vs1
-            // - Cara o Cruz
-            // - 21 / Blackjack
-            // - Futuros minijuegos
-            // =================================================
 
             if (
                 interaction.customId.startsWith(
@@ -1784,10 +1767,6 @@ client.on(
                 }
 
             }
-
-            // =================================================
-            // ROLES DE STREAMERS
-            // =================================================
 
             if (
                 interaction.customId.startsWith(
@@ -1870,10 +1849,6 @@ client.on(
                 return;
             }
 
-            // =================================================
-            // GIVEAWAY - FINALIZAR
-            // =================================================
-
             if (
                 interaction.customId.startsWith(
                     "giveaway_cerrar_"
@@ -1942,10 +1917,6 @@ client.on(
 
                 return;
             }
-
-            // =================================================
-            // GIVEAWAY - NUEVO GANADOR
-            // =================================================
 
             if (
                 interaction.customId.startsWith(
@@ -2016,10 +1987,6 @@ client.on(
                 return;
             }
 
-            // =================================================
-            // GIVEAWAY - PARTICIPAR
-            // =================================================
-
             if (
                 interaction.customId.startsWith(
                     "giveaway_participar_"
@@ -2056,10 +2023,6 @@ client.on(
 
                 return;
             }
-
-            // =================================================
-            // BOTONES RAID
-            // =================================================
 
             if (
                 interaction.customId.startsWith(
@@ -2145,10 +2108,6 @@ client.on(
 
                 return;
             }
-
-            // =================================================
-            // PAGINACIÓN DE TRACKERS
-            // =================================================
 
             if (
                 interaction.customId.startsWith(
@@ -2247,10 +2206,6 @@ client.on(
 
                 return;
             }
-
-            // =================================================
-            // ELIMINAR TRACKER
-            // =================================================
 
             if (
                 interaction.customId.startsWith(
@@ -2509,6 +2464,24 @@ client.on(
 
             console.log(
                 `🎯 Ejecutando /${interaction.commandName}`
+            );
+
+            // =================================================
+            // DIAGNÓSTICO DE OPCIONES
+            // =================================================
+
+            console.log(
+                "🔍 OPCIONES RECIBIDAS:",
+                JSON.stringify(
+                    interaction.options.data,
+                    null,
+                    2
+                )
+            );
+
+            console.log(
+                "🔍 NOMBRE OPCIÓN perfil:",
+                interaction.options.getString("perfil")
             );
 
             await command.execute(
