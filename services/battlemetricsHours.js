@@ -816,176 +816,6 @@ async function obtenerInfoServidor(
 
 
 // ============================================================
-// OBTENER TODOS LOS SERVIDORES DEL JUGADOR
-// ============================================================
-
-async function obtenerTodosLosServidoresJugador(
-    playerId,
-    servidoresMap
-) {
-
-    try {
-
-        let nextUrl =
-            `/players/${playerId}/relationships/servers`;
-
-        let pagina = 0;
-
-        while (
-            nextUrl &&
-            pagina < 100
-        ) {
-
-            const response =
-                await axiosBM.get(
-                    nextUrl,
-                    {
-                        params:
-                            pagina === 0
-                                ? {
-                                    "page[size]":
-                                        100
-                                }
-                                : undefined
-                    }
-                );
-
-            const data =
-                Array.isArray(
-                    response.data.data
-                )
-                    ? response.data.data
-                    : [];
-
-            if (
-                data.length === 0
-            ) {
-
-                break;
-            }
-
-            for (
-                const servidor of
-                data
-            ) {
-
-                if (
-                    !servidor ||
-                    !servidor.id
-                ) {
-
-                    continue;
-                }
-
-                const id =
-                    String(
-                        servidor.id
-                    );
-
-                const attributes =
-                    servidor.attributes ||
-                    {};
-
-                const relationships =
-                    servidor.relationships ||
-                    {};
-
-                let game =
-                    attributes.game ||
-                    "";
-
-                if (
-                    !game &&
-                    relationships.game &&
-                    relationships.game.data
-                ) {
-
-                    game =
-                        relationships.game.data.id ||
-                        "";
-                }
-
-                const nombre =
-                    attributes.name ||
-                    `Servidor ${id}`;
-
-                const esRust =
-                    String(
-                        game
-                    )
-                        .toLowerCase()
-                        .includes("rust") ||
-                    nombre
-                        .toLowerCase()
-                        .includes("rust");
-
-                const timePlayed =
-                    servidor.meta &&
-                    typeof servidor.meta.timePlayed !==
-                    "undefined"
-                        ? Number(
-                            servidor.meta.timePlayed
-                        )
-                        : 0;
-
-                servidoresMap.set(
-                    id,
-                    {
-                        id,
-
-                        nombre,
-
-                        game,
-
-                        esRust,
-
-                        ip:
-                            attributes.ip ||
-                            null,
-
-                        port:
-                            attributes.port ||
-                            null,
-
-                        timePlayed
-                    }
-                );
-            }
-
-            const next =
-                response.data.links &&
-                response.data.links.next
-                    ? response.data.links.next
-                    : null;
-
-            if (!next) {
-                break;
-            }
-
-            nextUrl =
-                next;
-
-            pagina++;
-        }
-
-        console.log(
-            `🖥️ BM | Servidores asociados al jugador: ${servidoresMap.size}`
-        );
-
-    } catch (error) {
-
-        console.log(
-            "⚠️ BM | No se pudo obtener relación completa de servidores:",
-            error.response?.data ||
-            error.message
-        );
-    }
-
-    return servidoresMap;
-}
-
-
-// ============================================================
 // TODAS LAS SESIONES
 // ============================================================
 
@@ -1389,6 +1219,86 @@ async function obtenerHorasJugadorServidor(
 
 
 // ============================================================
+// TOTAL DEL OVERVIEW DE BATTLEMETRICS
+// ============================================================
+
+function obtenerTotalOverviewBattleMetrics(
+    player
+) {
+
+    if (!player) {
+        return 0;
+    }
+
+    const meta =
+        player.meta ||
+        {};
+
+    const attributes =
+        player.attributes ||
+        {};
+
+    const candidatos = [
+
+        // Campo utilizado por BattleMetrics
+        // para player.timePlayed.
+        meta.timePlayed,
+
+        meta.timeplayed,
+
+        meta.totalTime,
+
+        meta.totalSeconds,
+
+        // Por si la API lo entrega en attributes.
+        attributes.timePlayed,
+
+        attributes.timeplayed,
+
+        attributes.totalTime,
+
+        attributes.totalSeconds
+    ];
+
+    for (
+        const valor of
+        candidatos
+    ) {
+
+        if (
+            valor !== null &&
+            typeof valor !==
+            "undefined" &&
+            !isNaN(
+                Number(valor)
+            )
+        ) {
+
+            const segundos =
+                Number(valor);
+
+            if (
+                segundos > 0
+            ) {
+
+                console.log(
+                    `🧮 BM | Total Time Played del Overview: ${segundosAHoras(segundos)}`
+                );
+
+                return segundos;
+            }
+        }
+    }
+
+    console.log(
+        "⚠️ BM | El player del Overview no entregó timePlayed"
+    );
+
+    return 0;
+}
+
+
+// ============================================================
 // TOP SERVIDORES RUST
 // ============================================================
 
@@ -1400,16 +1310,6 @@ async function obtenerTopServidoresRust(
 
     const servidores =
         new Map();
-
-
-    // ---------------------------------------------------------
-    // INTENTAR OBTENER TODOS LOS SERVIDORES DEL JUGADOR
-    // ---------------------------------------------------------
-
-    await obtenerTodosLosServidoresJugador(
-        playerId,
-        servidoresMap
-    );
 
 
     // ---------------------------------------------------------
@@ -1656,7 +1556,11 @@ async function obtenerTopServidoresRust(
 
 
     // ---------------------------------------------------------
-    // TOTAL
+    // TOTAL DE SERVIDORES
+    //
+    // OJO:
+    // Este total se mantiene para información interna,
+    // PERO YA NO SE UTILIZA COMO TOTAL BM.
     // ---------------------------------------------------------
 
     const totalSegundos =
@@ -1707,7 +1611,7 @@ async function obtenerTopServidoresRust(
 
 
     console.log(
-        `🧮 BM | Total de todos los servidores: ${segundosAHoras(totalSegundos)}`
+        `🧮 BM | Total de servidores calculado: ${segundosAHoras(totalSegundos)}`
     );
 
 
@@ -1758,7 +1662,7 @@ async function getBattleMetricsPlayerStatus(
 
 
         // -----------------------------------------------------
-        // PLAYER
+        // PLAYER / OVERVIEW
         // -----------------------------------------------------
 
         const playerResponse =
@@ -1787,6 +1691,16 @@ async function getBattleMetricsPlayerStatus(
             player.attributes.name
                 ? player.attributes.name
                 : "Desconocido";
+
+
+        // -----------------------------------------------------
+        // TOTAL DEL OVERVIEW
+        // -----------------------------------------------------
+
+        const totalOverviewBM =
+            obtenerTotalOverviewBattleMetrics(
+                player
+            );
 
 
         // -----------------------------------------------------
@@ -2292,12 +2206,30 @@ async function getBattleMetricsPlayerStatus(
 
         // =====================================================
         // TOTAL BM
+        //
+        // AHORA SALE DIRECTAMENTE DEL OVERVIEW.
+        // NO SE SUMAN LOS SERVIDORES.
         // =====================================================
 
         let horasTotalesBM =
             Number(
-                resultadoServidores.totalSegundos
+                totalOverviewBM
             ) || 0;
+
+
+        // -----------------------------------------------------
+        // FALLBACK ÚNICAMENTE SI OVERVIEW NO ENTREGÓ DATO
+        // -----------------------------------------------------
+
+        if (
+            horasTotalesBM <= 0
+        ) {
+
+            horasTotalesBM =
+                Number(
+                    resultadoServidores.totalSegundos
+                ) || 0;
+        }
 
 
         if (
@@ -2307,6 +2239,11 @@ async function getBattleMetricsPlayerStatus(
             horasTotalesBM =
                 segundosTotalesSesiones;
         }
+
+
+        console.log(
+            `🎯 BM | TOTAL FINAL DESDE OVERVIEW: ${segundosAHoras(horasTotalesBM)}`
+        );
 
 
         // =====================================================
