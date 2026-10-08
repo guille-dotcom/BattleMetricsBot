@@ -16,6 +16,64 @@ const ServerConfig =
     require("../models/ServerConfig");
 
 
+// =====================================================
+// DIVIDIR TEXTO PARA CAMPOS DE DISCORD
+// Discord permite máximo 1024 caracteres por field.
+// =====================================================
+
+function dividirTextoDiscord(texto, maxCaracteres = 1024) {
+
+    const partes = [];
+    let actual = "";
+
+    for (const linea of String(texto).split("\n")) {
+
+        const candidato =
+            actual.length > 0
+                ? `${actual}\n${linea}`
+                : linea;
+
+        if (candidato.length > maxCaracteres) {
+
+            if (actual.length > 0) {
+                partes.push(actual);
+            }
+
+            if (linea.length > maxCaracteres) {
+
+                let restante = linea;
+
+                while (restante.length > maxCaracteres) {
+
+                    partes.push(
+                        restante.slice(0, maxCaracteres)
+                    );
+
+                    restante =
+                        restante.slice(maxCaracteres);
+                }
+
+                actual = restante;
+
+            } else {
+
+                actual = linea;
+            }
+
+        } else {
+
+            actual = candidato;
+        }
+    }
+
+    if (actual.length > 0) {
+        partes.push(actual);
+    }
+
+    return partes;
+}
+
+
 module.exports = {
 
     data:
@@ -193,8 +251,6 @@ module.exports = {
 
         // =====================================================
         // BUSCAR EN BATTLEMETRICS
-        //
-        // SIEMPRE EN EL SERVIDOR CONFIGURADO
         // =====================================================
 
         let jugadorBM = null;
@@ -350,8 +406,6 @@ module.exports = {
 
         // =====================================================
         // DATOS DETALLADOS BATTLEMETRICS
-        //
-        // PASAMOS EL SERVIDOR CONFIGURADO
         // =====================================================
 
         let datosFinales = null;
@@ -491,8 +545,6 @@ module.exports = {
 
         // =====================================================
         // SERVIDOR ACTUAL
-        //
-        // SOLO EL SERVIDOR CONFIGURADO
         // =====================================================
 
         let servidorActualTexto =
@@ -508,11 +560,6 @@ module.exports = {
                 datosFinales.servidorActualRust;
 
 
-            // -------------------------------------------------
-            // COMPROBAR QUE EL ID ES EXACTAMENTE
-            // EL SERVIDOR CONFIGURADO
-            // -------------------------------------------------
-
             if (
                 String(
                     servidorActual.id
@@ -521,10 +568,6 @@ module.exports = {
                     serverId
                 )
             ) {
-
-                // -------------------------------------------------
-                // HORAS ESPECÍFICAS DEL SERVIDOR CONFIGURADO
-                // -------------------------------------------------
 
                 const horasServidorActual =
                     datosFinales.horasServidorConfigurado &&
@@ -597,220 +640,200 @@ module.exports = {
                         : "#FF0000"
                 )
 
-                .addFields(
+                .addFields({
 
-                    // -----------------------------------------
-                    // SERVIDOR ACTUAL RUST
-                    // -----------------------------------------
+                    name:
+                        "🎮 Servidor actual",
 
-                    {
-                        name:
-                            "🎮 Servidor actual",
+                    value:
+                        servidorActualTexto,
 
-                        value:
-                            servidorActualTexto,
+                    inline:
+                        false
 
-                        inline: false
-                    },
-
-
-                    // -----------------------------------------
-                    // TOP 10 SERVIDORES RUST
-                    // -----------------------------------------
-
-                    {
-                        name:
-                            "🏆 Top 10 servidores de Rust",
-
-                        value:
-                            topRustTexto,
-
-                        inline: false
-                    },
-
-
-                    // -----------------------------------------
-                    // IDENTIFICADORES
-                    // -----------------------------------------
-
-                    {
-                        name:
-                            "🆔 BattleMetrics",
-
-                        value:
-                            `[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})`,
-
-                        inline: true
-                    },
-
-                    {
-                        name:
-                            "🆔 Steam ID",
-
-                        value:
-                            `[${steamId}](https://steamcommunity.com/profiles/${steamId})`,
-
-                        inline: true
-                    },
-
-
-                    // -----------------------------------------
-                    // ESTADO
-                    // -----------------------------------------
-
-                    {
-                        name:
-                            "🎮 Estado",
-
-                        value:
-                            `\`${estadoActual}\``,
-
-                        inline: true
-                    },
-
-
-                    // -----------------------------------------
-                    // HORAS
-                    // -----------------------------------------
-
-                    {
-                        name:
-                            "📈 Horas (BM)",
-
-                        value:
-                            `\`${horasBMTexto}\``,
-
-                        inline: true
-                    },
-
-                    {
-                        name:
-                            "📊 Horas (Steam)",
-
-                        value:
-                            horasSteamTexto,
-
-                        inline: true
-                    },
-
-                    {
-                        name:
-                            "⚖️ Diferencia",
-
-                        value:
-                            diferenciaTexto,
-
-                        inline: true
-                    },
-
-
-                    // -----------------------------------------
-                    // SERVIDORES
-                    // -----------------------------------------
-
-                    {
-                        name:
-                            "🖥️ Servidores Rust",
-
-                        value:
-                            `\`${cantidadServidoresRust}\``,
-
-                        inline: true
-                    },
-
-
-                    // -----------------------------------------
-                    // ACTIVIDAD
-                    // -----------------------------------------
-
-                    {
-                        name:
-                            "📈 Esta Semana",
-
-                        value:
-                            `\`${horasSemana}\``,
-
-                        inline: true
-                    },
-
-                    {
-                        name:
-                            "📆 Este Mes",
-
-                        value:
-                            `\`${horasMes}\``,
-
-                        inline: true
-                    },
-
-                    {
-                        name:
-                            "🕐 Última Conexión",
-
-                        value:
-                            `\`${ultimaConexion}\``,
-
-                        inline: true
-                    },
-
-
-                    // -----------------------------------------
-                    // STEAM
-                    // -----------------------------------------
-
-                    {
-                        name:
-                            "🌍 País",
-
-                        value:
-                            paisTexto,
-
-                        inline: true
-                    },
-
-                    {
-                        name:
-                            "🛡️ Estado Baneos",
-
-                        value:
-                            `\`${vacTexto}\``,
-
-                        inline: true
-                    },
-
-                    {
-                        name:
-                            "📅 Antigüedad",
-
-                        value:
-                            `\`${creacionSteamTexto}\``,
-
-                        inline: true
-                    },
-
-
-                    // -----------------------------------------
-                    // HISTORIAL
-                    // -----------------------------------------
-
-                    {
-                        name:
-                            "📝 Historial de Nombres",
-
-                        value:
-                            historialTexto,
-
-                        inline: false
-                    }
-
-                )
-
-                .setTimestamp()
-
-                .setFooter({
-                    text:
-                        "RustLogix"
                 });
+
+
+        // =====================================================
+        // TOP 10
+        // =====================================================
+
+        const partesTopRust =
+            dividirTextoDiscord(
+                topRustTexto,
+                1024
+            );
+
+
+        partesTopRust.forEach(
+            (parte, index) => {
+
+                embedOnline.addFields({
+
+                    name:
+                        index === 0
+                            ? "🏆 Top 10 servidores de Rust"
+                            : "🏆 Top 10 servidores de Rust · continuación",
+
+                    value:
+                        parte,
+
+                    inline:
+                        false
+
+                });
+
+            }
+        );
+
+
+        // =====================================================
+        // RESTO DEL EMBED
+        // =====================================================
+
+        embedOnline.addFields(
+
+            {
+                name:
+                    "🆔 BattleMetrics",
+
+                value:
+                    `[${datosFinales.id}](https://www.battlemetrics.com/players/${datosFinales.id})`,
+
+                inline: true
+            },
+
+            {
+                name:
+                    "🆔 Steam ID",
+
+                value:
+                    `[${steamId}](https://steamcommunity.com/profiles/${steamId})`,
+
+                inline: true
+            },
+
+            {
+                name:
+                    "🎮 Estado",
+
+                value:
+                    `\`${estadoActual}\``,
+
+                inline: true
+            },
+
+            {
+                name:
+                    "📈 Horas (BM)",
+
+                value:
+                    `\`${horasBMTexto}\``,
+
+                inline: true
+            },
+
+            {
+                name:
+                    "📊 Horas (Steam)",
+
+                value:
+                    horasSteamTexto,
+
+                inline: true
+            },
+
+            {
+                name:
+                    "⚖️ Diferencia",
+
+                value:
+                    diferenciaTexto,
+
+                inline: true
+            },
+
+            {
+                name:
+                    "🖥️ Servidores Rust",
+
+                value:
+                    `\`${cantidadServidoresRust}\``,
+
+                inline: true
+            },
+
+            {
+                name:
+                    "📈 Esta Semana",
+
+                value:
+                    `\`${horasSemana}\``,
+
+                inline: true
+            },
+
+            {
+                name:
+                    "📆 Este Mes",
+
+                value:
+                    `\`${horasMes}\``,
+
+                inline: true
+            },
+
+            {
+                name:
+                    "🕐 Última Conexión",
+
+                value:
+                    `\`${ultimaConexion}\``,
+
+                inline: true
+            },
+
+            {
+                name:
+                    "🌍 País",
+
+                value:
+                    paisTexto,
+
+                inline: true
+            },
+
+            {
+                name:
+                    "🛡️ Estado Baneos",
+
+                value:
+                    `\`${vacTexto}\``,
+
+                inline: true
+            },
+
+            {
+                name:
+                    "📅 Antigüedad",
+
+                value:
+                    `\`${creacionSteamTexto}\``,
+
+                inline: true
+            },
+
+            {
+                name:
+                    "📝 Historial de Nombres",
+
+                value:
+                    historialTexto,
+
+                inline: false
+            }
+
+        );
 
 
         // =====================================================
@@ -834,9 +857,11 @@ module.exports = {
         // =====================================================
 
         return await interaction.editReply({
+
             embeds: [
                 embedOnline
             ]
+
         });
     }
 };
