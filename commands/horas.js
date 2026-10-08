@@ -387,14 +387,6 @@ module.exports = {
         // DIFERENCIA STEAM / BATTLEMETRICS
         // =====================================================
 
-        /*
-         * horasTotalesBM viene como texto:
-         * "2763h 34m"
-         *
-         * Para calcular la diferencia necesitamos convertir
-         * ese texto nuevamente a horas numéricas.
-         */
-
         const horasBMTexto =
             datosFinales.totalHoras ||
             datosFinales.horasTotalesBM ||
@@ -476,6 +468,16 @@ module.exports = {
 
 
         // =====================================================
+        // SERVIDORES RUST
+        // =====================================================
+
+        const cantidadServidoresRust =
+            Number(
+                datosFinales.cantidadServidoresRust
+            ) || 0;
+
+
+        // =====================================================
         // ESTADO ACTUAL
         // =====================================================
 
@@ -522,9 +524,6 @@ module.exports = {
 
                 // -------------------------------------------------
                 // HORAS ESPECÍFICAS DEL SERVIDOR CONFIGURADO
-                //
-                // YA NO SE BUSCAN EN EL TOP 10.
-                // VIENEN DE LA CONSULTA DIRECTA DE BM.
                 // -------------------------------------------------
 
                 const horasServidorActual =
@@ -700,6 +699,21 @@ module.exports = {
 
                         value:
                             diferenciaTexto,
+
+                        inline: true
+                    },
+
+
+                    // -----------------------------------------
+                    // SERVIDORES
+                    // -----------------------------------------
+
+                    {
+                        name:
+                            "🖥️ Servidores Rust",
+
+                        value:
+                            `\`${cantidadServidoresRust}\``,
 
                         inline: true
                     },

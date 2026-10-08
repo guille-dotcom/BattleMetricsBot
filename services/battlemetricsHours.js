@@ -88,6 +88,176 @@ function obtenerFechaChile(fecha) {
 }
 
 
+// ============================================================
+// OBTENER PARTES DE FECHA EN CHILE
+// ============================================================
+
+function obtenerPartesChile(fecha = new Date()) {
+
+    const partes =
+        new Intl.DateTimeFormat("en-CA", {
+            timeZone: "America/Santiago",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hourCycle: "h23"
+        }).formatToParts(fecha);
+
+    const resultado = {};
+
+    for (const parte of partes) {
+        if (parte.type !== "literal") {
+            resultado[parte.type] =
+                Number(parte.value);
+        }
+    }
+
+    return resultado;
+}
+
+
+// ============================================================
+// CONVERTIR FECHA/HORA DE CHILE A UTC
+// ============================================================
+
+function crearFechaChile(
+    year,
+    month,
+    day,
+    hour = 0,
+    minute = 0,
+    second = 0
+) {
+
+    const utcInicial =
+        new Date(
+            Date.UTC(
+                year,
+                month - 1,
+                day,
+                hour,
+                minute,
+                second
+            )
+        );
+
+    const partes =
+        new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/Santiago",
+            timeZoneName: "shortOffset",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hourCycle: "h23"
+        }).formatToParts(utcInicial);
+
+    const zona =
+        partes.find(
+            parte =>
+                parte.type === "timeZoneName"
+        )?.value || "GMT-3";
+
+    const match =
+        zona.match(
+            /GMT([+-])(\d{1,2})(?::(\d{2}))?/
+        );
+
+    let offsetMinutos = -180;
+
+    if (match) {
+
+        const signo =
+            match[1] === "-"
+                ? -1
+                : 1;
+
+        const horas =
+            Number(match[2]) || 0;
+
+        const minutos =
+            Number(match[3]) || 0;
+
+        offsetMinutos =
+            signo *
+            (
+                horas * 60 +
+                minutos
+            );
+    }
+
+    return new Date(
+        utcInicial.getTime() -
+        offsetMinutos * 60 * 1000
+    );
+}
+
+
+// ============================================================
+// INICIO DE SEMANA EN CHILE
+// ============================================================
+
+function obtenerInicioSemanaChile(fecha = new Date()) {
+
+    const partes =
+        obtenerPartesChile(fecha);
+
+    const fechaChile =
+        new Date(
+            Date.UTC(
+                partes.year,
+                partes.month - 1,
+                partes.day
+            )
+        );
+
+    const diaSemana =
+        fechaChile.getUTCDay();
+
+    const diferencia =
+        diaSemana;
+
+    fechaChile.setUTCDate(
+        fechaChile.getUTCDate() -
+        diferencia
+    );
+
+    return crearFechaChile(
+        fechaChile.getUTCFullYear(),
+        fechaChile.getUTCMonth() + 1,
+        fechaChile.getUTCDate(),
+        0,
+        0,
+        0
+    );
+}
+
+
+// ============================================================
+// INICIO DE MES EN CHILE
+// ============================================================
+
+function obtenerInicioMesChile(fecha = new Date()) {
+
+    const partes =
+        obtenerPartesChile(fecha);
+
+    return crearFechaChile(
+        partes.year,
+        partes.month,
+        1,
+        0,
+        0,
+        0
+    );
+}
+
+
 function esSesionActiva(session) {
     if (!session || !session.attributes) {
         return false;
@@ -386,11 +556,6 @@ async function obtenerInfoServidor(serverId, cache = new Map()) {
             textoGame.includes("rust") ||
             nombre.toLowerCase().includes("rust");
 
-        /*
-         * IMPORTANTE:
-         * Este timePlayed pertenece al servidor,
-         * NO se usa como horas del jugador.
-         */
         const timePlayed =
             servidor.meta &&
             typeof servidor.meta.timePlayed !== "undefined"
@@ -499,24 +664,56 @@ async function obtenerTodasLasSesiones(playerId) {
 
         try {
 
-            const response =
-                await axiosBM.get(
-                    `/players/${playerId}/relationships/sessions`,
-                    {
-                        params: {
-                            "page[size]": 100
+            let page = 1;
+
+            while (page <= 50) {
+
+                const response =
+                    await axiosBM.get(
+                        `/players/${playerId}/relationships/sessions`,
+                        {
+                            params: {
+                                "page[size]": 100,
+                                "page[number]": page
+                            }
                         }
-                    }
+                    );
+
+                const data =
+                    Array.isArray(
+                        response.data.data
+                    )
+                        ? response.data.data
+                        : [];
+
+                if (data.length === 0) {
+                    break;
+                }
+
+                sesiones.push(
+                    ...data
                 );
 
-            if (
-                Array.isArray(
-                    response.data.data
-                )
-            ) {
-                sesiones.push(
-                    ...response.data.data
-                );
+                const meta =
+                    response.data.meta || {};
+
+                const total =
+                    meta.total ||
+                    meta.count ||
+                    null;
+
+                if (
+                    total &&
+                    sesiones.length >= total
+                ) {
+                    break;
+                }
+
+                if (data.length < 100) {
+                    break;
+                }
+
+                page++;
             }
 
         } catch (error2) {
@@ -849,15 +1046,6 @@ async function obtenerTopServidoresRust(
         const serverId =
             String(servidor.id);
 
-        /*
-         * NO usamos servidor.timePlayed aquí.
-         *
-         * Ese valor pertenece al servidor y puede
-         * representar el tiempo global del servidor.
-         *
-         * Consultamos directamente las horas del jugador.
-         */
-
         const horasJugador =
             await obtenerHorasJugadorServidor(
                 playerId,
@@ -942,10 +1130,6 @@ async function obtenerTopServidoresRust(
         }
 
 
-        /*
-         * Solo agregamos servidores donde
-         * realmente tenemos tiempo del jugador.
-         */
         if (segundos > 0) {
 
             resultados.push({
@@ -998,6 +1182,14 @@ async function obtenerTopServidoresRust(
         );
 
 
+    // --------------------------------------------------------
+    // CANTIDAD TOTAL DE SERVIDORES RUST
+    // --------------------------------------------------------
+
+    const cantidadServidores =
+        resultados.length;
+
+
     const top10 =
         resultados.slice(0, 10);
 
@@ -1014,13 +1206,19 @@ async function obtenerTopServidoresRust(
 
 
     console.log(
+        `🖥️ BM | Cantidad total de servidores Rust: ${cantidadServidores}`
+    );
+
+
+    console.log(
         `🧮 BM | Total real de todos los servidores: ${segundosAHoras(totalSegundos)}`
     );
 
 
     return {
         top10,
-        totalSegundos
+        totalSegundos,
+        cantidadServidores
     };
 }
 
@@ -1243,7 +1441,10 @@ async function getBattleMetricsPlayerStatus(
             !!sesionActiva;
 
         const jugando =
-            !!sesionActivaRust;
+            sesionActivaRust &&
+            servidorActualRust
+                ? servidorActualRust.nombre
+                : null;
 
 
         // -----------------------------------------------------
@@ -1259,35 +1460,33 @@ async function getBattleMetricsPlayerStatus(
             new Date();
 
 
+        // -----------------------------------------------------
+        // PERIODOS EN CHILE
+        // -----------------------------------------------------
+
         const inicioSemana =
-            new Date(
+            obtenerInicioSemanaChile(
                 ahoraDate
             );
 
-        inicioSemana.setDate(
-            inicioSemana.getDate() -
-            inicioSemana.getDay()
-        );
-
-        inicioSemana.setHours(
-            0,
-            0,
-            0,
-            0
-        );
-
-
         const inicioMes =
-            new Date(
-                ahoraDate.getFullYear(),
-                ahoraDate.getMonth(),
-                1,
-                0,
-                0,
-                0,
-                0
+            obtenerInicioMesChile(
+                ahoraDate
             );
 
+
+        console.log(
+            `🕐 BM | Inicio semana Chile: ${inicioSemana.toISOString()}`
+        );
+
+        console.log(
+            `🕐 BM | Inicio mes Chile: ${inicioMes.toISOString()}`
+        );
+
+
+        // -----------------------------------------------------
+        // RECORRER TODAS LAS SESIONES
+        // -----------------------------------------------------
 
         for (
             const session of
@@ -1368,25 +1567,35 @@ async function getBattleMetricsPlayerStatus(
             // -------------------------------------------------
 
             if (
-                fin >= inicioSemana ||
-                inicio >= inicioSemana
+                fin.getTime() >
+                inicioSemana.getTime()
             ) {
 
                 const inicioReal =
-                    inicio > inicioSemana
+                    inicio.getTime() >
+                    inicioSemana.getTime()
                         ? inicio
                         : inicioSemana;
 
-                segundosSemana +=
-                    Math.max(
-                        0,
+                const finReal =
+                    fin.getTime() <
+                    ahoraDate.getTime()
+                        ? fin
+                        : ahoraDate;
+
+                if (
+                    finReal.getTime() >
+                    inicioReal.getTime()
+                ) {
+
+                    segundosSemana +=
                         Math.floor(
                             (
-                                fin.getTime() -
+                                finReal.getTime() -
                                 inicioReal.getTime()
                             ) / 1000
-                        )
-                    );
+                        );
+                }
             }
 
 
@@ -1395,25 +1604,35 @@ async function getBattleMetricsPlayerStatus(
             // -------------------------------------------------
 
             if (
-                fin >= inicioMes ||
-                inicio >= inicioMes
+                fin.getTime() >
+                inicioMes.getTime()
             ) {
 
                 const inicioReal =
-                    inicio > inicioMes
+                    inicio.getTime() >
+                    inicioMes.getTime()
                         ? inicio
                         : inicioMes;
 
-                segundosMes +=
-                    Math.max(
-                        0,
+                const finReal =
+                    fin.getTime() <
+                    ahoraDate.getTime()
+                        ? fin
+                        : ahoraDate;
+
+                if (
+                    finReal.getTime() >
+                    inicioReal.getTime()
+                ) {
+
+                    segundosMes +=
                         Math.floor(
                             (
-                                fin.getTime() -
+                                finReal.getTime() -
                                 inicioReal.getTime()
                             ) / 1000
-                        )
-                    );
+                        );
+                }
             }
 
 
@@ -1524,6 +1743,14 @@ async function getBattleMetricsPlayerStatus(
 
 
         // =====================================================
+        // CANTIDAD DE SERVIDORES RUST
+        // =====================================================
+
+        const cantidadServidoresRust =
+            resultadoServidores.cantidadServidores;
+
+
+        // =====================================================
         // TOTAL BM REAL
         // =====================================================
 
@@ -1532,11 +1759,6 @@ async function getBattleMetricsPlayerStatus(
                 resultadoServidores.totalSegundos
             ) || 0;
 
-
-        /*
-         * Solo usamos las sesiones como último respaldo
-         * si no conseguimos ningún tiempo directo.
-         */
 
         if (
             horasTotalesBM <= 0
@@ -1661,6 +1883,8 @@ async function getBattleMetricsPlayerStatus(
                     horasTotalesBM
                 ),
 
+            cantidadServidoresRust,
+
             horasSemana:
                 segundosAHoras(
                     segundosSemana
@@ -1775,7 +1999,10 @@ async function getBattleMetricsHours(
             datos.servidor,
 
         horasServidorConfigurado:
-            datos.horasServidorConfigurado
+            datos.horasServidorConfigurado,
+
+        cantidadServidoresRust:
+            datos.cantidadServidoresRust
     };
 }
 
