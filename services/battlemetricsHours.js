@@ -835,23 +835,27 @@ async function obtenerTodasLasSesiones(
 
     try {
 
-        let page = 1;
+        let nextUrl =
+            `/players/${playerId}/relationships/sessions`;
+
+        let pagina = 0;
 
         while (
-            page <= 50
+            nextUrl &&
+            pagina < 50
         ) {
 
             const response =
                 await axiosBM.get(
-                    `/players/${playerId}/relationships/sessions`,
+                    nextUrl,
                     {
-                        params: {
-                            "page[size]":
-                                100,
-
-                            "page[number]":
-                                page
-                        }
+                        params:
+                            pagina === 0
+                                ? {
+                                    "page[size]":
+                                        100
+                                }
+                                : undefined
                     }
                 );
 
@@ -878,111 +882,51 @@ async function obtenerTodasLasSesiones(
                 {};
 
             const total =
-                meta.total ||
-                meta.count ||
-                null;
+                Number(
+                    meta.total
+                );
 
             if (
-                total &&
-                sesiones.length >=
-                total
+                Number.isFinite(total) &&
+                total >= 0 &&
+                sesiones.length >= total
             ) {
 
                 break;
             }
 
-            if (
-                data.length < 100
-            ) {
+            /*
+             * BattleMetrics entrega el siguiente
+             * enlace de paginación en links.next.
+             *
+             * No usamos page[number], porque
+             * BattleMetrics está rechazando ese
+             * parámetro en este endpoint.
+             */
 
+            const next =
+                response.data.links &&
+                response.data.links.next
+                    ? response.data.links.next
+                    : null;
+
+            if (!next) {
                 break;
             }
 
-            page++;
+            nextUrl =
+                next;
+
+            pagina++;
         }
 
     } catch (error) {
 
-        console.log(
-            "⚠️ BM | Primer método de sesiones falló. Reintentando..."
+        console.error(
+            "❌ BM | Error obteniendo sesiones:",
+            error.response?.data ||
+            error.message
         );
-
-        try {
-
-            let page = 1;
-
-            while (
-                page <= 50
-            ) {
-
-                const response =
-                    await axiosBM.get(
-                        `/players/${playerId}/relationships/sessions`,
-                        {
-                            params: {
-                                "page[size]":
-                                    100,
-
-                                "page[number]":
-                                    page
-                            }
-                        }
-                    );
-
-                const data =
-                    Array.isArray(
-                        response.data.data
-                    )
-                        ? response.data.data
-                        : [];
-
-                if (
-                    data.length === 0
-                ) {
-
-                    break;
-                }
-
-                sesiones.push(
-                    ...data
-                );
-
-                const meta =
-                    response.data.meta ||
-                    {};
-
-                const total =
-                    meta.total ||
-                    meta.count ||
-                    null;
-
-                if (
-                    total &&
-                    sesiones.length >=
-                    total
-                ) {
-
-                    break;
-                }
-
-                if (
-                    data.length < 100
-                ) {
-
-                    break;
-                }
-
-                page++;
-            }
-
-        } catch (error2) {
-
-            console.error(
-                "❌ BM | Error obteniendo sesiones:",
-                error2.response?.data ||
-                error2.message
-            );
-        }
     }
 
     console.log(
