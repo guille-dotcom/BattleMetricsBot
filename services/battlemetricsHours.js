@@ -24,6 +24,7 @@ const axiosBM = axios.create({
 
 const MAX_PAGINAS = 100;
 const CONCURRENCIA_SERVIDORES = 5;
+const MAX_REINTENTOS_BM = 2;
 
 
 // ============================================================
@@ -125,9 +126,7 @@ function obtenerPartesChile(fecha = new Date()) {
     for (const parte of partes) {
 
         if (parte.type !== "literal") {
-
-            resultado[parte.type] =
-                Number(parte.value);
+            resultado[parte.type] = Number(parte.value);
         }
     }
 
@@ -260,6 +259,72 @@ function obtenerInicioMesChile(fecha = new Date()) {
 
 
 // ============================================================
+// PETICIÓN BM CON REINTENTOS
+// ============================================================
+
+async function solicitarBM(
+    url,
+    config = {},
+    reintentos = MAX_REINTENTOS_BM
+) {
+
+    let ultimoError = null;
+
+    for (
+        let intento = 0;
+        intento <= reintentos;
+        intento++
+    ) {
+
+        try {
+
+            return await axiosBM.get(
+                url,
+                config
+            );
+
+        } catch (error) {
+
+            ultimoError = error;
+
+            const status =
+                error.response?.status;
+
+            const reintentable =
+                !status ||
+                status === 408 ||
+                status === 429 ||
+                status >= 500;
+
+            if (
+                intento >= reintentos ||
+                !reintentable
+            ) {
+                break;
+            }
+
+            const espera =
+                500 * (intento + 1);
+
+            console.log(
+                `↻ BM | Reintentando ${url} en ${espera}ms...`
+            );
+
+            await new Promise(
+                resolve =>
+                    setTimeout(
+                        resolve,
+                        espera
+                    )
+            );
+        }
+    }
+
+    throw ultimoError;
+}
+
+
+// ============================================================
 // SESIONES
 // ============================================================
 
@@ -370,6 +435,10 @@ async function ejecutarConcurrencia(
             limite,
             elementos.length
         );
+
+    if (cantidadTrabajadores <= 0) {
+        return resultados;
+    }
 
     await Promise.all(
         Array.from(
@@ -507,7 +576,7 @@ async function searchBattleMetricsPlayer(
         );
 
         const response =
-            await axiosBM.get(
+            await solicitarBM(
                 `/servers/${serverId}`,
                 {
                     params: {
@@ -622,7 +691,7 @@ async function obtenerInfoServidor(
         try {
 
             response =
-                await axiosBM.get(
+                await solicitarBM(
                     `/servers/${id}`,
                     {
                         params: {
@@ -634,7 +703,7 @@ async function obtenerInfoServidor(
         } catch {
 
             response =
-                await axiosBM.get(
+                await solicitarBM(
                     `/servers/${id}`
                 );
         }
@@ -753,7 +822,7 @@ async function comprobarJugadorEnServidor(
         );
 
         const response =
-            await axiosBM.get(
+            await solicitarBM(
                 `/servers/${serverId}`,
                 {
                     params: {
@@ -830,11 +899,6 @@ async function comprobarJugadorEnServidor(
 
 // ============================================================
 // OBTENER TODAS LAS SESIONES
-//
-// Importante:
-// BattleMetrics puede devolver links.next.
-// No utilizamos page[number], porque ese parámetro ya dio
-// problemas anteriormente.
 // ============================================================
 
 async function obtenerTodasLasSesiones(
@@ -871,11 +935,11 @@ async function obtenerTodasLasSesiones(
 
             const response =
                 params
-                    ? await axiosBM.get(
+                    ? await solicitarBM(
                         url,
                         { params }
                     )
-                    : await axiosBM.get(
+                    : await solicitarBM(
                         url
                     );
 
@@ -989,14 +1053,7 @@ function agregarServidorAlMap(
     const existente =
         servidoresMap.get(id);
 
-    /*
-     * Si ya tenemos información más completa,
-     * intentamos no reemplazarla con una versión peor.
-     */
-
-    if (
-        existente
-    ) {
+    if (existente) {
 
         servidoresMap.set(
             id,
@@ -1052,21 +1109,18 @@ function agregarServidorAlMap(
 // ============================================================
 // OBTENER TODOS LOS SERVIDORES DEL JUGADOR
 //
-// ESTA ES LA PARTE IMPORTANTE.
+// IMPORTANTE:
 //
-// Primero pedimos:
-// /players/{playerId}/relationships/servers
+// No nos quedamos solamente con los servidores que aparecen
+// en una página inicial.
 //
-// No usamos page[number].
+// Recorremos TODAS las páginas usando links.next.
 //
-// BattleMetrics puede devolver:
-// - data con servidores
-// - included con servidores
-// - links.next
+// Además, los servidores encontrados mediante sesiones también
+// se incorporan posteriormente.
 //
-// Si la relación devuelve solamente IDs,
-// posteriormente obtenerTopServidoresRust() obtiene
-// la información real de cada servidor.
+// Esto permite construir el universo completo de servidores
+// antes de calcular el ranking.
 // ============================================================
 
 async function obtenerTodosLosServidoresJugador(
@@ -1117,11 +1171,11 @@ async function obtenerTodosLosServidoresJugador(
 
             const response =
                 params
-                    ? await axiosBM.get(
+                    ? await solicitarBM(
                         url,
                         { params }
                     )
-                    : await axiosBM.get(
+                    : await solicitarBM(
                         url
                     );
 
@@ -1159,14 +1213,6 @@ async function obtenerTodosLosServidoresJugador(
                 ) {
                     continue;
                 }
-
-                /*
-                 * En este endpoint normalmente data ya contiene
-                 * los recursos server.
-                 *
-                 * Si BattleMetrics entrega otro tipo de recurso,
-                 * no lo agregamos como servidor.
-                 */
 
                 if (
                     recurso.type &&
@@ -1239,11 +1285,6 @@ async function obtenerTodosLosServidoresJugador(
                 `📡 BM | Página ${pagina}: ${encontradosPagina} servidores nuevos | Total: ${servidoresEncontrados.size}`
             );
 
-
-            // ------------------------------------------------
-            // NEXT
-            // ------------------------------------------------
-
             const next =
                 body.links &&
                 body.links.next
@@ -1266,21 +1307,12 @@ async function obtenerTodosLosServidoresJugador(
                 error.message
             );
 
-            /*
-             * IMPORTANTE:
-             *
-             * No volvemos a intentar con page[number].
-             *
-             * Ese parámetro ya demostró que puede provocar
-             * errores en BattleMetrics.
-             */
-
             break;
         }
     }
 
     console.log(
-        `\n🖥️ BM | SERVIDORES TOTALES ENCONTRADOS: ${servidoresEncontrados.size}`
+        `\n🖥️ BM | SERVIDORES TOTALES ENCONTRADOS POR RELACIÓN: ${servidoresEncontrados.size}`
     );
 
     return servidoresEncontrados.size;
@@ -1289,6 +1321,18 @@ async function obtenerTodosLosServidoresJugador(
 
 // ============================================================
 // HORAS DIRECTAS DEL JUGADOR EN UN SERVIDOR
+//
+// IMPORTANTE:
+//
+// Aquí NO usamos server.meta.timePlayed.
+//
+// Ese dato corresponde al recurso servidor.
+//
+// Para el ranking necesitamos el tiempo del JUGADOR en ese
+// servidor.
+//
+// Intentamos primero el recurso player/server y luego el
+// historial.
 // ============================================================
 
 async function obtenerHorasJugadorServidor(
@@ -1313,7 +1357,7 @@ async function obtenerHorasJugadorServidor(
     try {
 
         const response =
-            await axiosBM.get(
+            await solicitarBM(
                 `/players/${player}/servers/${server}`
             );
 
@@ -1335,17 +1379,15 @@ async function obtenerHorasJugadorServidor(
         const candidatos = [
 
             meta.timePlayed,
-
             meta.timeplayed,
+            meta.seconds,
+            meta.totalTime,
+            meta.totalSeconds,
 
             attributes.timePlayed,
-
             attributes.timeplayed,
-
             attributes.seconds,
-
             attributes.totalTime,
-
             attributes.totalSeconds
         ];
 
@@ -1411,7 +1453,7 @@ async function obtenerHorasJugadorServidor(
     try {
 
         const response =
-            await axiosBM.get(
+            await solicitarBM(
                 `/players/${player}/time-played-history/${server}`
             );
 
@@ -1426,13 +1468,9 @@ async function obtenerHorasJugadorServidor(
         const candidatosMeta = [
 
             meta.timePlayed,
-
             meta.timeplayed,
-
             meta.totalTime,
-
             meta.totalSeconds,
-
             meta.seconds
         ];
 
@@ -1458,7 +1496,6 @@ async function obtenerHorasJugadorServidor(
             }
         }
 
-
         if (
             segundos <= 0 &&
             Array.isArray(data)
@@ -1475,15 +1512,10 @@ async function obtenerHorasJugadorServidor(
                 const valores = [
 
                     a.timePlayed,
-
                     a.timeplayed,
-
                     a.seconds,
-
                     a.duration,
-
                     a.totalTime,
-
                     a.totalSeconds,
 
                     registro.meta &&
@@ -1558,8 +1590,6 @@ async function obtenerHorasJugadorServidor(
 
 // ============================================================
 // CREAR MAPA DE HORAS DESDE SESIONES
-//
-// Esto evita recorrer las sesiones completas para cada servidor.
 // ============================================================
 
 function crearMapaHorasSesiones(
@@ -1656,26 +1686,20 @@ function crearMapaHorasSesiones(
 
 
 // ============================================================
-// TOP 10 SERVIDORES RUST
+// OBTENER TOP 10 SERVIDORES RUST
 //
-// PASO 1:
-// Tenemos TODOS los servidores.
+// FLUJO:
 //
-// PASO 2:
-// Para los que no tengan información completa,
-// consultamos /servers/{id}.
+// 1. Todos los servidores de la relación BM.
+// 2. Todos los servidores encontrados en sesiones.
+// 3. Información de todos los servidores.
+// 4. Filtrar Rust.
+// 5. Consultar horas del jugador EN CADA SERVIDOR RUST.
+// 6. Si la consulta directa falla, usar sesiones.
+// 7. Ordenar TODOS los resultados por horas.
+// 8. Solo después hacer slice(0, 10).
 //
-// PASO 3:
-// Filtramos Rust.
-//
-// PASO 4:
-// Consultamos las horas del jugador en TODOS los Rust.
-//
-// PASO 5:
-// Ordenamos.
-//
-// PASO 6:
-// Top 10.
+// NUNCA se hace slice antes del ordenamiento.
 // ============================================================
 
 async function obtenerTopServidoresRust(
@@ -1687,8 +1711,9 @@ async function obtenerTopServidoresRust(
     const servidores =
         new Map();
 
+
     // --------------------------------------------------------
-    // SERVIDORES DESCUBIERTOS
+    // 1. SERVIDORES DE LA RELACIÓN BM
     // --------------------------------------------------------
 
     for (
@@ -1714,8 +1739,15 @@ async function obtenerTopServidoresRust(
 
 
     // --------------------------------------------------------
-    // SERVIDORES DE SESIONES COMO RESPALDO
+    // 2. SERVIDORES DE TODAS LAS SESIONES
+    //
+    // Esto es importante porque puede existir un servidor
+    // histórico en las sesiones aunque no haya venido en la
+    // respuesta inicial de relationships/servers.
     // --------------------------------------------------------
+
+    const idsSesion =
+        new Set();
 
     for (
         const session of
@@ -1733,6 +1765,8 @@ async function obtenerTopServidoresRust(
 
         const id =
             String(serverId);
+
+        idsSesion.add(id);
 
         if (
             servidores.has(id)
@@ -1760,9 +1794,13 @@ async function obtenerTopServidoresRust(
         `\n🔎 BM | SERVIDORES TOTALES CANDIDATOS: ${servidores.size}`
     );
 
+    console.log(
+        `📊 BM | SERVIDORES DESCUBIERTOS MEDIANTE SESIONES: ${idsSesion.size}`
+    );
+
 
     // --------------------------------------------------------
-    // ASEGURAR INFORMACIÓN DE LOS SERVIDORES
+    // 3. ASEGURAR INFORMACIÓN DE TODOS LOS SERVIDORES
     // --------------------------------------------------------
 
     const candidatos =
@@ -1774,11 +1812,6 @@ async function obtenerTopServidoresRust(
         await ejecutarConcurrencia(
             candidatos,
             async servidor => {
-
-                /*
-                 * Si ya tenemos nombre/game suficientes,
-                 * no hacemos otra consulta.
-                 */
 
                 if (
                     servidor.nombre &&
@@ -1798,7 +1831,7 @@ async function obtenerTopServidoresRust(
 
 
     // --------------------------------------------------------
-    // FILTRAR RUST
+    // 4. FILTRAR RUST
     // --------------------------------------------------------
 
     const servidoresRust = [];
@@ -1842,7 +1875,7 @@ async function obtenerTopServidoresRust(
 
 
     // --------------------------------------------------------
-    // MAPA DE SESIONES PARA FALLBACK
+    // 5. MAPA DE SESIONES
     // --------------------------------------------------------
 
     const mapaHorasSesiones =
@@ -1852,11 +1885,11 @@ async function obtenerTopServidoresRust(
 
 
     // --------------------------------------------------------
-    // CONSULTAR HORAS DE TODOS LOS SERVIDORES RUST
+    // 6. CONSULTAR HORAS EN TODOS LOS SERVIDORES RUST
     // --------------------------------------------------------
 
     console.log(
-        `\n🏆 BM | CONSULTANDO HORAS EN ${servidoresRust.length} SERVIDORES RUST...`
+        `\n🏆 BM | CONSULTANDO HORAS INDIVIDUALES EN TODOS LOS ${servidoresRust.length} SERVIDORES RUST...`
     );
 
     const resultados =
@@ -1873,8 +1906,9 @@ async function obtenerTopServidoresRust(
                     `📊 BM | [${indice + 1}/${servidoresRust.length}] ${servidor.nombre} (${serverId})`
                 );
 
+
                 // --------------------------------------------
-                // HORAS DIRECTAS
+                // CONSULTA DIRECTA
                 // --------------------------------------------
 
                 const horasJugador =
@@ -1883,13 +1917,13 @@ async function obtenerTopServidoresRust(
                         serverId
                     );
 
-                let segundos = 0;
+                let segundosDirectos = 0;
 
                 if (
                     horasJugador
                 ) {
 
-                    segundos =
+                    segundosDirectos =
                         Number(
                             horasJugador.segundos
                         ) || 0;
@@ -1897,42 +1931,73 @@ async function obtenerTopServidoresRust(
 
 
                 // --------------------------------------------
-                // FALLBACK SESIONES
+                // SESIONES COMO RESPALDO
+                // --------------------------------------------
+
+                const segundosSesiones =
+                    Number(
+                        mapaHorasSesiones.get(
+                            serverId
+                        )
+                    ) || 0;
+
+
+                // --------------------------------------------
+                // ELEGIR EL MAYOR VALOR
+                //
+                // No usamos automáticamente sesiones si son
+                // menores que el valor histórico directo.
+                //
+                // Para el ranking nos interesa conservar la
+                // mayor cantidad de tiempo que BM nos haya
+                // entregado para ese servidor.
+                // --------------------------------------------
+
+                const segundos =
+                    Math.max(
+                        segundosDirectos,
+                        segundosSesiones
+                    );
+
+
+                // --------------------------------------------
+                // SI NO TENEMOS HORAS
                 // --------------------------------------------
 
                 if (
                     segundos <= 0
                 ) {
 
-                    segundos =
-                        Number(
-                            mapaHorasSesiones.get(
-                                serverId
-                            )
-                        ) || 0;
-
-                    if (
-                        segundos > 0
-                    ) {
-
-                        console.log(
-                            `↩️ BM | ${servidor.nombre}: usando sesiones -> ${segundosAHoras(segundos)}`
-                        );
-                    }
-                }
-
-
-                if (
-                    segundos <= 0
-                ) {
-
                     console.log(
-                        `⚪ BM | ${servidor.nombre}: 0h`
+                        `⚪ BM | ${servidor.nombre}: sin horas recuperables`
                     );
 
-                    return null;
+                    return {
+
+                        id:
+                            serverId,
+
+                        nombre:
+                            servidor.nombre,
+
+                        game:
+                            servidor.game,
+
+                        segundos:
+                            0,
+
+                        tiempo:
+                            "0h",
+
+                        horasRecuperadas:
+                            false
+                    };
                 }
 
+
+                // --------------------------------------------
+                // RESULTADO
+                // --------------------------------------------
 
                 console.log(
                     `✅ BM | ${servidor.nombre}: ${segundosAHoras(segundos)}`
@@ -1954,7 +2019,10 @@ async function obtenerTopServidoresRust(
                     tiempo:
                         segundosAHoras(
                             segundos
-                        )
+                        ),
+
+                    horasRecuperadas:
+                        true
                 };
 
             },
@@ -1963,32 +2031,62 @@ async function obtenerTopServidoresRust(
 
 
     // --------------------------------------------------------
-    // ELIMINAR NULOS
+    // 7. ELIMINAR NULOS
     // --------------------------------------------------------
 
     const resultadosValidos =
         resultados.filter(
-            Boolean
+            resultado =>
+                resultado &&
+                resultado.horasRecuperadas === true &&
+                Number(resultado.segundos) > 0
         );
 
 
     // --------------------------------------------------------
-    // ORDENAR TODOS LOS SERVIDORES
+    // 8. ORDENAR ABSOLUTAMENTE TODOS LOS RESULTADOS
+    //
+    // ESTE ES EL PUNTO CRÍTICO.
+    //
+    // Primero tenemos que tener las horas de TODOS.
+    // DESPUÉS ordenamos.
+    // DESPUÉS tomamos 10.
     // --------------------------------------------------------
 
     resultadosValidos.sort(
-        (a, b) =>
-            Number(
-                b.segundos || 0
-            ) -
-            Number(
-                a.segundos || 0
-            )
+        (a, b) => {
+
+            const horasB =
+                Number(
+                    b.segundos
+                ) || 0;
+
+            const horasA =
+                Number(
+                    a.segundos
+                ) || 0;
+
+            return horasB - horasA;
+        }
     );
 
 
     // --------------------------------------------------------
-    // TOTAL DE HORAS
+    // 9. TOP 10
+    // --------------------------------------------------------
+
+    const top10 =
+        resultadosValidos.slice(
+            0,
+            10
+        );
+
+
+    // --------------------------------------------------------
+    // 10. TOTAL DE HORAS
+    //
+    // Suma las horas individuales recuperadas de los
+    // servidores. Se mantiene el comportamiento actual.
     // --------------------------------------------------------
 
     const totalSegundos =
@@ -2008,13 +2106,7 @@ async function obtenerTopServidoresRust(
 
 
     // --------------------------------------------------------
-    // CANTIDAD TOTAL DE SERVIDORES RUST
-    //
-    // IMPORTANTE:
-    // Ahora NO depende de resultadosValidos.
-    //
-    // Si BattleMetrics conoce 89 servidores Rust,
-    // devuelve 89 aunque alguno tenga 0 horas recuperables.
+    // 11. CANTIDAD TOTAL DE SERVIDORES RUST
     // --------------------------------------------------------
 
     const cantidadServidores =
@@ -2022,22 +2114,11 @@ async function obtenerTopServidoresRust(
 
 
     // --------------------------------------------------------
-    // TOP 10
-    // --------------------------------------------------------
-
-    const top10 =
-        resultadosValidos.slice(
-            0,
-            10
-        );
-
-
-    // --------------------------------------------------------
-    // LOG FINAL
+    // LOG DEL TOP 10
     // --------------------------------------------------------
 
     console.log(
-        `\n🏆 BM | ================= TOP 10 FINAL =================`
+        `\n🏆 BM | ================= TOP 10 REAL =================`
     );
 
     top10.forEach(
@@ -2054,7 +2135,7 @@ async function obtenerTopServidoresRust(
     );
 
     console.log(
-        `🖥️ BM | Todos los servidores Rust encontrados: ${cantidadServidores}`
+        `🖥️ BM | TODOS los servidores Rust encontrados: ${cantidadServidores}`
     );
 
     console.log(
@@ -2062,8 +2143,29 @@ async function obtenerTopServidoresRust(
     );
 
     console.log(
-        `🧮 BM | Total horas de servidores procesados: ${segundosAHoras(totalSegundos)}`
+        `🧮 BM | Total horas recuperadas: ${segundosAHoras(totalSegundos)}`
     );
+
+
+    // --------------------------------------------------------
+    // AVISO SI ALGÚN SERVIDOR NO PUDO SER CONSULTADO
+    // --------------------------------------------------------
+
+    const servidoresSinHoras =
+        resultados.filter(
+            resultado =>
+                resultado &&
+                resultado.horasRecuperadas === false
+        );
+
+    if (
+        servidoresSinHoras.length > 0
+    ) {
+
+        console.log(
+            `⚠️ BM | ${servidoresSinHoras.length} servidores Rust no devolvieron horas recuperables.`
+        );
+    }
 
 
     return {
@@ -2072,7 +2174,16 @@ async function obtenerTopServidoresRust(
 
         totalSegundos,
 
-        cantidadServidores
+        cantidadServidores,
+
+        servidoresProcesados:
+            servidoresRust.length,
+
+        servidoresConHoras:
+            resultadosValidos.length,
+
+        servidoresSinHoras:
+            servidoresSinHoras.length
     };
 }
 
@@ -2113,7 +2224,7 @@ async function getBattleMetricsPlayerStatus(
         // -----------------------------------------------------
 
         const playerResponse =
-            await axiosBM.get(
+            await solicitarBM(
                 `/players/${playerId}`,
                 {
                     params: {
@@ -2618,7 +2729,7 @@ async function getBattleMetricsPlayerStatus(
         try {
 
             const identifiersResponse =
-                await axiosBM.get(
+                await solicitarBM(
                     `/players/${playerId}/relationships/identifiers`,
                     {
                         params: {
@@ -2905,7 +3016,7 @@ async function getServerLeaderboard(
     try {
 
         const response =
-            await axiosBM.get(
+            await solicitarBM(
                 `/servers/${serverId}`,
                 {
                     params: {
