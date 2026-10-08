@@ -3,6 +3,7 @@ const axios = require("axios");
 const BATTLEMETRICS_TOKEN = process.env.BATTLEMETRICS_TOKEN;
 
 const API = "https://api.battlemetrics.com";
+const WEB_API = "https://www.battlemetrics.com/_api";
 
 const HEADERS = {
     Authorization: `Bearer ${BATTLEMETRICS_TOKEN}`,
@@ -13,6 +14,12 @@ const REQUEST_TIMEOUT = 30000;
 
 const axiosBM = axios.create({
     baseURL: API,
+    headers: HEADERS,
+    timeout: REQUEST_TIMEOUT
+});
+
+const axiosBMWeb = axios.create({
+    baseURL: WEB_API,
     headers: HEADERS,
     timeout: REQUEST_TIMEOUT
 });
@@ -1222,79 +1229,125 @@ async function obtenerHorasJugadorServidor(
 // TOTAL DEL OVERVIEW DE BATTLEMETRICS
 // ============================================================
 
-function obtenerTotalOverviewBattleMetrics(
-    player
+async function obtenerTotalOverviewBattleMetrics(
+    playerId
 ) {
 
-    if (!player) {
+    if (!playerId) {
         return 0;
     }
 
-    const meta =
-        player.meta ||
-        {};
+    try {
 
-    const attributes =
-        player.attributes ||
-        {};
+        const ahora =
+            new Date();
 
-    const candidatos = [
+        const stop =
+            ahora.toISOString();
 
-        // Campo utilizado por BattleMetrics
-        // para player.timePlayed.
-        meta.timePlayed,
+        // BattleMetrics utiliza esta petición
+        // en el Overview.
+        //
+        // El rango no cambia el timePlayed acumulado.
+        // El campo attributes.timePlayed contiene
+        // el total histórico del jugador.
 
-        meta.timeplayed,
+        const inicio =
+            new Date(ahora);
 
-        meta.totalTime,
+        inicio.setDate(
+            inicio.getDate() - 30
+        );
 
-        meta.totalSeconds,
+        const start =
+            inicio.toISOString();
 
-        // Por si la API lo entrega en attributes.
-        attributes.timePlayed,
+        console.log(
+            `🎯 BM | Consultando Total Time Played real del Overview para ${playerId}`
+        );
 
-        attributes.timeplayed,
+        const response =
+            await axiosBMWeb.get(
+                `/players/${playerId}/time-played-statistics`,
+                {
+                    params: {
+                        start,
+                        stop
+                    }
+                }
+            );
 
-        attributes.totalTime,
-
-        attributes.totalSeconds
-    ];
-
-    for (
-        const valor of
-        candidatos
-    ) {
+        const data =
+            Array.isArray(
+                response.data?.data
+            )
+                ? response.data.data
+                : [];
 
         if (
-            valor !== null &&
-            typeof valor !==
-            "undefined" &&
-            !isNaN(
-                Number(valor)
-            )
+            data.length === 0
         ) {
 
-            const segundos =
-                Number(valor);
+            console.log(
+                "⚠️ BM | time-played-statistics no devolvió datos"
+            );
 
-            if (
-                segundos > 0
-            ) {
-
-                console.log(
-                    `🧮 BM | Total Time Played del Overview: ${segundosAHoras(segundos)}`
-                );
-
-                return segundos;
-            }
+            return 0;
         }
+
+        // Buscar específicamente Rust.
+        const rust =
+            data.find(
+                item =>
+                    item?.relationships?.game?.data?.id ===
+                        "rust" ||
+                    item?.id ===
+                        `${playerId}:rust`
+            );
+
+        const estadistica =
+            rust ||
+            data[0];
+
+        const segundos =
+            Number(
+                estadistica?.attributes?.timePlayed
+            );
+
+        if (
+            !Number.isFinite(
+                segundos
+            ) ||
+            segundos <= 0
+        ) {
+
+            console.log(
+                "⚠️ BM | attributes.timePlayed no disponible"
+            );
+
+            return 0;
+        }
+
+        console.log(
+            `✅ BM | Total Time Played REAL del Overview: ${segundosAHoras(segundos)}`
+        );
+
+        console.log(
+            `📊 BM | timePlayed bruto: ${segundos} segundos`
+        );
+
+        return segundos;
+
+    } catch (error) {
+
+        console.error(
+            "❌ BM | Error obteniendo Total Time Played del Overview:",
+            error.response?.data ||
+            error.message
+        );
+
+        return 0;
     }
-
-    console.log(
-        "⚠️ BM | El player del Overview no entregó timePlayed"
-    );
-
-    return 0;
 }
 
 
@@ -1558,9 +1611,7 @@ async function obtenerTopServidoresRust(
     // ---------------------------------------------------------
     // TOTAL DE SERVIDORES
     //
-    // OJO:
-    // Este total se mantiene para información interna,
-    // PERO YA NO SE UTILIZA COMO TOTAL BM.
+    // Este total NO se usa como Total BM.
     // ---------------------------------------------------------
 
     const totalSegundos =
@@ -1662,7 +1713,7 @@ async function getBattleMetricsPlayerStatus(
 
 
         // -----------------------------------------------------
-        // PLAYER / OVERVIEW
+        // PLAYER
         // -----------------------------------------------------
 
         const playerResponse =
@@ -1694,12 +1745,12 @@ async function getBattleMetricsPlayerStatus(
 
 
         // -----------------------------------------------------
-        // TOTAL DEL OVERVIEW
+        // TOTAL REAL DEL OVERVIEW
         // -----------------------------------------------------
 
         const totalOverviewBM =
-            obtenerTotalOverviewBattleMetrics(
-                player
+            await obtenerTotalOverviewBattleMetrics(
+                playerId
             );
 
 
@@ -2207,8 +2258,7 @@ async function getBattleMetricsPlayerStatus(
         // =====================================================
         // TOTAL BM
         //
-        // AHORA SALE DIRECTAMENTE DEL OVERVIEW.
-        // NO SE SUMAN LOS SERVIDORES.
+        // SALE DEL ENDPOINT REAL DEL OVERVIEW.
         // =====================================================
 
         let horasTotalesBM =
@@ -2218,12 +2268,16 @@ async function getBattleMetricsPlayerStatus(
 
 
         // -----------------------------------------------------
-        // FALLBACK ÚNICAMENTE SI OVERVIEW NO ENTREGÓ DATO
+        // FALLBACK SOLO SI EL OVERVIEW FALLA
         // -----------------------------------------------------
 
         if (
             horasTotalesBM <= 0
         ) {
+
+            console.log(
+                "⚠️ BM | Overview no entregó total, usando fallback de servidores"
+            );
 
             horasTotalesBM =
                 Number(
@@ -2235,6 +2289,10 @@ async function getBattleMetricsPlayerStatus(
         if (
             horasTotalesBM <= 0
         ) {
+
+            console.log(
+                "⚠️ BM | Fallback de servidores vacío, usando sesiones"
+            );
 
             horasTotalesBM =
                 segundosTotalesSesiones;
