@@ -219,12 +219,9 @@ function obtenerInicioSemanaChile(fecha = new Date()) {
     const diaSemana =
         fechaChile.getUTCDay();
 
-    const diferencia =
-        diaSemana;
-
     fechaChile.setUTCDate(
         fechaChile.getUTCDate() -
-        diferencia
+        diaSemana
     );
 
     return crearFechaChile(
@@ -259,11 +256,13 @@ function obtenerInicioMesChile(fecha = new Date()) {
 
 
 function esSesionActiva(session) {
+
     if (!session || !session.attributes) {
         return false;
     }
 
-    const a = session.attributes;
+    const a =
+        session.attributes;
 
     if (
         a.stop === null ||
@@ -285,6 +284,7 @@ function esSesionActiva(session) {
 
 
 function obtenerServerIdDeSesion(session) {
+
     if (!session) {
         return null;
     }
@@ -294,8 +294,11 @@ function obtenerServerIdDeSesion(session) {
         session.relationships.server &&
         session.relationships.server.data
     ) {
+
         return session.relationships.server.data.id
-            ? String(session.relationships.server.data.id)
+            ? String(
+                session.relationships.server.data.id
+            )
             : null;
     }
 
@@ -304,10 +307,11 @@ function obtenerServerIdDeSesion(session) {
 
 
 // ============================================================
-// EXTRAER JUGADORES DE RESPUESTA BATTLEMETRICS
+// EXTRAER JUGADORES
 // ============================================================
 
 function extraerJugadoresRespuesta(responseData) {
+
     const jugadores = [];
 
     if (!responseData) {
@@ -315,35 +319,53 @@ function extraerJugadoresRespuesta(responseData) {
     }
 
     if (Array.isArray(responseData.data)) {
-        jugadores.push(...responseData.data);
-    }
 
-    else if (
+        jugadores.push(
+            ...responseData.data
+        );
+
+    } else if (
         responseData.data &&
         typeof responseData.data === "object"
     ) {
+
         if (
             responseData.data.type === "player" ||
             responseData.data.attributes?.name
         ) {
-            jugadores.push(responseData.data);
+
+            jugadores.push(
+                responseData.data
+            );
         }
     }
 
     if (Array.isArray(responseData.included)) {
-        for (const recurso of responseData.included) {
+
+        for (
+            const recurso of
+            responseData.included
+        ) {
+
             if (
                 recurso &&
                 recurso.type === "player"
             ) {
-                jugadores.push(recurso);
+
+                jugadores.push(
+                    recurso
+                );
             }
         }
     }
 
-    const unicos = new Map();
+    const unicos =
+        new Map();
 
-    for (const jugador of jugadores) {
+    for (
+        const jugador of
+        jugadores
+    ) {
 
         if (!jugador) {
             continue;
@@ -357,7 +379,9 @@ function extraerJugadoresRespuesta(responseData) {
         const nombre =
             jugador.attributes &&
             jugador.attributes.name
-                ? String(jugador.attributes.name)
+                ? String(
+                    jugador.attributes.name
+                )
                 : "";
 
         const clave =
@@ -369,6 +393,7 @@ function extraerJugadoresRespuesta(responseData) {
         }
 
         if (!unicos.has(clave)) {
+
             unicos.set(
                 clave,
                 jugador
@@ -386,7 +411,11 @@ function extraerJugadoresRespuesta(responseData) {
 // BUSCAR JUGADOR EN SERVIDOR
 // ============================================================
 
-async function searchBattleMetricsPlayer(playerName, serverId) {
+async function searchBattleMetricsPlayer(
+    playerName,
+    serverId
+) {
+
     if (!playerName || !serverId) {
         return null;
     }
@@ -397,14 +426,15 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
             `🔎 BM | Buscando "${playerName}" en servidor ${serverId}`
         );
 
-        const response = await axiosBM.get(
-            `/servers/${serverId}`,
-            {
-                params: {
-                    include: "player"
+        const response =
+            await axiosBM.get(
+                `/servers/${serverId}`,
+                {
+                    params: {
+                        include: "player"
+                    }
                 }
-            }
-        );
+            );
 
         const jugadores =
             extraerJugadoresRespuesta(
@@ -417,7 +447,10 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
 
         const encontrados = [];
 
-        for (const jugador of jugadores) {
+        for (
+            const jugador of
+            jugadores
+        ) {
 
             const nombreBM =
                 jugador.attributes &&
@@ -449,6 +482,7 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
         }
 
         if (encontrados.length > 1) {
+
             return {
                 duplicate: true,
                 players: encontrados
@@ -457,6 +491,7 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
 
         return {
             duplicate: false,
+
             id:
                 encontrados[0].id,
 
@@ -484,12 +519,17 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
 // INFORMACIÓN DE SERVIDOR
 // ============================================================
 
-async function obtenerInfoServidor(serverId, cache = new Map()) {
+async function obtenerInfoServidor(
+    serverId,
+    cache = new Map()
+) {
+
     if (!serverId) {
         return null;
     }
 
-    const id = String(serverId);
+    const id =
+        String(serverId);
 
     if (cache.has(id)) {
         return cache.get(id);
@@ -501,20 +541,22 @@ async function obtenerInfoServidor(serverId, cache = new Map()) {
 
         try {
 
-            response = await axiosBM.get(
-                `/servers/${id}`,
-                {
-                    params: {
-                        include: "game"
+            response =
+                await axiosBM.get(
+                    `/servers/${id}`,
+                    {
+                        params: {
+                            include: "game"
+                        }
                     }
-                }
-            );
+                );
 
         } catch {
 
-            response = await axiosBM.get(
-                `/servers/${id}`
-            );
+            response =
+                await axiosBM.get(
+                    `/servers/${id}`
+                );
         }
 
         const servidor =
@@ -536,11 +578,16 @@ async function obtenerInfoServidor(serverId, cache = new Map()) {
             relationships.game &&
             relationships.game.data
         ) {
+
             gameName =
                 relationships.game.data.id || "";
         }
 
-        if (!gameName && attributes.game) {
+        if (
+            !gameName &&
+            attributes.game
+        ) {
+
             gameName =
                 attributes.game;
         }
@@ -550,7 +597,9 @@ async function obtenerInfoServidor(serverId, cache = new Map()) {
             `Servidor ${id}`;
 
         const textoGame =
-            String(gameName).toLowerCase();
+            String(
+                gameName
+            ).toLowerCase();
 
         const esRust =
             textoGame.includes("rust") ||
@@ -565,12 +614,22 @@ async function obtenerInfoServidor(serverId, cache = new Map()) {
                 : 0;
 
         const resultado = {
+
             id,
+
             nombre,
-            game: gameName,
+
+            game:
+                gameName,
+
             esRust,
-            ip: attributes.ip || null,
-            port: attributes.port || null,
+
+            ip:
+                attributes.ip || null,
+
+            port:
+                attributes.port || null,
+
             timePlayed
         };
 
@@ -595,135 +654,156 @@ async function obtenerInfoServidor(serverId, cache = new Map()) {
 
 
 // ============================================================
+// COMPROBAR SI EL JUGADOR ESTÁ ONLINE EN SERVIDOR
+//
+// ESTE MÉTODO NO DEPENDE DE LAS SESIONES.
+//
+// BattleMetrics devuelve los jugadores actuales directamente
+// desde /servers/{id}?include=player.
+// ============================================================
+
+async function comprobarJugadorEnServidor(
+    playerId,
+    serverId
+) {
+
+    if (!playerId || !serverId) {
+        return null;
+    }
+
+    try {
+
+        console.log(
+            `🔎 BM | Comprobando presencia actual: jugador ${playerId} -> servidor ${serverId}`
+        );
+
+        const response =
+            await axiosBM.get(
+                `/servers/${serverId}`,
+                {
+                    params: {
+                        include: "player"
+                    }
+                }
+            );
+
+        const jugadores =
+            extraerJugadoresRespuesta(
+                response.data
+            );
+
+        const jugadorEncontrado =
+            jugadores.find(
+                jugador =>
+                    String(
+                        jugador.id
+                    ) ===
+                    String(
+                        playerId
+                    )
+            );
+
+        if (!jugadorEncontrado) {
+
+            console.log(
+                `🔴 BM | Jugador ${playerId} NO aparece actualmente en servidor ${serverId}`
+            );
+
+            return null;
+        }
+
+        const servidor =
+            await obtenerInfoServidor(
+                serverId
+            );
+
+        if (!servidor) {
+
+            return {
+                id:
+                    String(serverId),
+
+                nombre:
+                    `Servidor ${serverId}`,
+
+                game:
+                    "rust",
+
+                esRust:
+                    true
+            };
+        }
+
+        console.log(
+            `🟢 BM | Jugador ${playerId} ESTÁ ONLINE en ${servidor.nombre} (${serverId})`
+        );
+
+        return servidor;
+
+    } catch (error) {
+
+        console.error(
+            `⚠️ BM | Error comprobando presencia actual en ${serverId}:`,
+            error.response?.data ||
+            error.message
+        );
+
+        return null;
+    }
+}
+
+
+// ============================================================
 // OBTENER SESIONES DEL JUGADOR
 // ============================================================
 
-async function obtenerTodasLasSesiones(playerId) {
+async function obtenerTodasLasSesiones(
+    playerId
+) {
 
     const sesiones = [];
 
     try {
 
-        let page = 1;
+        /*
+         * BattleMetrics está rechazando page[number].
+         *
+         * Primero intentamos solamente con page[size].
+         * Si la API devuelve datos, los utilizamos.
+         */
 
-        while (page <= 50) {
-
-            const response =
-                await axiosBM.get(
-                    `/players/${playerId}/relationships/sessions`,
-                    {
-                        params: {
-                            "page[size]": 100,
-                            "page[number]": page
-                        }
+        const response =
+            await axiosBM.get(
+                `/players/${playerId}/relationships/sessions`,
+                {
+                    params: {
+                        "page[size]": 100
                     }
-                );
-
-            const data =
-                Array.isArray(
-                    response.data.data
-                )
-                    ? response.data.data
-                    : [];
-
-            if (data.length === 0) {
-                break;
-            }
-
-            sesiones.push(
-                ...data
+                }
             );
 
-            const meta =
-                response.data.meta || {};
+        const data =
+            Array.isArray(
+                response.data.data
+            )
+                ? response.data.data
+                : [];
 
-            const total =
-                meta.total ||
-                meta.count ||
-                null;
+        sesiones.push(
+            ...data
+        );
 
-            if (
-                total &&
-                sesiones.length >= total
-            ) {
-                break;
-            }
-
-            if (data.length < 100) {
-                break;
-            }
-
-            page++;
-        }
+        console.log(
+            `📊 BM | Sesiones obtenidas: ${sesiones.length}`
+        );
 
     } catch (error) {
 
         console.log(
-            "⚠️ BM | Primer método de sesiones falló. Reintentando..."
+            "⚠️ BM | Endpoint de sesiones no disponible:",
+            error.response?.data ||
+            error.message
         );
-
-        try {
-
-            let page = 1;
-
-            while (page <= 50) {
-
-                const response =
-                    await axiosBM.get(
-                        `/players/${playerId}/relationships/sessions`,
-                        {
-                            params: {
-                                "page[size]": 100,
-                                "page[number]": page
-                            }
-                        }
-                    );
-
-                const data =
-                    Array.isArray(
-                        response.data.data
-                    )
-                        ? response.data.data
-                        : [];
-
-                if (data.length === 0) {
-                    break;
-                }
-
-                sesiones.push(
-                    ...data
-                );
-
-                const meta =
-                    response.data.meta || {};
-
-                const total =
-                    meta.total ||
-                    meta.count ||
-                    null;
-
-                if (
-                    total &&
-                    sesiones.length >= total
-                ) {
-                    break;
-                }
-
-                if (data.length < 100) {
-                    break;
-                }
-
-                page++;
-            }
-
-        } catch (error2) {
-
-            console.error(
-                "❌ BM | Error obteniendo sesiones:",
-                error2.response?.data ||
-                error2.message
-            );
-        }
     }
 
     return sesiones;
@@ -792,7 +872,10 @@ async function obtenerHorasJugadorServidor(
 
         let segundos = 0;
 
-        for (const valor of candidatos) {
+        for (
+            const valor of
+            candidatos
+        ) {
 
             if (
                 valor !== null &&
@@ -816,12 +899,17 @@ async function obtenerHorasJugadorServidor(
         if (segundos > 0) {
 
             return {
-                id: server,
+
+                id:
+                    server,
+
                 segundos,
+
                 tiempo:
                     segundosAHoras(
                         segundos
                     ),
+
                 origen:
                     "player-server"
             };
@@ -864,7 +952,10 @@ async function obtenerHorasJugadorServidor(
             meta.seconds
         ];
 
-        for (const valor of candidatosMeta) {
+        for (
+            const valor of
+            candidatosMeta
+        ) {
 
             if (
                 valor !== null &&
@@ -886,17 +977,26 @@ async function obtenerHorasJugadorServidor(
             Array.isArray(data)
         ) {
 
-            for (const registro of data) {
+            for (
+                const registro of
+                data
+            ) {
 
                 const a =
                     registro.attributes || {};
 
                 const valores = [
+
                     a.timePlayed,
+
                     a.timeplayed,
+
                     a.seconds,
+
                     a.duration,
+
                     a.totalTime,
+
                     a.totalSeconds,
 
                     registro.meta &&
@@ -908,7 +1008,10 @@ async function obtenerHorasJugadorServidor(
 
                 let encontrado = 0;
 
-                for (const valor of valores) {
+                for (
+                    const valor of
+                    valores
+                ) {
 
                     if (
                         valor !== null &&
@@ -937,12 +1040,17 @@ async function obtenerHorasJugadorServidor(
         if (segundos > 0) {
 
             return {
-                id: server,
+
+                id:
+                    server,
+
                 segundos,
+
                 tiempo:
                     segundosAHoras(
                         segundos
                     ),
+
                 origen:
                     "time-played-history"
             };
@@ -971,14 +1079,18 @@ async function obtenerTopServidoresRust(
     servidoresMap
 ) {
 
-    const servidores = new Map();
+    const servidores =
+        new Map();
 
 
     // --------------------------------------------------------
     // SERVIDORES CONOCIDOS
     // --------------------------------------------------------
 
-    for (const servidor of servidoresMap.values()) {
+    for (
+        const servidor of
+        servidoresMap.values()
+    ) {
 
         if (
             servidor &&
@@ -987,7 +1099,9 @@ async function obtenerTopServidoresRust(
         ) {
 
             servidores.set(
-                String(servidor.id),
+                String(
+                    servidor.id
+                ),
                 {
                     ...servidor
                 }
@@ -1000,10 +1114,15 @@ async function obtenerTopServidoresRust(
     // SERVIDORES DE LAS SESIONES
     // --------------------------------------------------------
 
-    for (const session of todasLasSesiones) {
+    for (
+        const session of
+        todasLasSesiones
+    ) {
 
         const serverId =
-            obtenerServerIdDeSesion(session);
+            obtenerServerIdDeSesion(
+                session
+            );
 
         if (!serverId) {
             continue;
@@ -1012,7 +1131,9 @@ async function obtenerTopServidoresRust(
         const id =
             String(serverId);
 
-        if (servidores.has(id)) {
+        if (
+            servidores.has(id)
+        ) {
             continue;
         }
 
@@ -1041,10 +1162,15 @@ async function obtenerTopServidoresRust(
 
     const resultados = [];
 
-    for (const servidor of servidores.values()) {
+    for (
+        const servidor of
+        servidores.values()
+    ) {
 
         const serverId =
-            String(servidor.id);
+            String(
+                servidor.id
+            );
 
         const horasJugador =
             await obtenerHorasJugadorServidor(
@@ -1064,19 +1190,26 @@ async function obtenerTopServidoresRust(
 
 
         // ----------------------------------------------------
-        // FALLBACK: SUMAR SESIONES SI BM NO ENTREGA
+        // FALLBACK: SUMAR SESIONES
         // ----------------------------------------------------
 
         if (segundos <= 0) {
 
-            for (const session of todasLasSesiones) {
+            for (
+                const session of
+                todasLasSesiones
+            ) {
 
                 const sessionServerId =
-                    obtenerServerIdDeSesion(session);
+                    obtenerServerIdDeSesion(
+                        session
+                    );
 
                 if (
                     !sessionServerId ||
-                    String(sessionServerId) !== serverId
+                    String(
+                        sessionServerId
+                    ) !== serverId
                 ) {
                     continue;
                 }
@@ -1103,7 +1236,9 @@ async function obtenerTopServidoresRust(
                         ).getTime();
 
                 } else if (
-                    esSesionActiva(session)
+                    esSesionActiva(
+                        session
+                    )
                 ) {
 
                     fin =
@@ -1124,7 +1259,10 @@ async function obtenerTopServidoresRust(
 
                 segundos +=
                     Math.floor(
-                        (fin - inicio) / 1000
+                        (
+                            fin -
+                            inicio
+                        ) / 1000
                     );
             }
         }
@@ -1155,23 +1293,30 @@ async function obtenerTopServidoresRust(
 
 
     // --------------------------------------------------------
-    // ORDENAR DE MAYOR A MENOR
+    // ORDENAR
     // --------------------------------------------------------
 
     resultados.sort(
         (a, b) =>
-            Number(b.segundos || 0) -
-            Number(a.segundos || 0)
+            Number(
+                b.segundos || 0
+            ) -
+            Number(
+                a.segundos || 0
+            )
     );
 
 
     // --------------------------------------------------------
-    // TOTAL REAL DE TODOS LOS SERVIDORES
+    // TOTAL REAL
     // --------------------------------------------------------
 
     const totalSegundos =
         resultados.reduce(
-            (total, servidor) =>
+            (
+                total,
+                servidor
+            ) =>
                 total +
                 (
                     Number(
@@ -1183,7 +1328,7 @@ async function obtenerTopServidoresRust(
 
 
     // --------------------------------------------------------
-    // CANTIDAD TOTAL DE SERVIDORES RUST
+    // CANTIDAD TOTAL
     // --------------------------------------------------------
 
     const cantidadServidores =
@@ -1191,7 +1336,10 @@ async function obtenerTopServidoresRust(
 
 
     const top10 =
-        resultados.slice(0, 10);
+        resultados.slice(
+            0,
+            10
+        );
 
 
     console.log(
@@ -1216,8 +1364,11 @@ async function obtenerTopServidoresRust(
 
 
     return {
+
         top10,
+
         totalSegundos,
+
         cantidadServidores
     };
 }
@@ -1244,7 +1395,8 @@ async function getBattleMetricsPlayerStatus(
 
         console.log(
             `🎯 BM | Servidor configurado: ${
-                configuredServerId || "NINGUNO"
+                configuredServerId ||
+                "NINGUNO"
             }`
         );
 
@@ -1271,6 +1423,7 @@ async function getBattleMetricsPlayerStatus(
             playerResponse.data.data;
 
         if (!player) {
+
             throw new Error(
                 "Jugador no encontrado"
             );
@@ -1344,14 +1497,57 @@ async function getBattleMetricsPlayerStatus(
             servidoresMap.set(
                 id,
                 {
+
                     id,
+
                     nombre:
                         nombreServidor,
+
                     game,
+
                     esRust,
+
                     timePlayed
                 }
             );
+        }
+
+
+        // =====================================================
+        // COMPROBAR ONLINE DIRECTAMENTE EN EL SERVIDOR
+        // =====================================================
+
+        let servidorActualRust = null;
+
+        let onlinePorServidor =
+            false;
+
+
+        if (
+            configuredServerId
+        ) {
+
+            const servidorOnline =
+                await comprobarJugadorEnServidor(
+                    playerId,
+                    configuredServerId
+                );
+
+            if (servidorOnline) {
+
+                servidorActualRust =
+                    servidorOnline;
+
+                onlinePorServidor =
+                    true;
+
+                servidoresMap.set(
+                    String(
+                        configuredServerId
+                    ),
+                    servidorOnline
+                );
+            }
         }
 
 
@@ -1370,12 +1566,12 @@ async function getBattleMetricsPlayerStatus(
 
 
         // -----------------------------------------------------
-        // SESIÓN ACTIVA
+        // SESIÓN ACTIVA COMO RESPALDO
         // -----------------------------------------------------
 
         let sesionActiva = null;
+
         let sesionActivaRust = null;
-        let servidorActualRust = null;
 
 
         for (
@@ -1425,43 +1621,59 @@ async function getBattleMetricsPlayerStatus(
                 sesionActivaRust =
                     session;
 
-                servidorActualRust =
-                    servidor;
+                /*
+                 * Solo utilizamos la sesión como respaldo
+                 * cuando no encontramos al jugador directamente
+                 * en el servidor configurado.
+                 */
+
+                if (
+                    !servidorActualRust
+                ) {
+
+                    servidorActualRust =
+                        servidor;
+                }
 
                 break;
             }
         }
 
 
-        // -----------------------------------------------------
+        // =====================================================
         // ESTADO
-        // -----------------------------------------------------
+        // =====================================================
 
         const online =
+            onlinePorServidor ||
             !!sesionActiva;
 
+
         const jugando =
-            sesionActivaRust &&
             servidorActualRust
                 ? servidorActualRust.nombre
                 : null;
 
 
-        // -----------------------------------------------------
+        // =====================================================
         // HORAS DE SESIONES
-        // -----------------------------------------------------
+        // =====================================================
 
         let segundosTotalesSesiones = 0;
+
         let segundosSemana = 0;
+
         let segundosMes = 0;
+
         let ultimaConexion = null;
+
 
         const ahoraDate =
             new Date();
 
 
         // -----------------------------------------------------
-        // PERIODOS EN CHILE
+        // PERIODOS CHILE
         // -----------------------------------------------------
 
         const inicioSemana =
@@ -1485,7 +1697,7 @@ async function getBattleMetricsPlayerStatus(
 
 
         // -----------------------------------------------------
-        // RECORRER TODAS LAS SESIONES
+        // RECORRER SESIONES
         // -----------------------------------------------------
 
         for (
@@ -1652,12 +1864,35 @@ async function getBattleMetricsPlayerStatus(
 
 
         // =====================================================
+        // SI ESTÁ ONLINE Y NO HAY SESIONES
+        //
+        // BM ya confirmó presencia actual, por lo que no
+        // debemos mostrarlo como offline.
+        // =====================================================
+
+        if (
+            onlinePorServidor &&
+            !ultimaConexion
+        ) {
+
+            ultimaConexion =
+                ahoraDate;
+
+            console.log(
+                `🟢 BM | Online confirmado directamente por servidor. Última conexión establecida a ahora.`
+            );
+        }
+
+
+        // =====================================================
         // HORAS DEL SERVIDOR CONFIGURADO
         // =====================================================
 
-        let horasServidorConfigurado = null;
+        let horasServidorConfigurado =
+            null;
 
-        let jugandoServidorConfigurado = false;
+        let jugandoServidorConfigurado =
+            false;
 
 
         if (
@@ -1743,7 +1978,7 @@ async function getBattleMetricsPlayerStatus(
 
 
         // =====================================================
-        // CANTIDAD DE SERVIDORES RUST
+        // CANTIDAD SERVIDORES RUST
         // =====================================================
 
         const cantidadServidoresRust =
@@ -1787,14 +2022,12 @@ async function getBattleMetricsPlayerStatus(
                     }
                 );
 
-
             const identifiers =
                 Array.isArray(
                     identifiersResponse.data.data
                 )
                     ? identifiersResponse.data.data
                     : [];
-
 
             historialNombres =
                 identifiers
@@ -1843,9 +2076,9 @@ async function getBattleMetricsPlayerStatus(
         }
 
 
-        // -----------------------------------------------------
+        // =====================================================
         // SERVIDOR PARA MOSTRAR
-        // -----------------------------------------------------
+        // =====================================================
 
         let servidorRespuesta = null;
 
@@ -1915,6 +2148,7 @@ async function getBattleMetricsPlayerStatus(
             servidorActualRust:
                 servidorActualRust
                     ? {
+
                         id:
                             String(
                                 servidorActualRust.id
@@ -1938,8 +2172,11 @@ async function getBattleMetricsPlayerStatus(
                 topServidoresRust,
 
             servidores: {
+
                 rust: {
+
                     datos: {
+
                         servidoresEncontrados:
                             topServidoresRust
                     }
@@ -2011,7 +2248,9 @@ async function getBattleMetricsHours(
 // LEADERBOARD
 // ============================================================
 
-async function getServerLeaderboard(serverId) {
+async function getServerLeaderboard(
+    serverId
+) {
 
     try {
 
@@ -2025,15 +2264,12 @@ async function getServerLeaderboard(serverId) {
                 }
             );
 
-
         const jugadores =
             extraerJugadoresRespuesta(
                 response.data
             );
 
-
         return jugadores
-
             .map(
                 jugador => ({
 
@@ -2047,7 +2283,6 @@ async function getServerLeaderboard(serverId) {
                             : "Desconocido"
                 })
             )
-
             .filter(
                 jugador =>
                     jugador.nombre
@@ -2071,8 +2306,12 @@ async function getServerLeaderboard(serverId) {
 // ============================================================
 
 module.exports = {
+
     searchBattleMetricsPlayer,
+
     getBattleMetricsPlayerStatus,
+
     getBattleMetricsHours,
+
     getServerLeaderboard
 };
