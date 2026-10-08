@@ -33,7 +33,6 @@ module.exports = {
                 interaction.options.getString("perfil");
 
             if (!perfil) {
-
                 return interaction.editReply(
                     "❌ Debes ingresar el enlace del perfil de BattleMetrics.\n\n" +
                     "Ejemplo:\n" +
@@ -47,7 +46,6 @@ module.exports = {
                 );
 
             if (!match) {
-
                 return interaction.editReply(
                     "❌ Debes ingresar un enlace válido de BattleMetrics.\n\n" +
                     "Ejemplo:\n" +
@@ -58,7 +56,6 @@ module.exports = {
             const playerId =
                 match[1];
 
-
             // ============================================================
             // OBTENER DATOS
             // ============================================================
@@ -67,12 +64,10 @@ module.exports = {
                 await getBattleMetricsHours(playerId);
 
             if (!datos) {
-
                 return interaction.editReply(
                     "❌ No se pudieron obtener los datos de BattleMetrics."
                 );
             }
-
 
             // ============================================================
             // DATOS BÁSICOS
@@ -86,7 +81,6 @@ module.exports = {
             const jugadorUrl =
                 `https://www.battlemetrics.com/players/${playerId}`;
 
-
             // ============================================================
             // SERVIDOR ACTUAL
             // ============================================================
@@ -96,7 +90,6 @@ module.exports = {
                 datos.server ||
                 datos.servidorActualRust?.nombre ||
                 "Ninguno";
-
 
             // ============================================================
             // SESIÓN ACTUAL
@@ -108,13 +101,11 @@ module.exports = {
                 datos.online ||
                 datos.jugando
             ) {
-
                 sesionActual =
                     datos.jugando ||
                     servidor ||
                     "Jugando";
             }
-
 
             // ============================================================
             // HORAS BATTLEMETRICS
@@ -123,7 +114,6 @@ module.exports = {
             const horas =
                 datos.totalHoras ||
                 "0h";
-
 
             // ============================================================
             // SERVIDORES JUGADOS
@@ -144,7 +134,6 @@ module.exports = {
                 if (
                     Number.isFinite(cantidad)
                 ) {
-
                     servidoresJugados =
                         cantidad;
                 }
@@ -155,11 +144,9 @@ module.exports = {
                 servidoresJugados === 0 &&
                 Array.isArray(datos.servidoresEncontrados)
             ) {
-
                 servidoresJugados =
                     datos.servidoresEncontrados.length;
             }
-
 
             // ============================================================
             // SEMANA
@@ -169,7 +156,6 @@ module.exports = {
                 datos.horasSemana ||
                 "0h";
 
-
             // ============================================================
             // MES
             // ============================================================
@@ -178,7 +164,6 @@ module.exports = {
                 datos.horasMes ||
                 "0h";
 
-
             // ============================================================
             // ÚLTIMA CONEXIÓN
             // ============================================================
@@ -186,7 +171,6 @@ module.exports = {
             const ultimaConexion =
                 datos.ultimaConexion ||
                 "N/A";
-
 
             // ============================================================
             // COLOR
@@ -197,7 +181,6 @@ module.exports = {
                     ? 0x57F287
                     : 0xED4245;
 
-
             // ============================================================
             // EMBED
             // ============================================================
@@ -207,56 +190,48 @@ module.exports = {
                     .setColor(color)
                     .setTitle("🎮 Perfil BattleMetrics")
                     .addFields(
-
                         {
                             name: "👤 Jugador",
                             value:
                                 `[${nombre}](${jugadorUrl})`,
                             inline: false
                         },
-
                         {
                             name: "🌐 Servidor Actual",
                             value:
                                 servidor,
                             inline: false
                         },
-
                         {
                             name: "⏱️ Sesión Actual",
                             value:
                                 `\`${sesionActual}\``,
                             inline: false
                         },
-
                         {
                             name: "📈 Horas BattleMetrics",
                             value:
                                 `\`${horas}\``,
                             inline: true
                         },
-
                         {
                             name: "🖥️ Servidores Jugados",
                             value:
                                 `\`${servidoresJugados}\``,
                             inline: true
                         },
-
                         {
                             name: "📅 Esta Semana",
                             value:
                                 `\`${semana}\``,
                             inline: true
                         },
-
                         {
                             name: "📆 Este Mes",
                             value:
                                 `\`${mes}\``,
                             inline: true
                         },
-
                         {
                             name: "🕐 Última Conexión",
                             value:
@@ -264,7 +239,6 @@ module.exports = {
                             inline: true
                         }
                     );
-
 
             // ============================================================
             // TOP 10 SERVIDORES RUST
@@ -278,7 +252,6 @@ module.exports = {
                             ? datos.topServidoresRust
                             : []
                     );
-
 
             if (
                 top10.length > 0
@@ -305,13 +278,8 @@ module.exports = {
                                     server.duracion ||
                                     "0h";
 
-
-                                // ----------------------------------------
                                 // SIN ID
-                                // ----------------------------------------
-
                                 if (!serverId) {
-
                                     return (
                                         `**${index + 1}.** ` +
                                         `${serverName} — ` +
@@ -319,11 +287,7 @@ module.exports = {
                                     );
                                 }
 
-
-                                // ----------------------------------------
                                 // CON ID
-                                // ----------------------------------------
-
                                 const serverUrl =
                                     `https://www.battlemetrics.com/servers/${serverId}`;
 
@@ -336,19 +300,14 @@ module.exports = {
                         )
                         .join("\n");
 
-
                 embed.addFields({
-
                     name:
                         "🏆 Top 10 servidores de Rust",
-
                     value:
                         listaTop,
-
                     inline: false
                 });
             }
-
 
             // ============================================================
             // HISTORIAL DE NOMBRES
@@ -368,19 +327,14 @@ module.exports = {
                         )
                         .join("\n");
 
-
                 embed.addFields({
-
                     name:
                         "📝 Historial de nombres",
-
                     value:
                         historial,
-
                     inline: false
                 });
             }
-
 
             // ============================================================
             // FOOTER
@@ -393,7 +347,6 @@ module.exports = {
 
             embed.setTimestamp();
 
-
             // ============================================================
             // RESPUESTA
             // ============================================================
@@ -402,11 +355,9 @@ module.exports = {
                 embeds: [embed]
             });
 
-
             console.log(
                 `✅ /horasbm completado para ${nombre} (${playerId})`
             );
-
 
         } catch (error) {
 
