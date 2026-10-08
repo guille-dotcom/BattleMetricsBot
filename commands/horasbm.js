@@ -14,7 +14,7 @@ module.exports = {
         .setDescription("Consulta las horas y estadísticas de BattleMetrics")
         .addStringOption(option =>
             option
-                .setName("perfil")
+                .setName("link")
                 .setDescription("Link del perfil de BattleMetrics")
                 .setRequired(true)
         ),
@@ -30,24 +30,23 @@ module.exports = {
             // ============================================================
 
             let perfil =
-                interaction.options.getString("perfil");
+                interaction.options.getString("link");
 
             // Fallback por si Discord entrega la opción directamente
-            // dentro de interaction.options.data
             if (!perfil) {
 
-                const opcionPerfil =
+                const opcionLink =
                     interaction.options.data.find(
-                        option => option.name === "perfil"
+                        option => option.name === "link"
                     );
 
-                if (opcionPerfil) {
-                    perfil = opcionPerfil.value;
+                if (opcionLink) {
+                    perfil = opcionLink.value;
                 }
             }
 
             console.log(
-                "🔎 /horasbm perfil recibido:",
+                "🔎 /horasbm link recibido:",
                 perfil
             );
 
@@ -165,6 +164,7 @@ module.exports = {
                 if (
                     Number.isFinite(cantidad)
                 ) {
+
                     servidoresJugados =
                         cantidad;
                 }
@@ -411,6 +411,7 @@ module.exports = {
                 embeds: [
                     embed
                 ]
+
             });
 
             console.log(
