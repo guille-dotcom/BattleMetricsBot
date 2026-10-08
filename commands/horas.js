@@ -387,10 +387,45 @@ module.exports = {
         // DIFERENCIA STEAM / BATTLEMETRICS
         // =====================================================
 
-        const horasBMNum =
-            parseFloat(
-                datosFinales.horasTotalesBM
-            ) || 0;
+        /*
+         * horasTotalesBM viene como texto:
+         * "2763h 34m"
+         *
+         * Para calcular la diferencia necesitamos convertir
+         * ese texto nuevamente a horas numéricas.
+         */
+
+        const horasBMTexto =
+            datosFinales.totalHoras ||
+            datosFinales.horasTotalesBM ||
+            "0h";
+
+
+        const horasBMMatch =
+            String(horasBMTexto).match(
+                /(\d+)h(?:\s+(\d+)m)?/
+            );
+
+
+        let horasBMNum = 0;
+
+
+        if (horasBMMatch) {
+
+            const horas =
+                Number(
+                    horasBMMatch[1]
+                ) || 0;
+
+            const minutos =
+                Number(
+                    horasBMMatch[2]
+                ) || 0;
+
+            horasBMNum =
+                horas +
+                (minutos / 60);
+        }
 
 
         const diferenciaTexto =
@@ -426,13 +461,13 @@ module.exports = {
         const horasSemana =
             datosFinales.horasSemana !== undefined
                 ? datosFinales.horasSemana
-                : 0;
+                : "0h";
 
 
         const horasMes =
             datosFinales.horasMes !== undefined
                 ? datosFinales.horasMes
-                : 0;
+                : "0h";
 
 
         const ultimaConexion =
@@ -644,7 +679,7 @@ module.exports = {
                             "📈 Horas (BM)",
 
                         value:
-                            `\`${datosFinales.horasTotalesBM}h\``,
+                            `\`${horasBMTexto}\``,
 
                         inline: true
                     },
@@ -679,7 +714,7 @@ module.exports = {
                             "📈 Esta Semana",
 
                         value:
-                            `\`${horasSemana}h\``,
+                            `\`${horasSemana}\``,
 
                         inline: true
                     },
@@ -689,7 +724,7 @@ module.exports = {
                             "📆 Este Mes",
 
                         value:
-                            `\`${horasMes}h\``,
+                            `\`${horasMes}\``,
 
                         inline: true
                     },
