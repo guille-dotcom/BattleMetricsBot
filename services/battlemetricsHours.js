@@ -325,114 +325,28 @@ function extraerJugadoresRespuesta(responseData) {
 
 
 // ============================================================
-// BUSCAR JUGADOR EN BATTLEMETRICS
-// Primero busca globalmente por nombre.
-// Si no encuentra coincidencia, intenta con el servidor.
+// BUSCAR JUGADOR EXCLUSIVAMENTE EN EL SERVIDOR CONFIGURADO
+// No realiza búsquedas globales en BattleMetrics.
 // ============================================================
 
 async function searchBattleMetricsPlayer(playerName, serverId) {
-    if (!playerName || !String(playerName).trim()) {
+    if (!playerName || !String(playerName).trim() || !serverId) {
         return null;
     }
 
-    const nombreBuscado = String(playerName).trim();
+    const nombreBuscado = String(playerName)
+        .trim()
+        .toLowerCase();
+
+    const servidor = String(serverId).trim();
 
     console.log(
-        `🔎 BM | Iniciando búsqueda global de "${nombreBuscado}"`
+        `🔎 BM | Buscando "${playerName}" exclusivamente en servidor ${servidor}`
     );
 
-    // ---------------------------------------------------------
-    // MÉTODO 1: BÚSQUEDA GLOBAL EN BATTLEMETRICS
-    // ---------------------------------------------------------
-
     try {
-        const response = await axiosBM.get("/players", {
-            params: {
-                "filter[search]": nombreBuscado,
-                "page[size]": 100
-            }
-        });
-
-        const jugadores = extraerJugadoresRespuesta(
-            response.data
-        );
-
-        console.log(
-            `🔎 BM | Resultados globales recibidos: ${jugadores.length}`
-        );
-
-        // Solo aceptar coincidencias exactas para no confundir
-        // jugadores cuyos nombres sean parecidos.
-        const encontrados = jugadores.filter(jugador => {
-            const nombreBM = String(
-                jugador.attributes?.name || ""
-            ).trim();
-
-            return (
-                nombreBM.toLowerCase() ===
-                nombreBuscado.toLowerCase()
-            );
-        });
-
-        console.log(
-            `🔎 BM | Coincidencias globales exactas: ${encontrados.length}`
-        );
-
-        if (encontrados.length === 1) {
-            const jugador = encontrados[0];
-
-            console.log(
-                `✅ BM | Jugador encontrado globalmente: ${jugador.attributes?.name} (${jugador.id})`
-            );
-
-            return {
-                duplicate: false,
-                id: String(jugador.id),
-                nombre:
-                    jugador.attributes?.name ||
-                    nombreBuscado
-            };
-        }
-
-        if (encontrados.length > 1) {
-            console.log(
-                "⚠️ BM | Hay varios jugadores con el mismo nombre en la búsqueda global."
-            );
-
-            return {
-                duplicate: true,
-                players: encontrados.map(jugador => ({
-                    id: String(jugador.id),
-                    attributes: jugador.attributes
-                }))
-            };
-        }
-    } catch (error) {
-        console.warn(
-            "⚠️ BM | La búsqueda global no funcionó; intentaré buscar en el servidor.",
-            error.response?.data || error.message
-        );
-    }
-
-    // ---------------------------------------------------------
-    // MÉTODO 2: BÚSQUEDA EN EL SERVIDOR CONFIGURADO
-    // ---------------------------------------------------------
-
-    if (!serverId) {
-        console.log(
-            "⚠️ BM | No hay servidor configurado para la búsqueda alternativa."
-        );
-
-        return null;
-    }
-
-    try {
-        console.log(
-            `🔎 BM | Buscando "${nombreBuscado}" en servidor ${serverId}`
-        );
-
         const response = await axiosBM.get(
-            `/servers/${serverId}`,
+            `/servers/${servidor}`,
             {
                 params: {
                     include: "player"
@@ -445,27 +359,24 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
         );
 
         console.log(
-            `🔎 BM | Recursos de jugadores recibidos: ${jugadores.length}`
+            `🔎 BM | Servidor ${servidor}: ${jugadores.length} recursos de jugadores recibidos`
         );
 
         const encontrados = jugadores.filter(jugador => {
             const nombreBM = String(
                 jugador.attributes?.name || ""
-            ).trim();
+            ).trim().toLowerCase();
 
-            return (
-                nombreBM.toLowerCase() ===
-                nombreBuscado.toLowerCase()
-            );
+            return nombreBM === nombreBuscado;
         });
 
         console.log(
-            `🔎 BM | Coincidencias en el servidor: ${encontrados.length}`
+            `🔎 BM | Coincidencias exactas en servidor ${servidor}: ${encontrados.length}`
         );
 
         if (encontrados.length === 0) {
             console.log(
-                `⚠️ BM | No se encontró "${nombreBuscado}" en la búsqueda global ni en el servidor.`
+                `⚠️ BM | "${playerName}" no aparece en los recursos devueltos por el servidor ${servidor}.`
             );
 
             return null;
@@ -474,7 +385,10 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
         if (encontrados.length > 1) {
             return {
                 duplicate: true,
-                players: encontrados
+                players: encontrados.map(jugador => ({
+                    id: String(jugador.id),
+                    attributes: jugador.attributes
+                }))
             };
         }
 
@@ -483,11 +397,11 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
             id: String(encontrados[0].id),
             nombre:
                 encontrados[0].attributes?.name ||
-                nombreBuscado
+                playerName
         };
     } catch (error) {
         console.error(
-            "❌ BM | Error buscando jugador:",
+            `❌ BM | Error buscando en servidor ${servidor}:`,
             error.response?.data || error.message
         );
 
@@ -823,7 +737,6 @@ async function obtenerTotalOverviewBattleMetrics(playerId) {
         const stop = new Date();
         const start = new Date(stop);
 
-        // BattleMetrics exige un intervalo para esta consulta.
         start.setUTCDate(start.getUTCDate() - 30);
 
         const response = await axiosBM.get(
@@ -1025,10 +938,7 @@ async function getBattleMetricsPlayerStatus(
 
         console.log("==========================================");
 
-        // -----------------------------------------------------
         // DATOS DEL JUGADOR
-        // -----------------------------------------------------
-
         const playerResponse = await axiosBM.get(
             `/players/${playerId}`,
             {
@@ -1047,17 +957,11 @@ async function getBattleMetricsPlayerStatus(
         const nombre =
             player.attributes?.name || "Desconocido";
 
-        // -----------------------------------------------------
         // TOTAL DEL OVERVIEW
-        // -----------------------------------------------------
-
         const totalOverviewBM =
             await obtenerTotalOverviewBattleMetrics(playerId);
 
-        // -----------------------------------------------------
         // SERVIDORES INCLUIDOS
-        // -----------------------------------------------------
-
         const servidoresMap = new Map();
 
         const included = Array.isArray(
@@ -1100,10 +1004,7 @@ async function getBattleMetricsPlayerStatus(
             });
         }
 
-        // -----------------------------------------------------
         // SESIONES
-        // -----------------------------------------------------
-
         const todasLasSesiones =
             await obtenerTodasLasSesiones(playerId);
 
@@ -1126,10 +1027,7 @@ async function getBattleMetricsPlayerStatus(
             }
         }
 
-        // -----------------------------------------------------
         // SESIÓN ACTIVA
-        // -----------------------------------------------------
-
         let sesionActiva = null;
         let sesionActivaRust = null;
         let servidorActualRust = null;
@@ -1168,10 +1066,7 @@ async function getBattleMetricsPlayerStatus(
             }
         }
 
-        // -----------------------------------------------------
         // ESTADO Y DURACIÓN DE LA SESIÓN ACTUAL
-        // -----------------------------------------------------
-
         const online = Boolean(sesionActiva);
 
         const jugando =
@@ -1192,10 +1087,7 @@ async function getBattleMetricsPlayerStatus(
                 ? segundosAHoras(segundosSesionActual)
                 : null;
 
-        // -----------------------------------------------------
         // HORAS DE SESIONES
-        // -----------------------------------------------------
-
         let segundosTotalesSesiones = 0;
         let segundosSemana = 0;
         let segundosMes = 0;
@@ -1301,10 +1193,7 @@ async function getBattleMetricsPlayerStatus(
             }
         }
 
-        // -----------------------------------------------------
         // HORAS EN EL SERVIDOR CONFIGURADO
-        // -----------------------------------------------------
-
         let horasServidorConfigurado = null;
         let jugandoServidorConfigurado = false;
 
@@ -1332,10 +1221,7 @@ async function getBattleMetricsPlayerStatus(
             }
         }
 
-        // -----------------------------------------------------
         // TOP 10 Y SERVIDORES RUST
-        // -----------------------------------------------------
-
         const resultadoServidores =
             await obtenerTopServidoresRust(
                 playerId,
@@ -1349,10 +1235,7 @@ async function getBattleMetricsPlayerStatus(
         const cantidadServidoresRust =
             resultadoServidores.cantidadServidoresRust;
 
-        // -----------------------------------------------------
         // TOTAL DE BATTLEMETRICS
-        // -----------------------------------------------------
-
         let horasTotalesBM =
             Number(totalOverviewBM) || 0;
 
@@ -1377,10 +1260,7 @@ async function getBattleMetricsPlayerStatus(
             `🎯 BM | TOTAL FINAL: ${segundosAHoras(horasTotalesBM)}`
         );
 
-        // -----------------------------------------------------
         // HISTORIAL DE NOMBRES
-        // -----------------------------------------------------
-
         let historialNombres = [];
 
         try {
@@ -1424,17 +1304,11 @@ async function getBattleMetricsPlayerStatus(
             );
         }
 
-        // -----------------------------------------------------
         // SERVIDOR PARA MOSTRAR
-        // -----------------------------------------------------
-
         const servidorRespuesta =
             servidorActualRust || null;
 
-        // -----------------------------------------------------
         // RESULTADO FINAL
-        // -----------------------------------------------------
-
         return {
             id: playerId,
             nombre,
