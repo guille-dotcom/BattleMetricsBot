@@ -42,9 +42,16 @@ function crearCamposTop10(servidores) {
     }
 
     const lineas = servidores.slice(0, 10).map((servidor, index) => {
-        const nombre = limitarTexto(servidor.nombre || "Servidor desconocido", 100);
+        const nombre = limitarTexto(
+            servidor.nombre || "Servidor desconocido",
+            100
+        );
+
         const id = encodeURIComponent(String(servidor.id || ""));
-        const tiempo = limitarTexto(servidor.tiempo || "Horas no disponibles", 30);
+        const tiempo = limitarTexto(
+            servidor.tiempo || "Horas no disponibles",
+            30
+        );
 
         if (!id) {
             return `**${index + 1}.** ${nombre} — \`${tiempo}\``;
@@ -55,13 +62,15 @@ function crearCamposTop10(servidores) {
 
     const campos = [];
 
-    // Máximo de tres servidores por campo para dejar margen al límite de Discord.
     for (let i = 0; i < lineas.length; i += 3) {
         campos.push({
             name: i === 0
                 ? "🏆 Top servidores de Rust"
                 : "🏆 Top servidores de Rust (continuación)",
-            value: limitarTexto(lineas.slice(i, i + 3).join("\n"), 1000),
+            value: limitarTexto(
+                lineas.slice(i, i + 3).join("\n"),
+                1000
+            ),
             inline: false
         });
     }
@@ -81,6 +90,23 @@ function convertirHorasATotal(horasTexto) {
         (Number(horasMatch?.[1]) || 0) +
         (Number(minutosMatch?.[1]) || 0) / 60
     );
+}
+
+// ============================================================
+// DURACIÓN DE LA SESIÓN ACTUAL
+// ============================================================
+
+function formatearDuracionSesion(segundos) {
+    segundos = Math.max(0, Math.floor(Number(segundos) || 0));
+
+    const horas = Math.floor(segundos / 3600);
+    const minutos = Math.floor((segundos % 3600) / 60);
+
+    if (horas > 0) {
+        return `${horas} hora${horas !== 1 ? "s" : ""} ${minutos}m`;
+    }
+
+    return `${minutos}m`;
 }
 
 // ============================================================
@@ -192,7 +218,10 @@ module.exports = {
 
             let vacTexto = "✅ Sin baneos detectados";
 
-            if (perfilSteam.vacBanned && Number(perfilSteam.gameBansCount) > 0) {
+            if (
+                perfilSteam.vacBanned &&
+                Number(perfilSteam.gameBansCount) > 0
+            ) {
                 vacTexto = "⚠️ Baneo VAC y Game Ban";
             } else if (perfilSteam.vacBanned) {
                 vacTexto = "⚠️ Baneo VAC";
@@ -268,7 +297,8 @@ module.exports = {
                     .setTimestamp()
                     .setFooter({ text: "RustLogix" });
 
-                const avatar = perfilSteam.avatarfull || perfilSteam.avatar;
+                const avatar =
+                    perfilSteam.avatarfull || perfilSteam.avatar;
 
                 if (avatar) {
                     embedOffline.setThumbnail(avatar);
@@ -307,28 +337,22 @@ module.exports = {
             // HORAS
             // =================================================
 
-            const horasBMTexto = datos.totalHoras ||
+            const horasBMTexto =
+                datos.totalHoras ||
                 datos.totalHorasTexto ||
                 datos.horasTotalesTexto ||
                 datos.totalHorasFormateadas ||
                 datos.totalHorasBMTexto ||
-                datos.totalHorasBM ||
-                datos.totalSegundos !== undefined
-                    ? (
-                        datos.totalHoras ||
-                        datos.totalHorasTexto ||
-                        datos.horasTotalesTexto ||
-                        datos.totalHorasFormateadas ||
-                        datos.totalHorasBMTexto ||
-                        (typeof datos.totalHorasBM === "string"
-                            ? datos.totalHorasBM
-                            : null) ||
-                        (Number(datos.totalSegundos) > 0
-                            ? `${Math.floor(Number(datos.totalSegundos) / 3600)}h ${Math.floor((Number(datos.totalSegundos) % 3600) / 60)}m`
-                            : null) ||
-                        "0h"
-                    )
-                    : "0h";
+                (
+                    typeof datos.totalHorasBM === "string"
+                        ? datos.totalHorasBM
+                        : null
+                ) ||
+                (
+                    Number(datos.totalSegundos) > 0
+                        ? `${Math.floor(Number(datos.totalSegundos) / 3600)}h ${Math.floor((Number(datos.totalSegundos) % 3600) / 60)}m`
+                        : "0h"
+                );
 
             const horasBMNum = convertirHorasATotal(horasBMTexto);
 
@@ -341,15 +365,57 @@ module.exports = {
             const ultimaConexion = datos.ultimaConexion || "No disponible";
 
             // =================================================
-            // ESTADO ACTUAL
+            // ESTADO ACTUAL Y DURACIÓN DE SESIÓN
             // =================================================
 
             let estadoActual = "🔴 Offline";
 
+            const sesionActiva = Array.isArray(datos.sesiones)
+                ? datos.sesiones.find(session => {
+                    const attributes = session?.attributes || {};
+                    const serverActualId =
+                        session?.relationships?.server?.data?.id;
+
+                    const activa =
+                        attributes.stop == null ||
+                        attributes.active === true ||
+                        attributes.online === true ||
+                        attributes.connected === true;
+
+                    return (
+                        activa &&
+                        String(serverActualId) ===
+                            String(datos.servidorActualRust?.id)
+                    );
+                })
+                : null;
+
+            let duracionSesionTexto = null;
+
+            if (sesionActiva?.attributes?.start) {
+                const inicioSesion = new Date(
+                    sesionActiva.attributes.start
+                ).getTime();
+
+                if (Number.isFinite(inicioSesion)) {
+                    const segundosSesion = Math.max(
+                        0,
+                        Math.floor((Date.now() - inicioSesion) / 1000)
+                    );
+
+                    duracionSesionTexto =
+                        formatearDuracionSesion(segundosSesion);
+                }
+            }
+
             if (datos.jugandoServidorConfigurado) {
-                estadoActual = "🟢 Online en el servidor configurado";
+                estadoActual = duracionSesionTexto
+                    ? `🟢 Jugando · ${duracionSesionTexto}`
+                    : "🟢 Jugando";
             } else if (datos.jugando) {
-                estadoActual = "🟡 Online en otro servidor Rust";
+                estadoActual = duracionSesionTexto
+                    ? `🟡 Jugando en otro servidor · ${duracionSesionTexto}`
+                    : "🟡 Jugando en otro servidor";
             } else if (datos.online) {
                 estadoActual = "🟡 Online; servidor Rust no confirmado";
             }
@@ -515,7 +581,8 @@ module.exports = {
                     text: "RustLogix"
                 });
 
-            const avatar = perfilSteam.avatarfull || perfilSteam.avatar;
+            const avatar =
+                perfilSteam.avatarfull || perfilSteam.avatar;
 
             if (avatar) {
                 embed.setThumbnail(avatar);

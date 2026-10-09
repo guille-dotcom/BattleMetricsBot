@@ -21,8 +21,6 @@ const axiosBM = axios.create({
     timeout: REQUEST_TIMEOUT
 });
 
-// La web de BattleMetrics utiliza esta API interna para las estadísticas
-// globales del jugador. El campo attributes.timePlayed es el total de Rust.
 const axiosWebBM = axios.create({
     baseURL: WEB_API,
     headers: {
@@ -47,7 +45,6 @@ function segundosAHoras(segundos) {
     return `${horas}h ${minutos}m`;
 }
 
-// La web redondea el total mostrado al minuto más cercano.
 function segundosAHorasRedondeado(segundos) {
     segundos = Math.max(0, Number(segundos) || 0);
 
@@ -72,6 +69,24 @@ function formatearDuracion(segundos) {
     if (horas > 0) return `${horas}h ${minutos}m`;
 
     return `${minutos}m`;
+}
+
+function obtenerDuracionSesion(session, ahora = Date.now()) {
+    const inicioTexto = session?.attributes?.start;
+
+    if (!inicioTexto) return null;
+
+    const inicio = new Date(inicioTexto).getTime();
+
+    if (!Number.isFinite(inicio) || inicio > ahora) {
+        return null;
+    }
+
+    if (!esSesionActiva(session)) {
+        return null;
+    }
+
+    return Math.max(0, Math.floor((ahora - inicio) / 1000));
 }
 
 function obtenerFechaChile(fecha) {
@@ -269,8 +284,6 @@ async function obtenerEstadisticasGlobalesJugador(playerId) {
     const inicioSemana = obtenerInicioSemanaUTC(ahora);
     const inicioMes = obtenerInicioMesUTC(ahora);
 
-    // Solicitamos desde la fecha más antigua necesaria para las
-    // estadísticas semanales y mensuales.
     const inicio = new Date(Math.min(
         inicioSemana.getTime(),
         inicioMes.getTime()
@@ -549,7 +562,6 @@ async function obtenerTodasLasSesiones(playerId) {
                 continue;
             }
 
-            // Respaldo para respuestas sin links.next.
             if (data.length >= 100) {
                 try {
                     const siguiente = await axiosBM.get(
@@ -654,7 +666,6 @@ async function obtenerHorasJugadorServidor(playerId, serverId) {
         `🎯 BM | Consultando horas directas: jugador ${player} -> servidor ${server}`
     );
 
-    // Método 1: información del jugador en el servidor.
     try {
         const response = await axiosBM.get(
             `/players/${player}/servers/${server}`
@@ -687,7 +698,6 @@ async function obtenerHorasJugadorServidor(playerId, serverId) {
         );
     }
 
-    // Método 2: historial de tiempo jugado de ese servidor.
     try {
         const response = await axiosBM.get(
             `/players/${player}/time-played-history/${server}`
@@ -791,7 +801,6 @@ async function obtenerTopServidoresRust(
 ) {
     const servidores = new Map();
 
-    // Servidores conocidos desde los recursos del jugador.
     for (const servidor of servidoresMap.values()) {
         if (servidor?.id && servidor.esRust) {
             servidores.set(
@@ -801,7 +810,6 @@ async function obtenerTopServidoresRust(
         }
     }
 
-    // Descubrir los servidores presentes en las sesiones.
     const idsSesiones = new Set();
 
     for (const session of sesiones) {
@@ -956,8 +964,6 @@ async function getBattleMetricsPlayerStatus(
             });
         }
 
-        // Recuperamos el total global desde el endpoint de la web.
-        // Si falla, el código conserva la suma por servidores como respaldo.
         const estadisticasGlobales =
             await obtenerEstadisticasGlobalesJugador(playerId);
 
@@ -971,6 +977,7 @@ async function getBattleMetricsPlayerStatus(
         let sesionActivaRust = null;
         let servidorActualRust = null;
 
+        // Buscamos una sesión activa en un servidor Rust.
         for (const session of sesiones) {
             if (!esSesionActiva(session)) continue;
 
@@ -1004,8 +1011,25 @@ async function getBattleMetricsPlayerStatus(
         const online = Boolean(sesionActiva);
         const jugando = Boolean(sesionActivaRust);
 
-        // Estadísticas por sesiones: se utilizan como respaldo si
-        // el endpoint de estadísticas globales no está disponible.
+        // Duración de la sesión Rust que aparece como activa.
+        const duracionSesionSegundos =
+            obtenerDuracionSesion(sesionActivaRust);
+
+        // Duración en el servidor configurado, si esa es la sesión activa.
+        const sesionActivaServidorConfigurado =
+            configuredServerId &&
+            sesionActivaRust &&
+            String(obtenerServerIdDeSesion(sesionActivaRust)) ===
+                String(configuredServerId)
+                ? sesionActivaRust
+                : null;
+
+        const duracionSesionConfiguradoSegundos =
+            obtenerDuracionSesion(
+                sesionActivaServidorConfigurado
+            );
+
+        // Estadísticas por sesiones: respaldo para semana y mes.
         let segundosSemanaSesiones = 0;
         let segundosMesSesiones = 0;
         let ultimaConexion = null;
@@ -1091,7 +1115,7 @@ async function getBattleMetricsPlayerStatus(
             }
         }
 
-        // Horas del servidor configurado: se muestran por separado.
+        // Horas del servidor configurado.
         let horasServidorConfigurado = null;
         let jugandoServidorConfigurado = false;
 
@@ -1118,7 +1142,6 @@ async function getBattleMetricsPlayerStatus(
             }
         }
 
-        // Ranking y suma independiente de los servidores descubiertos.
         const resultadoServidores =
             await obtenerTopServidoresRust(
                 playerId,
@@ -1129,9 +1152,6 @@ async function getBattleMetricsPlayerStatus(
         const totalSegundosServidores =
             resultadoServidores.totalSegundos;
 
-        // TOTAL OFICIAL:
-        // preferimos el valor exacto de la web, attributes.timePlayed.
-        // Solo usamos la suma de servidores si la petición web falla.
         const totalOficialDisponible =
             estadisticasGlobales !== null;
 
@@ -1221,12 +1241,14 @@ async function getBattleMetricsPlayerStatus(
             online,
             jugando,
 
-            // Total oficial del perfil cuando la petición funciona.
+            // Duración de la sesión Rust activa.
+            duracionSesionSegundos,
+            duracionSesionConfiguradoSegundos,
+
             horasTotalesBM: totalSegundos,
             totalHoras,
             totalSegundos,
 
-            // Diagnóstico: permite comparar la web con la suma por servidor.
             totalSegundosServidores,
             totalOficialDisponible,
             fuenteTotal: totalOficialDisponible
@@ -1312,7 +1334,11 @@ async function getBattleMetricsHours(
             datos.totalOficialDisponible,
         fuenteTotal: datos.fuenteTotal,
         totalSegundosServidores:
-            datos.totalSegundosServidores
+            datos.totalSegundosServidores,
+        duracionSesionSegundos:
+            datos.duracionSesionSegundos,
+        duracionSesionConfiguradoSegundos:
+            datos.duracionSesionConfiguradoSegundos
     };
 }
 
