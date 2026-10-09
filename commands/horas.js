@@ -48,6 +48,7 @@ function crearCamposTop10(servidores) {
         );
 
         const id = encodeURIComponent(String(servidor.id || ""));
+
         const tiempo = limitarTexto(
             servidor.tiempo || "Horas no disponibles",
             30
@@ -97,7 +98,10 @@ function convertirHorasATotal(horasTexto) {
 // ============================================================
 
 function formatearDuracionSesion(segundos) {
-    segundos = Math.max(0, Math.floor(Number(segundos) || 0));
+    segundos = Math.max(
+        0,
+        Math.floor(Number(segundos) || 0)
+    );
 
     const horas = Math.floor(segundos / 3600);
     const minutos = Math.floor((segundos % 3600) / 60);
@@ -295,7 +299,9 @@ module.exports = {
                         }
                     )
                     .setTimestamp()
-                    .setFooter({ text: "RustLogix" });
+                    .setFooter({
+                        text: "RustLogix"
+                    });
 
                 const avatar =
                     perfilSteam.avatarfull || perfilSteam.avatar;
@@ -370,42 +376,43 @@ module.exports = {
 
             let estadoActual = "🔴 Offline";
 
-            const sesionActiva = Array.isArray(datos.sesiones)
-                ? datos.sesiones.find(session => {
-                    const attributes = session?.attributes || {};
-                    const serverActualId =
-                        session?.relationships?.server?.data?.id;
+            /*
+             * La duración llega directamente desde
+             * battlemetricsHours.js.
+             *
+             * No buscamos datos.sesiones porque el servicio
+             * no necesita devolver el array completo para
+             * calcular la duración de la sesión activa.
+             */
 
-                    const activa =
-                        attributes.stop == null ||
-                        attributes.active === true ||
-                        attributes.online === true ||
-                        attributes.connected === true;
+            const segundosSesionConfigurado = Number(
+                datos.duracionSesionConfiguradoSegundos
+            );
 
-                    return (
-                        activa &&
-                        String(serverActualId) ===
-                            String(datos.servidorActualRust?.id)
-                    );
-                })
-                : null;
+            const segundosSesionRust = Number(
+                datos.duracionSesionSegundos
+            );
 
             let duracionSesionTexto = null;
 
-            if (sesionActiva?.attributes?.start) {
-                const inicioSesion = new Date(
-                    sesionActiva.attributes.start
-                ).getTime();
-
-                if (Number.isFinite(inicioSesion)) {
-                    const segundosSesion = Math.max(
-                        0,
-                        Math.floor((Date.now() - inicioSesion) / 1000)
+            if (
+                datos.jugandoServidorConfigurado &&
+                Number.isFinite(segundosSesionConfigurado) &&
+                segundosSesionConfigurado >= 0
+            ) {
+                duracionSesionTexto =
+                    formatearDuracionSesion(
+                        segundosSesionConfigurado
                     );
-
-                    duracionSesionTexto =
-                        formatearDuracionSesion(segundosSesion);
-                }
+            } else if (
+                datos.jugando &&
+                Number.isFinite(segundosSesionRust) &&
+                segundosSesionRust >= 0
+            ) {
+                duracionSesionTexto =
+                    formatearDuracionSesion(
+                        segundosSesionRust
+                    );
             }
 
             if (datos.jugandoServidorConfigurado) {
@@ -417,7 +424,8 @@ module.exports = {
                     ? `🟡 Jugando en otro servidor · ${duracionSesionTexto}`
                     : "🟡 Jugando en otro servidor";
             } else if (datos.online) {
-                estadoActual = "🟡 Online; servidor Rust no confirmado";
+                estadoActual =
+                    "🟡 Online; servidor Rust no confirmado";
             }
 
             // =================================================
