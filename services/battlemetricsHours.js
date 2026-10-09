@@ -325,17 +325,110 @@ function extraerJugadoresRespuesta(responseData) {
 
 
 // ============================================================
-// BUSCAR JUGADOR EN SERVIDOR
+// BUSCAR JUGADOR EN BATTLEMETRICS
+// Primero busca globalmente por nombre.
+// Si no encuentra coincidencia, intenta con el servidor.
 // ============================================================
 
 async function searchBattleMetricsPlayer(playerName, serverId) {
-    if (!playerName || !serverId) {
+    if (!playerName || !String(playerName).trim()) {
+        return null;
+    }
+
+    const nombreBuscado = String(playerName).trim();
+
+    console.log(
+        `🔎 BM | Iniciando búsqueda global de "${nombreBuscado}"`
+    );
+
+    // ---------------------------------------------------------
+    // MÉTODO 1: BÚSQUEDA GLOBAL EN BATTLEMETRICS
+    // ---------------------------------------------------------
+
+    try {
+        const response = await axiosBM.get("/players", {
+            params: {
+                "filter[search]": nombreBuscado,
+                "page[size]": 100
+            }
+        });
+
+        const jugadores = extraerJugadoresRespuesta(
+            response.data
+        );
+
+        console.log(
+            `🔎 BM | Resultados globales recibidos: ${jugadores.length}`
+        );
+
+        // Solo aceptar coincidencias exactas para no confundir
+        // jugadores cuyos nombres sean parecidos.
+        const encontrados = jugadores.filter(jugador => {
+            const nombreBM = String(
+                jugador.attributes?.name || ""
+            ).trim();
+
+            return (
+                nombreBM.toLowerCase() ===
+                nombreBuscado.toLowerCase()
+            );
+        });
+
+        console.log(
+            `🔎 BM | Coincidencias globales exactas: ${encontrados.length}`
+        );
+
+        if (encontrados.length === 1) {
+            const jugador = encontrados[0];
+
+            console.log(
+                `✅ BM | Jugador encontrado globalmente: ${jugador.attributes?.name} (${jugador.id})`
+            );
+
+            return {
+                duplicate: false,
+                id: String(jugador.id),
+                nombre:
+                    jugador.attributes?.name ||
+                    nombreBuscado
+            };
+        }
+
+        if (encontrados.length > 1) {
+            console.log(
+                "⚠️ BM | Hay varios jugadores con el mismo nombre en la búsqueda global."
+            );
+
+            return {
+                duplicate: true,
+                players: encontrados.map(jugador => ({
+                    id: String(jugador.id),
+                    attributes: jugador.attributes
+                }))
+            };
+        }
+    } catch (error) {
+        console.warn(
+            "⚠️ BM | La búsqueda global no funcionó; intentaré buscar en el servidor.",
+            error.response?.data || error.message
+        );
+    }
+
+    // ---------------------------------------------------------
+    // MÉTODO 2: BÚSQUEDA EN EL SERVIDOR CONFIGURADO
+    // ---------------------------------------------------------
+
+    if (!serverId) {
+        console.log(
+            "⚠️ BM | No hay servidor configurado para la búsqueda alternativa."
+        );
+
         return null;
     }
 
     try {
         console.log(
-            `🔎 BM | Buscando "${playerName}" en servidor ${serverId}`
+            `🔎 BM | Buscando "${nombreBuscado}" en servidor ${serverId}`
         );
 
         const response = await axiosBM.get(
@@ -356,18 +449,25 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
         );
 
         const encontrados = jugadores.filter(jugador => {
-            const nombreBM =
-                String(jugador.attributes?.name || "").trim();
+            const nombreBM = String(
+                jugador.attributes?.name || ""
+            ).trim();
 
-            return nombreBM.toLowerCase() ===
-                String(playerName).trim().toLowerCase();
+            return (
+                nombreBM.toLowerCase() ===
+                nombreBuscado.toLowerCase()
+            );
         });
 
         console.log(
-            `🔎 BM | Coincidencias encontradas: ${encontrados.length}`
+            `🔎 BM | Coincidencias en el servidor: ${encontrados.length}`
         );
 
         if (encontrados.length === 0) {
+            console.log(
+                `⚠️ BM | No se encontró "${nombreBuscado}" en la búsqueda global ni en el servidor.`
+            );
+
             return null;
         }
 
@@ -380,10 +480,10 @@ async function searchBattleMetricsPlayer(playerName, serverId) {
 
         return {
             duplicate: false,
-            id: encontrados[0].id,
+            id: String(encontrados[0].id),
             nombre:
                 encontrados[0].attributes?.name ||
-                playerName
+                nombreBuscado
         };
     } catch (error) {
         console.error(
