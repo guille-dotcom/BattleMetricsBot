@@ -52,6 +52,14 @@ const {
 } = require("./services/kickDropsService");
 
 // ======================
+// KICK ALERTAS
+// ======================
+
+const {
+    iniciarKickAlertasAutomaticas
+} = require("./services/kickAlertService");
+
+// ======================
 // TIENDA RUST AUTOMÁTICA
 // ======================
 
@@ -962,6 +970,44 @@ client.once(
         }
 
         // ======================
+        // KICK ALERTAS AUTOMÁTICAS
+        // ======================
+
+        console.log(
+            "🔔 Iniciando sistema automático de Kick Alertas..."
+        );
+
+        try {
+
+            if (
+                typeof iniciarKickAlertasAutomaticas !==
+                "function"
+            ) {
+
+                throw new Error(
+                    "iniciarKickAlertasAutomaticas no está exportada desde kickAlertService.js"
+                );
+
+            }
+
+            iniciarKickAlertasAutomaticas(
+                client
+            );
+
+            console.log(
+                "🔔 Sistema automático de Kick Alertas iniciado correctamente."
+            );
+
+        } catch (error) {
+
+            console.error(
+                "❌ Error iniciando Kick Alertas automáticas:",
+                error
+            );
+
+        }
+
+        // ======================
         // TIENDA RUST AUTOMÁTICA
         // ======================
 
@@ -1239,6 +1285,99 @@ client.on(
                     `❌ Error en autocompletado para /${interaction.commandName}:`,
                     error
                 );
+
+            }
+
+            return;
+        }
+
+        // =====================================================
+        // KICK ALERTAS - SELECCIÓN DE ROL
+        // =====================================================
+
+        if (
+            interaction.isRoleSelectMenu() &&
+            interaction.customId === "kick_alerta_role"
+        ) {
+
+            try {
+
+                const KickAlertMonitor =
+                    require(
+                        "./models/KickAlertMonitor"
+                    );
+
+                const guildId =
+                    interaction.guild.id;
+
+                const roleId =
+                    interaction.values[0];
+
+                const monitor =
+                    await KickAlertMonitor.findOne({
+                        guildId
+                    });
+
+                if (!monitor) {
+
+                    return interaction.reply({
+                        content:
+                            "❌ No existe una configuración de Kick Alerts. Ejecuta `/kick-alerta configurar` nuevamente.",
+                        ephemeral:
+                            true
+                    });
+
+                }
+
+                monitor.roleId =
+                    roleId;
+
+                await monitor.save();
+
+                return interaction.update({
+
+                    content:
+                        `✅ **Kick Alerts configurado correctamente.**\n\n` +
+                        `📢 Canal de alertas: <#${monitor.channelId}>\n` +
+                        `🔔 Rol de alerta: <@&${roleId}>`,
+
+                    embeds: [],
+
+                    components: []
+
+                });
+
+            } catch (error) {
+
+                console.error(
+                    "❌ Error configurando rol de Kick Alerts:",
+                    error
+                );
+
+                try {
+
+                    if (
+                        !interaction.replied &&
+                        !interaction.deferred
+                    ) {
+
+                        return interaction.reply({
+                            content:
+                                "❌ Ocurrió un error guardando el rol de Kick Alerts.",
+                            ephemeral:
+                                true
+                        });
+
+                    }
+
+                } catch (replyError) {
+
+                    console.error(
+                        "❌ Error respondiendo selector Kick Alerts:",
+                        replyError.message
+                    );
+
+                }
 
             }
 
