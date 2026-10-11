@@ -48,12 +48,11 @@ function obtenerFechaActual() {
 
 function crearEmbedCumpleanos(
     cumple,
-    usuario,
     anioActual
 ) {
 
     let descripcion =
-        `🥳 ¡Hoy es el cumpleaños de <@${cumple.userId}>!\n\n`;
+        `🥳 ¡Hoy es el cumpleaños de **${cumple.nombre}**!\n\n`;
 
     if (cumple.anio) {
 
@@ -91,19 +90,6 @@ function crearEmbedCumpleanos(
             })
 
             .setTimestamp();
-
-    if (
-        usuario &&
-        usuario.displayAvatarURL
-    ) {
-
-        embed.setThumbnail(
-            usuario.displayAvatarURL({
-                size: 256
-            })
-        );
-
-    }
 
     return embed;
 }
@@ -259,35 +245,12 @@ async function revisarCumpleanos(
                 }
 
                 // =============================================
-                // OBTENER USUARIO
-                // =============================================
-
-                let usuario =
-                    null;
-
-                try {
-
-                    usuario =
-                        await client.users.fetch(
-                            cumple.userId
-                        );
-
-                } catch (error) {
-
-                    console.log(
-                        `⚠️ No se pudo obtener usuario ${cumple.userId}.`
-                    );
-
-                }
-
-                // =============================================
                 // CREAR EMBED
                 // =============================================
 
                 const embed =
                     crearEmbedCumpleanos(
                         cumple,
-                        usuario,
                         anio
                     );
 
@@ -297,17 +260,11 @@ async function revisarCumpleanos(
 
                 await canal.send({
                     content:
-                        `🎉 <@${cumple.userId}> 🎉`,
+                        `🎉 **${cumple.nombre}** 🎉`,
 
                     embeds: [
                         embed
-                    ],
-
-                    allowedMentions: {
-                        users: [
-                            cumple.userId
-                        ]
-                    }
+                    ]
                 });
 
                 // =============================================
@@ -320,13 +277,13 @@ async function revisarCumpleanos(
                 await cumple.save();
 
                 console.log(
-                    `🎂 Felicitación enviada a ${cumple.userId} en ${guild.name}.`
+                    `🎂 Felicitación enviada a ${cumple.nombre} en ${guild.name}.`
                 );
 
             } catch (error) {
 
                 console.error(
-                    `❌ Error procesando cumpleaños ${cumple.userId}:`,
+                    `❌ Error procesando cumpleaños ${cumple.nombre}:`,
                     error
                 );
 

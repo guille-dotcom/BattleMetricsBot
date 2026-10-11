@@ -156,9 +156,9 @@ module.exports = {
                             "Registra o actualiza un cumpleaños"
                         )
 
-                        // IMPORTANTE:
-                        // Las opciones obligatorias deben ir
-                        // antes de las opcionales en Discord.
+                        // =====================================
+                        // DÍA
+                        // =====================================
 
                         .addIntegerOption(
                             option =>
@@ -178,6 +178,10 @@ module.exports = {
                                     .setMaxValue(31)
                         )
 
+                        // =====================================
+                        // MES
+                        // =====================================
+
                         .addIntegerOption(
                             option =>
 
@@ -196,7 +200,11 @@ module.exports = {
                                     .setMaxValue(12)
                         )
 
-                        .addUserOption(
+                        // =====================================
+                        // NOMBRE
+                        // =====================================
+
+                        .addStringOption(
                             option =>
 
                                 option
@@ -204,11 +212,17 @@ module.exports = {
                                     .setName("usuario")
 
                                     .setDescription(
-                                        "Usuario cuyo cumpleaños quieres registrar"
+                                        "Nombre de la persona"
                                     )
 
-                                    .setRequired(false)
+                                    .setRequired(true)
+
+                                    .setMaxLength(100)
                         )
+
+                        // =====================================
+                        // AÑO
+                        // =====================================
 
                         .addIntegerOption(
                             option =>
@@ -247,7 +261,7 @@ module.exports = {
                             "Elimina un cumpleaños registrado"
                         )
 
-                        .addUserOption(
+                        .addStringOption(
                             option =>
 
                                 option
@@ -255,10 +269,12 @@ module.exports = {
                                     .setName("usuario")
 
                                     .setDescription(
-                                        "Usuario cuyo cumpleaños quieres eliminar"
+                                        "Nombre de la persona"
                                     )
 
-                                    .setRequired(false)
+                                    .setRequired(true)
+
+                                    .setMaxLength(100)
                         )
             )
 
@@ -341,6 +357,7 @@ module.exports = {
             return interaction.reply({
                 content:
                     "❌ Este comando solo puede utilizarse dentro de un servidor.",
+
                 ephemeral:
                     true
             });
@@ -374,13 +391,31 @@ module.exports = {
                     "año"
                 );
 
-            // Si no se especifica usuario,
-            // se registra el propio usuario.
-            const usuario =
-                interaction.options.getUser(
+            const nombre =
+                interaction.options.getString(
                     "usuario"
-                ) ||
-                interaction.user;
+                );
+
+            // ================================================
+            // VALIDAR NOMBRE
+            // ================================================
+
+            const nombreLimpio =
+                nombre
+                    ? nombre.trim()
+                    : "";
+
+            if (!nombreLimpio) {
+
+                return interaction.reply({
+                    content:
+                        "❌ Debes indicar el nombre de la persona.",
+
+                    ephemeral:
+                        true
+                });
+
+            }
 
             // ================================================
             // VALIDAR FECHA
@@ -401,6 +436,7 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ La fecha indicada no es válida.",
+
                     ephemeral:
                         true
                 });
@@ -431,44 +467,12 @@ module.exports = {
                     return interaction.reply({
                         content:
                             "❌ La fecha de nacimiento no puede estar en el futuro.",
+
                         ephemeral:
                             true
                     });
 
                 }
-
-            }
-
-            // ================================================
-            // COMPROBAR QUE EL USUARIO PERTENECE AL SERVIDOR
-            // ================================================
-
-            try {
-
-                const miembro =
-                    await interaction.guild.members.fetch(
-                        usuario.id
-                    );
-
-                if (!miembro) {
-
-                    return interaction.reply({
-                        content:
-                            "❌ Ese usuario no pertenece a este servidor.",
-                        ephemeral:
-                            true
-                    });
-
-                }
-
-            } catch (error) {
-
-                return interaction.reply({
-                    content:
-                        "❌ Ese usuario no pertenece a este servidor.",
-                    ephemeral:
-                        true
-                });
 
             }
 
@@ -484,8 +488,8 @@ module.exports = {
                         guildId:
                             interaction.guild.id,
 
-                        userId:
-                            usuario.id
+                        nombre:
+                            nombreLimpio
 
                     });
 
@@ -501,9 +505,6 @@ module.exports = {
                         anio ||
                         null;
 
-                    // Si se modifica el cumpleaños,
-                    // permitimos que vuelva a felicitarse
-                    // este año si corresponde.
                     existente.ultimoAnioFelicitado =
                         null;
 
@@ -516,8 +517,8 @@ module.exports = {
                         guildId:
                             interaction.guild.id,
 
-                        userId:
-                            usuario.id,
+                        nombre:
+                            nombreLimpio,
 
                         dia,
 
@@ -538,10 +539,6 @@ module.exports = {
                 // EMBED DE CONFIRMACIÓN
                 // ============================================
 
-                const esPropio =
-                    usuario.id ===
-                    interaction.user.id;
-
                 const embed =
                     new EmbedBuilder()
 
@@ -554,9 +551,7 @@ module.exports = {
                         )
 
                         .setDescription(
-                            esPropio
-                                ? `El cumpleaños de <@${usuario.id}> se ha guardado correctamente.`
-                                : `El cumpleaños de <@${usuario.id}> se ha guardado correctamente.`
+                            `El cumpleaños de **${nombreLimpio}** se ha guardado correctamente.`
                         )
 
                         .addFields(
@@ -613,6 +608,7 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ Ocurrió un error guardando el cumpleaños.",
+
                     ephemeral:
                         true
                 });
@@ -630,11 +626,27 @@ module.exports = {
             "eliminar"
         ) {
 
-            const usuario =
-                interaction.options.getUser(
+            const nombre =
+                interaction.options.getString(
                     "usuario"
-                ) ||
-                interaction.user;
+                );
+
+            const nombreLimpio =
+                nombre
+                    ? nombre.trim()
+                    : "";
+
+            if (!nombreLimpio) {
+
+                return interaction.reply({
+                    content:
+                        "❌ Debes indicar el nombre de la persona.",
+
+                    ephemeral:
+                        true
+                });
+
+            }
 
             try {
 
@@ -644,8 +656,8 @@ module.exports = {
                         guildId:
                             interaction.guild.id,
 
-                        userId:
-                            usuario.id
+                        nombre:
+                            nombreLimpio
 
                     });
 
@@ -653,7 +665,8 @@ module.exports = {
 
                     return interaction.reply({
                         content:
-                            `❌ <@${usuario.id}> no tiene ningún cumpleaños registrado.`,
+                            `❌ No existe ningún cumpleaños registrado para **${nombreLimpio}**.`,
+
                         ephemeral:
                             true
                     });
@@ -662,7 +675,8 @@ module.exports = {
 
                 return interaction.reply({
                     content:
-                        `🗑️ El cumpleaños de <@${usuario.id}> ha sido eliminado correctamente.`,
+                        `🗑️ El cumpleaños de **${nombreLimpio}** ha sido eliminado correctamente.`,
+
                     ephemeral:
                         true
                 });
@@ -677,6 +691,7 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ Ocurrió un error eliminando el cumpleaños.",
+
                     ephemeral:
                         true
                 });
@@ -703,6 +718,7 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ Necesitas el permiso **Gestionar servidor** para configurar los cumpleaños.",
+
                     ephemeral:
                         true
                 });
@@ -785,6 +801,7 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ Ocurrió un error configurando el canal.",
+
                     ephemeral:
                         true
                 });
@@ -842,7 +859,7 @@ module.exports = {
 
                         .map(
                             cumple =>
-                                `🎈 <@${cumple.userId}>`
+                                `🎈 **${cumple.nombre}**`
                         )
 
                         .join(
@@ -887,6 +904,7 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ Ocurrió un error consultando los cumpleaños.",
+
                     ephemeral:
                         true
                 });
@@ -961,6 +979,7 @@ module.exports = {
 
                 // Discord limita la descripción del embed.
                 // Mostramos los próximos 25.
+
                 const proximos =
                     lista.slice(
                         0,
@@ -974,7 +993,7 @@ module.exports = {
                             cumple => {
 
                                 return (
-                                    `🎈 <@${cumple.userId}>\n` +
+                                    `🎈 **${cumple.nombre}**\n` +
                                     `📅 ${cumple.dia} de ${MESES[cumple.mes - 1]} — ` +
                                     `${textoDias(cumple.dias)}`
                                 );
@@ -1026,6 +1045,7 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ Ocurrió un error consultando los cumpleaños.",
+
                     ephemeral:
                         true
                 });

@@ -8,10 +8,11 @@ const birthdaySchema = new mongoose.Schema(
             index: true
         },
 
-        userId: {
+        nombre: {
             type: String,
             required: true,
-            index: true
+            trim: true,
+            maxlength: 100
         },
 
         dia: {
@@ -45,12 +46,12 @@ const birthdaySchema = new mongoose.Schema(
     }
 );
 
-// Un usuario solo puede tener un cumpleaños
+// Una persona solo puede tener un cumpleaños
 // registrado por servidor.
 birthdaySchema.index(
     {
         guildId: 1,
-        userId: 1
+        nombre: 1
     },
     {
         unique: true
