@@ -67,7 +67,7 @@ function crearEmbedCumpleanos(
     }
 
     descripcion +=
-        `🎉 ¡Todo **este servidor** te desea un muy feliz cumpleaños!\n\n`
+        `🎉 ¡Todo **este servidor** te desea un muy feliz cumpleaños!\n\n` +
         `🎁 ¡Que tengas un gran día!`;
 
     const embed =
