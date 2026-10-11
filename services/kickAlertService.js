@@ -3,6 +3,13 @@ const axios = require("axios");
 const KickAlertMonitor =
     require("../models/KickAlertMonitor");
 
+const {
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle
+} = require("discord.js");
+
 // ============================================================
 // CONFIGURACIÓN
 // ============================================================
@@ -223,14 +230,10 @@ async function obtenerStreamerKick(username) {
 
 function crearEmbedKickLive(streamer) {
 
-    const {
-        EmbedBuilder
-    } = require("discord.js");
-
     const embed =
         new EmbedBuilder()
             .setColor(0x53FC18)
-            .setTitle("Kick Alerts 🔔")
+            .setTitle("🔔 RustLogix")
             .setDescription(
                 "## 🔴 INICIO DIRECTO\n\n" +
                 `**[${streamer.displayName}](${streamer.url})** está en directo en Kick.`
@@ -284,6 +287,26 @@ function crearEmbedKickLive(streamer) {
     }
 
     return embed;
+}
+
+// ============================================================
+// CREAR BOTÓN DEL CANAL
+// ============================================================
+
+function crearBotonKick(streamer) {
+
+    if (!streamer?.url) {
+        return null;
+    }
+
+    return new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setLabel("Ver canal en Kick")
+                .setEmoji("🔴")
+                .setStyle(ButtonStyle.Link)
+                .setURL(streamer.url)
+        );
 }
 
 // ============================================================
@@ -355,7 +378,12 @@ async function enviarAlerta(
                 streamer
             );
 
-        await channel.send({
+        const botonKick =
+            crearBotonKick(
+                streamer
+            );
+
+        const mensaje = {
             content: contenido,
             embeds: [embed],
             allowedMentions: {
@@ -364,7 +392,18 @@ async function enviarAlerta(
                         ? [monitor.roleId]
                         : []
             }
-        });
+        };
+
+        if (botonKick) {
+
+            mensaje.components = [
+                botonKick
+            ];
+        }
+
+        await channel.send(
+            mensaje
+        );
 
         console.log(
             `[KickAlert] 🔴 ${streamer.displayName} está ONLINE en ${guild.name}`
