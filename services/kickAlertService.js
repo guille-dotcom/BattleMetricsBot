@@ -235,7 +235,7 @@ function crearEmbedKickLive(streamer) {
             .setColor(0x53FC18)
             .setTitle("🔔 RustLogix")
             .setDescription(
-                "## 🔴 INICIO DIRECTO\n\n" +
+                "## 🟢 INICIO DIRECTO\n\n" +
                 `**[${streamer.displayName}](${streamer.url})** está en directo en Kick.`
             )
             .addFields(
@@ -357,7 +357,7 @@ async function enviarAlerta(
         }
 
         let contenido =
-            "🔔 **INICIO DIRECTO**";
+            "🔔 **ESTAMOS EN STREAM**";
 
         if (monitor.roleId) {
 
