@@ -76,6 +76,14 @@ const {
 } = require("./services/planillaAutomatica");
 
 // ======================
+// CUMPLEAÑOS AUTOMÁTICOS
+// ======================
+
+const {
+    iniciarCumpleanosAutomaticos
+} = require("./services/birthdayService");
+
+// ======================
 // PUERTO PARA RENDER
 // ======================
 
@@ -1056,6 +1064,44 @@ client.once(
 
             console.error(
                 "❌ Error iniciando planilla automática:",
+                error
+            );
+
+        }
+
+        // ======================
+        // CUMPLEAÑOS AUTOMÁTICOS
+        // ======================
+
+        console.log(
+            "🎂 Iniciando sistema automático de cumpleaños..."
+        );
+
+        try {
+
+            if (
+                typeof iniciarCumpleanosAutomaticos !==
+                "function"
+            ) {
+
+                throw new Error(
+                    "iniciarCumpleanosAutomaticos no está exportada desde birthdayService.js"
+                );
+
+            }
+
+            iniciarCumpleanosAutomaticos(
+                client
+            );
+
+            console.log(
+                "🎂 Sistema automático de cumpleaños iniciado correctamente."
+            );
+
+        } catch (error) {
+
+            console.error(
+                "❌ Error iniciando cumpleaños automáticos:",
                 error
             );
 
