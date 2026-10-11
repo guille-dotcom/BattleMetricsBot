@@ -135,7 +135,7 @@ module.exports = {
     data:
         new SlashCommandBuilder()
 
-            .setName("cumpleaños")
+            .setName("cumpleanos")
 
             .setDescription(
                 "Sistema de cumpleaños de RustLogix"
