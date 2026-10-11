@@ -156,19 +156,9 @@ module.exports = {
                             "Registra o actualiza un cumpleaños"
                         )
 
-                        .addUserOption(
-                            option =>
-
-                                option
-
-                                    .setName("usuario")
-
-                                    .setDescription(
-                                        "Usuario cuyo cumpleaños quieres registrar"
-                                    )
-
-                                    .setRequired(false)
-                        )
+                        // IMPORTANTE:
+                        // Las opciones obligatorias deben ir
+                        // antes de las opcionales en Discord.
 
                         .addIntegerOption(
                             option =>
@@ -204,6 +194,20 @@ module.exports = {
                                     .setMinValue(1)
 
                                     .setMaxValue(12)
+                        )
+
+                        .addUserOption(
+                            option =>
+
+                                option
+
+                                    .setName("usuario")
+
+                                    .setDescription(
+                                        "Usuario cuyo cumpleaños quieres registrar"
+                                    )
+
+                                    .setRequired(false)
                         )
 
                         .addIntegerOption(
@@ -476,11 +480,13 @@ module.exports = {
 
                 const existente =
                     await Birthday.findOne({
+
                         guildId:
                             interaction.guild.id,
 
                         userId:
                             usuario.id
+
                     });
 
                 if (existente) {
