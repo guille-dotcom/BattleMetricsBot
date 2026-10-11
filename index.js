@@ -700,7 +700,12 @@ const commandFiles =
                 file.endsWith(".js")
         );
 
-const commandsArray = [];
+// =====================================================
+// CAMBIO: REGISTRO DE COMANDOS SIN DUPLICADOS
+// =====================================================
+
+const comandosRegistrados =
+    new Map();
 
 for (const file of commandFiles) {
 
@@ -716,17 +721,32 @@ for (const file of commandFiles) {
             "execute" in command
         ) {
 
-            client.commands.set(
-                command.data.name,
+            const nombre =
+                command.data.name;
+
+            if (
+                comandosRegistrados.has(
+                    nombre
+                )
+            ) {
+
+                console.log(
+                    `⚠️ COMANDO DUPLICADO DETECTADO: /${nombre}`
+                );
+
+                console.log(
+                    `⚠️ El archivo ${file} reemplazará la definición anterior.`
+                );
+
+            }
+
+            comandosRegistrados.set(
+                nombre,
                 command
             );
 
-            commandsArray.push(
-                command.data.toJSON()
-            );
-
             console.log(
-                `✅ Comando cargado: ${command.data.name}`
+                `✅ Comando cargado: /${nombre} (${file})`
             );
 
         } else {
@@ -745,6 +765,27 @@ for (const file of commandFiles) {
         );
 
     }
+
+}
+
+const commandsArray = [];
+
+for (
+    const [
+        nombre,
+        command
+    ]
+    of comandosRegistrados
+) {
+
+    client.commands.set(
+        nombre,
+        command
+    );
+
+    commandsArray.push(
+        command.data.toJSON()
+    );
 
 }
 
@@ -777,6 +818,43 @@ client.once(
                 "🔄 Sincronizando comandos globalmente..."
             );
 
+            // =================================================
+            // DIAGNÓSTICO /CUMPLEANOS
+            // =================================================
+
+            const cumpleanosLocal =
+                commandsArray.find(
+                    command =>
+                        command.name ===
+                        "cumpleanos"
+                );
+
+            console.log(
+                "🎂 DEFINICIÓN LOCAL DE /cumpleanos:"
+            );
+
+            if (cumpleanosLocal) {
+
+                console.log(
+                    JSON.stringify(
+                        cumpleanosLocal,
+                        null,
+                        2
+                    )
+                );
+
+            } else {
+
+                console.log(
+                    "❌ NO SE ENCONTRÓ /cumpleanos EN commandsArray"
+                );
+
+            }
+
+            // =================================================
+            // REGISTRAR COMANDOS
+            // =================================================
+
             await rest.put(
                 Routes.applicationCommands(
                     client.user.id
@@ -787,8 +865,80 @@ client.once(
             );
 
             console.log(
-                "✨ ¡Comandos sincronizados sin duplicados!"
+                "✨ ¡Comandos enviados a Discord correctamente!"
             );
+
+            // =================================================
+            // COMPROBAR LO QUE DISCORD TIENE REGISTRADO
+            // =================================================
+
+            console.log(
+                "🔎 Comprobando comandos registrados realmente en Discord..."
+            );
+
+            const comandosDiscord =
+                await rest.get(
+                    Routes.applicationCommands(
+                        client.user.id
+                    )
+                );
+
+            const cumpleanosDiscord =
+                comandosDiscord.find(
+                    command =>
+                        command.name ===
+                        "cumpleanos"
+                );
+
+            console.log(
+                "🎂 DEFINICIÓN DE /cumpleanos EN DISCORD:"
+            );
+
+            if (cumpleanosDiscord) {
+
+                console.log(
+                    JSON.stringify(
+                        cumpleanosDiscord,
+                        null,
+                        2
+                    )
+                );
+
+                const registrar =
+                    cumpleanosDiscord.options?.find(
+                        option =>
+                            option.name ===
+                            "registrar"
+                    );
+
+                const usuario =
+                    registrar?.options?.find(
+                        option =>
+                            option.name ===
+                            "usuario"
+                    );
+
+                if (usuario) {
+
+                    console.log(
+                        "✅ CONFIRMADO: Discord tiene la opción /cumpleanos registrar usuario."
+                    );
+
+                } else {
+
+                    console.log(
+                        "❌ PROBLEMA: Discord NO tiene la opción 'usuario' en /cumpleanos registrar."
+                    );
+
+                }
+
+            } else {
+
+                console.log(
+                    "❌ Discord NO devolvió el comando /cumpleanos."
+                );
+
+            }
 
         } catch (error) {
 
