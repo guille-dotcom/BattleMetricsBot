@@ -15,6 +15,82 @@ const {
 } = require("../services/kickAlertService");
 
 // ============================================================
+// NORMALIZAR STREAMER DE KICK
+// ============================================================
+
+function normalizarStreamerKick(input) {
+
+    if (!input) {
+        return "";
+    }
+
+    let valor =
+        String(input)
+            .trim()
+            .replace(/^@/, "");
+
+    // --------------------------------------------------------
+    // Si es una URL de Kick
+    // --------------------------------------------------------
+
+    if (
+        /^https?:\/\/(?:www\.)?kick\.com\//i.test(valor)
+    ) {
+
+        try {
+
+            const url =
+                new URL(valor);
+
+            valor =
+                url.pathname
+                    .replace(/^\/+/, "")
+                    .split("/")[0]
+                    .trim();
+
+        } catch {
+
+            valor =
+                valor
+                    .replace(
+                        /^https?:\/\/(?:www\.)?kick\.com\//i,
+                        ""
+                    )
+                    .split(/[/?#]/)[0]
+                    .trim();
+        }
+    }
+
+    // --------------------------------------------------------
+    // Si alguien pone solamente kick.com/nombre
+    // --------------------------------------------------------
+
+    else if (
+        /^kick\.com\//i.test(valor)
+    ) {
+
+        valor =
+            valor
+                .replace(/^kick\.com\//i, "")
+                .split(/[/?#]/)[0]
+                .trim();
+    }
+
+    // --------------------------------------------------------
+    // Limpiar restos
+    // --------------------------------------------------------
+
+    valor =
+        valor
+            .replace(/^\/+/, "")
+            .replace(/\/+$/, "")
+            .split(/[/?#]/)[0]
+            .trim();
+
+    return valor;
+}
+
+// ============================================================
 // COMANDO
 // ============================================================
 
@@ -54,7 +130,7 @@ module.exports = {
                     option
                         .setName("streamer")
                         .setDescription(
-                            "Nombre del streamer de Kick"
+                            "Nombre o enlace del streamer de Kick"
                         )
                         .setRequired(true)
                 )
@@ -74,7 +150,7 @@ module.exports = {
                     option
                         .setName("streamer")
                         .setDescription(
-                            "Nombre del streamer de Kick"
+                            "Nombre o enlace del streamer de Kick"
                         )
                         .setRequired(true)
                 )
@@ -202,17 +278,23 @@ module.exports = {
             const guildId =
                 interaction.guild.id;
 
-            const streamerInput =
+            const input =
                 interaction.options
                     .getString("streamer")
-                    .trim()
-                    .replace(/^@/, "");
+                    .trim();
+
+            // ------------------------------------------------
+            // Convertir nombre o URL a username
+            // ------------------------------------------------
+
+            const streamerInput =
+                normalizarStreamerKick(input);
 
             if (!streamerInput) {
 
                 return interaction.reply({
                     content:
-                        "❌ Debes indicar un nombre de streamer de Kick.",
+                        "❌ Debes indicar un nombre o enlace válido de un streamer de Kick.",
                     ephemeral: true
                 });
             }
@@ -246,7 +328,7 @@ module.exports = {
 
                 return interaction.editReply(
                     "❌ No pude encontrar ese streamer en Kick.\n\n" +
-                    `Comprueba que el nombre sea correcto: **${streamerInput}**`
+                    `Comprueba que el nombre o enlace sea correcto: **${streamerInput}**`
                 );
             }
 
@@ -255,8 +337,9 @@ module.exports = {
             // =================================================
 
             const usernameNormalizado =
-                streamer.username
-                    .toLowerCase();
+                String(
+                    streamer.username || streamerInput
+                ).toLowerCase();
 
             const existente =
                 monitor.streamers.find(
@@ -323,7 +406,8 @@ module.exports = {
                         streamer.avatar || null
                     )
                     .setURL(
-                        streamer.url
+                        streamer.url ||
+                        `https://kick.com/${streamer.username}`
                     )
                     .setFooter({
                         text:
@@ -346,12 +430,23 @@ module.exports = {
             const guildId =
                 interaction.guild.id;
 
-            const streamerInput =
+            const input =
                 interaction.options
                     .getString("streamer")
-                    .trim()
-                    .replace(/^@/, "")
+                    .trim();
+
+            const streamerInput =
+                normalizarStreamerKick(input)
                     .toLowerCase();
+
+            if (!streamerInput) {
+
+                return interaction.reply({
+                    content:
+                        "❌ Debes indicar un nombre o enlace válido de un streamer de Kick.",
+                    ephemeral: true
+                });
+            }
 
             await interaction.deferReply({
                 ephemeral: true
@@ -435,47 +530,86 @@ module.exports = {
             }
 
             // =================================================
-            // DATOS DE PRUEBA
+            // NECESITAMOS UN STREAMER REAL
             // =================================================
 
-            const streamerPrueba = {
+            if (
+                !monitor.streamers ||
+                monitor.streamers.length === 0
+            ) {
+
+                return interaction.editReply(
+                    "❌ Primero debes añadir al menos un streamer con `/kick-alerta añadir`."
+                );
+            }
+
+            // =================================================
+            // USAR EL PRIMER STREAMER CONFIGURADO
+            // =================================================
+
+            const streamerConfigurado =
+                monitor.streamers[0];
+
+            const username =
+                streamerConfigurado.kickUsername;
+
+            let streamerPrueba =
+                await obtenerStreamerKick(
+                    username
+                );
+
+            if (!streamerPrueba) {
+
+                return interaction.editReply(
+                    `❌ No pude obtener actualmente los datos de **${streamerConfigurado.displayName || username}** desde Kick.`
+                );
+            }
+
+            // =================================================
+            // FORZAR ESTADO DE DIRECTO PARA LA PRUEBA
+            //
+            // Los datos visuales vienen del streamer real.
+            // Solo modificamos lo necesario para simular
+            // que acaba de entrar en directo.
+            // =================================================
+
+            streamerPrueba = {
+
+                ...streamerPrueba,
 
                 username:
-                    "rust",
+                    streamerPrueba.username ||
+                    username,
 
                 displayName:
-                    "Kick Alerts",
+                    streamerPrueba.displayName ||
+                    streamerConfigurado.displayName ||
+                    username,
 
                 live:
                     true,
 
-                avatar:
-                    "https://files.kick.com/images/user/1/profile_image/conversion/9c8b5b4f-7e0f-4c7d-8e1d-0b6c7c4f5d6e-fullsize.webp",
-
-                thumbnail:
-                    null,
-
                 title:
+                    streamerPrueba.title ||
                     "Esta es una alerta de prueba de RustLogix",
 
                 categoryName:
+                    streamerPrueba.categoryName ||
                     "Rust",
 
-                categoryImage:
-                    null,
-
-                viewers:
-                    0,
-
-                streamId:
-                    null,
-
                 startedAt:
+                    streamerPrueba.startedAt ||
                     new Date(),
 
                 url:
-                    "https://kick.com/"
+                    streamerPrueba.url ||
+                    `https://kick.com/${username}`
             };
+
+            // =================================================
+            // ENVIAR EXACTAMENTE LA MISMA ALERTA
+            // QUE SE UTILIZA EN OFFLINE → ONLINE
+            // =================================================
 
             const enviada =
                 await enviarAlerta(
@@ -492,9 +626,94 @@ module.exports = {
             }
 
             return interaction.editReply(
-                "✅ Alerta de prueba enviada correctamente."
+                `✅ Alerta de prueba enviada correctamente usando **${streamerPrueba.displayName}**.`
             );
         }
+    },
+
+    // ========================================================
+    // SELECTOR DE ROL
+    // ========================================================
+
+    async manejarSelectRol(interaction) {
+
+        if (
+            !interaction.isRoleSelectMenu()
+        ) {
+            return;
+        }
+
+        if (
+            interaction.customId !==
+            "kick_alerta_role"
+        ) {
+            return;
+        }
+
+        if (
+            !interaction.memberPermissions.has(
+                PermissionFlagsBits.ManageGuild
+            )
+        ) {
+
+            return interaction.reply({
+                content:
+                    "❌ Necesitas el permiso **Gestionar servidor** para configurar las alertas de Kick.",
+                ephemeral: true
+            });
+        }
+
+        const roleId =
+            interaction.values[0];
+
+        const guildId =
+            interaction.guild.id;
+
+        const monitor =
+            await KickAlertMonitor.findOne({
+                guildId
+            });
+
+        if (!monitor) {
+
+            return interaction.reply({
+                content:
+                    "❌ Primero debes ejecutar `/kick-alerta configurar`.",
+                ephemeral: true
+            });
+        }
+
+        monitor.roleId =
+            roleId;
+
+        await monitor.save();
+
+        const role =
+            interaction.guild.roles.cache.get(
+                roleId
+            );
+
+        return interaction.update({
+
+            embeds: [
+                new EmbedBuilder()
+                    .setColor(0x53FC18)
+                    .setTitle(
+                        "🔔 Kick Alerts configurado"
+                    )
+                    .setDescription(
+                        `📢 **Canal de alertas:** <#${monitor.channelId}>\n\n` +
+                        `👤 **Rol de alertas:** ${role ? `<@&${role.id}>` : `<@&${roleId}>`}\n\n` +
+                        "Los avisos se enviarán cuando un streamer pase de **OFFLINE → ONLINE**."
+                    )
+                    .setFooter({
+                        text:
+                            "RustLogix • Kick Alerts"
+                    })
+            ],
+
+            components: []
+        });
     },
 
     // ========================================================
