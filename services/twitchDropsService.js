@@ -12,19 +12,19 @@ let temporizadorIniciado = false;
 let revisando = false;
 
 function limpiarTexto(texto) {
-    return String(texto || "")
+    return String(texto ?? "")
         .replace(/\u00a0/g, " ")
         .replace(/\s+/g, " ")
         .trim();
 }
 
 function escaparMarkdown(texto) {
-    return String(texto || "").replace(/([\\`*_{}[\]()#+\-.!|>~])/g, "\\$1");
+    return String(texto ?? "").replace(/([\\`*_{}\[\]()#+\-.!|>~])/g, "\\$1");
 }
 
 function normalizarNombre(texto) {
     return limpiarTexto(texto)
-        .replace(/^(?:image:\s*)/i, "")
+        .replace(/^image:\s*/i, "")
         .replace(/\s+/g, " ")
         .trim();
 }
@@ -45,9 +45,7 @@ function obtenerUrlMedia($, elemento) {
     ];
 
     for (const candidato of candidatos) {
-        if (!candidato || candidato.startsWith("data:")) {
-            continue;
-        }
+        if (!candidato || candidato.startsWith("data:")) continue;
 
         try {
             return new URL(candidato, FACEPUNCH_URL).href;
@@ -60,9 +58,7 @@ function obtenerUrlMedia($, elemento) {
 }
 
 function obtenerImagenTarjeta($, tarjeta) {
-    if (!tarjeta || !tarjeta.length) {
-        return null;
-    }
+    if (!tarjeta || !tarjeta.length) return null;
 
     let imagen = null;
 
@@ -102,12 +98,9 @@ function extraerDuracion(texto) {
         /^(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)$/i
     );
 
-    if (!coincidencia) {
-        return null;
-    }
+    if (!coincidencia) return null;
 
     const cantidad = Number(coincidencia[1]);
-
     const unidad = /^(?:minutes?|mins?)$/i.test(coincidencia[2])
         ? "min"
         : "h";
@@ -127,9 +120,7 @@ function buscarEncabezado($, expresion) {
     let encontrado = null;
 
     $("h1, h2, h3, h4, [role='heading']").each((_, elemento) => {
-        if (encontrado) {
-            return;
-        }
+        if (encontrado) return;
 
         const texto = limpiarTexto($(elemento).text());
 
@@ -148,25 +139,38 @@ function obtenerOrden(elemento) {
 }
 
 function encontrarTarjeta($, nodo, duracion) {
-    let actual = nodo;
+    let actual = $(nodo);
 
-    for (let nivel = 0; nivel < 8; nivel++) {
-        if (!actual || actual.length === 0) {
-            break;
-        }
+    // La duración puede venir vacía o con una estructura inesperada.
+    const duracionTexto = limpiarTexto(
+        duracion?.texto ?? duracion?.text ?? ""
+    );
+
+    for (let nivel = 0; nivel < 10; nivel++) {
+        if (!actual || !actual.length) break;
 
         const textoTarjeta = limpiarTexto(actual.text());
         const textoSinDuracion = obtenerTextoSinDuracion(textoTarjeta);
 
         if (
-            textoTarjeta.length > duracion.text.length &&
-            textoTarjeta.length <= 180 &&
-            textoSinDuracion.length > 1
+            textoTarjeta &&
+            textoSinDuracion.length > 1 &&
+            textoTarjeta.length <= 220 &&
+            (!duracionTexto || textoTarjeta.length > duracionTexto.length)
         ) {
-            return actual;
+            // Preferir un contenedor que incluya imagen o enlace de recompensa.
+            const tieneImagen = actual.find("img, video, source").length > 0;
+            const tieneEnlace = actual.find("a").length > 0;
+
+            if (tieneImagen || tieneEnlace || nivel >= 2) {
+                return actual;
+            }
         }
 
-        actual = actual.parent();
+        const padre = actual.parent();
+
+        if (!padre || !padre.length) break;
+        actual = padre;
     }
 
     return null;
@@ -175,35 +179,29 @@ function encontrarTarjeta($, nodo, duracion) {
 function extraerTarjetas($, inicioOrden, finOrden) {
     const recompensas = [];
     const duplicados = new Set();
+
+    $("body *").each((indice, elemento) => {
+        elemento.__dropsOrder = indice;
+    });
+
     const elementos = $("body *").toArray();
 
     for (const elemento of elementos) {
         const nodo = $(elemento);
 
-        if (nodo.children().length > 0) {
-            continue;
-        }
+        // Las duraciones se buscan en nodos hoja para evitar repetir tarjetas.
+        if (nodo.children().length > 0) continue;
 
         const duracion = extraerDuracion(nodo.text());
-
-        if (!duracion) {
-            continue;
-        }
+        if (!duracion) continue;
 
         const orden = obtenerOrden(elemento);
 
-        if (
-            orden <= inicioOrden ||
-            orden >= finOrden
-        ) {
-            continue;
-        }
+        if (orden <= inicioOrden || orden >= finOrden) continue;
 
-        const tarjeta = encontrarTarjeta($, nodo, duracion);
+        const tarjeta = encontrarTarjeta($, elemento, duracion);
 
-        if (!tarjeta || tarjeta.length === 0) {
-            continue;
-        }
+        if (!tarjeta || !tarjeta.length) continue;
 
         let textoTarjeta = obtenerTextoSinDuracion(tarjeta.text());
         const nombresEnlaces = [];
@@ -229,12 +227,10 @@ function extraerTarjetas($, inicioOrden, finOrden) {
                 !/^(rust|twitch)$/i.test(nombreEnlace)
             ) {
                 streamer = nombreEnlace;
-
                 textoTarjeta = textoTarjeta.replace(
                     new RegExp(escaparRegex(nombreEnlace), "i"),
                     " "
                 );
-
                 break;
             }
         }
@@ -254,10 +250,7 @@ function extraerTarjetas($, inicioOrden, finOrden) {
 
         const clave = `${nombre.toLowerCase()}-${duracion.text}`;
 
-        if (duplicados.has(clave)) {
-            continue;
-        }
-
+        if (duplicados.has(clave)) continue;
         duplicados.add(clave);
 
         recompensas.push({
@@ -303,15 +296,7 @@ function extraerDatosCampana($, textoCompleto) {
             /Twitch Drops\s+(?:Round\s*)?#?\s*(\d+)/i
         );
 
-        if (coincidencia) {
-            numero = coincidencia[1];
-        }
-    }
-
-    if (anfitrion) {
-        anfitrion = anfitrion
-            .replace(/\s+(?:Base Invaders)\s*$/i, "")
-            .trim();
+        if (coincidencia) numero = coincidencia[1];
     }
 
     const estado = /\bLive Now\b/i.test(textoCompleto)
@@ -350,10 +335,7 @@ async function obtenerDropsOficiales() {
         }
     });
 
-    if (
-        respuesta.status !== 200 ||
-        typeof respuesta.data !== "string"
-    ) {
+    if (respuesta.status !== 200 || typeof respuesta.data !== "string") {
         throw new Error("Facepunch no devolvió una página HTML válida.");
     }
 
@@ -389,18 +371,8 @@ async function obtenerDropsOficiales() {
         ? obtenerOrden(metricas)
         : Number.MAX_SAFE_INTEGER;
 
-    const generales = extraerTarjetas(
-        $,
-        ordenGeneral,
-        ordenStreamer
-    );
-
-    const streamers = extraerTarjetas(
-        $,
-        ordenStreamer,
-        ordenMetricas
-    );
-
+    const generales = extraerTarjetas($, ordenGeneral, ordenStreamer);
+    const streamers = extraerTarjetas($, ordenStreamer, ordenMetricas);
     const campana = extraerDatosCampana($, textoCompleto);
 
     if (!generales.length && !streamers.length) {
@@ -443,17 +415,20 @@ function crearEmbedDrops(datos) {
                 name: titulo,
                 value: "No se identificaron recompensas en esta sección."
             });
-
             return;
         }
 
         const lineas = recompensas.slice(0, 20).map(recompensa => {
             const nombre = escaparMarkdown(recompensa.nombre);
-            const nombreVisible = recompensa.imagen
+            const visible = recompensa.imagen
                 ? `[${nombre}](${recompensa.imagen})`
                 : `**${nombre}**`;
 
-            return `• ${nombreVisible} — ${recompensa.tiempo}`;
+            const streamer = recompensa.streamer
+                ? ` — ${escaparMarkdown(recompensa.streamer)}`
+                : "";
+
+            return `• ${visible} — ${recompensa.tiempo}${streamer}`;
         });
 
         embed.addFields({
@@ -470,9 +445,7 @@ function crearEmbedDrops(datos) {
         ...datos.streamers
     ].find(recompensa => recompensa.imagen)?.imagen;
 
-    if (primeraImagen) {
-        embed.setThumbnail(primeraImagen);
-    }
+    if (primeraImagen) embed.setThumbnail(primeraImagen);
 
     embed.addFields({
         name: "🔗 Fuente",
@@ -505,9 +478,7 @@ async function publicarRustDrops(interaction) {
 }
 
 async function revisarDropsAutomaticos() {
-    if (revisando || !cliente) {
-        return;
-    }
+    if (revisando || !cliente) return;
 
     revisando = true;
 
@@ -517,9 +488,7 @@ async function revisarDropsAutomaticos() {
             channelId: { $exists: true, $ne: null }
         });
 
-        if (!monitores.length) {
-            return;
-        }
+        if (!monitores.length) return;
 
         let datos;
 
@@ -530,7 +499,6 @@ async function revisarDropsAutomaticos() {
                 "❌ No se pudieron consultar los Twitch Drops oficiales:",
                 error.message
             );
-
             return;
         }
 
@@ -543,15 +511,10 @@ async function revisarDropsAutomaticos() {
                     .fetch(monitor.channelId)
                     .catch(() => null);
 
-                if (
-                    !canal ||
-                    !canal.isTextBased() ||
-                    !canal.messages
-                ) {
+                if (!canal || !canal.isTextBased() || !canal.messages) {
                     console.warn(
                         `⚠️ Canal de Twitch Drops no disponible: ${monitor.channelId}`
                     );
-
                     continue;
                 }
 
@@ -563,13 +526,9 @@ async function revisarDropsAutomaticos() {
                         .catch(() => null);
                 }
 
-                if (
-                    monitor.campaignSignature === firma &&
-                    mensaje
-                ) {
+                if (monitor.campaignSignature === firma && mensaje) {
                     monitor.lastCheckedAt = new Date();
                     await monitor.save();
-
                     continue;
                 }
 
@@ -603,19 +562,14 @@ async function revisarDropsAutomaticos() {
             }
         }
     } catch (error) {
-        console.error(
-            "❌ Error revisando monitores de Twitch Drops:",
-            error
-        );
+        console.error("❌ Error revisando monitores de Twitch Drops:", error);
     } finally {
         revisando = false;
     }
 }
 
 function iniciarDropsAutomaticos(client) {
-    if (temporizadorIniciado) {
-        return;
-    }
+    if (temporizadorIniciado) return;
 
     cliente = client;
     temporizadorIniciado = true;
