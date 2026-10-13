@@ -1,5 +1,6 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
+
 const {
     EmbedBuilder
 } = require("discord.js");
@@ -101,7 +102,7 @@ function normalizarUrlImagen(url) {
         String(url)
             .trim()
             .replace(
-                /&amp;/g,
+                /&/g,
                 "&"
             );
 
@@ -307,7 +308,6 @@ function extraerImagenElemento(
                         );
 
                     if (url) {
-
                         imagen =
                             url;
                     }
@@ -337,6 +337,298 @@ function extraerImagenElemento(
     }
 
     return null;
+}
+
+// ============================================================
+// IMAGEN ESPECÍFICA DEL STREAMER DROP
+// ============================================================
+
+function extraerImagenStreamerDrop(
+    $,
+    card,
+    nombreDrop,
+    streamer
+) {
+
+    if (
+        !card ||
+        !card.length ||
+        !nombreDrop
+    ) {
+        return null;
+    }
+
+    const nombreNormalizado =
+        limpiarTexto(
+            nombreDrop
+        ).toLowerCase();
+
+    const streamerNormalizado =
+        limpiarTexto(
+            streamer
+        ).toLowerCase();
+
+    let imagenEncontrada = null;
+
+    // ========================================================
+    // 1. BUSCAR ELEMENTOS QUE CONTENGAN EXACTAMENTE
+    //    EL NOMBRE DEL DROP
+    // ========================================================
+
+    const candidatosNombre = [];
+
+    card.find("*").each(
+        (_, elemento) => {
+
+            if (imagenEncontrada) {
+                return;
+            }
+
+            const $elemento =
+                $(elemento);
+
+            const textoDirecto =
+                limpiarTexto(
+                    $elemento
+                        .clone()
+                        .children()
+                        .remove()
+                        .end()
+                        .text()
+                );
+
+            const textoCompleto =
+                limpiarTexto(
+                    $elemento.text()
+                );
+
+            if (!textoDirecto) {
+                return;
+            }
+
+            const directoNormalizado =
+                textoDirecto.toLowerCase();
+
+            const completoNormalizado =
+                textoCompleto.toLowerCase();
+
+            // Coincidencia exacta.
+            const coincideExacto =
+                directoNormalizado ===
+                nombreNormalizado;
+
+            // Coincidencia cuando el nombre aparece
+            // dentro del texto del elemento.
+            const coincideDentro =
+                completoNormalizado.includes(
+                    nombreNormalizado
+                );
+
+            if (
+                !coincideExacto &&
+                !coincideDentro
+            ) {
+                return;
+            }
+
+            // Evitar tomar el contenedor gigante
+            // que contiene también otros drops.
+            if (
+                textoCompleto.length > 250
+            ) {
+                return;
+            }
+
+            candidatosNombre.push(
+                $elemento
+            );
+        }
+    );
+
+    // ========================================================
+    // 2. PRIORIZAR ELEMENTOS MÁS PEQUEÑOS
+    // ========================================================
+
+    candidatosNombre.sort(
+        (a, b) => {
+
+            const textoA =
+                limpiarTexto(
+                    a.text()
+                ).length;
+
+            const textoB =
+                limpiarTexto(
+                    b.text()
+                ).length;
+
+            return textoA - textoB;
+        }
+    );
+
+    // ========================================================
+    // 3. DESDE EL NOMBRE SUBIR POR EL DOM
+    //    HASTA ENCONTRAR SU IMAGEN
+    // ========================================================
+
+    for (
+        const elementoNombre
+        of candidatosNombre
+    ) {
+
+        let actual =
+            elementoNombre;
+
+        for (
+            let nivel = 0;
+            nivel < 8;
+            nivel++
+        ) {
+
+            if (
+                !actual ||
+                !actual.length
+            ) {
+                break;
+            }
+
+            const textoActual =
+                limpiarTexto(
+                    actual.text()
+                );
+
+            // No subir a contenedores enormes.
+            if (
+                nivel > 0 &&
+                textoActual.length > 350
+            ) {
+                break;
+            }
+
+            const imagen =
+                extraerImagenElemento(
+                    $,
+                    actual
+                );
+
+            if (imagen) {
+
+                imagenEncontrada =
+                    imagen;
+
+                break;
+            }
+
+            actual =
+                actual.parent();
+        }
+
+        if (imagenEncontrada) {
+            break;
+        }
+    }
+
+    if (imagenEncontrada) {
+        return imagenEncontrada;
+    }
+
+    // ========================================================
+    // 4. BUSCAR IMG CON ALT / TITLE / DATA ATTRIBUTES
+    //    RELACIONADOS CON EL NOMBRE DEL DROP
+    // ========================================================
+
+    const palabrasDrop =
+        nombreNormalizado
+            .split(/\s+/)
+            .filter(
+                palabra =>
+                    palabra.length >= 3
+            );
+
+    if (palabrasDrop.length) {
+
+        const imagenes =
+            card.find(
+                "img, source"
+            );
+
+        for (
+            const elemento
+            of imagenes.toArray()
+        ) {
+
+            const $img =
+                $(elemento);
+
+            const textosImagen = [
+                $img.attr("alt"),
+                $img.attr("title"),
+                $img.attr("aria-label"),
+                $img.attr("data-alt"),
+                $img.attr("data-name"),
+                $img.attr("data-title"),
+                $img.attr("data-image")
+            ]
+                .filter(Boolean)
+                .map(
+                    valor =>
+                        limpiarTexto(
+                            valor
+                        ).toLowerCase()
+                );
+
+            if (!textosImagen.length) {
+                continue;
+            }
+
+            const coincide =
+                textosImagen.some(
+                    texto =>
+                        texto.includes(
+                            nombreNormalizado
+                        ) ||
+                        (
+                            palabrasDrop.length > 0 &&
+                            palabrasDrop.every(
+                                palabra =>
+                                    texto.includes(
+                                        palabra
+                                    )
+                            )
+                        )
+                );
+
+            if (!coincide) {
+                continue;
+            }
+
+            const imagen =
+                extraerImagenElemento(
+                    $,
+                    $img.parent()
+                ) ||
+                extraerImagenElemento(
+                    $,
+                    $img
+                );
+
+            if (imagen) {
+                return imagen;
+            }
+        }
+    }
+
+    // ========================================================
+    // 5. ÚLTIMO RESPALDO
+    //
+    // Solamente si no logramos relacionar la imagen
+    // directamente con el nombre del Drop.
+    // ========================================================
+
+    return extraerImagenElemento(
+        $,
+        card
+    );
 }
 
 // ============================================================
@@ -454,6 +746,7 @@ const MESES_EN = {
     october: 9,
     november: 10,
     december: 11,
+
     jan: 0,
     feb: 1,
     mar: 2,
@@ -468,6 +761,63 @@ const MESES_EN = {
     dec: 11
 };
 
+function crearFechaConOffset(
+    año,
+    mes,
+    dia,
+    hora,
+    minuto,
+    offsetHoras,
+    offsetMinutos
+) {
+
+    const signo =
+        offsetHoras < 0
+            ? -1
+            : 1;
+
+    const offsetTotalMinutos =
+        (
+            Math.abs(offsetHoras) * 60
+        ) +
+        (
+            offsetMinutos || 0
+        );
+
+    const offsetFirmado =
+        signo *
+        offsetTotalMinutos;
+
+    const utc =
+        Date.UTC(
+            año,
+            mes,
+            dia,
+            hora,
+            minuto
+        ) -
+        (
+            offsetFirmado *
+            60 *
+            1000
+        );
+
+    const fecha =
+        new Date(
+            utc
+        );
+
+    if (
+        Number.isNaN(
+            fecha.getTime()
+        )
+    ) {
+        return null;
+    }
+
+    return fecha;
+}
+
 function parsearFechaFacepunch(
     texto
 ) {
@@ -479,14 +829,29 @@ function parsearFechaFacepunch(
     texto =
         limpiarTexto(texto);
 
-    // ========================================================
-    // ESPAÑOL
-    //
-    // 23 de octubre de 2026 a las 15:00 GMT-3
-    // ========================================================
+    const isoMatch =
+        texto.match(
+            /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})/
+        );
+
+    if (isoMatch) {
+
+        const fecha =
+            new Date(
+                isoMatch[0]
+            );
+
+        if (
+            !Number.isNaN(
+                fecha.getTime()
+            )
+        ) {
+            return fecha;
+        }
+    }
 
     let regex =
-        /(\d{1,2})\s+de\s+([a-záéíóú]+)\s+de\s+(\d{4})\s+a\s+las\s+(\d{1,2}):(\d{2})\s+GMT\s*([+-]\d{1,2})(?::?(\d{2}))?/i;
+        /(\d{1,2})\s+de\s+([a-záéíóú]+)\s+de\s+(\d{4})\s+a\s+las\s+(\d{1,2}):(\d{2})\s+GMT\s*([+-])(\d{1,2})(?::?(\d{2}))?/i;
 
     let match =
         texto.match(
@@ -521,157 +886,38 @@ function parsearFechaFacepunch(
         const minuto =
             Number(match[5]);
 
-        const offsetHoras =
-            Number(match[6]);
-
-        const offsetMinutos =
-            Number(match[7] || 0);
-
-        if (
-            mes === undefined ||
-            Number.isNaN(mes)
-        ) {
-            return null;
-        }
-
-        const offsetTotalMinutos =
-            (
-                offsetHoras *
-                60
-            ) +
-            (
-                offsetHoras >= 0
-                    ? offsetMinutos
-                    : -offsetMinutos
-            );
-
-        const utc =
-            Date.UTC(
-                año,
-                mes,
-                dia,
-                hora,
-                minuto
-            ) -
-            (
-                offsetTotalMinutos *
-                60 *
-                1000
-            );
-
-        return new Date(utc);
-    }
-
-    // ========================================================
-    // INGLÉS
-    //
-    // October 23, 2026 at 15:00 GMT-3
-    // Oct 23, 2026 at 15:00 GMT-3
-    // ========================================================
-
-    regex =
-        /([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})\s+(?:at\s+)?(\d{1,2}):(\d{2})\s*([AP]M)?\s*GMT\s*([+-]\d{1,2})(?::?(\d{2}))?/i;
-
-    match =
-        texto.match(
-            regex
-        );
-
-    if (match) {
-
-        const mesNombre =
-            match[1]
-                .toLowerCase();
-
-        const mes =
-            MESES_EN[
-                mesNombre
-            ];
-
-        const dia =
-            Number(match[2]);
-
-        const año =
-            Number(match[3]);
-
-        let hora =
-            Number(match[4]);
-
-        const minuto =
-            Number(match[5]);
-
-        const ampm =
-            match[6];
+        const signo =
+            match[6] === "-"
+                ? -1
+                : 1;
 
         const offsetHoras =
+            signo *
             Number(match[7]);
 
         const offsetMinutos =
-            Number(match[8] || 0);
-
-        if (
-            mes === undefined
-        ) {
-            return null;
-        }
-
-        if (ampm) {
-
-            if (
-                /^PM$/i.test(
-                    ampm
-                ) &&
-                hora < 12
-            ) {
-                hora += 12;
-            }
-
-            if (
-                /^AM$/i.test(
-                    ampm
-                ) &&
-                hora === 12
-            ) {
-                hora = 0;
-            }
-        }
-
-        const offsetTotalMinutos =
-            (
-                offsetHoras *
-                60
-            ) +
-            (
-                offsetHoras >= 0
-                    ? offsetMinutos
-                    : -offsetMinutos
+            Number(
+                match[8] || 0
             );
 
-        const utc =
-            Date.UTC(
+        if (
+            mes !== undefined
+        ) {
+
+            return crearFechaConOffset(
                 año,
                 mes,
                 dia,
                 hora,
-                minuto
-            ) -
-            (
-                offsetTotalMinutos *
-                60 *
-                1000
+                minuto,
+                offsetHoras,
+                offsetMinutos
             );
-
-        return new Date(utc);
+        }
     }
 
-    // ========================================================
-    // FORMATO CON COMA
-    //
-    // October 23, 2026, 15:00 GMT-3
-    // ========================================================
-
     regex =
-        /([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4}),?\s+(\d{1,2}):(\d{2})\s*([AP]M)?\s*GMT\s*([+-]\d{1,2})(?::?(\d{2}))?/i;
+        /([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})(?:\s+at)?\s+(\d{1,2}):(\d{2})\s*(AM|PM)?\s*GMT\s*([+-])(\d{1,2})(?::?(\d{2}))?/i;
 
     match =
         texto.match(
@@ -700,70 +946,137 @@ function parsearFechaFacepunch(
         const ampm =
             match[6];
 
+        const signo =
+            match[7] === "-"
+                ? -1
+                : 1;
+
         const offsetHoras =
-            Number(match[7]);
+            signo *
+            Number(match[8]);
 
         const offsetMinutos =
-            Number(match[8] || 0);
-
-        if (
-            mes === undefined
-        ) {
-            return null;
-        }
-
-        if (ampm) {
-
-            if (
-                /^PM$/i.test(
-                    ampm
-                ) &&
-                hora < 12
-            ) {
-                hora += 12;
-            }
-
-            if (
-                /^AM$/i.test(
-                    ampm
-                ) &&
-                hora === 12
-            ) {
-                hora = 0;
-            }
-        }
-
-        const offsetTotalMinutos =
-            (
-                offsetHoras *
-                60
-            ) +
-            (
-                offsetHoras >= 0
-                    ? offsetMinutos
-                    : -offsetMinutos
+            Number(
+                match[9] || 0
             );
 
-        const utc =
-            Date.UTC(
+        if (
+            mes !== undefined
+        ) {
+
+            if (ampm) {
+
+                if (
+                    /^PM$/i.test(
+                        ampm
+                    ) &&
+                    hora < 12
+                ) {
+                    hora += 12;
+                }
+
+                if (
+                    /^AM$/i.test(
+                        ampm
+                    ) &&
+                    hora === 12
+                ) {
+                    hora = 0;
+                }
+            }
+
+            return crearFechaConOffset(
                 año,
                 mes,
                 dia,
                 hora,
-                minuto
-            ) -
-            (
-                offsetTotalMinutos *
-                60 *
-                1000
+                minuto,
+                offsetHoras,
+                offsetMinutos
             );
-
-        return new Date(utc);
+        }
     }
 
-    // ========================================================
-    // FECHA ISO / DATE NORMAL
-    // ========================================================
+    regex =
+        /(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})(?:\s+at)?\s+(\d{1,2}):(\d{2})\s*(AM|PM)?\s*GMT\s*([+-])(\d{1,2})(?::?(\d{2}))?/i;
+
+    match =
+        texto.match(
+            regex
+        );
+
+    if (match) {
+
+        const dia =
+            Number(match[1]);
+
+        const mes =
+            MESES_EN[
+                match[2].toLowerCase()
+            ];
+
+        const año =
+            Number(match[3]);
+
+        let hora =
+            Number(match[4]);
+
+        const minuto =
+            Number(match[5]);
+
+        const ampm =
+            match[6];
+
+        const signo =
+            match[7] === "-"
+                ? -1
+                : 1;
+
+        const offsetHoras =
+            signo *
+            Number(match[8]);
+
+        const offsetMinutos =
+            Number(
+                match[9] || 0
+            );
+
+        if (
+            mes !== undefined
+        ) {
+
+            if (ampm) {
+
+                if (
+                    /^PM$/i.test(
+                        ampm
+                    ) &&
+                    hora < 12
+                ) {
+                    hora += 12;
+                }
+
+                if (
+                    /^AM$/i.test(
+                        ampm
+                    ) &&
+                    hora === 12
+                ) {
+                    hora = 0;
+                }
+            }
+
+            return crearFechaConOffset(
+                año,
+                mes,
+                dia,
+                hora,
+                minuto,
+                offsetHoras,
+                offsetMinutos
+            );
+        }
+    }
 
     const fecha =
         new Date(
@@ -774,8 +1087,13 @@ function parsearFechaFacepunch(
         !Number.isNaN(
             fecha.getTime()
         ) &&
-        /\d{4}-\d{2}-\d{2}/.test(
-            texto
+        (
+            /\d{4}-\d{2}-\d{2}/.test(
+                texto
+            ) ||
+            /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\b/i.test(
+                texto
+            )
         )
     ) {
 
@@ -785,6 +1103,10 @@ function parsearFechaFacepunch(
     return null;
 }
 
+// ============================================================
+// EXTRAER FECHAS DE CAMPAÑA
+// ============================================================
+
 function extraerFechasCampaña(
     $,
     textoPagina
@@ -792,10 +1114,6 @@ function extraerFechasCampaña(
 
     let inicio = null;
     let fin = null;
-
-    // ========================================================
-    // ATRIBUTOS DATETIME
-    // ========================================================
 
     const fechasAtributos = [];
 
@@ -871,176 +1189,119 @@ function extraerFechasCampaña(
             finAtributo.fecha;
     }
 
-    // ========================================================
-    // TEXTO VISIBLE
-    // ========================================================
-
     const texto =
         limpiarTexto(
             textoPagina
         );
 
-    // ========================================================
-    // ESPAÑOL: DOS FECHAS
-    // ========================================================
+    const regexFechasES =
+        /\d{1,2}\s+de\s+[a-záéíóú]+\s+de\s+\d{4}\s+a\s+las\s+\d{1,2}:\d{2}\s+GMT\s*[+-]\d{1,2}(?::?\d{2})?/gi;
 
-    if (!inicio || !fin) {
+    const matchesES =
+        texto.match(
+            regexFechasES
+        ) || [];
 
-        const regexES =
-            /(\d{1,2}\s+de\s+[a-záéíóú]+\s+de\s+\d{4}\s+a\s+las\s+\d{1,2}:\d{2}\s+GMT\s*[+-]\d{1,2}(?::?\d{2})?)\s*(?:-|–|—|hasta|to)\s*(\d{1,2}\s+de\s+[a-záéíóú]+\s+de\s+\d{4}\s+a\s+las\s+\d{1,2}:\d{2}\s+GMT\s*[+-]\d{1,2}(?::?\d{2})?)/i;
+    const fechasES =
+        matchesES
+            .map(
+                valor =>
+                    parsearFechaFacepunch(
+                        valor
+                    )
+            )
+            .filter(Boolean);
 
-        const match =
-            texto.match(
-                regexES
-            );
+    const regexFechasEN =
+        /[A-Za-z]{3,12}\s+\d{1,2},\s+\d{4}(?:\s+at)?\s+\d{1,2}:\d{2}\s*(?:AM|PM)?\s*GMT\s*[+-]\d{1,2}(?::?\d{2})?/gi;
 
-        if (match) {
+    const matchesEN =
+        texto.match(
+            regexFechasEN
+        ) || [];
 
-            const fechaInicio =
-                parsearFechaFacepunch(
-                    match[1]
-                );
+    const fechasEN =
+        matchesEN
+            .map(
+                valor =>
+                    parsearFechaFacepunch(
+                        valor
+                    )
+            )
+            .filter(Boolean);
 
-            const fechaFin =
-                parsearFechaFacepunch(
-                    match[2]
-                );
+    const regexFechasEN2 =
+        /\d{1,2}\s+[A-Za-z]{3,12}\s+\d{4}(?:\s+at)?\s+\d{1,2}:\d{2}\s*(?:AM|PM)?\s*GMT\s*[+-]\d{1,2}(?::?\d{2})?/gi;
 
-            if (fechaInicio) {
-                inicio =
-                    fechaInicio;
-            }
+    const matchesEN2 =
+        texto.match(
+            regexFechasEN2
+        ) || [];
 
-            if (fechaFin) {
-                fin =
-                    fechaFin;
-            }
-        }
-    }
+    const fechasEN2 =
+        matchesEN2
+            .map(
+                valor =>
+                    parsearFechaFacepunch(
+                        valor
+                    )
+            )
+            .filter(Boolean);
 
-    // ========================================================
-    // INGLÉS: MES DÍA, AÑO
-    // ========================================================
+    const fechasTexto = [
+        ...fechasES,
+        ...fechasEN,
+        ...fechasEN2
+    ];
 
-    if (!inicio || !fin) {
+    const fechasUnicas = [];
 
-        const regexEN =
-            /([A-Za-z]{3,9}\s+\d{1,2},\s+\d{4}\s+(?:at\s+)?\d{1,2}:\d{2}\s*(?:AM|PM)?\s*GMT\s*[+-]\d{1,2}(?::?\d{2})?)\s*(?:-|–|—|to|until)\s*([A-Za-z]{3,9}\s+\d{1,2},\s+\d{4}\s+(?:at\s+)?\d{1,2}:\d{2}\s*(?:AM|PM)?\s*GMT\s*[+-]\d{1,2}(?::?\d{2})?)/i;
+    for (
+        const fecha
+        of fechasTexto
+    ) {
 
-        const match =
-            texto.match(
-                regexEN
-            );
-
-        if (match) {
-
-            const fechaInicio =
-                parsearFechaFacepunch(
-                    match[1]
-                );
-
-            const fechaFin =
-                parsearFechaFacepunch(
-                    match[2]
-                );
-
-            if (fechaInicio) {
-                inicio =
-                    fechaInicio;
-            }
-
-            if (fechaFin) {
-                fin =
-                    fechaFin;
-            }
-        }
-    }
-
-    // ========================================================
-    // FECHAS INDIVIDUALES EN ESPAÑOL
-    // ========================================================
-
-    if (!inicio || !fin) {
-
-        const regexES =
-            /\d{1,2}\s+de\s+[a-záéíóú]+\s+de\s+\d{4}\s+a\s+las\s+\d{1,2}:\d{2}\s+GMT\s*[+-]\d{1,2}(?::?\d{2})?/gi;
-
-        const matches =
-            texto.match(
-                regexES
-            ) || [];
-
-        const fechas =
-            matches
-                .map(
-                    valor =>
-                        parsearFechaFacepunch(
-                            valor
-                        )
-                )
-                .filter(Boolean);
+        const tiempo =
+            fecha.getTime();
 
         if (
-            !inicio &&
-            fechas.length >= 1
+            fechasUnicas.some(
+                existente =>
+                    existente.getTime() ===
+                    tiempo
+            )
         ) {
-            inicio =
-                fechas[0];
+            continue;
         }
 
-        if (
-            !fin &&
-            fechas.length >= 2
-        ) {
-            fin =
-                fechas[1];
-        }
+        fechasUnicas.push(
+            fecha
+        );
     }
 
-    // ========================================================
-    // FECHAS INDIVIDUALES EN INGLÉS
-    // ========================================================
+    fechasUnicas.sort(
+        (a, b) =>
+            a.getTime() -
+            b.getTime()
+    );
 
-    if (!inicio || !fin) {
+    if (
+        !inicio &&
+        fechasUnicas.length >= 1
+    ) {
 
-        const regexEN =
-            /[A-Za-z]{3,9}\s+\d{1,2},\s+\d{4}\s+(?:at\s+)?\d{1,2}:\d{2}\s*(?:AM|PM)?\s*GMT\s*[+-]\d{1,2}(?::?\d{2})?/gi;
-
-        const matches =
-            texto.match(
-                regexEN
-            ) || [];
-
-        const fechas =
-            matches
-                .map(
-                    valor =>
-                        parsearFechaFacepunch(
-                            valor
-                        )
-                )
-                .filter(Boolean);
-
-        if (
-            !inicio &&
-            fechas.length >= 1
-        ) {
-            inicio =
-                fechas[0];
-        }
-
-        if (
-            !fin &&
-            fechas.length >= 2
-        ) {
-            fin =
-                fechas[1];
-        }
+        inicio =
+            fechasUnicas[0];
     }
 
-    // ========================================================
-    // SCRIPTS
-    // ========================================================
+    if (
+        !fin &&
+        fechasUnicas.length >= 2
+    ) {
+
+        fin =
+            fechasUnicas[1];
+    }
 
     const scripts =
         $("script")
@@ -1051,87 +1312,92 @@ function extraerFechasCampaña(
             .get()
             .join("\n");
 
-    // ========================================================
-    // CAMPOS START / END EN JSON
-    // ========================================================
-
     if (
         scripts &&
         (!inicio || !fin)
     ) {
 
         const patronesInicio = [
-            /["'](?:startDate|start_date|startTime|start_time|campaignStart|campaign_start)["']\s*:\s*["']([^"']+)["']/gi,
-            /(?:startDate|start_date|startTime|start_time|campaignStart|campaign_start)\s*=\s*["']([^"']+)["']/gi
+            /["'](?:startDate|start_date|startTime|start_time|campaignStart|campaign_start|startsAt)["']\s*:\s*["']([^"']+)["']/gi,
+            /(?:startDate|start_date|startTime|start_time|campaignStart|campaign_start|startsAt)\s*=\s*["']([^"']+)["']/gi
         ];
 
         const patronesFin = [
-            /["'](?:endDate|end_date|endTime|end_time|campaignEnd|campaign_end)["']\s*:\s*["']([^"']+)["']/gi,
-            /(?:endDate|end_date|endTime|end_time|campaignEnd|campaign_end)\s*=\s*["']([^"']+)["']/gi
+            /["'](?:endDate|end_date|endTime|end_time|campaignEnd|campaign_end|endsAt)["']\s*:\s*["']([^"']+)["']/gi,
+            /(?:endDate|end_date|endTime|end_time|campaignEnd|campaign_end|endsAt)\s*=\s*["']([^"']+)["']/gi
         ];
 
-        for (
-            const regex
-            of patronesInicio
-        ) {
+        if (!inicio) {
 
-            const match =
-                regex.exec(
-                    scripts
-                );
+            for (
+                const regex
+                of patronesInicio
+            ) {
 
-            if (!match) {
-                continue;
-            }
+                regex.lastIndex = 0;
 
-            const fecha =
-                parsearFechaFacepunch(
-                    match[1]
-                );
+                const match =
+                    regex.exec(
+                        scripts
+                    );
 
-            if (fecha) {
+                if (!match) {
+                    continue;
+                }
 
-                inicio =
-                    fecha;
+                const fecha =
+                    parsearFechaFacepunch(
+                        match[1]
+                    );
 
-                break;
+                if (fecha) {
+
+                    inicio =
+                        fecha;
+
+                    break;
+                }
             }
         }
 
-        for (
-            const regex
-            of patronesFin
-        ) {
+        if (!fin) {
 
-            const match =
-                regex.exec(
-                    scripts
-                );
+            for (
+                const regex
+                of patronesFin
+            ) {
 
-            if (!match) {
-                continue;
-            }
+                regex.lastIndex = 0;
 
-            const fecha =
-                parsearFechaFacepunch(
-                    match[1]
-                );
+                const match =
+                    regex.exec(
+                        scripts
+                    );
 
-            if (fecha) {
+                if (!match) {
+                    continue;
+                }
 
-                fin =
-                    fecha;
+                const fecha =
+                    parsearFechaFacepunch(
+                        match[1]
+                    );
 
-                break;
+                if (fecha) {
+
+                    fin =
+                        fecha;
+
+                    break;
+                }
             }
         }
     }
 
-    // ========================================================
-    // ISO EN SCRIPTS
-    // ========================================================
-
-    if (!inicio || !fin) {
+    if (
+        scripts &&
+        (!inicio || !fin)
+    ) {
 
         const isoRegex =
             /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})/g;
@@ -1152,6 +1418,11 @@ function extraerFechasCampaña(
                         !Number.isNaN(
                             fecha.getTime()
                         )
+                )
+                .sort(
+                    (a, b) =>
+                        a.getTime() -
+                        b.getTime()
                 );
 
         if (
@@ -1194,10 +1465,6 @@ function extraerInformacionCampaña($) {
     let nombre = "";
     let estado = "";
 
-    // ========================================================
-    // ESTADO
-    // ========================================================
-
     const matchEstado =
         textoPagina.match(
             /\b(Upcoming|Active|Ended)\b/i
@@ -1208,10 +1475,6 @@ function extraerInformacionCampaña($) {
         estado =
             matchEstado[1];
     }
-
-    // ========================================================
-    // TÍTULO
-    // ========================================================
 
     const elementos =
         $("h1, h2, h3, h4, h5, h6, strong, b");
@@ -1258,10 +1521,6 @@ function extraerInformacionCampaña($) {
                 );
         }
     }
-
-    // ========================================================
-    // NOMBRE / TEMA
-    // ========================================================
 
     const headings =
         $("h1, h2, h3");
@@ -1326,7 +1585,7 @@ function extraerInformacionCampaña($) {
 
         const match =
             textoPagina.match(
-                /Twitch Drops Round\s+\d+[^\n]*?\s+(Base Invaders)\s+/i
+                /Twitch Drops Round\s+\d+[^\n]*?\s+(Base Invaders)\b/i
             );
 
         if (match) {
@@ -1450,10 +1709,6 @@ function extraerNombreDesdeCard(
         opciones.streamer ||
         "";
 
-    // ========================================================
-    // ENLACES
-    // ========================================================
-
     card.find("a").each((_, elemento) => {
 
         const $a =
@@ -1512,6 +1767,14 @@ function extraerNombreDesdeCard(
         }
 
         if (
+            /^(?:connect\s+account|twitch\s+account|twitch|account|sign\s+in|log\s+in|login)$/i.test(
+                texto
+            )
+        ) {
+            return;
+        }
+
+        if (
             /\b\d+(?:\.\d+)?\s*(?:hour|hours|minute|minutes|h|m)\b/i.test(
                 texto
             )
@@ -1523,10 +1786,6 @@ function extraerNombreDesdeCard(
             texto
         );
     });
-
-    // ========================================================
-    // SELECTORES DE NOMBRE
-    // ========================================================
 
     const selectores = [
         "[class*='drop-name']",
@@ -1585,6 +1844,14 @@ function extraerNombreDesdeCard(
                 }
 
                 if (
+                    /^(?:connect\s+account|twitch\s+account|twitch\s+drops?|account|sign\s+in|log\s+in|login)$/i.test(
+                        texto
+                    )
+                ) {
+                    return;
+                }
+
+                if (
                     /\b\d+(?:\.\d+)?\s*(?:hour|hours|minute|minutes|h|m)\b/i.test(
                         texto
                     )
@@ -1607,16 +1874,13 @@ function extraerNombreDesdeCard(
         /^general drops/i,
         /^streamer drops/i,
         /^loading/i,
-
-        // ====================================================
-        // ELEMENTOS DE LA INTERFAZ DE TWITCH
-        // ====================================================
-
         /^twitch$/i,
         /^twitch account$/i,
         /^twitch drops$/i,
         /^twitch account drops$/i,
         /^account$/i,
+        /^connect account$/i,
+        /^connect twitch$/i,
         /^sign in$/i,
         /^log in$/i,
         /^login$/i
@@ -1720,7 +1984,9 @@ function extraerGeneralDrops($) {
 
         if (
             !nombre ||
-            /^video$/i.test(nombre)
+            /^video$/i.test(
+                nombre
+            )
         ) {
 
             nombre =
@@ -1740,7 +2006,7 @@ function extraerGeneralDrops($) {
         }
 
         if (
-            /^(?:video|claimed|twitch|twitch account|twitch drops)$/i.test(
+            /^(?:video|claimed|twitch|twitch account|twitch drops|connect account)$/i.test(
                 nombre
             )
         ) {
@@ -1795,74 +2061,8 @@ function extraerStreamerDrops($) {
     const streamersProcesados =
         new Set();
 
-    $(
-        "a[href]"
-    ).each((_, elemento) => {
-
-        const $a =
-            $(elemento);
-
-        const href =
-            String(
-                $a.attr("href") ||
-                ""
-            );
-
-        // ====================================================
-        // SOLO LINKS DIRECTOS A TWITCH
-        // ====================================================
-
-        if (
-            !/^https?:\/\/(?:www\.)?twitch\.tv\/[^/]+\/?$/i.test(
-                href
-            )
-        ) {
-            return;
-        }
-
-        if (
-            /directory/i.test(
-                href
-            )
-        ) {
-            return;
-        }
-
-        let streamer =
-            limpiarTexto(
-                $a.text()
-            );
-
-        if (!streamer) {
-
-            const partes =
-                href
-                    .split("/")
-                    .filter(Boolean);
-
-            streamer =
-                partes[
-                    partes.length - 1
-                ];
-        }
-
-        if (!streamer) {
-            return;
-        }
-
-        // ====================================================
-        // FILTRAR ELEMENTOS QUE NO SON STREAMERS
-        // ====================================================
-
-        const login =
-            streamer
-                .toLowerCase()
-                .replace(
-                    /^@/,
-                    ""
-                );
-
-        const streamersInvalidos = new Set([
+    const streamersInvalidos =
+        new Set([
             "twitch",
             "twitchaccount",
             "twitch-account",
@@ -1879,8 +2079,77 @@ function extraerStreamerDrops($) {
             "directory",
             "search",
             "videos",
-            "browse"
+            "browse",
+            "drops",
+            "settings",
+            "subscriptions"
         ]);
+
+    $(
+        "a[href]"
+    ).each((_, elemento) => {
+
+        const $a =
+            $(elemento);
+
+        const href =
+            String(
+                $a.attr("href") ||
+                ""
+            ).trim();
+
+        let url;
+
+        try {
+
+            url =
+                new URL(
+                    href
+                );
+
+        } catch {
+            return;
+        }
+
+        if (
+            !/^https?:$/i.test(
+                url.protocol
+            )
+        ) {
+            return;
+        }
+
+        if (
+            !/^(?:www\.)?twitch\.tv$/i.test(
+                url.hostname
+            )
+        ) {
+            return;
+        }
+
+        const partes =
+            url.pathname
+                .split("/")
+                .filter(Boolean);
+
+        if (
+            partes.length !== 1
+        ) {
+            return;
+        }
+
+        const login =
+            partes[0]
+                .toLowerCase()
+                .replace(
+                    /^@/,
+                    ""
+                )
+                .trim();
+
+        if (!login) {
+            return;
+        }
 
         if (
             streamersInvalidos.has(
@@ -1890,9 +2159,18 @@ function extraerStreamerDrops($) {
             return;
         }
 
-        // ====================================================
-        // EVITAR DUPLICADOS
-        // ====================================================
+        const textoEnlace =
+            limpiarTexto(
+                $a.text()
+            );
+
+        if (
+            /^(?:twitch|twitch\s+account|account|connect\s+account|connect\s+twitch|sign\s+in|log\s+in|login)$/i.test(
+                textoEnlace
+            )
+        ) {
+            return;
+        }
 
         if (
             streamersProcesados.has(
@@ -1902,9 +2180,9 @@ function extraerStreamerDrops($) {
             return;
         }
 
-        // ====================================================
-        // CONTENEDOR
-        // ====================================================
+        const streamer =
+            textoEnlace ||
+            partes[0];
 
         const card =
             encontrarContenedorDrop(
@@ -1917,10 +2195,6 @@ function extraerStreamerDrops($) {
                 card.text()
             );
 
-        // ====================================================
-        // DEBE TENER DURACIÓN
-        // ====================================================
-
         const horas =
             extraerHoras(
                 textoCard
@@ -1929,13 +2203,6 @@ function extraerStreamerDrops($) {
         if (horas == null) {
             return;
         }
-
-        // ====================================================
-        // EVITAR CARDS QUE NO SON STREAMER DROPS
-        //
-        // Si el contenedor únicamente representa navegación
-        // de Twitch, no lo consideramos Drop.
-        // ====================================================
 
         if (
             /\b(?:general drops|available on|all streams)\b/i.test(
@@ -1963,7 +2230,7 @@ function extraerStreamerDrops($) {
                 nombre
                     .replace(
                         new RegExp(
-                            `^${streamer}\\s+`,
+                            `^${streamer.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+`,
                             "i"
                         ),
                         ""
@@ -1978,10 +2245,6 @@ function extraerStreamerDrops($) {
                     )
                     .trim();
         }
-
-        // ====================================================
-        // CANDIDATOS ALTERNATIVOS
-        // ====================================================
 
         if (
             !nombre ||
@@ -2038,7 +2301,7 @@ function extraerStreamerDrops($) {
                     }
 
                     if (
-                        /^(?:twitch|twitch account|twitch drops|account|login|sign in|log in)$/i.test(
+                        /^(?:twitch|twitch account|twitch drops|account|connect account|connect twitch|login|sign in|log in)$/i.test(
                             texto
                         )
                     ) {
@@ -2088,12 +2351,8 @@ function extraerStreamerDrops($) {
             return;
         }
 
-        // ====================================================
-        // FILTRO FINAL DE SEGURIDAD
-        // ====================================================
-
         if (
-            /^(?:twitch|twitch account|twitch drops|account|login|sign in|log in)$/i.test(
+            /^(?:twitch|twitch account|twitch drops|account|connect account|connect twitch|login|sign in|log in)$/i.test(
                 nombre
             )
         ) {
@@ -2115,18 +2374,16 @@ function extraerStreamerDrops($) {
         }
 
         // ====================================================
-        // IMAGEN
+        // IMAGEN ESPECÍFICA DEL DROP
         // ====================================================
 
         const imagen =
-            extraerImagenElemento(
+            extraerImagenStreamerDrop(
                 $,
-                card
+                card,
+                nombre,
+                streamer
             );
-
-        // ====================================================
-        // CREAR DROP
-        // ====================================================
 
         let drop =
             drops.find(
@@ -2156,11 +2413,15 @@ function extraerStreamerDrops($) {
             drops.push(
                 drop
             );
-        }
 
-        // ====================================================
-        // ASOCIAR STREAMER
-        // ====================================================
+        } else if (
+            !drop.imagen &&
+            imagen
+        ) {
+
+            drop.imagen =
+                imagen;
+        }
 
         const yaExiste =
             drop.streamers.some(
@@ -2262,10 +2523,7 @@ async function obtenerDropsFacepunch() {
         ...new Set(
             streamerDrops.flatMap(
                 drop =>
-                    (
-                        drop.streamers ||
-                        []
-                    )
+                    (drop.streamers || [])
                         .map(
                             streamer =>
                                 typeof streamer === "string"
@@ -2321,10 +2579,7 @@ async function obtenerDropsFacepunch() {
     ) {
 
         const asociados =
-            (
-                drop.streamers ||
-                []
-            )
+            (drop.streamers || [])
                 .map(
                     streamer =>
                         typeof streamer === "string"
@@ -2475,6 +2730,7 @@ async function obtenerStreamersOnlineRust(
                                     /^@/,
                                     ""
                                 )
+                                .trim()
                     )
                     .filter(Boolean)
             )
@@ -2493,6 +2749,7 @@ async function obtenerStreamersOnlineRust(
             process.env.TWITCH_CLIENT_ID;
 
         if (!clientId) {
+
             throw new Error(
                 "Falta TWITCH_CLIENT_ID."
             );
@@ -2510,16 +2767,6 @@ async function obtenerStreamersOnlineRust(
                 "application/json"
         };
 
-        // ====================================================
-        // TWITCH NO ACEPTA BIEN EL ARRAY DE AXIOS:
-        //
-        // user_login[]=a&user_login[]=b
-        //
-        // Construimos manualmente:
-        //
-        // user_login=a&user_login=b
-        // ====================================================
-
         for (
             let i = 0;
             i < unicos.length;
@@ -2532,30 +2779,28 @@ async function obtenerStreamersOnlineRust(
                     i + 100
                 );
 
-            const parametros = [
-                `game_id=${encodeURIComponent(
-                    TWITCH_GAME_ID_RUST
-                )}`
-            ];
+            const query =
+                new URLSearchParams();
+
+            query.append(
+                "game_id",
+                TWITCH_GAME_ID_RUST
+            );
 
             for (
                 const login
                 of lote
             ) {
 
-                parametros.push(
-                    `user_login=${encodeURIComponent(
-                        login
-                    )}`
+                query.append(
+                    "user_login",
+                    login
                 );
             }
 
-            const url =
-                `${TWITCH_API}/streams?${parametros.join("&")}`;
-
             const response =
                 await axios.get(
-                    url,
+                    `${TWITCH_API}/streams?${query.toString()}`,
                     {
                         headers,
 
@@ -2652,10 +2897,6 @@ function crearEmbedCampaña(
             )
             .setTimestamp();
 
-    // ========================================================
-    // ESTADO
-    // ========================================================
-
     if (
         datos.estado
     ) {
@@ -2703,10 +2944,6 @@ function crearEmbedCampaña(
         });
     }
 
-    // ========================================================
-    // INICIO
-    // ========================================================
-
     if (
         datos.campaignStart
     ) {
@@ -2748,10 +2985,6 @@ function crearEmbedCampaña(
             });
         }
     }
-
-    // ========================================================
-    // FINAL
-    // ========================================================
 
     if (
         datos.campaignEnd
@@ -2832,10 +3065,6 @@ function crearEmbedDrop(
                     true
             });
 
-    // ========================================================
-    // GENERAL
-    // ========================================================
-
     if (!esStreamer) {
 
         embed.addFields({
@@ -2849,10 +3078,6 @@ function crearEmbedDrop(
                 false
         });
     }
-
-    // ========================================================
-    // STREAMER
-    // ========================================================
 
     else {
 
@@ -2914,10 +3139,6 @@ function crearEmbedDrop(
                 false
         });
     }
-
-    // ========================================================
-    // IMAGEN GRANDE
-    // ========================================================
 
     if (
         drop.imagen
@@ -3127,17 +3348,6 @@ function convertirDatosAGuardado(
 
 // ============================================================
 // CREAR GRUPOS DE MENSAJES
-//
-// Cada Drop va en su propio mensaje.
-//
-// ORDEN:
-//
-// 1. Campaña
-// 2. General Drop 1
-// 3. General Drop 2
-// 4. ...
-// 5. Streamer Drop 1
-// 6. Streamer Drop 2
 // ============================================================
 
 function crearGruposMensajesDrops(
@@ -3150,10 +3360,6 @@ function crearGruposMensajesDrops(
 
     const mensajes = [];
 
-    // ========================================================
-    // CAMPAÑA
-    // ========================================================
-
     mensajes.push({
 
         tipo:
@@ -3165,10 +3371,6 @@ function crearGruposMensajesDrops(
             )
         ]
     });
-
-    // ========================================================
-    // GENERAL DROPS
-    // ========================================================
 
     for (
         const drop
@@ -3191,10 +3393,6 @@ function crearGruposMensajesDrops(
             ]
         });
     }
-
-    // ========================================================
-    // STREAMER DROPS
-    // ========================================================
 
     for (
         const drop
@@ -3223,14 +3421,6 @@ function crearGruposMensajesDrops(
 
 // ============================================================
 // PUBLICAR RUST DROPS
-//
-// COMPATIBLE CON:
-//
-// /drops rust
-// publicarRustDrops(interaction)
-//
-// AUTOMÁTICO
-// publicarRustDrops(channel, datos, onlineMap)
 // ============================================================
 
 async function publicarRustDrops(
@@ -3243,10 +3433,6 @@ async function publicarRustDrops(
 
         let interaction = null;
         let channel = null;
-
-        // ========================================================
-        // LLAMADA DESDE /DROPS
-        // ========================================================
 
         if (
             primerParametro &&
@@ -3280,21 +3466,12 @@ async function publicarRustDrops(
                         []
                     );
             }
-        }
 
-        // ========================================================
-        // LLAMADA AUTOMÁTICA
-        // ========================================================
-
-        else {
+        } else {
 
             channel =
                 primerParametro;
         }
-
-        // ========================================================
-        // VALIDAR CANAL
-        // ========================================================
 
         if (!channel) {
 
@@ -3303,19 +3480,11 @@ async function publicarRustDrops(
             );
         }
 
-        // ========================================================
-        // SI NO HAY DATOS, OBTENERLOS
-        // ========================================================
-
         if (!datos) {
 
             datos =
                 await obtenerDropsFacepunch();
         }
-
-        // ========================================================
-        // VALIDAR DROPS
-        // ========================================================
 
         if (
             !datos ||
@@ -3329,10 +3498,6 @@ async function publicarRustDrops(
                 "Facepunch no devolvió Drops de Rust."
             );
         }
-
-        // ========================================================
-        // OBTENER STREAMERS ONLINE
-        // ========================================================
 
         if (
             !onlineMap ||
@@ -3358,10 +3523,6 @@ async function publicarRustDrops(
                 );
         }
 
-        // ========================================================
-        // CREAR MENSAJES
-        // ========================================================
-
         const grupos =
             crearGruposMensajesDrops(
                 datos,
@@ -3377,10 +3538,6 @@ async function publicarRustDrops(
                 "No hay mensajes de Rust Drops para publicar."
             );
         }
-
-        // ========================================================
-        // PUBLICAR
-        // ========================================================
 
         const mensajesPublicados = [];
 
@@ -3417,10 +3574,6 @@ async function publicarRustDrops(
                     grupo.tipo
             });
         }
-
-        // ========================================================
-        // RESULTADO
-        // ========================================================
 
         return {
 
@@ -3528,12 +3681,6 @@ function actualizarEstadosStreamer(
 
 // ============================================================
 // EDITAR MENSAJES DEL MONITOR
-//
-// [0] header
-// [1] general 1
-// [2] general 2
-// ...
-// [N] streamer
 // ============================================================
 
 async function editarMensajesMonitor(
@@ -3562,19 +3709,11 @@ async function editarMensajesMonitor(
 
     const embeds = [];
 
-    // ========================================================
-    // HEADER
-    // ========================================================
-
     embeds.push(
         crearEmbedCampaña(
             datos
         )
     );
-
-    // ========================================================
-    // DROPS
-    // ========================================================
 
     for (
         const drop
@@ -3590,10 +3729,6 @@ async function editarMensajesMonitor(
     }
 
     let cambio = false;
-
-    // ========================================================
-    // EDITAR CADA MENSAJE
-    // ========================================================
 
     for (
         let i = 0;
@@ -3686,10 +3821,6 @@ async function revisarDropsAutomaticos(
             return;
         }
 
-        // ====================================================
-        // FACEPUNCH UNA SOLA VEZ
-        // ====================================================
-
         const datos =
             await obtenerDropsFacepunch();
 
@@ -3705,10 +3836,6 @@ async function revisarDropsAutomaticos(
 
             return;
         }
-
-        // ====================================================
-        // STREAMERS ONLINE
-        // ====================================================
 
         const onlineMap =
             await obtenerStreamersOnlineRust(
@@ -3728,10 +3855,6 @@ async function revisarDropsAutomaticos(
                 ).length
             }`
         );
-
-        // ====================================================
-        // PROCESAR MONITORES
-        // ====================================================
 
         for (
             const monitor
@@ -3762,10 +3885,6 @@ async function revisarDropsAutomaticos(
                     mensajesActuales !==
                     expectedMessages;
 
-                // ====================================================
-                // NUEVA CAMPAÑA / MIGRACIÓN DE FORMATO
-                // ====================================================
-
                 if (
                     campaignChanged ||
                     formatoAntiguo
@@ -3795,10 +3914,6 @@ async function revisarDropsAutomaticos(
                         );
                     }
 
-                    // ==================================================
-                    // PUBLICAR NUEVO BLOQUE
-                    // ==================================================
-
                     const resultadoPublicacion =
                         await publicarRustDrops(
                             channel,
@@ -3822,11 +3937,6 @@ async function revisarDropsAutomaticos(
 
                     continue;
                 }
-
-                // ====================================================
-                // MISMA CAMPAÑA
-                // ACTUALIZAR ONLINE/OFFLINE
-                // ====================================================
 
                 const dropsGuardados =
                     Array.isArray(
@@ -3933,7 +4043,6 @@ function iniciarDropsAutomaticos(
         "[Twitch Drops] Servicio automático iniciado."
     );
 
-    // Primera revisión a los 5 segundos.
     setTimeout(
         () => {
 
@@ -3951,7 +4060,6 @@ function iniciarDropsAutomaticos(
         5000
     );
 
-    // Revisar cada minuto.
     intervaloAutomatico =
         setInterval(
             () => {
