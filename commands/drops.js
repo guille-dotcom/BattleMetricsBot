@@ -1,16 +1,14 @@
-
 const {
     SlashCommandBuilder,
     PermissionFlagsBits,
     ChannelType
 } = require("discord.js");
 
-const RustDropsMonitor =
-    require("../models/RustDropsMonitor");
+const RustDropsMonitor = require("../models/RustDropsMonitor");
 
 const {
     obtenerDropsOficiales,
-    crearEmbedDrops
+    crearEmbedsDrops
 } = require("../services/twitchDropsService");
 
 module.exports = {
@@ -56,15 +54,34 @@ module.exports = {
             });
         }
 
+        // CONSULTAR LOS DROPS OFICIALES
         if (subcomando === "rust") {
             await interaction.deferReply();
 
             try {
                 const datos = await obtenerDropsOficiales();
+                const embeds = crearEmbedsDrops(datos);
+
+                if (!Array.isArray(embeds) || embeds.length === 0) {
+                    return interaction.editReply({
+                        content:
+                            "ℹ️ No se encontraron Twitch Drops para mostrar.\n" +
+                            "Consulta la fuente oficial: https://twitch.facepunch.com/",
+                        embeds: []
+                    });
+                }
+
+                console.log(
+                    `🟣 /drops rust: enviando ${embeds.length} embeds`,
+                    embeds.map(embed => embed.data.title)
+                );
 
                 return interaction.editReply({
-                    embeds: [crearEmbedDrops(datos)],
-                    allowedMentions: { parse: [] }
+                    content: "",
+                    embeds: embeds.slice(0, 10),
+                    allowedMentions: {
+                        parse: []
+                    }
                 });
             } catch (error) {
                 console.error("Error en /drops rust:", error);
@@ -73,24 +90,30 @@ module.exports = {
                     content:
                         "❌ No se pudieron leer los Twitch Drops oficiales. " +
                         "No se mostrarán datos inventados. Inténtalo más tarde: " +
-                        "https://twitch.facepunch.com/"
+                        "https://twitch.facepunch.com/",
+                    embeds: []
                 });
             }
         }
 
+        // COMPROBAR PERMISOS
         if (
             !interaction.memberPermissions?.has(
                 PermissionFlagsBits.ManageGuild
             )
         ) {
             return interaction.reply({
-                content: "❌ Necesitas el permiso **Gestionar servidor** para cambiar esta configuración.",
+                content:
+                    "❌ Necesitas el permiso **Gestionar servidor** para cambiar esta configuración.",
                 ephemeral: true
             });
         }
 
+        // CONFIGURAR CANAL AUTOMÁTICO
         if (subcomando === "configurar") {
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({
+                ephemeral: true
+            });
 
             try {
                 const canal = interaction.options.getChannel("canal");
@@ -143,8 +166,11 @@ module.exports = {
             }
         }
 
+        // DESACTIVAR ANUNCIOS AUTOMÁTICOS
         if (subcomando === "quitar-canal") {
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({
+                ephemeral: true
+            });
 
             try {
                 const resultado = await RustDropsMonitor.deleteOne({
