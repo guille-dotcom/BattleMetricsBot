@@ -12,10 +12,19 @@ const TwitchDropsMonitorSchema = new mongoose.Schema(
             type: String,
             required: true
         },
+
+        // Compatibilidad con el mensaje único de versiones anteriores.
         messageId: {
             type: String,
             default: null
         },
+
+        // Un ID independiente por cada recompensa publicada.
+        messageIds: {
+            type: [String],
+            default: []
+        },
+
         campaignKey: {
             type: String,
             default: null

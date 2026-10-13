@@ -6,11 +6,15 @@ const RustDropsMonitor = require("../models/RustDropsMonitor");
 
 const FACEPUNCH_URL = "https://twitch.facepunch.com/";
 const INTERVALO_REVISION = 5 * 60 * 1000;
-const MAX_EMBEDS_POR_MENSAJE = 10;
+const MAX_DROPS_POR_PUBLICACION = 10;
 
 let cliente = null;
 let temporizadorIniciado = false;
 let revisando = false;
+
+// ============================================================
+// UTILIDADES
+// ============================================================
 
 function limpiarTexto(texto) {
     return String(texto ?? "")
@@ -61,7 +65,6 @@ function esImagenValida(url) {
         return false;
     }
 
-    // Nunca utilizar avatares de Twitch como imágenes de recompensas.
     if (
         /static-cdn\.jtvnw\.net/i.test(url) ||
         /jtv_user_pictures/i.test(url) ||
@@ -178,12 +181,12 @@ function obtenerImagenTarjeta($, tarjeta) {
         return candidatos[0];
     }
 
-    const fondo = extraerUrlDeEstilo(tarjeta.attr("style"));
-
-    if (fondo) return fondo;
-
-    return null;
+    return extraerUrlDeEstilo(tarjeta.attr("style"));
 }
+
+// ============================================================
+// DURACIÓN Y DETECCIÓN DE RECOMPENSAS
+// ============================================================
 
 function extraerDuracion(texto) {
     const valor = limpiarTexto(texto);
@@ -406,7 +409,6 @@ function extraerTarjetas($, inicioOrden, finOrden) {
             }
         }
 
-        // TwitchRivals es el streamer, no parte del nombre del objeto.
         if (/^TwitchRivals\s+/i.test(textoTarjeta)) {
             streamer = streamer || "TwitchRivals";
             textoTarjeta = textoTarjeta.replace(/^TwitchRivals\s+/i, "");
@@ -444,6 +446,10 @@ function extraerTarjetas($, inicioOrden, finOrden) {
 
     return recompensas;
 }
+
+// ============================================================
+// DATOS DE CAMPAÑA
+// ============================================================
 
 function extraerDatosCampana($, textoCompleto) {
     const encabezados = $("h1, h2, h3, h4, [role='heading']")
@@ -505,6 +511,10 @@ function extraerDatosCampana($, textoCompleto) {
     };
 }
 
+// ============================================================
+// CONSULTA OFICIAL DE FACEPUNCH
+// ============================================================
+
 async function obtenerDropsOficiales() {
     const respuesta = await axios.get(FACEPUNCH_URL, {
         timeout: 25000,
@@ -562,18 +572,21 @@ async function obtenerDropsOficiales() {
         );
     }
 
-    console.log("🟣 Twitch Drops extraídos:", JSON.stringify({
-        generales: generales.map(({ nombre, tiempo, imagen }) => ({
-            nombre,
-            tiempo,
-            imagen: Boolean(imagen)
-        })),
-        streamers: streamers.map(({ nombre, tiempo, imagen }) => ({
-            nombre,
-            tiempo,
-            imagen: Boolean(imagen)
-        }))
-    }));
+    console.log(
+        "🟣 Twitch Drops extraídos:",
+        JSON.stringify({
+            generales: generales.map(({ nombre, tiempo, imagen }) => ({
+                nombre,
+                tiempo,
+                imagen: Boolean(imagen)
+            })),
+            streamers: streamers.map(({ nombre, tiempo, imagen }) => ({
+                nombre,
+                tiempo,
+                imagen: Boolean(imagen)
+            }))
+        })
+    );
 
     return {
         fuente: FACEPUNCH_URL,
@@ -587,17 +600,17 @@ async function obtenerDropsOficiales() {
     };
 }
 
-/**
- * Crea un embed individual por recompensa.
- * Cada embed utiliza setImage() para que el objeto tenga su propia imagen.
- */
+// ============================================================
+// EMBEDS: UN EMBED COMPLETO POR RECOMPENSA
+// ============================================================
+
 function crearEmbedsDrops(datos) {
     const recompensas = [
-        ...datos.generales.map(recompensa => ({
+        ...(datos.generales || []).map(recompensa => ({
             ...recompensa,
             tipo: "Recompensa general"
         })),
-        ...datos.streamers.map(recompensa => ({
+        ...(datos.streamers || []).map(recompensa => ({
             ...recompensa,
             tipo: "Recompensa de streamer"
         }))
@@ -626,6 +639,10 @@ function crearEmbedsDrops(datos) {
                     name: "📦 Tipo",
                     value: recompensa.tipo,
                     inline: true
+                },
+                {
+                    name: "🔗 Fuente oficial",
+                    value: `[Consultar Facepunch](${FACEPUNCH_URL})`
                 }
             )
             .setFooter({
@@ -641,22 +658,14 @@ function crearEmbedsDrops(datos) {
             });
         }
 
-        // Solo se añade una imagen si es válida.
-        // Los avatares de Twitch ya se descartan en esImagenValida().
         if (esImagenValida(recompensa.imagen)) {
             embed.setImage(recompensa.imagen);
         }
-
-        embed.addFields({
-            name: "🔗 Fuente oficial",
-            value: `[Consultar Facepunch](${FACEPUNCH_URL})`
-        });
 
         return embed;
     });
 }
 
-// Compatibilidad con cualquier código anterior que espere un único embed.
 function crearEmbedDrops(datos) {
     return crearEmbedsDrops(datos)[0] || new EmbedBuilder()
         .setColor(0x9146ff)
@@ -676,9 +685,13 @@ function firmaCampana(datos) {
     });
 }
 
+// ============================================================
+// PUBLICACIÓN MANUAL: CADA RECOMPENSA EN SU PROPIO MENSAJE
+// ============================================================
+
 async function publicarRustDrops(interaction) {
     const datos = await obtenerDropsOficiales();
-    const embeds = crearEmbedsDrops(datos);
+    const embeds = crearEmbedsDrops(datos).slice(0, MAX_DROPS_POR_PUBLICACION);
 
     if (!embeds.length) {
         await interaction.editReply({
@@ -689,21 +702,60 @@ async function publicarRustDrops(interaction) {
         return datos;
     }
 
-    if (embeds.length > MAX_EMBEDS_POR_MENSAJE) {
-        console.warn(
-            `⚠️ Facepunch devolvió ${embeds.length} recompensas. ` +
-            `Discord permite como máximo ${MAX_EMBEDS_POR_MENSAJE} embeds por mensaje.`
-        );
-    }
-
     await interaction.editReply({
         content: "",
-        embeds: embeds.slice(0, MAX_EMBEDS_POR_MENSAJE),
+        embeds: [embeds[0]],
         allowedMentions: { parse: [] }
     });
 
+    for (const embed of embeds.slice(1)) {
+        await interaction.followUp({
+            embeds: [embed],
+            allowedMentions: { parse: [] }
+        });
+    }
+
+    console.log(
+        `✅ /drops rust: publicados ${embeds.length} mensajes individuales.`
+    );
+
     return datos;
 }
+
+// ============================================================
+// COMPATIBILIDAD CON EL MODELO MONGODB
+// ============================================================
+
+function obtenerIdsMensajes(monitor) {
+    // Primero utiliza el array si el esquema actual lo admite.
+    if (Array.isArray(monitor.messageIds) && monitor.messageIds.length) {
+        return monitor.messageIds
+            .map(id => String(id).trim())
+            .filter(Boolean);
+    }
+
+    // Compatibilidad con el campo messageId antiguo.
+    if (!monitor.messageId) return [];
+
+    return String(monitor.messageId)
+        .split(",")
+        .map(id => id.trim())
+        .filter(Boolean);
+}
+
+function guardarIdsMensajes(monitor, ids) {
+    // messageId se mantiene como campo principal compatible.
+    monitor.messageId = ids.join(",");
+
+    // Solo se asigna el array cuando existe en el esquema de Mongoose.
+    if (RustDropsMonitor.schema.path("messageIds")) {
+        monitor.messageIds = ids;
+    }
+}
+
+// ============================================================
+// PUBLICACIONES AUTOMÁTICAS
+// ============================================================
 
 async function revisarDropsAutomaticos() {
     if (revisando || !cliente) return;
@@ -727,14 +779,23 @@ async function revisarDropsAutomaticos() {
                 "❌ No se pudieron consultar los Twitch Drops oficiales:",
                 error.message
             );
+
+            // No modificar mensajes si la fuente oficial falla.
             return;
         }
 
         const firma = firmaCampana(datos);
         const embeds = crearEmbedsDrops(datos).slice(
             0,
-            MAX_EMBEDS_POR_MENSAJE
+            MAX_DROPS_POR_PUBLICACION
         );
+
+        if (!embeds.length) {
+            console.warn(
+                "⚠️ La página oficial no produjo embeds. Se conservan los anuncios existentes."
+            );
+            return;
+        }
 
         for (const monitor of monitores) {
             try {
@@ -749,34 +810,75 @@ async function revisarDropsAutomaticos() {
                     continue;
                 }
 
-                let mensaje = null;
+                const idsGuardados = obtenerIdsMensajes(monitor);
 
-                if (monitor.messageId) {
-                    mensaje = await canal.messages
-                        .fetch(monitor.messageId)
+                // IMPORTANTE: conserva las posiciones. No filtrar los null,
+                // porque eso podría asociar una recompensa al mensaje equivocado.
+                const mensajesPorPosicion = [];
+
+                for (const id of idsGuardados) {
+                    const mensaje = await canal.messages
+                        .fetch(id)
                         .catch(() => null);
+
+                    mensajesPorPosicion.push(mensaje);
                 }
 
-                if (monitor.campaignSignature === firma && mensaje) {
+                const mismaFirma = monitor.campaignSignature === firma;
+
+                const todosExisten =
+                    mensajesPorPosicion.length === embeds.length &&
+                    mensajesPorPosicion.every(Boolean);
+
+                if (mismaFirma && todosExisten) {
                     monitor.lastCheckedAt = new Date();
                     await monitor.save();
                     continue;
                 }
 
-                if (mensaje) {
-                    await mensaje.edit({
-                        content: "",
-                        embeds,
-                        allowedMentions: { parse: [] }
-                    });
-                } else {
-                    mensaje = await canal.send({
-                        embeds,
-                        allowedMentions: { parse: [] }
+                const nuevosIds = [];
+
+                for (let i = 0; i < embeds.length; i++) {
+                    const embed = embeds[i];
+                    let mensaje = mensajesPorPosicion[i] || null;
+
+                    if (mensaje) {
+                        // Edita el mensaje correspondiente a esta recompensa.
+                        await mensaje.edit({
+                            content: "",
+                            embeds: [embed],
+                            allowedMentions: { parse: [] }
+                        });
+                    } else {
+                        // Si falta el mensaje, crea uno solo para este Drop.
+                        mensaje = await canal.send({
+                            embeds: [embed],
+                            allowedMentions: { parse: [] }
+                        });
+                    }
+
+                    nuevosIds.push(mensaje.id);
+                }
+
+                // Si hay menos recompensas que antes, elimina mensajes sobrantes.
+                for (
+                    let i = embeds.length;
+                    i < mensajesPorPosicion.length;
+                    i++
+                ) {
+                    const mensaje = mensajesPorPosicion[i];
+
+                    if (!mensaje) continue;
+
+                    await mensaje.delete().catch(error => {
+                        console.warn(
+                            `⚠️ No se pudo eliminar el mensaje antiguo ${mensaje.id}:`,
+                            error.message
+                        );
                     });
                 }
 
-                monitor.messageId = mensaje.id;
+                guardarIdsMensajes(monitor, nuevosIds);
                 monitor.campaignName = datos.campana;
                 monitor.campaignSignature = firma;
                 monitor.lastCheckedAt = new Date();
@@ -784,22 +886,29 @@ async function revisarDropsAutomaticos() {
                 await monitor.save();
 
                 console.log(
-                    `✅ Twitch Drops actualizados en ${canal.guild?.name || canal.id} ` +
-                    `(${embeds.length} embeds)`
+                    `✅ Twitch Drops actualizados en ${canal.guild?.name || canal.id}: ` +
+                    `${embeds.length} mensajes individuales.`
                 );
             } catch (error) {
                 console.error(
                     `❌ Error actualizando Twitch Drops en ${monitor.guildId}:`,
-                    error.message
+                    error
                 );
             }
         }
     } catch (error) {
-        console.error("❌ Error revisando monitores de Twitch Drops:", error);
+        console.error(
+            "❌ Error revisando monitores de Twitch Drops:",
+            error
+        );
     } finally {
         revisando = false;
     }
 }
+
+// ============================================================
+// INICIAR MONITOR
+// ============================================================
 
 function iniciarDropsAutomaticos(client) {
     if (temporizadorIniciado) return;
@@ -817,6 +926,10 @@ function iniciarDropsAutomaticos(client) {
         revisarDropsAutomaticos().catch(console.error);
     }, INTERVALO_REVISION);
 }
+
+// ============================================================
+// EXPORTACIONES
+// ============================================================
 
 module.exports = {
     obtenerDropsOficiales,

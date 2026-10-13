@@ -1,3 +1,4 @@
+
 const {
     SlashCommandBuilder,
     PermissionFlagsBits,
@@ -54,7 +55,7 @@ module.exports = {
             });
         }
 
-        // CONSULTAR LOS DROPS OFICIALES
+        // PUBLICAR CADA DROP EN UN MENSAJE INDEPENDIENTE
         if (subcomando === "rust") {
             await interaction.deferReply();
 
@@ -66,34 +67,57 @@ module.exports = {
                     return interaction.editReply({
                         content:
                             "ℹ️ No se encontraron Twitch Drops para mostrar.\n" +
-                            "Consulta la fuente oficial: https://twitch.facepunch.com/",
+                            "Fuente oficial: https://twitch.facepunch.com/",
                         embeds: []
                     });
                 }
 
                 console.log(
-                    `🟣 /drops rust: enviando ${embeds.length} embeds`,
+                    `🟣 /drops rust: publicando ${embeds.length} mensajes independientes`,
                     embeds.map(embed => embed.data.title)
                 );
 
-                return interaction.editReply({
+                // La primera recompensa utiliza la respuesta diferida.
+                await interaction.editReply({
                     content: "",
-                    embeds: embeds.slice(0, 10),
-                    allowedMentions: {
-                        parse: []
-                    }
+                    embeds: [embeds[0]],
+                    allowedMentions: { parse: [] }
                 });
+
+                // Cada recompensa adicional se envía en su propio mensaje.
+                for (let i = 1; i < embeds.length; i++) {
+                    await interaction.followUp({
+                        content: "",
+                        embeds: [embeds[i]],
+                        allowedMentions: { parse: [] }
+                    });
+                }
+
+                console.log(
+                    `✅ /drops rust: publicados ${embeds.length} mensajes independientes`
+                );
+
             } catch (error) {
                 console.error("Error en /drops rust:", error);
 
-                return interaction.editReply({
-                    content:
-                        "❌ No se pudieron leer los Twitch Drops oficiales. " +
-                        "No se mostrarán datos inventados. Inténtalo más tarde: " +
-                        "https://twitch.facepunch.com/",
-                    embeds: []
+                const mensaje =
+                    "❌ No se pudieron leer o publicar los Twitch Drops oficiales. " +
+                    "Inténtalo más tarde: https://twitch.facepunch.com/";
+
+                if (interaction.replied || interaction.deferred) {
+                    return interaction.followUp({
+                        content: mensaje,
+                        ephemeral: true
+                    }).catch(() => null);
+                }
+
+                return interaction.reply({
+                    content: mensaje,
+                    ephemeral: true
                 });
             }
+
+            return;
         }
 
         // COMPROBAR PERMISOS
@@ -111,18 +135,12 @@ module.exports = {
 
         // CONFIGURAR CANAL AUTOMÁTICO
         if (subcomando === "configurar") {
-            await interaction.deferReply({
-                ephemeral: true
-            });
+            await interaction.deferReply({ ephemeral: true });
 
             try {
                 const canal = interaction.options.getChannel("canal");
 
-                if (
-                    !canal ||
-                    !canal.isTextBased() ||
-                    !canal.guild
-                ) {
+                if (!canal || !canal.isTextBased() || !canal.guild) {
                     return interaction.editReply(
                         "❌ Selecciona un canal de texto válido de este servidor."
                     );
@@ -136,26 +154,37 @@ module.exports = {
                     monitor = new RustDropsMonitor({
                         guildId: interaction.guild.id,
                         channelId: canal.id,
+                        messageId: null,
+                        messageIds: [],
+                        campaignSignature: null,
+                        campaignName: null,
                         active: true
                     });
                 } else if (monitor.channelId !== canal.id) {
+                    // Los mensajes del canal anterior no se reutilizan.
                     monitor.channelId = canal.id;
                     monitor.messageId = null;
+                    monitor.messageIds = [];
                     monitor.campaignSignature = null;
                     monitor.campaignName = null;
                     monitor.active = true;
                 } else {
                     monitor.active = true;
+
+                    if (!Array.isArray(monitor.messageIds)) {
+                        monitor.messageIds = [];
+                    }
                 }
 
                 await monitor.save();
 
                 return interaction.editReply(
-                    `✅ **Canal de Twitch Drops configurado.**\n\n` +
+                    "✅ **Canal de Twitch Drops configurado.**\n\n" +
                     `📢 Canal: ${canal}\n` +
-                    `🔄 Revisión automática: cada 5 minutos.\n` +
-                    `🟣 Fuente: https://twitch.facepunch.com/\n\n` +
-                    `El bot publicará el anuncio oficial y actualizará ese mismo mensaje cuando detecte cambios.`
+                    "🧩 Cada recompensa tendrá su propio mensaje.\n" +
+                    "🔄 Revisión automática: cada 5 minutos.\n" +
+                    "🟣 Fuente oficial: https://twitch.facepunch.com/\n\n" +
+                    "RustLogix actualizará los mensajes existentes cuando cambien las recompensas."
                 );
             } catch (error) {
                 console.error("Error en /drops configurar:", error);
@@ -168,9 +197,7 @@ module.exports = {
 
         // DESACTIVAR ANUNCIOS AUTOMÁTICOS
         if (subcomando === "quitar-canal") {
-            await interaction.deferReply({
-                ephemeral: true
-            });
+            await interaction.deferReply({ ephemeral: true });
 
             try {
                 const resultado = await RustDropsMonitor.deleteOne({
@@ -185,9 +212,9 @@ module.exports = {
 
                 return interaction.editReply(
                     "🔕 **Publicaciones automáticas desactivadas.**\n\n" +
-                    "RustLogix dejará de publicar y actualizar los Twitch Drops en este servidor.\n" +
-                    "El mensaje que ya estaba publicado no se elimina.\n\n" +
-                    "Puedes seguir usando `/drops rust` para consultar la página oficial."
+                    "RustLogix dejará de actualizar los Twitch Drops automáticamente.\n" +
+                    "Los mensajes que ya estaban publicados no se eliminan.\n\n" +
+                    "Puedes seguir usando `/drops rust` para consultar las recompensas oficiales."
                 );
             } catch (error) {
                 console.error("Error en /drops quitar-canal:", error);
