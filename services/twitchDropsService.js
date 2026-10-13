@@ -68,7 +68,8 @@ function esImagenValida(url) {
     if (
         /static-cdn\.jtvnw\.net/i.test(url) ||
         /jtv_user_pictures/i.test(url) ||
-        /profile_image/i.test(url)
+        /profile_image/i.test(url) ||
+        /discord\.com\/assets\//i.test(url)
     ) {
         return false;
     }
@@ -76,8 +77,7 @@ function esImagenValida(url) {
     return (
         !/\.svg(?:[?#].*)?$/i.test(url) &&
         !/\.mp4(?:[?#].*)?$/i.test(url) &&
-        !/\.webm(?:[?#].*)?$/i.test(url) &&
-        !/discord\.com\/assets\//i.test(url)
+        !/\.webm(?:[?#].*)?$/i.test(url)
     );
 }
 
@@ -349,6 +349,32 @@ function encontrarTarjeta($, nodo, duracion) {
     return tarjetaConImagen || tarjetaConEnlace;
 }
 
+/**
+ * Determina si la tarjeta indica que el objeto aún no se ha revelado.
+ *
+ * Es importante comprobar el texto de la tarjeta completa antes de
+ * interpretar el resto del contenido como el nombre de un objeto.
+ */
+function esDropSinRevelar(texto) {
+    const valor = limpiarTexto(texto);
+
+    return (
+        /\bcoming\s+soon\b/i.test(valor) ||
+        /\bvery\s+soon\b/i.test(valor) ||
+        /\bto\s+be\s+announced\b/i.test(valor) ||
+        /\bto\s+be\s+revealed\b/i.test(valor) ||
+        /\bunknown\s+reward\b/i.test(valor) ||
+        /\bpr[oó]ximamente\b/i.test(valor) ||
+        /\bpor\s+revelar\b/i.test(valor) ||
+        /\bpor\s+anunciar\b/i.test(valor) ||
+        /\bpr[oó]ximamente\s+disponible\b/i.test(valor)
+    );
+}
+
+/**
+ * Busca texto explícito de recompensa desconocida.
+ * Nunca deduce el nombre de una recompensa usando únicamente su imagen.
+ */
 function extraerTarjetas($, inicioOrden, finOrden) {
     const recompensas = [];
     const duplicados = new Set();
@@ -375,66 +401,90 @@ function extraerTarjetas($, inicioOrden, finOrden) {
 
         if (!tarjeta || !tarjeta.length) continue;
 
-        let textoTarjeta = obtenerTextoSinDuracion(tarjeta.text());
-        const nombresEnlaces = [];
+        const textoOriginal = limpiarTexto(tarjeta.text());
+        const sinRevelar = esDropSinRevelar(textoOriginal);
 
-        tarjeta.find("a").each((_, enlace) => {
-            const nombreEnlace = limpiarTexto($(enlace).text());
-            const href = $(enlace).attr("href") || "";
-
-            if (
-                nombreEnlace &&
-                /twitch\.tv/i.test(href) &&
-                !/^(online|random|sort by)$/i.test(nombreEnlace)
-            ) {
-                nombresEnlaces.push(nombreEnlace);
-            }
-        });
+        // Diagnóstico de la tarjeta de cinco horas para identificar
+        // exactamente el contenido recibido desde Facepunch.
+        if (duracion.unidad === "h" && duracion.cantidad === 5) {
+            console.log("🔎 TARJETA OFICIAL DE 5 HORAS:", {
+                texto: textoOriginal.slice(0, 1000),
+                comingSoon: sinRevelar,
+                html: tarjeta.html()?.slice(0, 3000)
+            });
+        }
 
         let streamer = null;
+        let nombre = null;
+        let imagen = null;
 
-        for (const nombreEnlace of nombresEnlaces) {
-            if (
-                textoTarjeta.toLowerCase().includes(nombreEnlace.toLowerCase()) &&
-                !/^(rust|twitch|twitchrivals)$/i.test(nombreEnlace)
-            ) {
-                streamer = nombreEnlace;
+        if (sinRevelar) {
+            // No utilizar nombres, imágenes ni texto sobrante de una
+            // recompensa cuyo nombre oficial aún no se conoce.
+            nombre = "Próximamente";
+            imagen = null;
+        } else {
+            let textoTarjeta = obtenerTextoSinDuracion(textoOriginal);
+            const nombresEnlaces = [];
 
-                textoTarjeta = textoTarjeta.replace(
-                    new RegExp(escaparRegex(nombreEnlace), "i"),
-                    " "
-                );
+            tarjeta.find("a").each((_, enlace) => {
+                const nombreEnlace = limpiarTexto($(enlace).text());
+                const href = $(enlace).attr("href") || "";
 
-                break;
+                if (
+                    nombreEnlace &&
+                    /twitch\.tv/i.test(href) &&
+                    !/^(online|random|sort by)$/i.test(nombreEnlace)
+                ) {
+                    nombresEnlaces.push(nombreEnlace);
+                }
+            });
+
+            for (const nombreEnlace of nombresEnlaces) {
+                if (
+                    textoTarjeta.toLowerCase().includes(nombreEnlace.toLowerCase()) &&
+                    !/^(rust|twitch|twitchrivals)$/i.test(nombreEnlace)
+                ) {
+                    streamer = nombreEnlace;
+
+                    textoTarjeta = textoTarjeta.replace(
+                        new RegExp(escaparRegex(nombreEnlace), "i"),
+                        " "
+                    );
+
+                    break;
+                }
             }
-        }
 
-        if (/^TwitchRivals\s+/i.test(textoTarjeta)) {
-            streamer = streamer || "TwitchRivals";
-            textoTarjeta = textoTarjeta.replace(/^TwitchRivals\s+/i, "");
-        }
+            if (/^TwitchRivals\s+/i.test(textoTarjeta)) {
+                streamer = streamer || "TwitchRivals";
+                textoTarjeta = textoTarjeta.replace(/^TwitchRivals\s+/i, "");
+            }
 
-        const nombre = normalizarNombre(textoTarjeta)
-            .replace(/^[\s:|•\-–]+/, "")
-            .replace(/[\s:|•\-–]+$/, "");
+            nombre = normalizarNombre(textoTarjeta)
+                .replace(/^[\s:|•\-–]+/, "")
+                .replace(/[\s:|•\-–]+$/, "");
 
-        if (
-            !nombre ||
-            nombre.length > 65 ||
-            /^(watch|watching|available|getting|drops|hours?|minutes?|twitchrivals)$/i.test(nombre) ||
-            /^(sort by|online random)$/i.test(nombre)
-        ) {
-            continue;
+            // Evitar que estados, métricas o textos genéricos se
+            // publiquen como nombres de objetos.
+            if (
+                !nombre ||
+                nombre.length > 65 ||
+                /^(watch|watching|available|getting|drops|hours?|minutes?|twitchrivals)$/i.test(nombre) ||
+                /^(sort by|online random|coming soon|very soon|upcoming|live now)$/i.test(nombre)
+            ) {
+                continue;
+            }
+
+            imagen = obtenerImagenTarjeta($, tarjeta);
         }
 
         const tiempo = duracion.texto;
-        const clave = `${nombre.toLowerCase()}-${tiempo}`;
+        const clave = `${nombre.toLowerCase()}-${tiempo}-${streamer || ""}`;
 
         if (duplicados.has(clave)) continue;
 
         duplicados.add(clave);
-
-        const imagen = obtenerImagenTarjeta($, tarjeta);
 
         recompensas.push({
             nombre,
@@ -617,6 +667,9 @@ function crearEmbedsDrops(datos) {
     ];
 
     return recompensas.map(recompensa => {
+        const esProximamente =
+            /^Próximamente$/i.test(recompensa.nombre);
+
         const embed = new EmbedBuilder()
             .setColor(0x9146ff)
             .setTitle(
@@ -627,7 +680,12 @@ function crearEmbedsDrops(datos) {
                 `**Campaña:** ${datos.campana}\n` +
                 `**Estado:** ${datos.estado}` +
                 (datos.tema ? `\n**Tema:** ${datos.tema}` : "") +
-                (datos.fechas ? `\n**Fechas:** ${datos.fechas}` : "")
+                (datos.fechas ? `\n**Fechas:** ${datos.fechas}` : "") +
+                (
+                    esProximamente
+                        ? "\n\nEl objeto de esta recompensa todavía no ha sido revelado oficialmente por Facepunch."
+                        : ""
+                )
             )
             .addFields(
                 {
@@ -658,7 +716,11 @@ function crearEmbedsDrops(datos) {
             });
         }
 
-        if (esImagenValida(recompensa.imagen)) {
+        // No asignar imágenes a recompensas cuyo objeto no se ha revelado.
+        if (
+            !esProximamente &&
+            esImagenValida(recompensa.imagen)
+        ) {
             embed.setImage(recompensa.imagen);
         }
 
@@ -691,7 +753,10 @@ function firmaCampana(datos) {
 
 async function publicarRustDrops(interaction) {
     const datos = await obtenerDropsOficiales();
-    const embeds = crearEmbedsDrops(datos).slice(0, MAX_DROPS_POR_PUBLICACION);
+    const embeds = crearEmbedsDrops(datos).slice(
+        0,
+        MAX_DROPS_POR_PUBLICACION
+    );
 
     if (!embeds.length) {
         await interaction.editReply({
@@ -727,14 +792,12 @@ async function publicarRustDrops(interaction) {
 // ============================================================
 
 function obtenerIdsMensajes(monitor) {
-    // Primero utiliza el array si el esquema actual lo admite.
     if (Array.isArray(monitor.messageIds) && monitor.messageIds.length) {
         return monitor.messageIds
             .map(id => String(id).trim())
             .filter(Boolean);
     }
 
-    // Compatibilidad con el campo messageId antiguo.
     if (!monitor.messageId) return [];
 
     return String(monitor.messageId)
@@ -744,10 +807,8 @@ function obtenerIdsMensajes(monitor) {
 }
 
 function guardarIdsMensajes(monitor, ids) {
-    // messageId se mantiene como campo principal compatible.
     monitor.messageId = ids.join(",");
 
-    // Solo se asigna el array cuando existe en el esquema de Mongoose.
     if (RustDropsMonitor.schema.path("messageIds")) {
         monitor.messageIds = ids;
     }
@@ -780,7 +841,6 @@ async function revisarDropsAutomaticos() {
                 error.message
             );
 
-            // No modificar mensajes si la fuente oficial falla.
             return;
         }
 
@@ -811,9 +871,6 @@ async function revisarDropsAutomaticos() {
                 }
 
                 const idsGuardados = obtenerIdsMensajes(monitor);
-
-                // IMPORTANTE: conserva las posiciones. No filtrar los null,
-                // porque eso podría asociar una recompensa al mensaje equivocado.
                 const mensajesPorPosicion = [];
 
                 for (const id of idsGuardados) {
@@ -843,14 +900,12 @@ async function revisarDropsAutomaticos() {
                     let mensaje = mensajesPorPosicion[i] || null;
 
                     if (mensaje) {
-                        // Edita el mensaje correspondiente a esta recompensa.
                         await mensaje.edit({
                             content: "",
                             embeds: [embed],
                             allowedMentions: { parse: [] }
                         });
                     } else {
-                        // Si falta el mensaje, crea uno solo para este Drop.
                         mensaje = await canal.send({
                             embeds: [embed],
                             allowedMentions: { parse: [] }
@@ -860,7 +915,6 @@ async function revisarDropsAutomaticos() {
                     nuevosIds.push(mensaje.id);
                 }
 
-                // Si hay menos recompensas que antes, elimina mensajes sobrantes.
                 for (
                     let i = embeds.length;
                     i < mensajesPorPosicion.length;
