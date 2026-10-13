@@ -19,7 +19,10 @@ function limpiarTexto(texto) {
 }
 
 function escaparMarkdown(texto) {
-    return String(texto ?? "").replace(/([\\`*_{}\[\]()#+\-.!|>~])/g, "\\$1");
+    return String(texto ?? "").replace(
+        /([\\`*_{}\[\]()#+\-.!|>~])/g,
+        "\\$1"
+    );
 }
 
 function normalizarNombre(texto) {
@@ -34,7 +37,11 @@ function convertirUrl(url) {
 
     const valor = String(url).trim().replace(/^["']|["']$/g, "");
 
-    if (!valor || valor.startsWith("data:") || valor.startsWith("blob:")) {
+    if (
+        !valor ||
+        valor.startsWith("data:") ||
+        valor.startsWith("blob:")
+    ) {
         return null;
     }
 
@@ -132,37 +139,80 @@ function obtenerImagenTarjeta($, tarjeta) {
     return obtenerUrlMedia($, tarjeta);
 }
 
+function extraerDuracion(texto) {
+    const valor = limpiarTexto(texto);
+
+    // Formatos: "1 Hour", "2 Hours", "30 Minutes", "1.5 Hours".
+    let coincidencia = valor.match(
+        /^(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)$/i
+    );
+
+    if (coincidencia) {
+        const cantidad = Number(coincidencia[1]);
+        const unidad = /^(?:minutes?|mins?)$/i.test(coincidencia[2])
+            ? "min"
+            : "h";
+
+        return {
+            cantidad,
+            unidad,
+            texto: `${cantidad} ${unidad}`
+        };
+    }
+
+    // Formatos compactos: "1h", "30m", "1h 30m".
+    coincidencia = valor.match(
+        /^(?:(\d+(?:\.\d+)?)\s*h(?:ours?)?)?(?:\s*)(?:(\d+(?:\.\d+)?)\s*m(?:in(?:utes?)?)?)?$/i
+    );
+
+    if (
+        coincidencia &&
+        (coincidencia[1] !== undefined || coincidencia[2] !== undefined)
+    ) {
+        const horas = Number(coincidencia[1] || 0);
+        const minutos = Number(coincidencia[2] || 0);
+
+        if (horas > 0 && minutos > 0) {
+            return {
+                cantidad: horas * 60 + minutos,
+                unidad: "min",
+                texto: `${horas} h ${minutos} min`
+            };
+        }
+
+        if (horas > 0) {
+            return {
+                cantidad: horas,
+                unidad: "h",
+                texto: `${horas} h`
+            };
+        }
+
+        if (minutos > 0) {
+            return {
+                cantidad: minutos,
+                unidad: "min",
+                texto: `${minutos} min`
+            };
+        }
+    }
+
+    return null;
+}
+
 function obtenerTextoSinDuracion(texto) {
     return limpiarTexto(texto)
         .replace(
             /\b\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?)\b/gi,
             " "
         )
+        .replace(/\b\d+(?:\.\d+)?\s*[hm]\b/gi, " ")
         .replace(
             /\b(?:Sort by|Online|Random|General Drops|Streamer Drops)\b/gi,
             " "
         )
         .replace(/\s+/g, " ")
         .trim();
-}
-
-function extraerDuracion(texto) {
-    const coincidencia = limpiarTexto(texto).match(
-        /^(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)$/i
-    );
-
-    if (!coincidencia) return null;
-
-    const cantidad = Number(coincidencia[1]);
-    const unidad = /^(?:minutes?|mins?)$/i.test(coincidencia[2])
-        ? "min"
-        : "h";
-
-    return {
-        cantidad,
-        unidad,
-        texto: `${cantidad} ${unidad}`
-    };
 }
 
 function escaparRegex(texto) {
@@ -235,11 +285,11 @@ function extraerTarjetas($, inicioOrden, finOrden) {
     const recompensas = [];
     const duplicados = new Set();
 
-    $("body *").each((indice, elemento) => {
+    const elementos = $("body *").toArray();
+
+    elementos.forEach((elemento, indice) => {
         elemento.__dropsOrder = indice;
     });
-
-    const elementos = $("body *").toArray();
 
     for (const elemento of elementos) {
         const nodo = $(elemento);
@@ -305,8 +355,8 @@ function extraerTarjetas($, inicioOrden, finOrden) {
             continue;
         }
 
-        // IMPORTANTE: la propiedad correcta es duracion.texto.
-        const tiempo = duracion.text;
+        // La propiedad correcta es "texto", no "text".
+        const tiempo = duracion.texto;
         const clave = `${nombre.toLowerCase()}-${tiempo}`;
 
         if (duplicados.has(clave)) continue;
@@ -441,6 +491,19 @@ async function obtenerDropsOficiales() {
         );
     }
 
+    console.log("🟣 Twitch Drops extraídos:", JSON.stringify({
+        generales: generales.map(({ nombre, tiempo, imagen }) => ({
+            nombre,
+            tiempo,
+            imagen: Boolean(imagen)
+        })),
+        streamers: streamers.map(({ nombre, tiempo, imagen }) => ({
+            nombre,
+            tiempo,
+            imagen: Boolean(imagen)
+        }))
+    }));
+
     return {
         fuente: FACEPUNCH_URL,
         campana: campana.campana || "Campaña oficial de Rust",
@@ -506,7 +569,9 @@ function crearEmbedDrops(datos) {
         ...datos.streamers
     ].find(recompensa => recompensa.imagen)?.imagen;
 
-    if (primeraImagen) embed.setThumbnail(primeraImagen);
+    if (primeraImagen) {
+        embed.setThumbnail(primeraImagen);
+    }
 
     embed.addFields({
         name: "🔗 Fuente",
