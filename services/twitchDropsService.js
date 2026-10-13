@@ -1,310 +1,452 @@
-const axios = require('axios');
-const cheerio = require('cheerio');
-const { EmbedBuilder } = require('discord.js');
-const RustDropsMonitor = require('../models/RustDropsMonitor');
 
-class RustDropsService {
-  constructor(client) {
-    this.client = client;
-    this.facepunchUrl = 'https://twitch.facepunch.com/';
-    this.twitchClientId = process.env.TWITCH_CLIENT_ID;
-    this.twitchClientSecret = process.env.TWITCH_CLIENT_SECRET;
-  }
+const axios = require("axios");
+const cheerio = require("cheerio");
+const { EmbedBuilder } = require("discord.js");
+const RustDropsMonitor = require("../models/RustDropsMonitor");
 
-  /**
-   * Obtiene un token de acceso de la API de Twitch (Client Credentials Grant)
-   */
-  async getTwitchAccessToken() {
-    try {
-      const response = await axios.post(
-        `https://id.twitch.tv/oauth2/token?client_id=${this.twitchClientId}&client_secret=${this.twitchClientSecret}&grant_type=client_credentials`
-      );
-      return response.data.access_token;
-    } catch (error) {
-      console.error('[RustDropsService] Error obteniendo token de Twitch:', error.message);
-      return null;
-    }
-  }
+const FACEPUNCH_URL = "https://twitch.facepunch.com/";
+const INTERVALO_REVISION = 5 * 60 * 1000;
 
-  /**
-   * Verifica en la API de Twitch qué streamers están en directo jugando Rust
-   */
-  async checkTwitchStreamersStatus(monitor) {
-    if (!this.twitchClientId || !this.twitchClientSecret) {
-      console.warn('[RustDropsService] Faltan las credenciales de Twitch (TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET)');
-      return;
-    }
+let cliente = null;
+let temporizadorIniciado = false;
+let revisando = false;
 
-    const accessToken = await this.getTwitchAccessToken();
-    if (!accessToken) return;
-
-    // Recopilar todos los logins únicos de los drops de streamers
-    const allLogins = [];
-    monitor.drops.forEach(drop => {
-      if (drop.tipo === 'streamer' && drop.canales) {
-        drop.canales.forEach(c => {
-          if (!allLogins.includes(c.login)) allLogins.includes(c.login) || allLogins.push(c.login);
-        });
-      }
-    });
-
-    if (allLogins.length === 0) return;
-
-    // La API de Twitch permite consultar hasta 100 usuarios por petición usando ?user_login=
-    // Si tienes muchos, puedes dividirlos en bloques de 100. Aquí consultamos los primeros 100.
-    const chunkLogins = allLogins.slice(0, 100);
-    const queryParams = chunkLogins.map(login => `user_login=${login}`).join('&');
-
-    try {
-      const response = await axios.get(`https://api.twitch.tv/helix/streams?${queryParams}`, {
-        headers: {
-          'Client-ID': this.twitchClientId,
-          'Authorization': `Bearer ${accessToken}`
-        }
-      });
-
-      const activeStreams = response.data.data; // Streams que están en vivo ahora mismo
-
-      // Actualizar el estado booleano dentro del documento del monitor
-      let changed = false;
-      monitor.drops.forEach(drop => {
-        if (drop.tipo === 'streamer' && drop.canales) {
-          drop.canales.forEach(canal => {
-            // Buscar si este canal está en la lista de streams activos y si su game_id es Rust (26349)
-            const streamInfo = activeStreams.find(s => s.user_login.toLowerCase() === canal.login.toLowerCase());
-            const isOnlineRust = streamInfo && streamInfo.game_id === '26349';
-
-            if (canal.online !== isOnlineRust) {
-              canal.online = isOnlineRust;
-              changed = true;
-            }
-          });
-        }
-      });
-
-      if (changed) {
-        monitor.ultimaRevision = new Date();
-        await monitor.save();
-        await this.updateDiscordMessages(monitor);
-      }
-    } catch (error) {
-      console.error('[RustDropsService] Error consultando streams de Twitch:', error.message);
-    }
-  }
-
-  /**
-   * Extrae los drops de Facepunch analizando su HTML real
-   */
-  async scrapeFacepunch() {
-    try {
-      const { data } = await axios.get(this.facepunchUrl, {
-        headers: { 
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
-        }
-      });
-      const $ = cheerio.load(data);
-
-      const campaignName = $('.current-campaign h1, .campaign-title, header h1').first().text().trim() || 'Rust Twitch Drops';
-      const drops = [];
-
-      // 1. Extraer Drops Generales
-      $('.section-header.generic, .section:has(.generic)').next('.drops-container').find('.drop-box, a.drop-box').each((_, el) => {
-        const nombre = $(el).find('.drop-box-header, .title, h3').text().trim() || 'Drop General';
-        const imagen = $(el).find('img').attr('src');
-        const watchTimeText = $(el).find('.watch-time, .time, .drop-lock').text().trim();
-        const horas = this.parseHours(watchTimeText);
-
-        if (nombre) {
-          drops.push({
-            tipo: 'general',
-            nombre,
-            horas,
-            imagen: this.formatImageUrl(imagen),
-            canales: []
-          });
-        }
-      });
-
-      // 2. Extraer Drops de Streamers
-      $('.streamer-drops .drop-box, .streamer-drop').each((_, el) => {
-        const nombre = $(el).find('.drop-box-header, .title, h3').text().trim() || 'Drop de Streamer';
-        const imagen = $(el).find('img').attr('src');
-        const watchTimeText = $(el).find('.watch-time, .time').text().trim();
-        const horas = this.parseHours(watchTimeText);
-
-        const canales = [];
-        $(el).find('a[href*="twitch.tv"]').each((_, aEl) => {
-          const href = $(aEl).attr('href') || '';
-          const displayName = $(aEl).text().trim();
-          
-          const match = href.match(/twitch\.tv\/([a-zA-Z0-9_]+)/);
-          if (match && match[1]) {
-            const login = match[1].toLowerCase();
-            canales.push({
-              login,
-              displayName: displayName || login,
-              online: false
-            });
-          }
-        });
-
-        if (nombre) {
-          drops.push({
-            tipo: 'streamer',
-            nombre,
-            horas,
-            imagen: this.formatImageUrl(imagen),
-            canales
-          });
-        }
-      });
-
-      return {
-        campaignKey: `rust-drops-${Date.now()}`,
-        campaignName,
-        fechaInicio: new Date().toISOString().split('T')[0],
-        fechaFin: null,
-        drops
-      };
-
-    } catch (error) {
-      console.error('[RustDropsService] Error haciendo scrape de Facepunch:', error.message);
-      return null;
-    }
-  }
-
-  /**
-   * Genera los Embeds para Discord basados en el documento de MongoDB
-   */
-  buildEmbeds(monitorDoc) {
-    const embeds = [];
-
-    // Embed principal de la campaña
-    const mainEmbed = new EmbedBuilder()
-      .setTitle(`🎁 Rust Twitch Drops - ${monitorDoc.campaignName || 'Campaña Activa'}`)
-      .setURL(this.facepunchUrl)
-      .setColor(0xce422b)
-      .addFields(
-        { name: '📅 Vigencia', value: `${monitorDoc.fechaInicio || 'N/A'} al ${monitorDoc.fechaFin || 'N/A'}`, inline: false }
-      )
-      .setTimestamp();
-    
-    embeds.push(mainEmbed);
-
-    // Embeds por cada Drop registrado
-    for (const drop of monitorDoc.drops) {
-      const dropEmbed = new EmbedBuilder()
-        .setTitle(`${drop.tipo === 'general' ? '🌐 [General]' : '👤 [Streamer]'} ${drop.nombre}`)
-        .setColor(drop.tipo === 'general' ? 0x2b82ce : 0x57f287)
-        .addFields({ name: '⏳ Tiempo requerido', value: `${drop.horas} hora(s)`, inline: true });
-
-      if (drop.imagen) {
-        dropEmbed.setImage(drop.imagen);
-      }
-
-      if (drop.tipo === 'streamer' && drop.canales && drop.canales.length > 0) {
-        const channelsStatus = drop.canales.map(c => 
-          `${c.online ? '🟢' : '🔴'} [${c.displayName}](https://twitch.tv/${c.login})`
-        ).join('\n');
-
-        dropEmbed.addFields({ name: '📺 Canales vinculados', value: channelsStatus.substring(0, 1024), inline: false });
-      }
-
-      embeds.push(dropEmbed);
-    }
-
-    return embeds;
-  }
-
-  /**
-   * Actualiza los mensajes existentes en el canal de Discord con los nuevos embeds
-   */
-  async updateDiscordMessages(monitor) {
-    try {
-      const channel = await this.client.channels.fetch(monitor.channelId);
-      if (!channel) return;
-
-      const embeds = this.buildEmbeds(monitor);
-
-      // Si tienes un solo mensaje principal con toda la info o varios, aquí actualizamos el principal por ahora
-      if (monitor.messageIds && monitor.messageIds.length > 0) {
-        const msg = await channel.messages.fetch(monitor.messageIds[0]);
-        await msg.edit({ embeds: [embeds[0]] }); // O puedes pasar todos los embeds según cómo los organices
-      }
-    } catch (err) {
-      console.error('[RustDropsService] Error al actualizar mensajes en Discord:', err.message);
-    }
-  }
-
-  /**
-   * Sincroniza los drops con la BD y publica o actualiza en el canal de Discord
-   */
-  async syncAndPublish(guildId, channelId) {
-    const scrapedData = await this.scrapeFacepunch();
-    if (!scrapedData) throw new Error('No se pudieron obtener los datos de Facepunch.');
-
-    let monitor = await RustDropsMonitor.findOne({ guildId, channelId });
-
-    if (!monitor) {
-      monitor = new RustDropsMonitor({
-        guildId,
-        channelId,
-        campaignKey: scrapedData.campaignKey,
-        campaignName: scrapedData.campaignName,
-        fechaInicio: scrapedData.fechaInicio,
-        fechaFin: scrapedData.fechaFin,
-        drops: scrapedData.drops
-      });
-    } else {
-      monitor.campaignKey = scrapedData.campaignKey;
-      monitor.campaignName = scrapedData.campaignName;
-      monitor.fechaInicio = scrapedData.fechaInicio;
-      monitor.fechaFin = scrapedData.fechaFin;
-      monitor.drops = scrapedData.drops;
-      monitor.ultimaRevision = new Date();
-    }
-
-    await monitor.save();
-
-    // Comprobar estado en Twitch inmediatamente al sincronizar
-    await this.checkTwitchStreamersStatus(monitor);
-
-    const embeds = this.buildEmbeds(monitor);
-    const channel = await this.client.channels.fetch(channelId);
-
-    if (monitor.messageIds && monitor.messageIds.length > 0) {
-      try {
-        const msg = await channel.messages.fetch(monitor.messageIds[0]);
-        await msg.edit({ embeds: [embeds[0]] });
-      } catch (err) {
-        const newMsg = await channel.send({ embeds: [embeds[0]] });
-        monitor.messageIds = [newMsg.id];
-        await monitor.save();
-      }
-    } else {
-      const newMsg = await channel.send({ embeds: [embeds[0]] });
-      monitor.messageIds = [newMsg.id];
-      await monitor.save();
-    }
-
-    return monitor;
-  }
-
-  /**
-   * Convierte texto como "2 hours" en un número entero
-   */
-  parseHours(text) {
-    const match = text.match(/(\d+)/);
-    return match ? parseInt(match[1], 10) : 1;
-  }
-
-  /**
-   * Asegura que la URL de la imagen sea absoluta
-   */
-  formatImageUrl(imageUrl) {
-    if (!imageUrl) return null;
-    return imageUrl.startsWith('http') ? imageUrl : `https://twitch.facepunch.com${imageUrl}`;
-  }
+function limpiarTexto(texto) {
+    return String(texto || "")
+        .replace(/\u00a0/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 }
 
-module.exports = RustDropsService;
+function escaparMarkdown(texto) {
+    return String(texto || "")
+        .replace(/([\\`*_{}[\]()#+\-.!|>~])/g, "\\$1");
+}
+
+function obtenerImagenes($) {
+    const imagenes = [];
+
+    $("img").each((_, elemento) => {
+        const imagen = $(elemento);
+        const nombre = limpiarTexto(
+            imagen.attr("alt") ||
+            imagen.attr("title")
+        );
+
+        const src =
+            imagen.attr("src") ||
+            imagen.attr("data-src") ||
+            imagen.attr("data-original");
+
+        if (
+            nombre &&
+            src &&
+            !src.startsWith("data:")
+        ) {
+            try {
+                imagenes.push({
+                    nombre,
+                    url: new URL(src, FACEPUNCH_URL).href
+                });
+            } catch {}
+        }
+    });
+
+    return imagenes;
+}
+
+function extraerRecompensas(texto, imagenes) {
+    const resultado = [];
+    const encontrados = new Set();
+
+    const patron =
+        /([A-Za-z0-9][A-Za-z0-9'’&!()_ -]{0,65}?)\s+(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)(?=\s|$)/gi;
+
+    let coincidencia;
+
+    while (
+        (coincidencia = patron.exec(texto)) !== null
+    ) {
+        let nombre = limpiarTexto(coincidencia[1])
+            .replace(/^[\s:|•\-]+/, "")
+            .replace(/\s+/g, " ");
+
+        nombre = nombre
+            .split(/\b(?:General Drops|Streamer Drops|Drops Metrics|Available across|Available to unlock)\b/i)[0]
+            .trim();
+
+        if (
+            !nombre ||
+            nombre.length > 65 ||
+            /^(watch|watching|available|getting|drops|hours?|minutes?)$/i.test(nombre)
+        ) {
+            continue;
+        }
+
+        const cantidad = Number(coincidencia[2]);
+        const unidad = /^(minutes?|mins?)$/i.test(coincidencia[3])
+            ? "min"
+            : "h";
+
+        const clave = `${nombre.toLowerCase()}-${cantidad}-${unidad}`;
+
+        if (encontrados.has(clave)) {
+            continue;
+        }
+
+        encontrados.add(clave);
+
+        const imagen = imagenes.find(
+            item =>
+                item.nombre.toLowerCase() === nombre.toLowerCase()
+        );
+
+        resultado.push({
+            nombre,
+            tiempo: `${cantidad} ${unidad}`,
+            imagen: imagen?.url || null
+        });
+    }
+
+    return resultado;
+}
+
+async function obtenerDropsOficiales() {
+    const respuesta = await axios.get(FACEPUNCH_URL, {
+        timeout: 25000,
+        maxRedirects: 5,
+        headers: {
+            "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
+    });
+
+    if (
+        respuesta.status !== 200 ||
+        typeof respuesta.data !== "string"
+    ) {
+        throw new Error(
+            "Facepunch no devolvió una página HTML válida."
+        );
+    }
+
+    const $ = cheerio.load(respuesta.data);
+    const textoCompleto = limpiarTexto(
+        $("body").text()
+    );
+
+    if (
+        !textoCompleto ||
+        !/Twitch Drops/i.test(textoCompleto) ||
+        !/General Drops|Streamer Drops/i.test(textoCompleto)
+    ) {
+        throw new Error(
+            "No se reconoció la estructura oficial de Twitch Drops. No se actualizarán los anuncios."
+        );
+    }
+
+    const imagenes = obtenerImagenes($);
+
+    const campanaMatch = textoCompleto.match(
+        /Twitch Drops?\s+(?:Round\s*)?#?\s*(\d+)\s+Hosted by\s+(.+?)(?=\s+(?:General Drops|Streamer Drops|Drops Metrics|October|November|December|January|February|March|April|May|June|July|August|September)\b)/i
+    );
+
+    const tituloAlternativo = textoCompleto.match(
+        /Twitch Drops?\s+(?:Round\s*)?#?\s*(\d+)/i
+    );
+
+    const nombreCampana = campanaMatch
+        ? `Twitch Drops Round ${campanaMatch[1]} — Hosted by ${campanaMatch[2]}`
+        : tituloAlternativo
+            ? `Twitch Drops Round ${tituloAlternativo[1]}`
+            : null;
+
+    const estado = /\bLive Now\b/i.test(textoCompleto)
+        ? "En curso"
+        : /\bUpcoming\b/i.test(textoCompleto)
+            ? "Próximamente"
+            : null;
+
+    const fechasMatch = textoCompleto.match(
+        /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*UTC\s*[-–]\s*(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*UTC)/i
+    );
+
+    const temaMatch = nombreCampana
+        ? textoCompleto.match(
+            new RegExp(
+                nombreCampana
+                    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
+                "\\s+(.+?)\\s+(?:General Drops|Streamer Drops)",
+                "i"
+            )
+        )
+        : null;
+
+    const indiceGeneral = textoCompleto.search(/General Drops/i);
+    const indiceStreamer = textoCompleto.search(/Streamer Drops/i);
+    const indiceMetricas = textoCompleto.search(/Drops Metrics/i);
+
+    if (indiceGeneral < 0 || indiceStreamer < 0) {
+        throw new Error(
+            "No se encontraron las secciones oficiales de recompensas."
+        );
+    }
+
+    const textoGenerales = textoCompleto.slice(
+        indiceGeneral,
+        indiceStreamer
+    );
+
+    const finStreamer =
+        indiceMetricas > indiceStreamer
+            ? indiceMetricas
+            : textoCompleto.length;
+
+    const textoStreamers = textoCompleto.slice(
+        indiceStreamer,
+        finStreamer
+    );
+
+    const generales = extraerRecompensas(
+        textoGenerales,
+        imagenes
+    );
+
+    const streamers = extraerRecompensas(
+        textoStreamers,
+        imagenes
+    );
+
+    if (
+        !nombreCampana &&
+        generales.length === 0 &&
+        streamers.length === 0
+    ) {
+        throw new Error(
+            "La página no contiene datos suficientes para crear un anuncio fiable."
+        );
+    }
+
+    return {
+        fuente: FACEPUNCH_URL,
+        campana: nombreCampana || "Campaña oficial de Rust",
+        estado: estado || "Consulta oficial",
+        tema: temaMatch
+            ? limpiarTexto(temaMatch[1])
+            : null,
+        fechas: fechasMatch
+            ? limpiarTexto(fechasMatch[1])
+            : null,
+        generales,
+        streamers,
+        consultado: new Date().toISOString()
+    };
+}
+
+function crearEmbedDrops(datos) {
+    const embed = new EmbedBuilder()
+        .setColor(0x9146ff)
+        .setTitle("🎁 Rust — Twitch Drops oficiales")
+        .setURL(FACEPUNCH_URL)
+        .setDescription(
+            `**Campaña:** ${datos.campana}\n` +
+            `**Estado:** ${datos.estado}` +
+            (datos.tema ? `\n**Tema:** ${datos.tema}` : "") +
+            (datos.fechas ? `\n**Fechas:** ${datos.fechas}` : "")
+        )
+        .setFooter({
+            text: "RustLogix • Fuente oficial de Facepunch"
+        })
+        .setTimestamp(new Date(datos.consultado));
+
+    function agregarSeccion(titulo, recompensas) {
+        if (!recompensas.length) {
+            embed.addFields({
+                name: titulo,
+                value: "No se pudieron identificar recompensas en esta sección."
+            });
+            return;
+        }
+
+        const lineas = recompensas.slice(0, 20).map(
+            recompensa =>
+                `• **${escaparMarkdown(recompensa.nombre)}** — ${recompensa.tiempo}`
+        );
+
+        embed.addFields({
+            name: titulo,
+            value: lineas.join("\n").slice(0, 1024)
+        });
+    }
+
+    agregarSeccion(
+        "🌐 Recompensas generales",
+        datos.generales
+    );
+
+    agregarSeccion(
+        "🎮 Recompensas de streamers",
+        datos.streamers
+    );
+
+    embed.addFields({
+        name: "🔗 Fuente",
+        value: `[Consultar Facepunch](${FACEPUNCH_URL})`
+    });
+
+    return embed;
+}
+
+function firmaCampana(datos) {
+    return JSON.stringify({
+        campana: datos.campana,
+        estado: datos.estado,
+        tema: datos.tema,
+        fechas: datos.fechas,
+        generales: datos.generales,
+        streamers: datos.streamers
+    });
+}
+
+async function publicarRustDrops(interaction) {
+    const datos = await obtenerDropsOficiales();
+
+    await interaction.editReply({
+        embeds: [crearEmbedDrops(datos)],
+        allowedMentions: { parse: [] }
+    });
+
+    return datos;
+}
+
+async function revisarDropsAutomaticos() {
+    if (revisando || !cliente) {
+        return;
+    }
+
+    revisando = true;
+
+    try {
+        const monitores = await RustDropsMonitor.find({
+            active: true,
+            channelId: { $exists: true, $ne: null }
+        });
+
+        if (!monitores.length) {
+            return;
+        }
+
+        let datos;
+
+        try {
+            datos = await obtenerDropsOficiales();
+        } catch (error) {
+            console.error(
+                "❌ No se pudieron consultar los Twitch Drops oficiales:",
+                error.message
+            );
+
+            // Nunca borrar ni reemplazar el anuncio si falla Facepunch.
+            return;
+        }
+
+        const firma = firmaCampana(datos);
+        const embed = crearEmbedDrops(datos);
+
+        for (const monitor of monitores) {
+            try {
+                if (monitor.campaignSignature === firma) {
+                    monitor.lastCheckedAt = new Date();
+                    await monitor.save();
+                    continue;
+                }
+
+                const canal = await cliente.channels
+                    .fetch(monitor.channelId)
+                    .catch(() => null);
+
+                if (
+                    !canal ||
+                    !canal.isTextBased() ||
+                    !canal.messages
+                ) {
+                    console.warn(
+                        `⚠️ Canal de Twitch Drops no disponible: ${monitor.channelId}`
+                    );
+                    continue;
+                }
+
+                let mensaje = null;
+
+                if (monitor.messageId) {
+                    mensaje = await canal.messages
+                        .fetch(monitor.messageId)
+                        .catch(() => null);
+                }
+
+                if (mensaje) {
+                    await mensaje.edit({
+                        embeds: [embed],
+                        allowedMentions: { parse: [] }
+                    });
+                } else {
+                    mensaje = await canal.send({
+                        embeds: [embed],
+                        allowedMentions: { parse: [] }
+                    });
+                }
+
+                monitor.messageId = mensaje.id;
+                monitor.campaignName = datos.campana;
+                monitor.campaignSignature = firma;
+                monitor.lastCheckedAt = new Date();
+
+                await monitor.save();
+
+                console.log(
+                    `✅ Twitch Drops actualizados en ${canal.guild?.name || canal.id}`
+                );
+            } catch (error) {
+                console.error(
+                    `❌ Error actualizando Twitch Drops en ${monitor.guildId}:`,
+                    error.message
+                );
+            }
+        }
+    } catch (error) {
+        console.error(
+            "❌ Error revisando monitores de Twitch Drops:",
+            error
+        );
+    } finally {
+        revisando = false;
+    }
+}
+
+function iniciarDropsAutomaticos(client) {
+    if (temporizadorIniciado) {
+        return;
+    }
+
+    cliente = client;
+    temporizadorIniciado = true;
+
+    console.log(
+        "🟣 Monitor oficial de Twitch Drops iniciado (cada 5 minutos)."
+    );
+
+    revisarDropsAutomaticos().catch(console.error);
+
+    setInterval(() => {
+        revisarDropsAutomaticos().catch(console.error);
+    }, INTERVALO_REVISION);
+}
+
+module.exports = {
+    obtenerDropsOficiales,
+    crearEmbedDrops,
+    publicarRustDrops,
+    iniciarDropsAutomaticos,
+    revisarDropsAutomaticos
+};
