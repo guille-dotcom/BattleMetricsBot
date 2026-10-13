@@ -29,6 +29,28 @@ function normalizarNombre(texto) {
         .trim();
 }
 
+function convertirUrl(url) {
+    if (!url) return null;
+
+    const valor = String(url).trim().replace(/^["']|["']$/g, "");
+
+    if (!valor || valor.startsWith("data:") || valor.startsWith("blob:")) {
+        return null;
+    }
+
+    try {
+        const resultado = new URL(valor, FACEPUNCH_URL);
+
+        if (!["http:", "https:"].includes(resultado.protocol)) {
+            return null;
+        }
+
+        return resultado.href;
+    } catch {
+        return null;
+    }
+}
+
 function obtenerUrlMedia($, elemento) {
     const nodo = $(elemento);
 
@@ -37,20 +59,44 @@ function obtenerUrlMedia($, elemento) {
         nodo.attr("data-src"),
         nodo.attr("data-original"),
         nodo.attr("data-lazy-src"),
+        nodo.attr("data-image"),
+        nodo.attr("data-image-url"),
         nodo.attr("poster"),
+        nodo.attr("content"),
+        nodo.attr("srcset")?.split(",").pop()?.trim().split(/\s+/)[0],
+        nodo.attr("data-srcset")?.split(",").pop()?.trim().split(/\s+/)[0],
         nodo.find("source").first().attr("src"),
+        nodo.find("source").first().attr("srcset")?.split(",").pop()?.trim().split(/\s+/)[0],
         nodo.find("img").first().attr("src"),
         nodo.find("img").first().attr("data-src"),
+        nodo.find("img").first().attr("srcset")?.split(",").pop()?.trim().split(/\s+/)[0],
         nodo.find("video").first().attr("poster")
     ];
 
     for (const candidato of candidatos) {
-        if (!candidato || candidato.startsWith("data:")) continue;
+        const url = convertirUrl(candidato);
 
-        try {
-            return new URL(candidato, FACEPUNCH_URL).href;
-        } catch {
-            // Probar el siguiente atributo.
+        if (url && !/\.svg(?:[?#].*)?$/i.test(url)) {
+            return url;
+        }
+    }
+
+    const estilos = [
+        nodo.attr("style"),
+        nodo.find("[style]").first().attr("style")
+    ].filter(Boolean);
+
+    for (const estilo of estilos) {
+        const coincidencia = estilo.match(
+            /background-image\s*:\s*url\((['"]?)(.*?)\1\)/i
+        );
+
+        if (coincidencia) {
+            const url = convertirUrl(coincidencia[2]);
+
+            if (url && !/\.svg(?:[?#].*)?$/i.test(url)) {
+                return url;
+            }
         }
     }
 
@@ -60,23 +106,30 @@ function obtenerUrlMedia($, elemento) {
 function obtenerImagenTarjeta($, tarjeta) {
     if (!tarjeta || !tarjeta.length) return null;
 
+    const selectores = [
+        "img",
+        "picture source",
+        "source",
+        "video",
+        "[style*='background-image']",
+        "[data-src]",
+        "[data-image]",
+        "[data-image-url]"
+    ].join(", ");
+
     let imagen = null;
 
-    tarjeta.find("img, video, source").each((_, elemento) => {
+    tarjeta.find(selectores).each((_, elemento) => {
         if (imagen) return;
 
         const url = obtenerUrlMedia($, elemento);
 
-        if (
-            url &&
-            /^https?:\/\//i.test(url) &&
-            !/\.svg(?:[?#].*)?$/i.test(url)
-        ) {
-            imagen = url;
-        }
+        if (url) imagen = url;
     });
 
-    return imagen;
+    if (imagen) return imagen;
+
+    return obtenerUrlMedia($, tarjeta);
 }
 
 function obtenerTextoSinDuracion(texto) {
@@ -141,7 +194,6 @@ function obtenerOrden(elemento) {
 function encontrarTarjeta($, nodo, duracion) {
     let actual = $(nodo);
 
-    // La duración puede venir vacía o con una estructura inesperada.
     const duracionTexto = limpiarTexto(
         duracion?.texto ?? duracion?.text ?? ""
     );
@@ -158,8 +210,10 @@ function encontrarTarjeta($, nodo, duracion) {
             textoTarjeta.length <= 220 &&
             (!duracionTexto || textoTarjeta.length > duracionTexto.length)
         ) {
-            // Preferir un contenedor que incluya imagen o enlace de recompensa.
-            const tieneImagen = actual.find("img, video, source").length > 0;
+            const tieneImagen = actual.find(
+                "img, video, source, picture, [style*='background-image'], [data-src]"
+            ).length > 0;
+
             const tieneEnlace = actual.find("a").length > 0;
 
             if (tieneImagen || tieneEnlace || nivel >= 2) {
@@ -170,6 +224,7 @@ function encontrarTarjeta($, nodo, duracion) {
         const padre = actual.parent();
 
         if (!padre || !padre.length) break;
+
         actual = padre;
     }
 
@@ -189,10 +244,10 @@ function extraerTarjetas($, inicioOrden, finOrden) {
     for (const elemento of elementos) {
         const nodo = $(elemento);
 
-        // Las duraciones se buscan en nodos hoja para evitar repetir tarjetas.
         if (nodo.children().length > 0) continue;
 
         const duracion = extraerDuracion(nodo.text());
+
         if (!duracion) continue;
 
         const orden = obtenerOrden(elemento);
@@ -227,10 +282,12 @@ function extraerTarjetas($, inicioOrden, finOrden) {
                 !/^(rust|twitch)$/i.test(nombreEnlace)
             ) {
                 streamer = nombreEnlace;
+
                 textoTarjeta = textoTarjeta.replace(
                     new RegExp(escaparRegex(nombreEnlace), "i"),
                     " "
                 );
+
                 break;
             }
         }
@@ -248,15 +305,18 @@ function extraerTarjetas($, inicioOrden, finOrden) {
             continue;
         }
 
-        const clave = `${nombre.toLowerCase()}-${duracion.text}`;
+        // IMPORTANTE: la propiedad correcta es duracion.texto.
+        const tiempo = duracion.text;
+        const clave = `${nombre.toLowerCase()}-${tiempo}`;
 
         if (duplicados.has(clave)) continue;
+
         duplicados.add(clave);
 
         recompensas.push({
             nombre,
             streamer,
-            tiempo: duracion.text,
+            tiempo,
             imagen: obtenerImagenTarjeta($, tarjeta)
         });
     }
@@ -424,11 +484,12 @@ function crearEmbedDrops(datos) {
                 ? `[${nombre}](${recompensa.imagen})`
                 : `**${nombre}**`;
 
+            const tiempo = recompensa.tiempo || "Duración no detectada";
             const streamer = recompensa.streamer
                 ? ` — ${escaparMarkdown(recompensa.streamer)}`
                 : "";
 
-            return `• ${visible} — ${recompensa.tiempo}${streamer}`;
+            return `• ${visible} — ${tiempo}${streamer}`;
         });
 
         embed.addFields({
