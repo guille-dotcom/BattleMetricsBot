@@ -12,6 +12,10 @@ const TwitchDropsMonitorSchema = new mongoose.Schema(
             type: String,
             required: true
         },
+        messageId: {
+            type: String,
+            default: null
+        },
         campaignKey: {
             type: String,
             default: null

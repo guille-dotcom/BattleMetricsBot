@@ -19,96 +19,278 @@ function limpiarTexto(texto) {
 }
 
 function escaparMarkdown(texto) {
-    return String(texto || "")
-        .replace(/([\\`*_{}[\]()#+\-.!|>~])/g, "\\$1");
+    return String(texto || "").replace(/([\\`*_{}[\]()#+\-.!|>~])/g, "\\$1");
 }
 
-function obtenerImagenes($) {
-    const imagenes = [];
+function normalizarNombre(texto) {
+    return limpiarTexto(texto)
+        .replace(/^(?:image:\s*)/i, "")
+        .replace(/\s+/g, " ")
+        .trim();
+}
 
-    $("img").each((_, elemento) => {
-        const imagen = $(elemento);
-        const nombre = limpiarTexto(
-            imagen.attr("alt") ||
-            imagen.attr("title")
-        );
+function obtenerUrlMedia($, elemento) {
+    const nodo = $(elemento);
 
-        const src =
-            imagen.attr("src") ||
-            imagen.attr("data-src") ||
-            imagen.attr("data-original");
+    const candidatos = [
+        nodo.attr("src"),
+        nodo.attr("data-src"),
+        nodo.attr("data-original"),
+        nodo.attr("poster"),
+        nodo.find("source").first().attr("src"),
+        nodo.find("img").first().attr("src"),
+        nodo.find("video").first().attr("poster")
+    ];
 
-        if (
-            nombre &&
-            src &&
-            !src.startsWith("data:")
-        ) {
-            try {
-                imagenes.push({
-                    nombre,
-                    url: new URL(src, FACEPUNCH_URL).href
-                });
-            } catch {}
+    for (const candidato of candidatos) {
+        if (!candidato || candidato.startsWith("data:")) {
+            continue;
+        }
+
+        try {
+            return new URL(candidato, FACEPUNCH_URL).href;
+        } catch {
+            // Probar el siguiente atributo.
+        }
+    }
+
+    return null;
+}
+
+function obtenerImagenTarjeta($, tarjeta) {
+    let imagen = null;
+
+    tarjeta.find("img, video, source").each((_, elemento) => {
+        if (imagen) return;
+
+        const url = obtenerUrlMedia($, elemento);
+
+        if (url && /\.(?:png|jpe?g|webp|gif)(?:[?#].*)?$/i.test(url)) {
+            imagen = url;
         }
     });
 
-    return imagenes;
+    return imagen;
 }
 
-function extraerRecompensas(texto, imagenes) {
-    const resultado = [];
-    const encontrados = new Set();
+function obtenerTextoSinDuracion(texto) {
+    return limpiarTexto(texto)
+        .replace(/\b\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?)\b/gi, " ")
+        .replace(/\b(?:Sort by|Online|Random|General Drops|Streamer Drops)\b/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
 
-    const patron =
-        /([A-Za-z0-9][A-Za-z0-9'’&!()_ -]{0,65}?)\s+(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)(?=\s|$)/gi;
+function extraerDuracion(texto) {
+    const coincidencia = limpiarTexto(texto).match(
+        /^(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)$/i
+    );
 
-    let coincidencia;
+    if (!coincidencia) return null;
 
-    while (
-        (coincidencia = patron.exec(texto)) !== null
-    ) {
-        let nombre = limpiarTexto(coincidencia[1])
-            .replace(/^[\s:|•\-]+/, "")
-            .replace(/\s+/g, " ");
+    const cantidad = Number(coincidencia[1]);
+    const unidad = /^(?:minutes?|mins?)$/i.test(coincidencia[2])
+        ? "min"
+        : "h";
 
-        nombre = nombre
-            .split(/\b(?:General Drops|Streamer Drops|Drops Metrics|Available across|Available to unlock)\b/i)[0]
-            .trim();
+    return {
+        cantidad,
+        unidad,
+        texto: `${cantidad} ${unidad}`
+    };
+}
+
+function extraerTarjetas($, inicioOrden, finOrden, encabezados) {
+    const recompensas = [];
+    const duplicados = new Set();
+    const elementos = $("body *").toArray();
+
+    for (const elemento of elementos) {
+        const nodo = $(elemento);
+
+        // El tiempo debe estar en un elemento pequeño, no en el texto
+        // completo de la página.
+        if (nodo.children().length > 0) continue;
+
+        const duracion = extraerDuracion(nodo.text());
+        if (!duracion) continue;
+
+        const orden = elemento.__dropsOrder;
+
+        if (orden == null || orden <= inicioOrden || orden >= finOrden) {
+            continue;
+        }
+
+        let tarjeta = null;
+        let actual = nodo;
+
+        // Subimos por el DOM hasta encontrar el bloque individual
+        // que contiene nombre, duración y, cuando existe, una imagen.
+        for (let nivel = 0; nivel < 7 && actual.length; nivel++) {
+            const texto = limpiarTexto(actual.text());
+
+            if (
+                texto.length > duracion.text.length &&
+                texto.length <= 180 &&
+                obtenerTextoSinDuracion(texto).length > 1
+            ) {
+                tarjeta = actual;
+                break;
+            }
+
+            actual = actual.parent();
+        }
+
+        if (!tarjeta || !tarjeta.length) continue;
+
+        let textoTarjeta = obtenerTextoSinDuracion(tarjeta.text());
+        const nombresEnlaces = [];
+
+        tarjeta.find("a").each((_, enlace) => {
+            const nombreEnlace = limpiarTexto($(enlace).text());
+            const href = $(enlace).attr("href") || "";
+
+            if (
+                nombreEnlace &&
+                /twitch\.tv/i.test(href) &&
+                !/^(online|random|sort by)$/i.test(nombreEnlace)
+            ) {
+                nombresEnlaces.push(nombreEnlace);
+            }
+        });
+
+        // Si hay un enlace al streamer dentro de la tarjeta,
+        // lo separamos del nombre de la recompensa.
+        let streamer = null;
+
+        for (const nombreEnlace of nombresEnlaces) {
+            if (
+                textoTarjeta.toLowerCase().includes(nombreEnlace.toLowerCase()) &&
+                !/^(rust|twitch)$/i.test(nombreEnlace)
+            ) {
+                streamer = nombreEnlace;
+                textoTarjeta = textoTarjeta.replace(
+                    new RegExp(
+                        nombreEnlace.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+                        "i"
+                    ),
+                    " "
+                );
+                break;
+            }
+        }
+
+        const nombre = normalizarNombre(textoTarjeta)
+            .replace(/^[\s:|•\-–]+/, "")
+            .replace(/[\s:|•\-–]+$/, "");
 
         if (
             !nombre ||
             nombre.length > 65 ||
-            /^(watch|watching|available|getting|drops|hours?|minutes?)$/i.test(nombre)
+            /^(?:watch|watching|available|getting|drops|hours?|minutes?|twitchrivals)$/i.test(nombre) ||
+            /^(?:sort by|online random)$/i.test(nombre)
         ) {
             continue;
         }
 
-        const cantidad = Number(coincidencia[2]);
-        const unidad = /^(minutes?|mins?)$/i.test(coincidencia[3])
-            ? "min"
-            : "h";
+        const clave = `${nombre.toLowerCase()}-${duracion.text}`;
 
-        const clave = `${nombre.toLowerCase()}-${cantidad}-${unidad}`;
+        if (duplicados.has(clave)) continue;
+        duplicados.add(clave);
 
-        if (encontrados.has(clave)) {
-            continue;
-        }
-
-        encontrados.add(clave);
-
-        const imagen = imagenes.find(
-            item =>
-                item.nombre.toLowerCase() === nombre.toLowerCase()
-        );
-
-        resultado.push({
+        recompensas.push({
             nombre,
-            tiempo: `${cantidad} ${unidad}`,
-            imagen: imagen?.url || null
+            streamer,
+            tiempo: duracion.text,
+            imagen: obtenerImagenTarjeta($, tarjeta)
         });
     }
 
-    return resultado;
+    return recompensas;
+}
+
+function buscarEncabezado($, expresion) {
+    let encontrado = null;
+
+    $("h1, h2, h3, h4, [role='heading']").each((_, elemento) => {
+        if (encontrado) return;
+
+        const texto = limpiarTexto($(elemento).text());
+
+        if (expresion.test(texto)) {
+            encontrado = elemento;
+        }
+    });
+
+    return encontrado;
+}
+
+function extraerDatosCampana($, textoCompleto) {
+    const encabezados = $("h1, h2, h3, h4, [role='heading']")
+        .toArray()
+        .map(elemento => ({
+            texto: limpiarTexto($(elemento).text()),
+            orden: elemento.__dropsOrder
+        }));
+
+    const encabezadoCampana = encabezados.find(item =>
+        /Twitch Drops/i.test(item.texto) &&
+        /Hosted by/i.test(item.texto)
+    );
+
+    let numero = null;
+    let anfitrion = null;
+
+    if (encabezadoCampana) {
+        const coincidencia = encabezadoCampana.texto.match(
+            /Twitch Drops\s+(?:Round\s*)?#?\s*(\d+)\s+Hosted by\s+(.+)/i
+        );
+
+        if (coincidencia) {
+            numero = coincidencia[1];
+            anfitrion = limpiarTexto(coincidencia[2]);
+        }
+    }
+
+    if (!numero) {
+        const coincidencia = textoCompleto.match(
+            /Twitch Drops\s+(?:Round\s*)?#?\s*(\d+)/i
+        );
+
+        if (coincidencia) numero = coincidencia[1];
+    }
+
+    // Evita añadir el nombre del tema al anfitrión si la página
+    // no tiene un encabezado independiente para la campaña.
+    if (anfitrion) {
+        anfitrion = anfitrion
+            .replace(/\s+(?:Base Invaders)\s*$/i, "")
+            .trim();
+    }
+
+    const estado = /\bLive Now\b/i.test(textoCompleto)
+        ? "En curso"
+        : /\bUpcoming\b/i.test(textoCompleto)
+            ? "Próximamente"
+            : null;
+
+    const fechasMatch = textoCompleto.match(
+        /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*UTC\s*[-–]\s*(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*UTC)/i
+    );
+
+    const tema = encabezados.find(item =>
+        item.orden > (encabezadoCampana?.orden ?? -1) &&
+        !/Twitch Drops|General Drops|Streamer Drops|Drops Metrics/i.test(item.texto)
+    );
+
+    return {
+        campana: numero
+            ? `Twitch Drops Round ${numero}${anfitrion ? ` — Hosted by ${anfitrion}` : ""}`
+            : null,
+        estado,
+        tema: tema?.texto || null,
+        fechas: fechasMatch ? limpiarTexto(fechasMatch[1]) : null
+    };
 }
 
 async function obtenerDropsOficiales() {
@@ -126,118 +308,76 @@ async function obtenerDropsOficiales() {
         respuesta.status !== 200 ||
         typeof respuesta.data !== "string"
     ) {
-        throw new Error(
-            "Facepunch no devolvió una página HTML válida."
-        );
+        throw new Error("Facepunch no devolvió una página HTML válida.");
     }
 
     const $ = cheerio.load(respuesta.data);
-    const textoCompleto = limpiarTexto(
-        $("body").text()
-    );
+    const textoCompleto = limpiarTexto($("body").text());
 
     if (
         !textoCompleto ||
         !/Twitch Drops/i.test(textoCompleto) ||
-        !/General Drops|Streamer Drops/i.test(textoCompleto)
+        !/General Drops/i.test(textoCompleto) ||
+        !/Streamer Drops/i.test(textoCompleto)
     ) {
         throw new Error(
             "No se reconoció la estructura oficial de Twitch Drops. No se actualizarán los anuncios."
         );
     }
 
-    const imagenes = obtenerImagenes($);
+    // Asignamos un orden a los elementos para distinguir las
+    // recompensas generales de las recompensas de streamers.
+    $("body *").each((indice, elemento) => {
+        elemento.__dropsOrder = indice;
+    });
 
-    const campanaMatch = textoCompleto.match(
-        /Twitch Drops?\s+(?:Round\s*)?#?\s*(\d+)\s+Hosted by\s+(.+?)(?=\s+(?:General Drops|Streamer Drops|Drops Metrics|October|November|December|January|February|March|April|May|June|July|August|September)\b)/i
+    const general = buscarEncabezado($, /^General Drops\b/i);
+    const streamer = buscarEncabezado($, /^Streamer Drops\b/i);
+    const metricas = buscarEncabezado($, /^Drops Metrics\b/i);
+
+    if (!general || !streamer) {
+        throw new Error("No se encontraron los encabezados de recompensas.");
+    }
+
+    const ordenGeneral = general.__dropsOrder;
+    const ordenStreamer = streamer.__dropsOrder;
+    const ordenMetricas = metricas?.__dropsOrder ?? Number.MAX_SAFE_INTEGER;
+
+    const generales = extraerTarjetas(
+        $,
+        ordenGeneral,
+        ordenStreamer,
+        []
     );
 
-    const tituloAlternativo = textoCompleto.match(
-        /Twitch Drops?\s+(?:Round\s*)?#?\s*(\d+)/i
+    const streamers = extraerTarjetas(
+        $,
+        ordenStreamer,
+        ordenMetricas,
+        []
     );
 
-    const nombreCampana = campanaMatch
-        ? `Twitch Drops Round ${campanaMatch[1]} — Hosted by ${campanaMatch[2]}`
-        : tituloAlternativo
-            ? `Twitch Drops Round ${tituloAlternativo[1]}`
-            : null;
+    const campana = extraerDatosCampana($, textoCompleto);
 
-    const estado = /\bLive Now\b/i.test(textoCompleto)
-        ? "En curso"
-        : /\bUpcoming\b/i.test(textoCompleto)
-            ? "Próximamente"
-            : null;
-
-    const fechasMatch = textoCompleto.match(
-        /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*UTC\s*[-–]\s*(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*UTC)/i
-    );
-
-    const temaMatch = nombreCampana
-        ? textoCompleto.match(
-            new RegExp(
-                nombreCampana
-                    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
-                "\\s+(.+?)\\s+(?:General Drops|Streamer Drops)",
-                "i"
-            )
-        )
-        : null;
-
-    const indiceGeneral = textoCompleto.search(/General Drops/i);
-    const indiceStreamer = textoCompleto.search(/Streamer Drops/i);
-    const indiceMetricas = textoCompleto.search(/Drops Metrics/i);
-
-    if (indiceGeneral < 0 || indiceStreamer < 0) {
+    if (!campana.campana && !generales.length && !streamers.length) {
         throw new Error(
-            "No se encontraron las secciones oficiales de recompensas."
+            "La página oficial no contiene datos suficientes para publicar información fiable."
         );
     }
 
-    const textoGenerales = textoCompleto.slice(
-        indiceGeneral,
-        indiceStreamer
-    );
-
-    const finStreamer =
-        indiceMetricas > indiceStreamer
-            ? indiceMetricas
-            : textoCompleto.length;
-
-    const textoStreamers = textoCompleto.slice(
-        indiceStreamer,
-        finStreamer
-    );
-
-    const generales = extraerRecompensas(
-        textoGenerales,
-        imagenes
-    );
-
-    const streamers = extraerRecompensas(
-        textoStreamers,
-        imagenes
-    );
-
-    if (
-        !nombreCampana &&
-        generales.length === 0 &&
-        streamers.length === 0
-    ) {
+    // No publicamos una lista vacía como si fuese una lista válida.
+    if (!generales.length && !streamers.length) {
         throw new Error(
-            "La página no contiene datos suficientes para crear un anuncio fiable."
+            "No se pudieron identificar los bloques de recompensas en la página oficial."
         );
     }
 
     return {
         fuente: FACEPUNCH_URL,
-        campana: nombreCampana || "Campaña oficial de Rust",
-        estado: estado || "Consulta oficial",
-        tema: temaMatch
-            ? limpiarTexto(temaMatch[1])
-            : null,
-        fechas: fechasMatch
-            ? limpiarTexto(fechasMatch[1])
-            : null,
+        campana: campana.campana || "Campaña oficial de Rust",
+        estado: campana.estado || "Consulta oficial",
+        tema: campana.tema,
+        fechas: campana.fechas,
         generales,
         streamers,
         consultado: new Date().toISOString()
@@ -264,15 +404,19 @@ function crearEmbedDrops(datos) {
         if (!recompensas.length) {
             embed.addFields({
                 name: titulo,
-                value: "No se pudieron identificar recompensas en esta sección."
+                value: "No se pudieron identificar las recompensas de esta sección."
             });
             return;
         }
 
-        const lineas = recompensas.slice(0, 20).map(
-            recompensa =>
-                `• **${escaparMarkdown(recompensa.nombre)}** — ${recompensa.tiempo}`
-        );
+        const lineas = recompensas.slice(0, 20).map(recompensa => {
+            const nombre = escaparMarkdown(recompensa.nombre);
+            const nombreConImagen = recompensa.imagen
+                ? `[${nombre}](${recompensa.imagen})`
+                : `**${nombre}**`;
+
+            return `• ${nombreConImagen} — ${recompensa.tiempo}`;
+        });
 
         embed.addFields({
             name: titulo,
@@ -280,15 +424,19 @@ function crearEmbedDrops(datos) {
         });
     }
 
-    agregarSeccion(
-        "🌐 Recompensas generales",
-        datos.generales
-    );
+    agregarSeccion("🌐 Recompensas generales", datos.generales);
+    agregarSeccion("🎮 Recompensas de streamers", datos.streamers);
 
-    agregarSeccion(
-        "🎮 Recompensas de streamers",
-        datos.streamers
-    );
+    // Discord no permite poner una imagen distinta en cada línea de un
+    // embed; dejamos la primera imagen de recompensa como miniatura.
+    const primeraImagen = [
+        ...datos.generales,
+        ...datos.streamers
+    ].find(recompensa => recompensa.imagen)?.imagen;
+
+    if (primeraImagen) {
+        embed.setThumbnail(primeraImagen);
+    }
 
     embed.addFields({
         name: "🔗 Fuente",
@@ -321,9 +469,7 @@ async function publicarRustDrops(interaction) {
 }
 
 async function revisarDropsAutomaticos() {
-    if (revisando || !cliente) {
-        return;
-    }
+    if (revisando || !cliente) return;
 
     revisando = true;
 
@@ -333,9 +479,7 @@ async function revisarDropsAutomaticos() {
             channelId: { $exists: true, $ne: null }
         });
 
-        if (!monitores.length) {
-            return;
-        }
+        if (!monitores.length) return;
 
         let datos;
 
@@ -347,7 +491,7 @@ async function revisarDropsAutomaticos() {
                 error.message
             );
 
-            // Nunca borrar ni reemplazar el anuncio si falla Facepunch.
+            // No se toca ningún anuncio si falla la lectura oficial.
             return;
         }
 
@@ -356,12 +500,6 @@ async function revisarDropsAutomaticos() {
 
         for (const monitor of monitores) {
             try {
-                if (monitor.campaignSignature === firma) {
-                    monitor.lastCheckedAt = new Date();
-                    await monitor.save();
-                    continue;
-                }
-
                 const canal = await cliente.channels
                     .fetch(monitor.channelId)
                     .catch(() => null);
@@ -383,6 +521,16 @@ async function revisarDropsAutomaticos() {
                     mensaje = await canal.messages
                         .fetch(monitor.messageId)
                         .catch(() => null);
+                }
+
+                // Si la firma no cambió y el anuncio existe, no lo editamos.
+                if (
+                    monitor.campaignSignature === firma &&
+                    mensaje
+                ) {
+                    monitor.lastCheckedAt = new Date();
+                    await monitor.save();
+                    continue;
                 }
 
                 if (mensaje) {
@@ -425,9 +573,7 @@ async function revisarDropsAutomaticos() {
 }
 
 function iniciarDropsAutomaticos(client) {
-    if (temporizadorIniciado) {
-        return;
-    }
+    if (temporizadorIniciado) return;
 
     cliente = client;
     temporizadorIniciado = true;
