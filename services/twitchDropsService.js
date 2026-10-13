@@ -381,10 +381,6 @@ function extraerImagenDirecta(
         $(elemento);
 
 
-    // --------------------------------------------------------
-    // IMG
-    // --------------------------------------------------------
-
     const imagenes = [];
 
 
@@ -466,10 +462,6 @@ function extraerImagenDirecta(
         });
 
 
-    // --------------------------------------------------------
-    // VIDEO POSTER
-    // --------------------------------------------------------
-
     $elemento
         .find("video")
         .each((_, video) => {
@@ -498,10 +490,6 @@ function extraerImagenDirecta(
             }
         });
 
-
-    // --------------------------------------------------------
-    // SOURCE
-    // --------------------------------------------------------
 
     $elemento
         .find("source")
@@ -542,10 +530,6 @@ function extraerImagenDirecta(
             }
         });
 
-
-    // --------------------------------------------------------
-    // BACKGROUND
-    // --------------------------------------------------------
 
     $elemento
         .find("[style]")
@@ -607,12 +591,6 @@ function extraerImagenDirecta(
 // ============================================================
 // EXTRAER IMAGEN ASOCIADA A NOMBRE
 // ============================================================
-//
-// Busca primero atributos que explícitamente describan
-// el objeto.
-//
-// NO toma cualquier imagen del documento.
-// ============================================================
 
 function buscarImagenPorNombre(
     $,
@@ -628,10 +606,6 @@ function buscarImagenPorNombre(
     }
 
 
-    // --------------------------------------------------------
-    // Mapeo conocido
-    // --------------------------------------------------------
-
     const conocida =
         imagenConocidaPorNombre(
             nombre
@@ -642,10 +616,6 @@ function buscarImagenPorNombre(
         return conocida;
     }
 
-
-    // --------------------------------------------------------
-    // Elementos que contienen nombre del item
-    // --------------------------------------------------------
 
     const selectores = [
 
@@ -1025,10 +995,6 @@ function extraerNombreDesdeContenedor(
     }
 
 
-    // --------------------------------------------------------
-    // 1. Atributos semánticos
-    // --------------------------------------------------------
-
     const selectores =
         [
 
@@ -1143,10 +1109,6 @@ function extraerNombreDesdeContenedor(
     }
 
 
-    // --------------------------------------------------------
-    // 2. Buscar elementos de texto pequeños
-    // --------------------------------------------------------
-
     const candidatos = [];
 
 
@@ -1173,8 +1135,6 @@ function extraerNombreDesdeContenedor(
             }
 
 
-            // No aceptar textos que sean claramente
-            // una frase descriptiva.
             if (
                 texto.split(" ").length > 8
             ) {
@@ -1212,16 +1172,6 @@ function extraerNombreDesdeContenedor(
 
 // ============================================================
 // BUSCAR CONTENEDOR PEQUEÑO CON DURACIÓN
-// ============================================================
-//
-// A diferencia del parser anterior:
-//
-// NO subimos 6 niveles automáticamente.
-// Primero buscamos el contenedor más pequeño que:
-//
-// - tenga duración
-// - no sea enorme
-// - tenga estructura de drop
 // ============================================================
 
 function encontrarContenedorPequeno(
@@ -1440,21 +1390,12 @@ function extraerDatosDeContenedor(
     let imagen = null;
 
 
-    // --------------------------------------------------------
-    // Primero imagen asociada al nombre
-    // --------------------------------------------------------
-
     imagen =
         buscarImagenPorNombre(
             $,
             nombre
         );
 
-
-    // --------------------------------------------------------
-    // Si no existe, buscar SOLO en elementos semánticos
-    // del propio contenedor.
-    // --------------------------------------------------------
 
     if (!imagen) {
 
@@ -1544,10 +1485,6 @@ function extraerDatosDeContenedor(
     }
 
 
-    // --------------------------------------------------------
-    // Mapeo conocido
-    // --------------------------------------------------------
-
     if (!imagen) {
 
         imagen =
@@ -1556,10 +1493,6 @@ function extraerDatosDeContenedor(
             );
     }
 
-
-    // --------------------------------------------------------
-    // Nunca avatar
-    // --------------------------------------------------------
 
     if (
         imagen &&
@@ -1602,10 +1535,6 @@ function extraerGeneralDrops(
     const vistos =
         new Set();
 
-
-    // --------------------------------------------------------
-    // Buscamos nodos que tengan una duración en texto propio.
-    // --------------------------------------------------------
 
     const nodosDuracion = [];
 
@@ -1739,10 +1668,6 @@ function extraerStreamerDrops(
         new Set();
 
 
-    // --------------------------------------------------------
-    // Localizar links reales de Twitch
-    // --------------------------------------------------------
-
     $("a[href]")
         .each((_, enlace) => {
 
@@ -1783,10 +1708,6 @@ function extraerStreamerDrops(
                 return;
             }
 
-
-            // ------------------------------------------------
-            // Encontrar contenedor pequeño
-            // ------------------------------------------------
 
             const contenedor =
                 encontrarContenedorPequeno(
@@ -1835,14 +1756,9 @@ function extraerStreamerDrops(
                 };
 
 
-            // ------------------------------------------------
-            // Buscar nombre evitando el enlace del streamer
-            // ------------------------------------------------
-
             let nombre = null;
 
 
-            // 1. atributos específicos
             const selectoresNombre = [
 
                 "[data-name]",
@@ -1959,10 +1875,6 @@ function extraerStreamerDrops(
             }
 
 
-            // ------------------------------------------------
-            // 2. Buscar textos pequeños
-            // ------------------------------------------------
-
             if (!nombre) {
 
                 const candidatos = [];
@@ -1998,7 +1910,6 @@ function extraerStreamerDrops(
                         }
 
 
-                        // Evitar frases largas
                         if (
                             textoNodo.split(" ").length >
                             6
@@ -2036,12 +1947,6 @@ function extraerStreamerDrops(
             }
 
 
-            // ------------------------------------------------
-            // Fallback actual Facepunch:
-            //
-            // TwitchRivals -> Backpack
-            // ------------------------------------------------
-
             if (
                 !nombre &&
                 normalizarClave(
@@ -2066,24 +1971,12 @@ function extraerStreamerDrops(
             }
 
 
-            // ------------------------------------------------
-            // Imagen
-            // ------------------------------------------------
-
             let imagen =
                 buscarImagenPorNombre(
                     $,
                     nombre
                 );
 
-
-            // ------------------------------------------------
-            // IMPORTANTE:
-            //
-            // NO buscamos la primera imagen del contenedor.
-            //
-            // Eso era lo que provocaba TwitchRivals.
-            // ------------------------------------------------
 
             if (
                 imagen &&
@@ -2094,10 +1987,6 @@ function extraerStreamerDrops(
             }
 
 
-            // ------------------------------------------------
-            // Imagen conocida
-            // ------------------------------------------------
-
             if (!imagen) {
 
                 imagen =
@@ -2106,10 +1995,6 @@ function extraerStreamerDrops(
                     );
             }
 
-
-            // ------------------------------------------------
-            // Backpack conocido
-            // ------------------------------------------------
 
             const nombreClave =
                 normalizarClave(
@@ -2212,10 +2097,6 @@ function corregirStreamerDrops(
                 );
 
 
-            // ------------------------------------------------
-            // Nunca permitir descripción de Facepunch
-            // ------------------------------------------------
-
             if (
                 !esNombreDropValido(
                     nombre,
@@ -2233,10 +2114,6 @@ function corregirStreamerDrops(
                 }
             }
 
-
-            // ------------------------------------------------
-            // Imagen segura
-            // ------------------------------------------------
 
             let imagen =
                 drop.imagen;
@@ -2432,10 +2309,6 @@ function extraerInformacionCampana(
     let final = null;
 
 
-    // --------------------------------------------------------
-    // Título
-    // --------------------------------------------------------
-
     const tituloMatch =
         body.match(
             /Twitch Drops\s+Round\s+\d+(?:\s+Hosted by\s+[A-Za-z0-9 _.'-]+)?/i
@@ -2450,10 +2323,6 @@ function extraerInformacionCampana(
             );
     }
 
-
-    // --------------------------------------------------------
-    // Tema
-    // --------------------------------------------------------
 
     if (titulo) {
 
@@ -2502,10 +2371,6 @@ function extraerInformacionCampana(
     }
 
 
-    // --------------------------------------------------------
-    // Fallback de temas conocidos
-    // --------------------------------------------------------
-
     if (!tema) {
 
         const posibles = [
@@ -2544,10 +2409,6 @@ function extraerInformacionCampana(
     }
 
 
-    // --------------------------------------------------------
-    // Fechas
-    // --------------------------------------------------------
-
     const fechaRegex =
         /([A-Za-z]+)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s+(?:UTC|GMT)/gi;
 
@@ -2579,10 +2440,6 @@ function extraerInformacionCampana(
             );
     }
 
-
-    // --------------------------------------------------------
-    // Estado
-    // --------------------------------------------------------
 
     let estado =
         "unknown";
@@ -2959,10 +2816,6 @@ async function obtenerHtmlConPuppeteer() {
 
 async function obtenerDropsFacepunch() {
 
-    // --------------------------------------------------------
-    // Axios
-    // --------------------------------------------------------
-
     try {
 
         const response =
@@ -3014,10 +2867,6 @@ async function obtenerDropsFacepunch() {
         );
     }
 
-
-    // --------------------------------------------------------
-    // Puppeteer
-    // --------------------------------------------------------
 
     const html =
         await obtenerHtmlConPuppeteer();
@@ -3105,6 +2954,15 @@ async function obtenerTwitchToken() {
 // ============================================================
 // STREAMS RUST
 // ============================================================
+//
+// IMPORTANTE:
+//
+// null = Twitch no pudo responder.
+//
+// [] = Twitch respondió correctamente y no hay streams.
+//
+// Esta diferencia es fundamental para el sistema automático.
+// ============================================================
 
 async function obtenerStreamsRust() {
 
@@ -3129,7 +2987,7 @@ async function obtenerStreamsRust() {
 
     if (!token) {
 
-        return [];
+        return null;
     }
 
 
@@ -3238,7 +3096,17 @@ async function obtenerStreamsRust() {
         );
 
 
-        return [];
+        // NO devolvemos [].
+        //
+        // [] significa "Twitch respondió y no hay nadie".
+        // null significa "no pudimos comprobar Twitch".
+        //
+        // Esto evita que un fallo temporal provoque:
+        //
+        // ONLINE -> OFFLINE -> ONLINE
+        //
+        // y por tanto notificaciones falsas.
+        return null;
     }
 }
 
@@ -3268,6 +3136,25 @@ async function obtenerEstadoStreamer(
         await obtenerStreamsRust();
 
 
+    // Twitch no respondió correctamente.
+    if (
+        !Array.isArray(streams)
+    ) {
+
+        return {
+
+            online:
+                null,
+
+            stream:
+                null,
+
+            disponible:
+                false
+        };
+    }
+
+
     const encontrado =
         streams.find(
             stream =>
@@ -3289,13 +3176,25 @@ async function obtenerEstadoStreamer(
 
         stream:
             encontrado ||
-            null
+            null,
+
+        disponible:
+            true
     };
 }
 
 
 // ============================================================
 // MAPA STREAMERS ONLINE
+// ============================================================
+//
+// Retorna:
+//
+// Map  -> Twitch respondió correctamente.
+//
+// null -> Twitch falló.
+//
+// Nunca se debe convertir null en OFFLINE.
 // ============================================================
 
 async function obtenerMapaStreamersOnline(
@@ -3312,7 +3211,10 @@ async function obtenerMapaStreamersOnline(
                     )
                     .map(
                         drop =>
-                            drop.streamer.login
+                            String(
+                                drop.streamer.login
+                            ).trim()
+                            .toLowerCase()
                     )
             )
         ];
@@ -3332,6 +3234,31 @@ async function obtenerMapaStreamersOnline(
         await obtenerStreamsRust();
 
 
+    // ========================================================
+    // TWITCH FALLÓ
+    // ========================================================
+    //
+    // MUY IMPORTANTE:
+    //
+    // No devolvemos un Map vacío.
+    //
+    // Un Map vacío significaría:
+    //
+    // "Twitch respondió y ninguno está online".
+    //
+    // null significa:
+    //
+    // "No sabemos el estado porque Twitch falló".
+    // ========================================================
+
+    if (
+        !Array.isArray(streams)
+    ) {
+
+        return null;
+    }
+
+
     for (
         const login of logins
     ) {
@@ -3342,14 +3269,12 @@ async function obtenerMapaStreamersOnline(
                     String(
                         item.user_login
                     ).toLowerCase() ===
-                    String(
-                        login
-                    ).toLowerCase()
+                    login
             );
 
 
         mapa.set(
-            login.toLowerCase(),
+            login,
             {
 
                 online:
@@ -3738,9 +3663,11 @@ function crearEmbedResumen(
 
                         const estado =
                             login &&
-                            onlineMap?.get(
-                                login.toLowerCase()
-                            );
+                            onlineMap instanceof Map
+                                ? onlineMap.get(
+                                    login.toLowerCase()
+                                )
+                                : null;
 
 
                         return [
@@ -3866,35 +3793,62 @@ function crearCampaignKey(
 // ============================================================
 // PREPARAR STREAMERS
 // ============================================================
+//
+// Se guarda lastNotifiedOnline para recordar qué directo
+// concreto ya produjo una notificación.
+//
+// Esto evita que el mismo directo vuelva a avisar aunque
+// el documento se reconstruya o el estado online cambie.
+// ============================================================
 
 function prepararStreamers(
     drops,
     onlineMap
 ) {
 
+    const vistos =
+        new Set();
+
+
     return (drops || [])
         .filter(
             drop =>
-                drop.streamer
+                drop?.streamer?.login
         )
         .map(
             drop => {
 
                 const login =
-                    drop.streamer.login;
+                    String(
+                        drop.streamer.login
+                    ).trim();
+
+
+                const clave =
+                    login.toLowerCase();
+
+
+                // Evitar duplicados de Facepunch.
+                if (
+                    !login ||
+                    vistos.has(clave)
+                ) {
+
+                    return null;
+                }
+
+
+                vistos.add(
+                    clave
+                );
 
 
                 const estado =
-                    onlineMap.get(
-                        login.toLowerCase()
-                    ) || {
-
-                        online:
-                            false,
-
-                        stream:
-                            null
-                    };
+                    onlineMap instanceof Map
+                        ? onlineMap.get(
+                            clave
+                        )
+                        : null;
 
 
                 return {
@@ -3911,7 +3865,7 @@ function prepararStreamers(
 
                     online:
                         Boolean(
-                            estado.online
+                            estado?.online
                         ),
 
                     tituloDrop:
@@ -3925,15 +3879,35 @@ function prepararStreamers(
 
                     imagen:
                         drop.imagen ||
+                        null,
+
+                    // ID del directo que ya produjo una alerta.
+                    lastNotifiedOnline:
                         null
                 };
             }
-        );
+        )
+        .filter(Boolean);
 }
 
 
 // ============================================================
 // ACTUALIZAR ESTADOS
+// ============================================================
+//
+// REGLAS:
+//
+// 1. Si Twitch falla -> no tocar estados.
+//
+// 2. Si Twitch responde:
+//      online -> actualizar.
+//      offline -> actualizar.
+//
+// 3. Solo notificar ONLINE una vez por stream.id.
+//
+// 4. Solo notificar OFFLINE cuando el estado guardado
+//    realmente estaba online.
+//
 // ============================================================
 
 async function actualizarEstadosStreamer(
@@ -3953,7 +3927,33 @@ async function actualizarEstadosStreamer(
     }
 
 
+    // ========================================================
+    // TWITCH NO DISPONIBLE
+    // ========================================================
+    //
+    // No hacemos absolutamente nada.
+    //
+    // Si el streamer estaba online y Twitch falla durante un
+    // minuto, seguirá guardado como online.
+    //
+    // Así no tendremos:
+    //
+    // ONLINE
+    // OFFLINE falso
+    // ONLINE falso
+    //
+    if (
+        !(onlineMap instanceof Map)
+    ) {
+
+        return [];
+    }
+
+
     const notificaciones = [];
+
+    const streamersProcesados =
+        new Set();
 
 
     for (
@@ -3961,7 +3961,10 @@ async function actualizarEstadosStreamer(
     ) {
 
         const login =
-            streamer.login;
+            String(
+                streamer.login ||
+                ""
+            ).trim();
 
 
         if (!login) {
@@ -3969,9 +3972,30 @@ async function actualizarEstadosStreamer(
         }
 
 
+        const clave =
+            login.toLowerCase();
+
+
+        // Evita duplicados antiguos que ya puedan existir
+        // en MongoDB.
+        if (
+            streamersProcesados.has(
+                clave
+            )
+        ) {
+
+            continue;
+        }
+
+
+        streamersProcesados.add(
+            clave
+        );
+
+
         const actual =
             onlineMap.get(
-                login.toLowerCase()
+                clave
             ) || {
 
                 online:
@@ -3990,9 +4014,30 @@ async function actualizarEstadosStreamer(
 
         const ahoraOnline =
             Boolean(
-                actual.online
+                actual.online &&
+                actual.stream
             );
 
+
+        const streamId =
+            actual.stream?.id
+                ? String(
+                    actual.stream.id
+                )
+                : null;
+
+
+        const ultimoNotificado =
+            streamer.lastNotifiedOnline
+                ? String(
+                    streamer.lastNotifiedOnline
+                )
+                : null;
+
+
+        // ====================================================
+        // ACTUALIZAR ESTADO
+        // ====================================================
 
         streamer.online =
             ahoraOnline;
@@ -4003,16 +4048,20 @@ async function actualizarEstadosStreamer(
         ) {
 
             streamer.streamTitle =
-                actual.stream.title;
+                actual.stream.title ||
+                null;
 
             streamer.gameName =
-                actual.stream.game_name;
+                actual.stream.game_name ||
+                null;
 
             streamer.viewerCount =
-                actual.stream.viewer_count;
+                actual.stream.viewer_count ||
+                0;
 
             streamer.startedAt =
-                actual.stream.started_at;
+                actual.stream.started_at ||
+                null;
 
         } else {
 
@@ -4030,10 +4079,24 @@ async function actualizarEstadosStreamer(
         }
 
 
+        // ====================================================
+        // STREAM ONLINE
+        // ====================================================
+        //
+        // Solo se avisa una vez por ID de directo.
+        //
+        // Si Twitch devuelve el mismo stream.id en las
+        // siguientes revisiones, NO se vuelve a avisar.
+        //
         if (
-            !anterior &&
-            ahoraOnline
+            ahoraOnline &&
+            streamId &&
+            ultimoNotificado !== streamId
         ) {
+
+            streamer.lastNotifiedOnline =
+                streamId;
+
 
             notificaciones.push({
 
@@ -4045,6 +4108,15 @@ async function actualizarEstadosStreamer(
         }
 
 
+        // ====================================================
+        // STREAM OFFLINE
+        // ====================================================
+        //
+        // Solo avisamos si realmente estaba online antes.
+        //
+        // Si estaba offline y sigue offline:
+        // NO se manda nada.
+        //
         if (
             anterior &&
             !ahoraOnline
@@ -4258,11 +4330,6 @@ async function publicarRustDrops(
                 interactionOrChannel.channel;
         }
 
-
-        // ----------------------------------------------------
-        // Channel
-        // ----------------------------------------------------
-
         else {
 
             channel =
@@ -4308,6 +4375,17 @@ async function publicarRustDrops(
         }
 
 
+        // Para una consulta manual, si Twitch falla usamos
+        // un Map vacío solamente para poder construir el embed.
+        //
+        // El sistema automático NO utiliza este fallback para
+        // actualizar estados.
+        const mapaStreamsSeguro =
+            onlineMap instanceof Map
+                ? onlineMap
+                : new Map();
+
+
         // ----------------------------------------------------
         // Interaction
         // ----------------------------------------------------
@@ -4315,25 +4393,60 @@ async function publicarRustDrops(
         if (
             interactionOrChannel &&
             typeof interactionOrChannel.reply ===
+                "function" &&
+            typeof interactionOrChannel.followUp ===
                 "function"
         ) {
 
             const embed =
                 crearEmbedResumen(
                     datos,
-                    onlineMap
+                    mapaStreamsSeguro
                 );
 
 
-            await interactionOrChannel.reply({
+            // =================================================
+            // FIX InteractionAlreadyReplied
+            // =================================================
 
-                embeds: [
-                    embed
-                ],
+            if (
+                interactionOrChannel.deferred
+            ) {
 
-                ephemeral:
-                    true
-            });
+                await interactionOrChannel.editReply({
+
+                    embeds: [
+                        embed
+                    ]
+
+                });
+
+            } else if (
+                interactionOrChannel.replied
+            ) {
+
+                await interactionOrChannel.followUp({
+
+                    embeds: [
+                        embed
+                    ],
+
+                    ephemeral:
+                        true
+                });
+
+            } else {
+
+                await interactionOrChannel.reply({
+
+                    embeds: [
+                        embed
+                    ],
+
+                    ephemeral:
+                        true
+                });
+            }
 
 
             return {
@@ -4439,8 +4552,9 @@ async function publicarRustDrops(
 
 
             const estado =
-                login
-                    ? onlineMap.get(
+                login &&
+                mapaStreamsSeguro instanceof Map
+                    ? mapaStreamsSeguro.get(
                         login.toLowerCase()
                     )
                     : {
@@ -4842,10 +4956,46 @@ async function revisarDropsAutomaticos(
             );
 
 
+        // ====================================================
+        // COMPROBAR TWITCH
+        // ====================================================
+
         const onlineMap =
             await obtenerMapaStreamersOnline(
                 normalizados.streamerDrops
             );
+
+
+        // ====================================================
+        // SI TWITCH FALLÓ
+        // ====================================================
+        //
+        // No actualizamos estados.
+        //
+        // No enviamos ONLINE.
+        //
+        // No enviamos OFFLINE.
+        //
+        // La campaña/Drops de Facepunch sí pueden seguir
+        // procesándose.
+        // ====================================================
+
+        const twitchDisponible =
+            onlineMap instanceof Map;
+
+
+        const mapaStreamsSeguro =
+            twitchDisponible
+                ? onlineMap
+                : new Map();
+
+
+        if (!twitchDisponible) {
+
+            console.warn(
+                "[Twitch Drops] Twitch no respondió correctamente. Se conserva el estado de los streamers."
+            );
+        }
 
 
         for (
@@ -4871,11 +5021,13 @@ async function revisarDropsAutomaticos(
                 // ------------------------------------------------
 
                 const notificaciones =
-                    await actualizarEstadosStreamer(
-                        monitor,
-                        onlineMap,
-                        client
-                    );
+                    twitchDisponible
+                        ? await actualizarEstadosStreamer(
+                            monitor,
+                            mapaStreamsSeguro,
+                            client
+                        )
+                        : [];
 
 
                 // ------------------------------------------------
@@ -4906,7 +5058,7 @@ async function revisarDropsAutomaticos(
                         await publicarRustDrops(
                             channel,
                             normalizados,
-                            onlineMap
+                            mapaStreamsSeguro
                         );
 
 
@@ -4946,6 +5098,72 @@ async function revisarDropsAutomaticos(
                         streamer:
                             normalizados.streamerDrops
                     };
+
+
+                    // =================================================
+                    // IMPORTANTE
+                    // =================================================
+                    //
+                    // Si Twitch estaba disponible, sincronizamos
+                    // los nuevos streamers sin perder el
+                    // lastNotifiedOnline de los existentes.
+                    //
+                    // Si Twitch falló, NO reconstruimos estados.
+                    //
+                    if (
+                        twitchDisponible
+                    ) {
+
+                        const anteriores =
+                            new Map(
+
+                                (
+                                    monitor.streamers ||
+                                    []
+                                ).map(
+                                    streamer => [
+
+                                        String(
+                                            streamer.login
+                                        ).toLowerCase(),
+
+                                        streamer
+                                    ]
+                                )
+                            );
+
+
+                        const nuevos =
+                            prepararStreamers(
+                                normalizados.streamerDrops,
+                                mapaStreamsSeguro
+                            );
+
+
+                        for (
+                            const streamer of nuevos
+                        ) {
+
+                            const anterior =
+                                anteriores.get(
+                                    streamer.login.toLowerCase()
+                                );
+
+
+                            if (
+                                anterior
+                            ) {
+
+                                streamer.lastNotifiedOnline =
+                                    anterior.lastNotifiedOnline ||
+                                    null;
+                            }
+                        }
+
+
+                        monitor.streamers =
+                            nuevos;
+                    }
                 }
 
 
@@ -5127,10 +5345,16 @@ async function obtenerRustDropsEmbed(
         );
 
 
+    const mapaStreamsSeguro =
+        onlineMap instanceof Map
+            ? onlineMap
+            : new Map();
+
+
     const embed =
         crearEmbedResumen(
             normalizados,
-            onlineMap
+            mapaStreamsSeguro
         );
 
 
