@@ -1,4 +1,3 @@
-
 const axios = require("axios");
 const cheerio = require("cheerio");
 const { EmbedBuilder } = require("discord.js");
@@ -349,12 +348,6 @@ function encontrarTarjeta($, nodo, duracion) {
     return tarjetaConImagen || tarjetaConEnlace;
 }
 
-/**
- * Determina si la tarjeta indica que el objeto aún no se ha revelado.
- *
- * Es importante comprobar el texto de la tarjeta completa antes de
- * interpretar el resto del contenido como el nombre de un objeto.
- */
 function esDropSinRevelar(texto) {
     const valor = limpiarTexto(texto);
 
@@ -371,10 +364,65 @@ function esDropSinRevelar(texto) {
     );
 }
 
-/**
- * Busca texto explícito de recompensa desconocida.
- * Nunca deduce el nombre de una recompensa usando únicamente su imagen.
- */
+function obtenerNombreRecompensa($, tarjeta, textoOriginal) {
+    const selectores = [
+        ".drop-type",
+        ".drop-box-footer .drop-type",
+        "[class*='drop-type']",
+        "[class*='reward-name']",
+        "[class*='item-name']"
+    ];
+
+    for (const selector of selectores) {
+        const nombre = limpiarTexto(tarjeta.find(selector).first().text());
+
+        if (nombre) {
+            return normalizarNombre(nombre);
+        }
+    }
+
+    return normalizarNombre(obtenerTextoSinDuracion(textoOriginal));
+}
+
+function obtenerEnlaceStreamer($, tarjeta) {
+    let resultado = null;
+
+    tarjeta.find("a[href]").each((_, enlace) => {
+        if (resultado) return;
+
+        const href = convertirUrl($(enlace).attr("href"));
+        const nombre = limpiarTexto($(enlace).text());
+
+        if (!href || !nombre) return;
+
+        let url;
+
+        try {
+            url = new URL(href);
+        } catch {
+            return;
+        }
+
+        if (
+            !/(^|\.)twitch\.tv$/i.test(url.hostname) ||
+            /\/(directory|downloads|settings|videos|p|search)(\/|$)/i.test(url.pathname)
+        ) {
+            return;
+        }
+
+        const canal = url.pathname.split("/").filter(Boolean)[0];
+
+        if (!canal) return;
+
+        resultado = {
+            nombre,
+            url: `https://www.twitch.tv/${canal}`
+        };
+    });
+
+    return resultado;
+}
+
 function extraerTarjetas($, inicioOrden, finOrden) {
     const recompensas = [];
     const duplicados = new Set();
@@ -404,69 +452,23 @@ function extraerTarjetas($, inicioOrden, finOrden) {
         const textoOriginal = limpiarTexto(tarjeta.text());
         const sinRevelar = esDropSinRevelar(textoOriginal);
 
-        // Diagnóstico de la tarjeta de cinco horas para identificar
-        // exactamente el contenido recibido desde Facepunch.
-        if (duracion.unidad === "h" && duracion.cantidad === 5) {
-            console.log("🔎 TARJETA OFICIAL DE 5 HORAS:", {
-                texto: textoOriginal.slice(0, 1000),
-                comingSoon: sinRevelar,
-                html: tarjeta.html()?.slice(0, 3000)
-            });
-        }
-
         let streamer = null;
+        let streamerUrl = null;
         let nombre = null;
         let imagen = null;
 
         if (sinRevelar) {
-            // No utilizar nombres, imágenes ni texto sobrante de una
-            // recompensa cuyo nombre oficial aún no se conoce.
             nombre = "Próximamente";
-            imagen = null;
         } else {
-            let textoTarjeta = obtenerTextoSinDuracion(textoOriginal);
-            const nombresEnlaces = [];
+            const enlaceStreamer = obtenerEnlaceStreamer($, tarjeta);
 
-            tarjeta.find("a").each((_, enlace) => {
-                const nombreEnlace = limpiarTexto($(enlace).text());
-                const href = $(enlace).attr("href") || "";
-
-                if (
-                    nombreEnlace &&
-                    /twitch\.tv/i.test(href) &&
-                    !/^(online|random|sort by)$/i.test(nombreEnlace)
-                ) {
-                    nombresEnlaces.push(nombreEnlace);
-                }
-            });
-
-            for (const nombreEnlace of nombresEnlaces) {
-                if (
-                    textoTarjeta.toLowerCase().includes(nombreEnlace.toLowerCase()) &&
-                    !/^(rust|twitch|twitchrivals)$/i.test(nombreEnlace)
-                ) {
-                    streamer = nombreEnlace;
-
-                    textoTarjeta = textoTarjeta.replace(
-                        new RegExp(escaparRegex(nombreEnlace), "i"),
-                        " "
-                    );
-
-                    break;
-                }
+            if (enlaceStreamer) {
+                streamer = enlaceStreamer.nombre;
+                streamerUrl = enlaceStreamer.url;
             }
 
-            if (/^TwitchRivals\s+/i.test(textoTarjeta)) {
-                streamer = streamer || "TwitchRivals";
-                textoTarjeta = textoTarjeta.replace(/^TwitchRivals\s+/i, "");
-            }
+            nombre = obtenerNombreRecompensa($, tarjeta, textoOriginal);
 
-            nombre = normalizarNombre(textoTarjeta)
-                .replace(/^[\s:|•\-–]+/, "")
-                .replace(/[\s:|•\-–]+$/, "");
-
-            // Evitar que estados, métricas o textos genéricos se
-            // publiquen como nombres de objetos.
             if (
                 !nombre ||
                 nombre.length > 65 ||
@@ -480,7 +482,7 @@ function extraerTarjetas($, inicioOrden, finOrden) {
         }
 
         const tiempo = duracion.texto;
-        const clave = `${nombre.toLowerCase()}-${tiempo}-${streamer || ""}`;
+        const clave = `${nombre.toLowerCase()}-${tiempo}-${streamerUrl || streamer || ""}`;
 
         if (duplicados.has(clave)) continue;
 
@@ -489,6 +491,7 @@ function extraerTarjetas($, inicioOrden, finOrden) {
         recompensas.push({
             nombre,
             streamer,
+            streamerUrl,
             tiempo,
             imagen
         });
@@ -630,8 +633,10 @@ async function obtenerDropsOficiales() {
                 tiempo,
                 imagen: Boolean(imagen)
             })),
-            streamers: streamers.map(({ nombre, tiempo, imagen }) => ({
+            streamers: streamers.map(({ nombre, streamer, streamerUrl, tiempo, imagen }) => ({
                 nombre,
+                streamer,
+                streamerUrl,
                 tiempo,
                 imagen: Boolean(imagen)
             }))
@@ -651,41 +656,64 @@ async function obtenerDropsOficiales() {
 }
 
 // ============================================================
-// EMBEDS: UN EMBED COMPLETO POR RECOMPENSA
+// EMBEDS: SEPARACIÓN POR TIPO DE DROP
 // ============================================================
 
-function crearEmbedsDrops(datos) {
-    const recompensas = [
-        ...(datos.generales || []).map(recompensa => ({
-            ...recompensa,
-            tipo: "Recompensa general"
-        })),
-        ...(datos.streamers || []).map(recompensa => ({
-            ...recompensa,
-            tipo: "Recompensa de streamer"
-        }))
-    ];
+function crearEmbedSeccion(titulo, descripcion, datos) {
+    const embed = new EmbedBuilder()
+        .setColor(0x9146ff)
+        .setTitle(titulo)
+        .setURL(FACEPUNCH_URL)
+        .setDescription(descripcion)
+        .setFooter({
+            text: "RustLogix • Fuente oficial de Facepunch"
+        })
+        .setTimestamp(new Date(datos.consultado));
 
-    return recompensas.map(recompensa => {
-        const esProximamente =
-            /^Próximamente$/i.test(recompensa.nombre);
+    if (datos.tema) {
+        embed.addFields({
+            name: "🎯 Campaña",
+            value: datos.tema,
+            inline: true
+        });
+    }
+
+    if (datos.fechas) {
+        embed.addFields({
+            name: "📅 Fechas",
+            value: datos.fechas,
+            inline: false
+        });
+    }
+
+    return embed;
+}
+
+function crearEmbedsDrops(datos) {
+    const embeds = [];
+
+    // Mensaje separador: Drops generales.
+    embeds.push(
+        crearEmbedSeccion(
+            "🎁 DROPS GENERALES",
+            `Recompensas disponibles para la campaña general de Rust.\n\n**Campaña:** ${datos.campana}\n**Estado:** ${datos.estado}`,
+            datos
+        )
+    );
+
+    for (const recompensa of (datos.generales || [])) {
+        const esProximamente = /^Próximamente$/i.test(recompensa.nombre);
 
         const embed = new EmbedBuilder()
             .setColor(0x9146ff)
-            .setTitle(
-                `${recompensa.tipo === "Recompensa de streamer" ? "🎮" : "🎁"} ${recompensa.nombre}`
-            )
+            .setTitle(`🎁 ${recompensa.nombre}`)
             .setURL(FACEPUNCH_URL)
             .setDescription(
                 `**Campaña:** ${datos.campana}\n` +
                 `**Estado:** ${datos.estado}` +
-                (datos.tema ? `\n**Tema:** ${datos.tema}` : "") +
-                (datos.fechas ? `\n**Fechas:** ${datos.fechas}` : "") +
-                (
-                    esProximamente
-                        ? "\n\nEl objeto de esta recompensa todavía no ha sido revelado oficialmente por Facepunch."
-                        : ""
-                )
+                (esProximamente
+                    ? "\n\nEl objeto se encuentra pendiente de revelación oficial."
+                    : "")
             )
             .addFields(
                 {
@@ -695,7 +723,58 @@ function crearEmbedsDrops(datos) {
                 },
                 {
                     name: "📦 Tipo",
-                    value: recompensa.tipo,
+                    value: "Drop general",
+                    inline: true
+                },
+                {
+                    name: "🔗 Fuente oficial",
+                    value: `[Consultar Facepunch](${FACEPUNCH_URL})`
+                }
+            )
+            .setFooter({
+                text: "RustLogix • Fuente oficial de Facepunch"
+            })
+            .setTimestamp(new Date(datos.consultado));
+
+        if (!esProximamente && esImagenValida(recompensa.imagen)) {
+            embed.setImage(recompensa.imagen);
+        }
+
+        embeds.push(embed);
+    }
+
+    // Mensaje separador: Drops específicos de streamers.
+    embeds.push(
+        crearEmbedSeccion(
+            "🎮 DROPS ESPECÍFICOS DE STREAMERS",
+            `Recompensas vinculadas a canales concretos de Twitch.\n\n**Campaña:** ${datos.campana}\n**Estado:** ${datos.estado}`,
+            datos
+        )
+    );
+
+    for (const recompensa of (datos.streamers || [])) {
+        const esProximamente = /^Próximamente$/i.test(recompensa.nombre);
+
+        const embed = new EmbedBuilder()
+            .setColor(0x6441a5)
+            .setTitle(`🎮 ${recompensa.nombre}`)
+            .setURL(recompensa.streamerUrl || FACEPUNCH_URL)
+            .setDescription(
+                `**Campaña:** ${datos.campana}\n` +
+                `**Estado:** ${datos.estado}` +
+                (esProximamente
+                    ? "\n\nEl objeto se encuentra pendiente de revelación oficial."
+                    : "")
+            )
+            .addFields(
+                {
+                    name: "⏱️ Tiempo necesario",
+                    value: recompensa.tiempo || "Duración no detectada",
+                    inline: true
+                },
+                {
+                    name: "📦 Tipo",
+                    value: "Drop específico de streamer",
                     inline: true
                 },
                 {
@@ -709,23 +788,24 @@ function crearEmbedsDrops(datos) {
             .setTimestamp(new Date(datos.consultado));
 
         if (recompensa.streamer) {
+            const nombreCanal = escaparMarkdown(recompensa.streamer);
+            const urlCanal = recompensa.streamerUrl || FACEPUNCH_URL;
+
             embed.addFields({
-                name: "🎮 Streamer",
-                value: escaparMarkdown(recompensa.streamer),
+                name: "🎮 Canal de Twitch",
+                value: `[${nombreCanal}](${urlCanal})`,
                 inline: true
             });
         }
 
-        // No asignar imágenes a recompensas cuyo objeto no se ha revelado.
-        if (
-            !esProximamente &&
-            esImagenValida(recompensa.imagen)
-        ) {
+        if (!esProximamente && esImagenValida(recompensa.imagen)) {
             embed.setImage(recompensa.imagen);
         }
 
-        return embed;
-    });
+        embeds.push(embed);
+    }
+
+    return embeds.slice(0, MAX_DROPS_POR_PUBLICACION);
 }
 
 function crearEmbedDrops(datos) {
@@ -735,6 +815,10 @@ function crearEmbedDrops(datos) {
         .setURL(FACEPUNCH_URL)
         .setDescription("No se encontraron recompensas disponibles.");
 }
+
+// ============================================================
+// FIRMA DE CAMPAÑA
+// ============================================================
 
 function firmaCampana(datos) {
     return JSON.stringify({
@@ -753,10 +837,7 @@ function firmaCampana(datos) {
 
 async function publicarRustDrops(interaction) {
     const datos = await obtenerDropsOficiales();
-    const embeds = crearEmbedsDrops(datos).slice(
-        0,
-        MAX_DROPS_POR_PUBLICACION
-    );
+    const embeds = crearEmbedsDrops(datos);
 
     if (!embeds.length) {
         await interaction.editReply({
@@ -781,7 +862,7 @@ async function publicarRustDrops(interaction) {
     }
 
     console.log(
-        `✅ /drops rust: publicados ${embeds.length} mensajes individuales.`
+        `✅ /drops rust: publicados ${embeds.length} mensajes individuales, con secciones por tipo.`
     );
 
     return datos;
@@ -845,10 +926,7 @@ async function revisarDropsAutomaticos() {
         }
 
         const firma = firmaCampana(datos);
-        const embeds = crearEmbedsDrops(datos).slice(
-            0,
-            MAX_DROPS_POR_PUBLICACION
-        );
+        const embeds = crearEmbedsDrops(datos);
 
         if (!embeds.length) {
             console.warn(
