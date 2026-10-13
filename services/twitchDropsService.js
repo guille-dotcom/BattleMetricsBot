@@ -1,3 +1,4 @@
+
 const axios = require("axios");
 const cheerio = require("cheerio");
 const { EmbedBuilder } = require("discord.js");
@@ -5,6 +6,7 @@ const RustDropsMonitor = require("../models/RustDropsMonitor");
 
 const FACEPUNCH_URL = "https://twitch.facepunch.com/";
 const INTERVALO_REVISION = 5 * 60 * 1000;
+const MAX_EMBEDS_POR_MENSAJE = 10;
 
 let cliente = null;
 let temporizadorIniciado = false;
@@ -27,6 +29,7 @@ function escaparMarkdown(texto) {
 function normalizarNombre(texto) {
     return limpiarTexto(texto)
         .replace(/^image:\s*/i, "")
+        .replace(/^TwitchRivals\s+/i, "")
         .replace(/\s+/g, " ")
         .trim();
 }
@@ -36,10 +39,7 @@ function convertirUrl(url) {
 
     const valor = String(url).trim().replace(/^["']|["']$/g, "");
 
-    if (
-        !valor ||
-        /^(data|blob|javascript):/i.test(valor)
-    ) {
+    if (!valor || /^(data|blob|javascript):/i.test(valor)) {
         return null;
     }
 
@@ -57,11 +57,20 @@ function convertirUrl(url) {
 }
 
 function esImagenValida(url) {
-    if (!url) return false;
+    if (!url || !/^https?:\/\//i.test(url)) {
+        return false;
+    }
 
-    // No utilizar archivos SVG ni vídeos como si fueran imágenes.
+    // Nunca utilizar avatares de Twitch como imágenes de recompensas.
+    if (
+        /static-cdn\.jtvnw\.net/i.test(url) ||
+        /jtv_user_pictures/i.test(url) ||
+        /profile_image/i.test(url)
+    ) {
+        return false;
+    }
+
     return (
-        /^https?:\/\//i.test(url) &&
         !/\.svg(?:[?#].*)?$/i.test(url) &&
         !/\.mp4(?:[?#].*)?$/i.test(url) &&
         !/\.webm(?:[?#].*)?$/i.test(url) &&
@@ -105,16 +114,13 @@ function obtenerUrlMedia($, elemento) {
         nodo.attr("content"),
         nodo.attr("srcset")?.split(",").pop()?.trim().split(/\s+/)[0],
         nodo.attr("data-srcset")?.split(",").pop()?.trim().split(/\s+/)[0],
-
         nodo.find("img").first().attr("src"),
         nodo.find("img").first().attr("data-src"),
         nodo.find("img").first().attr("data-original"),
         nodo.find("img").first().attr("srcset")
             ?.split(",").pop()?.trim().split(/\s+/)[0],
-
         nodo.find("video").first().attr("poster"),
         nodo.find("video").first().attr("data-poster"),
-
         nodo.find("source").first().attr("poster"),
         nodo.find("source").first().attr("data-poster")
     ];
@@ -145,7 +151,6 @@ function obtenerUrlMedia($, elemento) {
 function obtenerImagenTarjeta($, tarjeta) {
     if (!tarjeta || !tarjeta.length) return null;
 
-    // Buscar primero imágenes y posters reales dentro de la tarjeta.
     const selectores = [
         "img",
         "picture img",
@@ -173,7 +178,6 @@ function obtenerImagenTarjeta($, tarjeta) {
         return candidatos[0];
     }
 
-    // Algunos diseños colocan la imagen como fondo de un contenedor.
     const fondo = extraerUrlDeEstilo(tarjeta.attr("style"));
 
     if (fondo) return fondo;
@@ -321,20 +325,13 @@ function encontrarTarjeta($, nodo, duracion) {
             );
 
         if (esCandidato) {
-            if (
-                !tarjetaConEnlace &&
-                actual.find("a").length > 0
-            ) {
+            if (!tarjetaConEnlace && actual.find("a").length > 0) {
                 tarjetaConEnlace = actual;
             }
 
-            // No detenerse al encontrar un enlace: la imagen puede estar
-            // en un contenedor padre de la misma recompensa.
             if (tieneMediosDeImagen($, actual)) {
                 tarjetaConImagen = actual;
 
-                // Seguir buscando un contenedor algo más completo,
-                // sin aceptar secciones enormes con varias recompensas.
                 if (nivel >= 2) break;
             }
         }
@@ -407,6 +404,12 @@ function extraerTarjetas($, inicioOrden, finOrden) {
 
                 break;
             }
+        }
+
+        // TwitchRivals es el streamer, no parte del nombre del objeto.
+        if (/^TwitchRivals\s+/i.test(textoTarjeta)) {
+            streamer = streamer || "TwitchRivals";
+            textoTarjeta = textoTarjeta.replace(/^TwitchRivals\s+/i, "");
         }
 
         const nombre = normalizarNombre(textoTarjeta)
@@ -584,69 +587,82 @@ async function obtenerDropsOficiales() {
     };
 }
 
+/**
+ * Crea un embed individual por recompensa.
+ * Cada embed utiliza setImage() para que el objeto tenga su propia imagen.
+ */
+function crearEmbedsDrops(datos) {
+    const recompensas = [
+        ...datos.generales.map(recompensa => ({
+            ...recompensa,
+            tipo: "Recompensa general"
+        })),
+        ...datos.streamers.map(recompensa => ({
+            ...recompensa,
+            tipo: "Recompensa de streamer"
+        }))
+    ];
+
+    return recompensas.map(recompensa => {
+        const embed = new EmbedBuilder()
+            .setColor(0x9146ff)
+            .setTitle(
+                `${recompensa.tipo === "Recompensa de streamer" ? "🎮" : "🎁"} ${recompensa.nombre}`
+            )
+            .setURL(FACEPUNCH_URL)
+            .setDescription(
+                `**Campaña:** ${datos.campana}\n` +
+                `**Estado:** ${datos.estado}` +
+                (datos.tema ? `\n**Tema:** ${datos.tema}` : "") +
+                (datos.fechas ? `\n**Fechas:** ${datos.fechas}` : "")
+            )
+            .addFields(
+                {
+                    name: "⏱️ Tiempo necesario",
+                    value: recompensa.tiempo || "Duración no detectada",
+                    inline: true
+                },
+                {
+                    name: "📦 Tipo",
+                    value: recompensa.tipo,
+                    inline: true
+                }
+            )
+            .setFooter({
+                text: "RustLogix • Fuente oficial de Facepunch"
+            })
+            .setTimestamp(new Date(datos.consultado));
+
+        if (recompensa.streamer) {
+            embed.addFields({
+                name: "🎮 Streamer",
+                value: escaparMarkdown(recompensa.streamer),
+                inline: true
+            });
+        }
+
+        // Solo se añade una imagen si es válida.
+        // Los avatares de Twitch ya se descartan en esImagenValida().
+        if (esImagenValida(recompensa.imagen)) {
+            embed.setImage(recompensa.imagen);
+        }
+
+        embed.addFields({
+            name: "🔗 Fuente oficial",
+            value: `[Consultar Facepunch](${FACEPUNCH_URL})`
+        });
+
+        return embed;
+    });
+}
+
+// Compatibilidad con cualquier código anterior que espere un único embed.
 function crearEmbedDrops(datos) {
-    const embed = new EmbedBuilder()
+    return crearEmbedsDrops(datos)[0] || new EmbedBuilder()
         .setColor(0x9146ff)
         .setTitle("🎁 Rust — Twitch Drops oficiales")
         .setURL(FACEPUNCH_URL)
-        .setDescription(
-            `**Campaña:** ${datos.campana}\n` +
-            `**Estado:** ${datos.estado}` +
-            (datos.tema ? `\n**Tema:** ${datos.tema}` : "") +
-            (datos.fechas ? `\n**Fechas:** ${datos.fechas}` : "")
-        )
-        .setFooter({
-            text: "RustLogix • Fuente oficial de Facepunch"
-        })
-        .setTimestamp(new Date(datos.consultado));
-
-    function agregarSeccion(titulo, recompensas) {
-        if (!recompensas.length) {
-            embed.addFields({
-                name: titulo,
-                value: "No se identificaron recompensas en esta sección."
-            });
-            return;
-        }
-
-        const lineas = recompensas.slice(0, 20).map(recompensa => {
-            const nombre = escaparMarkdown(recompensa.nombre);
-            const imagen = esImagenValida(recompensa.imagen)
-                ? `[${nombre}](${recompensa.imagen})`
-                : `**${nombre}**`;
-
-            const tiempo = recompensa.tiempo || "Duración no detectada";
-            const streamer = recompensa.streamer
-                ? ` — ${escaparMarkdown(recompensa.streamer)}`
-                : "";
-
-            return `• ${imagen} — ${tiempo}${streamer}`;
-        });
-
-        embed.addFields({
-            name: titulo,
-            value: lineas.join("\n").slice(0, 1024)
-        });
-    }
-
-    agregarSeccion("🌐 Recompensas generales", datos.generales);
-    agregarSeccion("🎮 Recompensas de streamers", datos.streamers);
-
-    const primeraImagen = [
-        ...datos.generales,
-        ...datos.streamers
-    ].find(recompensa => esImagenValida(recompensa.imagen))?.imagen;
-
-    if (primeraImagen) {
-        embed.setThumbnail(primeraImagen);
-    }
-
-    embed.addFields({
-        name: "🔗 Fuente",
-        value: `[Consultar Facepunch](${FACEPUNCH_URL})`
-    });
-
-    return embed;
+        .setDescription("No se encontraron recompensas disponibles.");
 }
 
 function firmaCampana(datos) {
@@ -662,9 +678,27 @@ function firmaCampana(datos) {
 
 async function publicarRustDrops(interaction) {
     const datos = await obtenerDropsOficiales();
+    const embeds = crearEmbedsDrops(datos);
+
+    if (!embeds.length) {
+        await interaction.editReply({
+            content: "No se encontraron recompensas oficiales para mostrar.",
+            embeds: []
+        });
+
+        return datos;
+    }
+
+    if (embeds.length > MAX_EMBEDS_POR_MENSAJE) {
+        console.warn(
+            `⚠️ Facepunch devolvió ${embeds.length} recompensas. ` +
+            `Discord permite como máximo ${MAX_EMBEDS_POR_MENSAJE} embeds por mensaje.`
+        );
+    }
 
     await interaction.editReply({
-        embeds: [crearEmbedDrops(datos)],
+        content: "",
+        embeds: embeds.slice(0, MAX_EMBEDS_POR_MENSAJE),
         allowedMentions: { parse: [] }
     });
 
@@ -697,7 +731,10 @@ async function revisarDropsAutomaticos() {
         }
 
         const firma = firmaCampana(datos);
-        const embed = crearEmbedDrops(datos);
+        const embeds = crearEmbedsDrops(datos).slice(
+            0,
+            MAX_EMBEDS_POR_MENSAJE
+        );
 
         for (const monitor of monitores) {
             try {
@@ -728,12 +765,13 @@ async function revisarDropsAutomaticos() {
 
                 if (mensaje) {
                     await mensaje.edit({
-                        embeds: [embed],
+                        content: "",
+                        embeds,
                         allowedMentions: { parse: [] }
                     });
                 } else {
                     mensaje = await canal.send({
-                        embeds: [embed],
+                        embeds,
                         allowedMentions: { parse: [] }
                     });
                 }
@@ -746,7 +784,8 @@ async function revisarDropsAutomaticos() {
                 await monitor.save();
 
                 console.log(
-                    `✅ Twitch Drops actualizados en ${canal.guild?.name || canal.id}`
+                    `✅ Twitch Drops actualizados en ${canal.guild?.name || canal.id} ` +
+                    `(${embeds.length} embeds)`
                 );
             } catch (error) {
                 console.error(
@@ -782,6 +821,7 @@ function iniciarDropsAutomaticos(client) {
 module.exports = {
     obtenerDropsOficiales,
     crearEmbedDrops,
+    crearEmbedsDrops,
     publicarRustDrops,
     iniciarDropsAutomaticos,
     revisarDropsAutomaticos
