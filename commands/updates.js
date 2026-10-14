@@ -8,7 +8,7 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 
 const NEWS_URL = "https://www.rustyfields.com/news";
-const TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single";
+const DEEPL_API_URL = "https://api-free.deepl.com/v2/translate";
 
 const MESES = {
     Jan: "ene",
@@ -86,48 +86,69 @@ function obtenerFecha(texto) {
     };
 }
 
-// Traduce el texto del inglés al español.
-// Si Google Translate falla, devuelve el texto original.
-async function traducirTexto(texto) {
-    const original = limpiarTexto(texto);
+// Traduce varias noticias en una sola petición a DeepL.
+async function traducirTextos(textos) {
+    const originales = textos.map(limpiarTexto);
 
-    if (!original) {
-        return original;
+    if (originales.length === 0) {
+        return [];
+    }
+
+    const apiKey = process.env.DEEPL_API_KEY;
+
+    if (!apiKey) {
+        console.warn(
+            "⚠️ Falta la variable de entorno DEEPL_API_KEY."
+        );
+
+        return originales;
     }
 
     try {
-        const respuesta = await axios.get(TRANSLATE_URL, {
-            params: {
-                client: "gtx",
-                sl: "auto",
-                tl: "es",
-                dt: "t",
-                q: original
+        const respuesta = await axios.post(
+            DEEPL_API_URL,
+            {
+                text: originales,
+                target_lang: "ES"
             },
-            timeout: 12000,
-            headers: {
-                "User-Agent": "Mozilla/5.0"
+            {
+                timeout: 25000,
+                headers: {
+                    Authorization: `DeepL-Auth-Key ${apiKey}`,
+                    "Content-Type": "application/json"
+                }
             }
-        });
-
-        const segmentos = respuesta.data?.[0];
-
-        if (!Array.isArray(segmentos)) {
-            return original;
-        }
-
-        const traducido = segmentos
-            .map(segmento => segmento?.[0] || "")
-            .join("");
-
-        return limpiarTexto(traducido) || original;
-    } catch (error) {
-        console.warn(
-            "⚠️ No se pudo traducir una noticia:",
-            error.message
         );
 
-        return original;
+        const traducciones = respuesta.data?.translations;
+
+        if (!Array.isArray(traducciones)) {
+            console.warn(
+                "⚠️ DeepL respondió sin traducciones válidas."
+            );
+
+            return originales;
+        }
+
+        return originales.map((original, indice) => {
+            const traducido = limpiarTexto(
+                traducciones[indice]?.text
+            );
+
+            return traducido || original;
+        });
+    } catch (error) {
+        const estado = error.response?.status;
+        const detalle =
+            error.response?.data?.message ||
+            error.message;
+
+        console.error(
+            `❌ Error de DeepL (HTTP ${estado || "?"}):`,
+            detalle
+        );
+
+        return originales;
     }
 }
 
@@ -223,7 +244,7 @@ module.exports = {
                 headers: {
                     "User-Agent":
                         "RustLogix/1.0 (Discord Rust news command)",
-                    "Accept":
+                    Accept:
                         "text/html,application/xhtml+xml"
                 }
             });
@@ -240,12 +261,13 @@ module.exports = {
                 return;
             }
 
-            // Traduce las noticias encontradas al español.
-            const noticiasTraducidas = await Promise.all(
-                noticias.map(async noticia => ({
-                    ...noticia,
-                    contenido: await traducirTexto(noticia.contenido)
-                }))
+            console.log(
+                `📰 /updates: ${noticias.length} noticias encontradas.`
+            );
+
+            // Una sola llamada a DeepL para todas las noticias.
+            const traducciones = await traducirTextos(
+                noticias.map(noticia => noticia.contenido)
             );
 
             const embed = new EmbedBuilder()
@@ -254,7 +276,8 @@ module.exports = {
                 .setURL(NEWS_URL)
                 .setDescription(
                     "Últimas noticias, avances de desarrollo y " +
-                    "actualizaciones de Rust, traducidos al español.\n\n" +
+                    "actualizaciones de Rust.\n\n" +
+                    "🌎 Noticias traducidas al español con DeepL.\n" +
                     "🟠 Los adelantos pueden cambiar antes de publicarse. " +
                     "Consulta la fuente original para confirmar los detalles."
                 )
@@ -263,16 +286,18 @@ module.exports = {
                     text: "RustLogix • Noticias de Rust en español"
                 });
 
-            for (const noticia of noticiasTraducidas) {
+            for (let i = 0; i < noticias.length; i++) {
+                const noticia = noticias[i];
+
                 const icono =
                     noticia.fuente === "Facepunch"
                         ? "✅"
                         : "🔎";
 
-                let resumen = limpiarTexto(noticia.contenido);
+                let resumen = limpiarTexto(traducciones[i]);
 
-                if (resumen.length > 480) {
-                    resumen = resumen.slice(0, 477).trimEnd() + "...";
+                if (resumen.length > 850) {
+                    resumen = resumen.slice(0, 847).trimEnd() + "...";
                 }
 
                 const valor =
@@ -290,6 +315,8 @@ module.exports = {
             await interaction.editReply({
                 embeds: [embed]
             });
+
+            console.log("✅ /updates terminado.");
 
         } catch (error) {
             console.error(
