@@ -1,3 +1,17 @@
+// ============================================================
+// RUSTLOGIX - TWITCH DROPS SERVICE
+// ============================================================
+// Fuente oficial: https://twitch.facepunch.com/
+//
+// - Extrae los Drops oficiales.
+// - Publica /drops en mensajes independientes.
+// - Actualiza automáticamente los anuncios.
+// - Actualiza la cuenta atrás cada minuto.
+// - Reconoce fechas en español e inglés.
+// - Convierte correctamente GMT-3 a UTC.
+// - Vigila streamers asociados a los Drops.
+// ============================================================
+
 const axios = require("axios");
 const cheerio = require("cheerio");
 const { EmbedBuilder } = require("discord.js");
@@ -8,7 +22,7 @@ const {
 } = require("./twitchStreamerDropWatcher");
 
 const FACEPUNCH_URL = "https://twitch.facepunch.com/";
-const INTERVALO_REVISION = 5 * 60 * 1000;
+const INTERVALO_REVISION = 60 * 1000;
 const MAX_DROPS_POR_PUBLICACION = 10;
 
 let cliente = null;
@@ -33,25 +47,14 @@ function escaparMarkdown(texto) {
     );
 }
 
-function normalizarNombre(texto) {
-    return limpiarTexto(texto)
-        .replace(/^image:\s*/i, "")
-        .replace(/^TwitchRivals\s+/i, "")
-        .replace(/\s+/g, " ")
-        .trim();
-}
-
 function convertirUrl(url) {
     if (!url) return null;
 
-    const valor = String(url).trim().replace(/^["']|["']$/g, "");
-
-    if (!valor || /^(data|blob|javascript):/i.test(valor)) {
-        return null;
-    }
-
     try {
-        const resultado = new URL(valor, FACEPUNCH_URL);
+        const resultado = new URL(
+            String(url).trim().replace(/^["']|["']$/g, ""),
+            FACEPUNCH_URL
+        );
 
         if (!["http:", "https:"].includes(resultado.protocol)) {
             return null;
@@ -84,26 +87,6 @@ function esImagenValida(url) {
     );
 }
 
-function extraerUrlDeEstilo(estilo) {
-    if (!estilo) return null;
-
-    const coincidencias = [
-        ...String(estilo).matchAll(
-            /url\(\s*(['"]?)(.*?)\1\s*\)/gi
-        )
-    ];
-
-    for (const coincidencia of coincidencias) {
-        const url = convertirUrl(coincidencia[2]);
-
-        if (esImagenValida(url)) {
-            return url;
-        }
-    }
-
-    return null;
-}
-
 function obtenerUrlMedia($, elemento) {
     const nodo = $(elemento);
 
@@ -118,17 +101,10 @@ function obtenerUrlMedia($, elemento) {
         nodo.attr("data-lazy-src"),
         nodo.attr("src"),
         nodo.attr("content"),
-        nodo.attr("srcset")?.split(",").pop()?.trim().split(/\s+/)[0],
-        nodo.attr("data-srcset")?.split(",").pop()?.trim().split(/\s+/)[0],
         nodo.find("img").first().attr("src"),
         nodo.find("img").first().attr("data-src"),
         nodo.find("img").first().attr("data-original"),
-        nodo.find("img").first().attr("srcset")
-            ?.split(",").pop()?.trim().split(/\s+/)[0],
-        nodo.find("video").first().attr("poster"),
-        nodo.find("video").first().attr("data-poster"),
-        nodo.find("source").first().attr("poster"),
-        nodo.find("source").first().attr("data-poster")
+        nodo.find("video").first().attr("poster")
     ];
 
     for (const candidato of candidatos) {
@@ -139,30 +115,33 @@ function obtenerUrlMedia($, elemento) {
         }
     }
 
-    const estilos = [
-        nodo.attr("style"),
-        nodo.attr("data-style"),
-        nodo.find("[style]").first().attr("style")
-    ].filter(Boolean);
+    const estilo =
+        nodo.attr("style") ||
+        nodo.find("[style]").first().attr("style");
 
-    for (const estilo of estilos) {
-        const url = extraerUrlDeEstilo(estilo);
+    if (estilo) {
+        const coincidencias = estilo.matchAll(
+            /url\(\s*(['"]?)(.*?)\1\s*\)/gi
+        );
 
-        if (url) return url;
+        for (const coincidencia of coincidencias) {
+            const url = convertirUrl(coincidencia[2]);
+
+            if (esImagenValida(url)) {
+                return url;
+            }
+        }
     }
 
     return null;
 }
 
 function obtenerImagenTarjeta($, tarjeta) {
-    if (!tarjeta || !tarjeta.length) return null;
-
     const selectores = [
         "img",
         "picture img",
         "video[poster]",
         "video[data-poster]",
-        "source[poster]",
         "[style*='background-image']",
         "[data-image]",
         "[data-image-url]",
@@ -170,25 +149,23 @@ function obtenerImagenTarjeta($, tarjeta) {
         "[data-poster]"
     ].join(", ");
 
-    const candidatos = [];
+    let imagen = null;
 
     tarjeta.find(selectores).each((_, elemento) => {
+        if (imagen) return;
+
         const url = obtenerUrlMedia($, elemento);
 
-        if (url && esImagenValida(url) && !candidatos.includes(url)) {
-            candidatos.push(url);
+        if (url && esImagenValida(url)) {
+            imagen = url;
         }
     });
 
-    if (candidatos.length) {
-        return candidatos[0];
-    }
-
-    return extraerUrlDeEstilo(tarjeta.attr("style"));
+    return imagen;
 }
 
 // ============================================================
-// DURACIÓN Y DETECCIÓN DE RECOMPENSAS
+// DURACIÓN DE LAS RECOMPENSAS
 // ============================================================
 
 function extraerDuracion(texto) {
@@ -200,7 +177,10 @@ function extraerDuracion(texto) {
 
     if (coincidencia) {
         const cantidad = Number(coincidencia[1]);
-        const unidad = /^(?:minutes?|mins?)$/i.test(coincidencia[2])
+
+        const unidad = /^(minutes?|mins?)$/i.test(
+            coincidencia[2]
+        )
             ? "min"
             : "h";
 
@@ -268,22 +248,37 @@ function obtenerTextoSinDuracion(texto) {
         .trim();
 }
 
-function escaparRegex(texto) {
-    return String(texto).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function esDropSinRevelar(texto) {
+    return (
+        /\bcoming\s+soon\b/i.test(texto) ||
+        /\bvery\s+soon\b/i.test(texto) ||
+        /\bto\s+be\s+announced\b/i.test(texto) ||
+        /\bto\s+be\s+revealed\b/i.test(texto) ||
+        /\bunknown\s+reward\b/i.test(texto) ||
+        /\bpr[oó]ximamente\b/i.test(texto) ||
+        /\bpor\s+revelar\b/i.test(texto) ||
+        /\bpor\s+anunciar\b/i.test(texto)
+    );
 }
+
+// ============================================================
+// DETECCIÓN DE SECCIONES
+// ============================================================
 
 function buscarEncabezado($, expresion) {
     let encontrado = null;
 
-    $("h1, h2, h3, h4, [role='heading']").each((_, elemento) => {
-        if (encontrado) return;
+    $("h1, h2, h3, h4, [role='heading']").each(
+        (_, elemento) => {
+            if (encontrado) return;
 
-        const texto = limpiarTexto($(elemento).text());
+            const texto = limpiarTexto($(elemento).text());
 
-        if (expresion.test(texto)) {
-            encontrado = elemento;
+            if (expresion.test(texto)) {
+                encontrado = elemento;
+            }
         }
-    });
+    );
 
     return encontrado;
 }
@@ -300,7 +295,6 @@ function tieneMediosDeImagen($, elemento) {
         "picture",
         "video[poster]",
         "video[data-poster]",
-        "source[poster]",
         "[style*='background-image']",
         "[data-image]",
         "[data-image-url]",
@@ -309,29 +303,21 @@ function tieneMediosDeImagen($, elemento) {
     ].join(", ")).length > 0;
 }
 
-function encontrarTarjeta($, nodo, duracion) {
+function encontrarTarjeta($, nodo) {
     let actual = $(nodo);
     let tarjetaConImagen = null;
     let tarjetaConEnlace = null;
-    const duracionTexto = limpiarTexto(duracion?.texto);
 
     for (let nivel = 0; nivel < 12; nivel++) {
         if (!actual || !actual.length) break;
 
-        const textoTarjeta = limpiarTexto(actual.text());
-        const textoSinDuracion = obtenerTextoSinDuracion(textoTarjeta);
+        const texto = limpiarTexto(actual.text());
 
-        const esCandidato =
-            textoTarjeta.length > 0 &&
-            textoTarjeta.length <= 350 &&
-            textoSinDuracion.length > 1 &&
-            (
-                !duracionTexto ||
-                textoTarjeta.length > duracionTexto.length
-            );
-
-        if (esCandidato) {
-            if (!tarjetaConEnlace && actual.find("a").length > 0) {
+        if (texto.length > 0 && texto.length <= 350) {
+            if (
+                !tarjetaConEnlace &&
+                actual.find("a[href]").length > 0
+            ) {
                 tarjetaConEnlace = actual;
             }
 
@@ -342,50 +328,10 @@ function encontrarTarjeta($, nodo, duracion) {
             }
         }
 
-        const padre = actual.parent();
-
-        if (!padre || !padre.length) break;
-
-        actual = padre;
+        actual = actual.parent();
     }
 
     return tarjetaConImagen || tarjetaConEnlace;
-}
-
-function esDropSinRevelar(texto) {
-    const valor = limpiarTexto(texto);
-
-    return (
-        /\bcoming\s+soon\b/i.test(valor) ||
-        /\bvery\s+soon\b/i.test(valor) ||
-        /\bto\s+be\s+announced\b/i.test(valor) ||
-        /\bto\s+be\s+revealed\b/i.test(valor) ||
-        /\bunknown\s+reward\b/i.test(valor) ||
-        /\bpr[oó]ximamente\b/i.test(valor) ||
-        /\bpor\s+revelar\b/i.test(valor) ||
-        /\bpor\s+anunciar\b/i.test(valor) ||
-        /\bpr[oó]ximamente\s+disponible\b/i.test(valor)
-    );
-}
-
-function obtenerNombreRecompensa($, tarjeta, textoOriginal) {
-    const selectores = [
-        ".drop-type",
-        ".drop-box-footer .drop-type",
-        "[class*='drop-type']",
-        "[class*='reward-name']",
-        "[class*='item-name']"
-    ];
-
-    for (const selector of selectores) {
-        const nombre = limpiarTexto(tarjeta.find(selector).first().text());
-
-        if (nombre) {
-            return normalizarNombre(nombre);
-        }
-    }
-
-    return normalizarNombre(obtenerTextoSinDuracion(textoOriginal));
 }
 
 function obtenerEnlaceStreamer($, tarjeta) {
@@ -399,37 +345,69 @@ function obtenerEnlaceStreamer($, tarjeta) {
 
         if (!href || !nombre) return;
 
-        let url;
-
         try {
-            url = new URL(href);
+            const url = new URL(href);
+
+            if (!/(^|\.)twitch\.tv$/i.test(url.hostname)) {
+                return;
+            }
+
+            if (
+                /\/(directory|downloads|settings|videos|p|search)(\/|$)/i
+                    .test(url.pathname)
+            ) {
+                return;
+            }
+
+            const canal = url.pathname
+                .split("/")
+                .filter(Boolean)[0];
+
+            if (!canal) return;
+
+            resultado = {
+                nombre,
+                url: `https://www.twitch.tv/${canal}`
+            };
         } catch {
             return;
         }
-
-        if (
-            !/(^|\.)twitch\.tv$/i.test(url.hostname) ||
-            /\/(directory|downloads|settings|videos|p|search)(\/|$)/i.test(url.pathname)
-        ) {
-            return;
-        }
-
-        const canal = url.pathname.split("/").filter(Boolean)[0];
-
-        if (!canal) return;
-
-        resultado = {
-            nombre,
-            url: `https://www.twitch.tv/${canal}`
-        };
     });
 
     return resultado;
 }
 
+function obtenerNombreRecompensa($, tarjeta, textoOriginal) {
+    const selectores = [
+        ".drop-type",
+        ".drop-box-footer .drop-type",
+        "[class*='drop-type']",
+        "[class*='reward-name']",
+        "[class*='item-name']"
+    ];
+
+    for (const selector of selectores) {
+        const nombre = limpiarTexto(
+            tarjeta.find(selector).first().text()
+        );
+
+        if (nombre) {
+            return nombre
+                .replace(/^image:\s*/i, "")
+                .replace(/^TwitchRivals\s+/i, "")
+                .trim();
+        }
+    }
+
+    return obtenerTextoSinDuracion(textoOriginal)
+        .replace(/^image:\s*/i, "")
+        .trim();
+}
+
 function extraerTarjetas($, inicioOrden, finOrden) {
     const recompensas = [];
     const duplicados = new Set();
+
     const elementos = $("body *").toArray();
 
     elementos.forEach((elemento, indice) => {
@@ -447,9 +425,14 @@ function extraerTarjetas($, inicioOrden, finOrden) {
 
         const orden = obtenerOrden(elemento);
 
-        if (orden <= inicioOrden || orden >= finOrden) continue;
+        if (
+            orden <= inicioOrden ||
+            orden >= finOrden
+        ) {
+            continue;
+        }
 
-        const tarjeta = encontrarTarjeta($, elemento, duracion);
+        const tarjeta = encontrarTarjeta($, elemento);
 
         if (!tarjeta || !tarjeta.length) continue;
 
@@ -464,14 +447,21 @@ function extraerTarjetas($, inicioOrden, finOrden) {
         if (sinRevelar) {
             nombre = "Próximamente";
         } else {
-            const enlaceStreamer = obtenerEnlaceStreamer($, tarjeta);
+            const enlaceStreamer = obtenerEnlaceStreamer(
+                $,
+                tarjeta
+            );
 
             if (enlaceStreamer) {
                 streamer = enlaceStreamer.nombre;
                 streamerUrl = enlaceStreamer.url;
             }
 
-            nombre = obtenerNombreRecompensa($, tarjeta, textoOriginal);
+            nombre = obtenerNombreRecompensa(
+                $,
+                tarjeta,
+                textoOriginal
+            );
 
             if (
                 !nombre ||
@@ -485,8 +475,11 @@ function extraerTarjetas($, inicioOrden, finOrden) {
             imagen = obtenerImagenTarjeta($, tarjeta);
         }
 
-        const tiempo = duracion.texto;
-        const clave = `${nombre.toLowerCase()}-${tiempo}-${streamerUrl || streamer || ""}`;
+        const clave = [
+            nombre.toLowerCase(),
+            duracion.texto,
+            streamerUrl || ""
+        ].join("-");
 
         if (duplicados.has(clave)) continue;
 
@@ -496,7 +489,7 @@ function extraerTarjetas($, inicioOrden, finOrden) {
             nombre,
             streamer,
             streamerUrl,
-            tiempo,
+            tiempo: duracion.texto,
             imagen
         });
     }
@@ -505,20 +498,96 @@ function extraerTarjetas($, inicioOrden, finOrden) {
 }
 
 // ============================================================
-// DATOS DE CAMPAÑA Y FECHAS OFICIALES
+// CONVERSIÓN DE FECHAS OFICIALES
 // ============================================================
 
 function convertirFechaOficial(fecha) {
     if (!fecha) return null;
 
-    const milisegundos = Date.parse(
-        fecha.replace(/\s+at\s+/i, " ")
+    const texto = limpiarTexto(fecha);
+
+    const meses = {
+        enero: 0,
+        febrero: 1,
+        marzo: 2,
+        abril: 3,
+        mayo: 4,
+        junio: 5,
+        julio: 6,
+        agosto: 7,
+        septiembre: 8,
+        setiembre: 8,
+        octubre: 9,
+        noviembre: 10,
+        diciembre: 11
+    };
+
+    // Ejemplo:
+    // 23 de octubre de 2026 a las 15:00 GMT-3
+    const espanol = texto.match(
+        /(\d{1,2})\s+de\s+([a-záéíóú]+)\s+de\s+(\d{4})\s+a\s+las\s+(\d{1,2}):(\d{2})\s*(GMT|UTC)\s*([+-]\d{1,2})(?::?(\d{2}))?/i
     );
+
+    if (espanol) {
+        const dia = Number(espanol[1]);
+        const mes = meses[espanol[2].toLowerCase()];
+        const anio = Number(espanol[3]);
+        const hora = Number(espanol[4]);
+        const minuto = Number(espanol[5]);
+
+        const signo = espanol[7].startsWith("-") ? -1 : 1;
+        const desfaseHoras = Math.abs(Number(espanol[7]));
+        const desfaseMinutos = Number(espanol[8] || 0);
+
+        if (
+            mes === undefined ||
+            dia < 1 ||
+            dia > 31 ||
+            hora < 0 ||
+            hora > 23 ||
+            minuto < 0 ||
+            minuto > 59
+        ) {
+            return null;
+        }
+
+        const desfaseTotal =
+            signo * (desfaseHoras * 60 + desfaseMinutos);
+
+        const milisegundos = Date.UTC(
+            anio,
+            mes,
+            dia,
+            hora,
+            minuto
+        ) - desfaseTotal * 60 * 1000;
+
+        const resultado = new Date(milisegundos);
+
+        if (
+            resultado.getUTCFullYear() !== anio ||
+            resultado.getUTCMonth() !== mes ||
+            resultado.getUTCDate() !== dia
+        ) {
+            return null;
+        }
+
+        return resultado.toISOString();
+    }
+
+    // Formato inglés:
+    // October 23, 2026 at 3:00 PM UTC
+    const ingles = texto.replace(/\s+at\s+/i, " ");
+    const milisegundos = Date.parse(ingles);
 
     return Number.isFinite(milisegundos)
         ? new Date(milisegundos).toISOString()
         : null;
 }
+
+// ============================================================
+// DATOS DE CAMPAÑA
+// ============================================================
 
 function extraerDatosCampana($, textoCompleto) {
     const encabezados = $("h1, h2, h3, h4, [role='heading']")
@@ -529,86 +598,116 @@ function extraerDatosCampana($, textoCompleto) {
         }));
 
     const encabezadoCampana = encabezados.find(item =>
-        /Twitch Drops/i.test(item.texto) &&
-        /Hosted by/i.test(item.texto)
+        /Twitch\s*Drops/i.test(item.texto) &&
+        /Hosted\s*by/i.test(item.texto)
     );
 
     let numero = null;
     let anfitrion = null;
 
-    if (encabezadoCampana) {
-        const coincidencia = encabezadoCampana.texto.match(
-            /Twitch Drops\s+(?:Round\s*)?#?\s*(\d+)\s+Hosted by\s+(.+)/i
-        );
+    const textoCabecera =
+        encabezadoCampana?.texto || textoCompleto;
 
-        if (coincidencia) {
-            numero = coincidencia[1];
-            anfitrion = limpiarTexto(coincidencia[2]);
-        }
+    const coincidenciaCabecera = textoCabecera.match(
+        /Twitch\s*Drops\s*(?:Round\s*)?#?\s*(\d+)\s*Hosted\s*by\s+(.+?)(?=Base Invaders|General Drops|Streamer Drops|$)/i
+    );
+
+    if (coincidenciaCabecera) {
+        numero = coincidenciaCabecera[1];
+        anfitrion = limpiarTexto(coincidenciaCabecera[2]);
     }
 
     if (!numero) {
         const coincidencia = textoCompleto.match(
-            /Twitch Drops\s+(?:Round\s*)?#?\s*(\d+)/i
+            /Twitch\s*Drops\s*(?:Round\s*)?#?\s*(\d+)/i
         );
 
-        if (coincidencia) numero = coincidencia[1];
+        if (coincidencia) {
+            numero = coincidencia[1];
+        }
     }
 
-    const estadoOriginal = /\bLive Now\b/i.test(textoCompleto)
-        ? "En curso"
-        : /\bUpcoming\b/i.test(textoCompleto)
-            ? "Próximamente"
-            : null;
+    if (!anfitrion) {
+        const coincidencia = textoCompleto.match(
+            /Twitch\s*Drops\s*(?:Round\s*)?#?\s*\d+\s*Hosted\s*by\s+(.+?)(?=Base Invaders|General Drops|Streamer Drops|$)/i
+        );
 
-    const fechasMatch = textoCompleto.match(
-        /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*UTC\s*[-–]\s*(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*UTC)/i
+        if (coincidencia) {
+            anfitrion = limpiarTexto(coincidencia[1]);
+        }
+    }
+
+    const regexFechaEspanol =
+        /(\d{1,2}\s+de\s+[a-záéíóú]+\s+de\s+\d{4}\s+a\s+las\s+\d{1,2}:\d{2}\s*(?:GMT|UTC)\s*[+-]\d{1,2}(?::?\d{2})?)\s*[-–]\s*(\d{1,2}\s+de\s+[a-záéíóú]+\s+de\s+\d{4}\s+a\s+las\s+\d{1,2}:\d{2}\s*(?:GMT|UTC)\s*[+-]\d{1,2}(?::?\d{2})?)/i;
+
+    const regexFechaIngles =
+        /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*(?:UTC|GMT)(?:\s*[+-]\d{1,2}(?::?\d{2})?)?)\s*[-–]\s*((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*(?:UTC|GMT)(?:\s*[+-]\d{1,2}(?::?\d{2})?)?)/i;
+
+    const fechasMatch =
+        textoCompleto.match(regexFechaEspanol) ||
+        textoCompleto.match(regexFechaIngles);
+
+    const fechaInicioTexto = fechasMatch?.[1] || null;
+    const fechaFinTexto = fechasMatch?.[2] || null;
+
+    const inicioCampana = convertirFechaOficial(
+        fechaInicioTexto
     );
 
-    const partesFecha = fechasMatch
-        ? fechasMatch[1].match(
-            /(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*UTC/gi
-        ) || []
-        : [];
+    const finCampana = convertirFechaOficial(
+        fechaFinTexto
+    );
 
-    const inicioCampana = convertirFechaOficial(partesFecha[0]);
-    const finCampana = convertirFechaOficial(partesFecha[1]);
-
-    let estado = estadoOriginal;
+    let estado = null;
 
     if (inicioCampana && finCampana) {
         const ahora = Date.now();
-        const inicioMs = new Date(inicioCampana).getTime();
-        const finMs = new Date(finCampana).getTime();
+        const inicio = new Date(inicioCampana).getTime();
+        const fin = new Date(finCampana).getTime();
 
-        if (ahora < inicioMs) {
+        if (ahora < inicio) {
             estado = "Próximamente";
-        } else if (ahora < finMs) {
+        } else if (ahora < fin) {
             estado = "En curso";
         } else {
             estado = "Finalizada";
         }
+    } else if (/\bLive\s*Now\b/i.test(textoCompleto)) {
+        estado = "En curso";
+    } else if (/\bUpcoming\b/i.test(textoCompleto)) {
+        estado = "Próximamente";
     }
 
-    const tema = encabezados.find(item =>
-        item.orden > (encabezadoCampana?.orden ?? -1) &&
-        !/Twitch Drops|General Drops|Streamer Drops|Drops Metrics/i.test(item.texto)
-    );
+    let tema = null;
+
+    if (/\bBase\s+Invaders\b/i.test(textoCompleto)) {
+        tema = "Base Invaders";
+    } else {
+        const temaEncabezado = encabezados.find(item =>
+            item.orden > (encabezadoCampana?.orden ?? -1) &&
+            !/Twitch Drops|General Drops|Streamer Drops|Drops Metrics|Upcoming|Live Now/i
+                .test(item.texto)
+        );
+
+        tema = temaEncabezado?.texto || null;
+    }
 
     return {
         campana: numero
             ? `Twitch Drops Round ${numero}${anfitrion ? ` — Hosted by ${anfitrion}` : ""}`
             : null,
         estado,
-        tema: tema?.texto || null,
-        fechas: fechasMatch ? limpiarTexto(fechasMatch[1]) : null,
+        tema,
+        fechas: fechasMatch
+            ? limpiarTexto(`${fechaInicioTexto} - ${fechaFinTexto}`)
+            : null,
         inicioCampana,
         finCampana
     };
 }
 
 // ============================================================
-// CONSULTA OFICIAL DE FACEPUNCH
+// CONSULTA A FACEPUNCH
 // ============================================================
 
 async function obtenerDropsOficiales() {
@@ -618,12 +717,17 @@ async function obtenerDropsOficiales() {
         headers: {
             "User-Agent":
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9"
+            "Accept-Language": "es-CL,es;q=0.9,en-US;q=0.8,en;q=0.7"
         }
     });
 
-    if (respuesta.status !== 200 || typeof respuesta.data !== "string") {
-        throw new Error("Facepunch no devolvió una página HTML válida.");
+    if (
+        respuesta.status !== 200 ||
+        typeof respuesta.data !== "string"
+    ) {
+        throw new Error(
+            "Facepunch no devolvió una página HTML válida."
+        );
     }
 
     const $ = cheerio.load(respuesta.data);
@@ -631,12 +735,12 @@ async function obtenerDropsOficiales() {
 
     if (
         !textoCompleto ||
-        !/Twitch Drops/i.test(textoCompleto) ||
+        !/Twitch\s*Drops/i.test(textoCompleto) ||
         !/General Drops/i.test(textoCompleto) ||
         !/Streamer Drops/i.test(textoCompleto)
     ) {
         throw new Error(
-            "No se reconoció la estructura oficial de Twitch Drops. No se actualizarán los anuncios."
+            "No se reconoció la estructura oficial de Twitch Drops."
         );
     }
 
@@ -644,51 +748,95 @@ async function obtenerDropsOficiales() {
         elemento.__dropsOrder = indice;
     });
 
-    const general = buscarEncabezado($, /^General Drops\b/i);
-    const streamer = buscarEncabezado($, /^Streamer Drops\b/i);
-    const metricas = buscarEncabezado($, /^Drops Metrics\b/i);
+    const general = buscarEncabezado(
+        $,
+        /^General Drops\b/i
+    );
+
+    const streamer = buscarEncabezado(
+        $,
+        /^Streamer Drops\b/i
+    );
+
+    const metricas = buscarEncabezado(
+        $,
+        /^Drops Metrics\b/i
+    );
 
     if (!general || !streamer) {
-        throw new Error("No se encontraron los encabezados de recompensas.");
+        throw new Error(
+            "No se encontraron las secciones oficiales de Drops."
+        );
     }
 
     const ordenGeneral = obtenerOrden(general);
     const ordenStreamer = obtenerOrden(streamer);
+
     const ordenMetricas = metricas
         ? obtenerOrden(metricas)
         : Number.MAX_SAFE_INTEGER;
 
-    const generales = extraerTarjetas($, ordenGeneral, ordenStreamer);
-    const streamers = extraerTarjetas($, ordenStreamer, ordenMetricas);
-    const campana = extraerDatosCampana($, textoCompleto);
+    const generales = extraerTarjetas(
+        $,
+        ordenGeneral,
+        ordenStreamer
+    );
+
+    const streamers = extraerTarjetas(
+        $,
+        ordenStreamer,
+        ordenMetricas
+    );
+
+    const campana = extraerDatosCampana(
+        $,
+        textoCompleto
+    );
 
     if (!generales.length && !streamers.length) {
         throw new Error(
-            "No se pudieron identificar las recompensas dentro de las secciones oficiales."
+            "No se pudieron identificar las recompensas oficiales."
         );
     }
 
     console.log(
         "🟣 Twitch Drops extraídos:",
         JSON.stringify({
-            generales: generales.map(({ nombre, tiempo, imagen }) => ({
-                nombre,
-                tiempo,
-                imagen: Boolean(imagen)
-            })),
-            streamers: streamers.map(({ nombre, streamer, streamerUrl, tiempo, imagen }) => ({
-                nombre,
-                streamer,
-                streamerUrl,
-                tiempo,
-                imagen: Boolean(imagen)
-            }))
+            campana: campana.campana,
+            estado: campana.estado,
+            tema: campana.tema,
+            fechas: campana.fechas,
+            inicioCampana: campana.inicioCampana,
+            finCampana: campana.finCampana,
+            generales: generales.map(
+                ({ nombre, tiempo, imagen }) => ({
+                    nombre,
+                    tiempo,
+                    imagen: Boolean(imagen)
+                })
+            ),
+            streamers: streamers.map(
+                ({
+                    nombre,
+                    streamer,
+                    streamerUrl,
+                    tiempo,
+                    imagen
+                }) => ({
+                    nombre,
+                    streamer,
+                    streamerUrl,
+                    tiempo,
+                    imagen: Boolean(imagen)
+                })
+            )
         })
     );
 
     return {
         fuente: FACEPUNCH_URL,
-        campana: campana.campana || "Campaña oficial de Rust",
+        campana: campana.campana ||
+            "Campaña oficial de Rust",
         estado: campana.estado || "Consulta oficial",
         tema: campana.tema,
         fechas: campana.fechas,
@@ -701,7 +849,7 @@ async function obtenerDropsOficiales() {
 }
 
 // ============================================================
-// CUENTA REGRESIVA DE CAMPAÑA
+// CUENTA REGRESIVA
 // ============================================================
 
 function crearCampoCuentaRegresiva(datos) {
@@ -709,14 +857,14 @@ function crearCampoCuentaRegresiva(datos) {
 
     const inicio = datos.inicioCampana
         ? new Date(datos.inicioCampana).getTime()
-        : null;
+        : NaN;
 
     const fin = datos.finCampana
         ? new Date(datos.finCampana).getTime()
-        : null;
+        : NaN;
 
-    let objetivo = null;
-    let titulo = null;
+    let objetivo;
+    let titulo;
 
     if (Number.isFinite(inicio) && ahora < inicio) {
         objetivo = inicio;
@@ -734,8 +882,12 @@ function crearCampoCuentaRegresiva(datos) {
     );
 
     const dias = Math.floor(totalSegundos / 86400);
-    const horas = Math.floor((totalSegundos % 86400) / 3600);
-    const minutos = Math.floor((totalSegundos % 3600) / 60);
+    const horas = Math.floor(
+        (totalSegundos % 86400) / 3600
+    );
+    const minutos = Math.floor(
+        (totalSegundos % 3600) / 60
+    );
     const segundos = totalSegundos % 60;
 
     const timestampDiscord = Math.floor(objetivo / 1000);
@@ -753,7 +905,7 @@ function crearCampoCuentaRegresiva(datos) {
 }
 
 // ============================================================
-// CREACIÓN DE EMBEDS
+// EMBEDS
 // ============================================================
 
 function crearEmbedSeccion(titulo, descripcion, datos) {
@@ -783,7 +935,7 @@ function crearEmbedSeccion(titulo, descripcion, datos) {
 
     if (datos.fechas) {
         embed.addFields({
-            name: "📅 Fechas",
+            name: "📅 Fechas oficiales",
             value: datos.fechas,
             inline: false
         });
@@ -798,13 +950,16 @@ function crearEmbedsDrops(datos) {
     embeds.push(
         crearEmbedSeccion(
             "🎁 DROPS GENERALES",
-            `Recompensas disponibles para la campaña general de Rust.\n\n**Campaña:** ${datos.campana}\n**Estado:** ${datos.estado}`,
+            `Recompensas generales de Rust.\n\n` +
+            `**Campaña:** ${datos.campana}\n` +
+            `**Estado:** ${datos.estado}`,
             datos
         )
     );
 
-    for (const recompensa of (datos.generales || [])) {
-        const esProximamente = /^Próximamente$/i.test(recompensa.nombre);
+    for (const recompensa of datos.generales || []) {
+        const proximamente =
+            /^Próximamente$/i.test(recompensa.nombre);
 
         const embed = new EmbedBuilder()
             .setColor(0x9146ff)
@@ -813,14 +968,17 @@ function crearEmbedsDrops(datos) {
             .setDescription(
                 `**Campaña:** ${datos.campana}\n` +
                 `**Estado:** ${datos.estado}` +
-                (esProximamente
-                    ? "\n\nEl objeto se encuentra pendiente de revelación oficial."
-                    : "")
+                (
+                    proximamente
+                        ? "\n\nEl objeto está pendiente de revelación oficial."
+                        : ""
+                )
             )
             .addFields(
                 {
                     name: "⏱️ Tiempo necesario",
-                    value: recompensa.tiempo || "Duración no detectada",
+                    value: recompensa.tiempo ||
+                        "Duración no detectada",
                     inline: true
                 },
                 {
@@ -838,13 +996,17 @@ function crearEmbedsDrops(datos) {
             })
             .setTimestamp(new Date(datos.consultado));
 
-        const cuentaRegresiva = crearCampoCuentaRegresiva(datos);
+        const cuentaRegresiva =
+            crearCampoCuentaRegresiva(datos);
 
         if (cuentaRegresiva) {
             embed.addFields(cuentaRegresiva);
         }
 
-        if (!esProximamente && esImagenValida(recompensa.imagen)) {
+        if (
+            !proximamente &&
+            esImagenValida(recompensa.imagen)
+        ) {
             embed.setImage(recompensa.imagen);
         }
 
@@ -854,13 +1016,16 @@ function crearEmbedsDrops(datos) {
     embeds.push(
         crearEmbedSeccion(
             "🎮 DROPS ESPECÍFICOS DE STREAMERS",
-            `Recompensas vinculadas a canales concretos de Twitch.\n\n**Campaña:** ${datos.campana}\n**Estado:** ${datos.estado}`,
+            `Recompensas vinculadas a canales de Twitch.\n\n` +
+            `**Campaña:** ${datos.campana}\n` +
+            `**Estado:** ${datos.estado}`,
             datos
         )
     );
 
-    for (const recompensa of (datos.streamers || [])) {
-        const esProximamente = /^Próximamente$/i.test(recompensa.nombre);
+    for (const recompensa of datos.streamers || []) {
+        const proximamente =
+            /^Próximamente$/i.test(recompensa.nombre);
 
         const embed = new EmbedBuilder()
             .setColor(0x6441a5)
@@ -869,14 +1034,17 @@ function crearEmbedsDrops(datos) {
             .setDescription(
                 `**Campaña:** ${datos.campana}\n` +
                 `**Estado:** ${datos.estado}` +
-                (esProximamente
-                    ? "\n\nEl objeto se encuentra pendiente de revelación oficial."
-                    : "")
+                (
+                    proximamente
+                        ? "\n\nEl objeto está pendiente de revelación oficial."
+                        : ""
+                )
             )
             .addFields(
                 {
                     name: "⏱️ Tiempo necesario",
-                    value: recompensa.tiempo || "Duración no detectada",
+                    value: recompensa.tiempo ||
+                        "Duración no detectada",
                     inline: true
                 },
                 {
@@ -895,23 +1063,26 @@ function crearEmbedsDrops(datos) {
             .setTimestamp(new Date(datos.consultado));
 
         if (recompensa.streamer) {
-            const nombreCanal = escaparMarkdown(recompensa.streamer);
-            const urlCanal = recompensa.streamerUrl || FACEPUNCH_URL;
-
             embed.addFields({
                 name: "🎮 Canal de Twitch",
-                value: `[${nombreCanal}](${urlCanal})`,
+                value:
+                    `[${escaparMarkdown(recompensa.streamer)}]` +
+                    `(${recompensa.streamerUrl || FACEPUNCH_URL})`,
                 inline: true
             });
         }
 
-        const cuentaRegresiva = crearCampoCuentaRegresiva(datos);
+        const cuentaRegresiva =
+            crearCampoCuentaRegresiva(datos);
 
         if (cuentaRegresiva) {
             embed.addFields(cuentaRegresiva);
         }
 
-        if (!esProximamente && esImagenValida(recompensa.imagen)) {
+        if (
+            !proximamente &&
+            esImagenValida(recompensa.imagen)
+        ) {
             embed.setImage(recompensa.imagen);
         }
 
@@ -922,11 +1093,14 @@ function crearEmbedsDrops(datos) {
 }
 
 function crearEmbedDrops(datos) {
-    return crearEmbedsDrops(datos)[0] || new EmbedBuilder()
-        .setColor(0x9146ff)
-        .setTitle("🎁 Rust — Twitch Drops oficiales")
-        .setURL(FACEPUNCH_URL)
-        .setDescription("No se encontraron recompensas disponibles.");
+    return crearEmbedsDrops(datos)[0] ||
+        new EmbedBuilder()
+            .setColor(0x9146ff)
+            .setTitle("🎁 Rust — Twitch Drops oficiales")
+            .setURL(FACEPUNCH_URL)
+            .setDescription(
+                "No se encontraron recompensas disponibles."
+            );
 }
 
 // ============================================================
@@ -941,7 +1115,9 @@ function firmaCampana(datos) {
         fechas: datos.fechas,
         inicioCampana: datos.inicioCampana,
         finCampana: datos.finCampana,
-        cuentaRegresivaTick: Math.floor(Date.now() / INTERVALO_REVISION),
+        cuentaRegresivaTick: Math.floor(
+            Date.now() / INTERVALO_REVISION
+        ),
         generales: datos.generales,
         streamers: datos.streamers
     });
@@ -957,7 +1133,7 @@ async function publicarRustDrops(interaction) {
 
     if (!embeds.length) {
         await interaction.editReply({
-            content: "No se encontraron recompensas oficiales para mostrar.",
+            content: "No se encontraron recompensas oficiales.",
             embeds: []
         });
 
@@ -978,7 +1154,7 @@ async function publicarRustDrops(interaction) {
     }
 
     console.log(
-        `✅ /drops rust: publicados ${embeds.length} mensajes individuales.`
+        `✅ /drops rust: publicados ${embeds.length} mensajes independientes.`
     );
 
     return datos;
@@ -989,13 +1165,18 @@ async function publicarRustDrops(interaction) {
 // ============================================================
 
 function obtenerIdsMensajes(monitor) {
-    if (Array.isArray(monitor.messageIds) && monitor.messageIds.length) {
+    if (
+        Array.isArray(monitor.messageIds) &&
+        monitor.messageIds.length
+    ) {
         return monitor.messageIds
             .map(id => String(id).trim())
             .filter(Boolean);
     }
 
-    if (!monitor.messageId) return [];
+    if (!monitor.messageId) {
+        return [];
+    }
 
     return String(monitor.messageId)
         .split(",")
@@ -1012,7 +1193,7 @@ function guardarIdsMensajes(monitor, ids) {
 }
 
 // ============================================================
-// PUBLICACIÓN AUTOMÁTICA
+// REVISIÓN AUTOMÁTICA
 // ============================================================
 
 async function revisarDropsAutomaticos() {
@@ -1034,7 +1215,7 @@ async function revisarDropsAutomaticos() {
             datos = await obtenerDropsOficiales();
         } catch (error) {
             console.error(
-                "❌ No se pudieron consultar los Twitch Drops oficiales:",
+                "❌ No se pudieron consultar los Drops oficiales:",
                 error.message
             );
 
@@ -1046,8 +1227,9 @@ async function revisarDropsAutomaticos() {
 
         if (!embeds.length) {
             console.warn(
-                "⚠️ La página oficial no produjo embeds. Se conservan los anuncios existentes."
+                "⚠️ No se generaron embeds. Se conservan los mensajes actuales."
             );
+
             return;
         }
 
@@ -1057,29 +1239,35 @@ async function revisarDropsAutomaticos() {
                     .fetch(monitor.channelId)
                     .catch(() => null);
 
-                if (!canal || !canal.isTextBased() || !canal.messages) {
+                if (
+                    !canal ||
+                    !canal.isTextBased() ||
+                    !canal.messages
+                ) {
                     console.warn(
-                        `⚠️ Canal de Twitch Drops no disponible: ${monitor.channelId}`
+                        `⚠️ Canal de Drops no disponible: ${monitor.channelId}`
                     );
+
                     continue;
                 }
 
                 const idsGuardados = obtenerIdsMensajes(monitor);
-                const mensajesPorPosicion = [];
+                const mensajes = [];
 
                 for (const id of idsGuardados) {
                     const mensaje = await canal.messages
                         .fetch(id)
                         .catch(() => null);
 
-                    mensajesPorPosicion.push(mensaje);
+                    mensajes.push(mensaje);
                 }
 
-                const mismaFirma = monitor.campaignSignature === firma;
+                const mismaFirma =
+                    monitor.campaignSignature === firma;
 
                 const todosExisten =
-                    mensajesPorPosicion.length === embeds.length &&
-                    mensajesPorPosicion.every(Boolean);
+                    mensajes.length === embeds.length &&
+                    mensajes.every(Boolean);
 
                 if (mismaFirma && todosExisten) {
                     monitor.lastCheckedAt = new Date();
@@ -1090,18 +1278,17 @@ async function revisarDropsAutomaticos() {
                 const nuevosIds = [];
 
                 for (let i = 0; i < embeds.length; i++) {
-                    const embed = embeds[i];
-                    let mensaje = mensajesPorPosicion[i] || null;
+                    let mensaje = mensajes[i] || null;
 
                     if (mensaje) {
                         await mensaje.edit({
                             content: "",
-                            embeds: [embed],
+                            embeds: [embeds[i]],
                             allowedMentions: { parse: [] }
                         });
                     } else {
                         mensaje = await canal.send({
-                            embeds: [embed],
+                            embeds: [embeds[i]],
                             allowedMentions: { parse: [] }
                         });
                     }
@@ -1109,24 +1296,26 @@ async function revisarDropsAutomaticos() {
                     nuevosIds.push(mensaje.id);
                 }
 
-                for (
-                    let i = embeds.length;
-                    i < mensajesPorPosicion.length;
-                    i++
-                ) {
-                    const mensaje = mensajesPorPosicion[i];
+                for (let i = embeds.length; i < mensajes.length; i++) {
+                    const mensaje = mensajes[i];
 
-                    if (!mensaje) continue;
-
-                    await mensaje.delete().catch(error => {
-                        console.warn(
-                            `⚠️ No se pudo eliminar el mensaje antiguo ${mensaje.id}:`,
-                            error.message
-                        );
-                    });
+                    if (mensaje) {
+                        await mensaje.delete().catch(error => {
+                            console.warn(
+                                `⚠️ No se pudo eliminar el mensaje ${mensaje.id}:`,
+                                error.message
+                            );
+                        });
+                    }
                 }
 
                 guardarIdsMensajes(monitor, nuevosIds);
+
+                monitor.campaignKey =
+                    datos.inicioCampana ||
+                    datos.campana ||
+                    null;
+
                 monitor.campaignName = datos.campana;
                 monitor.campaignSignature = firma;
                 monitor.lastCheckedAt = new Date();
@@ -1134,12 +1323,13 @@ async function revisarDropsAutomaticos() {
                 await monitor.save();
 
                 console.log(
-                    `✅ Twitch Drops actualizados en ${canal.guild?.name || canal.id}: ` +
+                    `✅ Twitch Drops actualizados en ` +
+                    `${canal.guild?.name || canal.id}: ` +
                     `${embeds.length} mensajes.`
                 );
             } catch (error) {
                 console.error(
-                    `❌ Error actualizando Twitch Drops en ${monitor.guildId}:`,
+                    `❌ Error actualizando Drops en ${monitor.guildId}:`,
                     error
                 );
             }
@@ -1171,7 +1361,8 @@ function iniciarDropsAutomaticos(client) {
     temporizadorIniciado = true;
 
     console.log(
-        "🟣 Monitor oficial de Twitch Drops iniciado (cada 5 minutos)."
+        "🟣 Monitor oficial de Twitch Drops iniciado. " +
+        "Actualización cada minuto."
     );
 
     revisarDropsAutomaticos().catch(console.error);
