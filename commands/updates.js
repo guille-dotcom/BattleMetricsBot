@@ -8,6 +8,7 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 
 const NEWS_URL = "https://www.rustyfields.com/news";
+const TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single";
 
 const MESES = {
     Jan: "ene",
@@ -42,8 +43,10 @@ function obtenerFuente(url) {
             return "Rustafied";
         }
 
-        if (host.includes("youtube.com") ||
-            host.includes("youtu.be")) {
+        if (
+            host.includes("youtube.com") ||
+            host.includes("youtu.be")
+        ) {
             return "Shadowfrax";
         }
 
@@ -65,12 +68,13 @@ function obtenerFecha(texto) {
         };
     }
 
+    const mes = match[1].slice(0, 1).toUpperCase() +
+        match[1].slice(1, 3).toLowerCase();
+
     const fecha = new Date(
         Date.UTC(
             Number(match[3]),
-            new Date(
-                `${match[1]} 1, ${match[3]}`
-            ).getMonth(),
+            new Date(`${mes} 1, ${match[3]}`).getMonth(),
             Number(match[2])
         )
     );
@@ -78,8 +82,53 @@ function obtenerFecha(texto) {
     return {
         fecha,
         fechaTexto:
-            `${match[2]} ${MESES[match[1]] || match[1]} ${match[3]}`
+            `${match[2]} ${MESES[mes] || mes} ${match[3]}`
     };
+}
+
+// Traduce el texto del inglés al español.
+// Si Google Translate falla, devuelve el texto original.
+async function traducirTexto(texto) {
+    const original = limpiarTexto(texto);
+
+    if (!original) {
+        return original;
+    }
+
+    try {
+        const respuesta = await axios.get(TRANSLATE_URL, {
+            params: {
+                client: "gtx",
+                sl: "auto",
+                tl: "es",
+                dt: "t",
+                q: original
+            },
+            timeout: 12000,
+            headers: {
+                "User-Agent": "Mozilla/5.0"
+            }
+        });
+
+        const segmentos = respuesta.data?.[0];
+
+        if (!Array.isArray(segmentos)) {
+            return original;
+        }
+
+        const traducido = segmentos
+            .map(segmento => segmento?.[0] || "")
+            .join("");
+
+        return limpiarTexto(traducido) || original;
+    } catch (error) {
+        console.warn(
+            "⚠️ No se pudo traducir una noticia:",
+            error.message
+        );
+
+        return original;
+    }
 }
 
 function extraerNoticias(html) {
@@ -109,33 +158,35 @@ function extraerNoticias(html) {
             return;
         }
 
+        const pathname = new URL(url).pathname;
+
         if (
-            /\/(news|store|support|careers|redeem)\/?$/i.test(
-                new URL(url).pathname
+            /^\/(news|store|support|careers|redeem)\/?$/i.test(
+                pathname
             )
         ) {
             return;
         }
 
-        urlsVistas.add(url);
-
         const datosFecha = obtenerFecha(texto);
 
-        let contenido = texto
-            .replace(
-                /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}\b/i,
+        let contenido = texto.replace(
+            /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}\b/i,
+            ""
+        );
+
+        contenido = limpiarTexto(
+            contenido.replace(
+                /^(Facepunch|Rustafied|Shadowfrax)\s+/i,
                 ""
             )
-            .trim();
-
-        contenido = contenido.replace(
-            /^(Facepunch|Rustafied|Shadowfrax)\s+/i,
-            ""
         );
 
         if (contenido.length < 20) {
             return;
         }
+
+        urlsVistas.add(url);
 
         noticias.push({
             fuente,
@@ -160,7 +211,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName("updates")
         .setDescription(
-            "Muestra las últimas novedades y adelantos de Rust"
+            "Muestra las últimas novedades y adelantos de Rust en español"
         ),
 
     async execute(interaction) {
@@ -177,47 +228,52 @@ module.exports = {
                 }
             });
 
-            const noticias = extraerNoticias(
-                respuesta.data
-            );
+            const noticias = extraerNoticias(respuesta.data);
 
             if (noticias.length === 0) {
                 await interaction.editReply({
                     content:
-                        "⚠️ No encontré noticias de Rust. " +
-                        "Puedes consultar la página original:\n" +
-                        NEWS_URL
+                        "⚠️ No encontré noticias de Rust.\n" +
+                        `Consulta la fuente original: ${NEWS_URL}`
                 });
 
                 return;
             }
 
+            // Traduce las noticias encontradas al español.
+            const noticiasTraducidas = await Promise.all(
+                noticias.map(async noticia => ({
+                    ...noticia,
+                    contenido: await traducirTexto(noticia.contenido)
+                }))
+            );
+
             const embed = new EmbedBuilder()
                 .setColor(0xD35400)
-                .setTitle("📰 RUST | Updates y adelantos")
+                .setTitle("📰 RUST | Novedades y adelantos")
                 .setURL(NEWS_URL)
                 .setDescription(
-                    "Últimas noticias, avances de desarrollo " +
-                    "y actualizaciones de Rust.\n\n" +
-                    "🟠 Los adelantos pueden cambiar antes " +
-                    "de publicarse. Revisa la fuente original " +
-                    "para confirmar cada novedad."
+                    "Últimas noticias, avances de desarrollo y " +
+                    "actualizaciones de Rust, traducidos al español.\n\n" +
+                    "🟠 Los adelantos pueden cambiar antes de publicarse. " +
+                    "Consulta la fuente original para confirmar los detalles."
                 )
                 .setTimestamp()
                 .setFooter({
-                    text: "RustLogix • Noticias de Rust"
+                    text: "RustLogix • Noticias de Rust en español"
                 });
 
-            for (const noticia of noticias) {
+            for (const noticia of noticiasTraducidas) {
                 const icono =
                     noticia.fuente === "Facepunch"
                         ? "✅"
                         : "🔎";
 
-                const resumen =
-                    noticia.contenido.length > 650
-                        ? noticia.contenido.slice(0, 647) + "..."
-                        : noticia.contenido;
+                let resumen = limpiarTexto(noticia.contenido);
+
+                if (resumen.length > 480) {
+                    resumen = resumen.slice(0, 477).trimEnd() + "...";
+                }
 
                 const valor =
                     `${resumen}\n\n` +
@@ -245,7 +301,7 @@ module.exports = {
                 content:
                     "❌ No pude obtener las novedades de Rust " +
                     "en este momento. Inténtalo más tarde.\n" +
-                    "Noticias: " + NEWS_URL
+                    `Noticias: ${NEWS_URL}`
             });
         }
     }
