@@ -3,6 +3,10 @@ const cheerio = require("cheerio");
 const { EmbedBuilder } = require("discord.js");
 const RustDropsMonitor = require("../models/RustDropsMonitor");
 
+const {
+    iniciarVigilanciaStreamers
+} = require("./twitchStreamerDropWatcher");
+
 const FACEPUNCH_URL = "https://twitch.facepunch.com/";
 const INTERVALO_REVISION = 5 * 60 * 1000;
 const MAX_DROPS_POR_PUBLICACION = 10;
@@ -501,8 +505,20 @@ function extraerTarjetas($, inicioOrden, finOrden) {
 }
 
 // ============================================================
-// DATOS DE CAMPAÑA
+// DATOS DE CAMPAÑA Y FECHAS OFICIALES
 // ============================================================
+
+function convertirFechaOficial(fecha) {
+    if (!fecha) return null;
+
+    const milisegundos = Date.parse(
+        fecha.replace(/\s+at\s+/i, " ")
+    );
+
+    return Number.isFinite(milisegundos)
+        ? new Date(milisegundos).toISOString()
+        : null;
+}
 
 function extraerDatosCampana($, textoCompleto) {
     const encabezados = $("h1, h2, h3, h4, [role='heading']")
@@ -539,7 +555,7 @@ function extraerDatosCampana($, textoCompleto) {
         if (coincidencia) numero = coincidencia[1];
     }
 
-    const estado = /\bLive Now\b/i.test(textoCompleto)
+    const estadoOriginal = /\bLive Now\b/i.test(textoCompleto)
         ? "En curso"
         : /\bUpcoming\b/i.test(textoCompleto)
             ? "Próximamente"
@@ -548,6 +564,31 @@ function extraerDatosCampana($, textoCompleto) {
     const fechasMatch = textoCompleto.match(
         /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*UTC\s*[-–]\s*(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*UTC)/i
     );
+
+    const partesFecha = fechasMatch
+        ? fechasMatch[1].match(
+            /(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*UTC/gi
+        ) || []
+        : [];
+
+    const inicioCampana = convertirFechaOficial(partesFecha[0]);
+    const finCampana = convertirFechaOficial(partesFecha[1]);
+
+    let estado = estadoOriginal;
+
+    if (inicioCampana && finCampana) {
+        const ahora = Date.now();
+        const inicioMs = new Date(inicioCampana).getTime();
+        const finMs = new Date(finCampana).getTime();
+
+        if (ahora < inicioMs) {
+            estado = "Próximamente";
+        } else if (ahora < finMs) {
+            estado = "En curso";
+        } else {
+            estado = "Finalizada";
+        }
+    }
 
     const tema = encabezados.find(item =>
         item.orden > (encabezadoCampana?.orden ?? -1) &&
@@ -560,7 +601,9 @@ function extraerDatosCampana($, textoCompleto) {
             : null,
         estado,
         tema: tema?.texto || null,
-        fechas: fechasMatch ? limpiarTexto(fechasMatch[1]) : null
+        fechas: fechasMatch ? limpiarTexto(fechasMatch[1]) : null,
+        inicioCampana,
+        finCampana
     };
 }
 
@@ -649,6 +692,8 @@ async function obtenerDropsOficiales() {
         estado: campana.estado || "Consulta oficial",
         tema: campana.tema,
         fechas: campana.fechas,
+        inicioCampana: campana.inicioCampana,
+        finCampana: campana.finCampana,
         generales,
         streamers,
         consultado: new Date().toISOString()
@@ -656,7 +701,59 @@ async function obtenerDropsOficiales() {
 }
 
 // ============================================================
-// EMBEDS: SEPARACIÓN POR TIPO DE DROP
+// CUENTA REGRESIVA DE CAMPAÑA
+// ============================================================
+
+function crearCampoCuentaRegresiva(datos) {
+    const ahora = Date.now();
+
+    const inicio = datos.inicioCampana
+        ? new Date(datos.inicioCampana).getTime()
+        : null;
+
+    const fin = datos.finCampana
+        ? new Date(datos.finCampana).getTime()
+        : null;
+
+    let objetivo = null;
+    let titulo = null;
+
+    if (Number.isFinite(inicio) && ahora < inicio) {
+        objetivo = inicio;
+        titulo = "⏳ COMIENZA EN";
+    } else if (Number.isFinite(fin) && ahora < fin) {
+        objetivo = fin;
+        titulo = "🏁 FINALIZA EN";
+    } else {
+        return null;
+    }
+
+    const totalSegundos = Math.max(
+        0,
+        Math.floor((objetivo - ahora) / 1000)
+    );
+
+    const dias = Math.floor(totalSegundos / 86400);
+    const horas = Math.floor((totalSegundos % 86400) / 3600);
+    const minutos = Math.floor((totalSegundos % 3600) / 60);
+    const segundos = totalSegundos % 60;
+
+    const timestampDiscord = Math.floor(objetivo / 1000);
+
+    return {
+        name: titulo,
+        value:
+            `**${dias}** Días\n` +
+            `**${horas}** Horas\n` +
+            `**${minutos}** Minutos\n` +
+            `**${segundos}** Segundos\n\n` +
+            `<t:${timestampDiscord}:R>`,
+        inline: false
+    };
+}
+
+// ============================================================
+// CREACIÓN DE EMBEDS
 // ============================================================
 
 function crearEmbedSeccion(titulo, descripcion, datos) {
@@ -669,6 +766,12 @@ function crearEmbedSeccion(titulo, descripcion, datos) {
             text: "RustLogix • Fuente oficial de Facepunch"
         })
         .setTimestamp(new Date(datos.consultado));
+
+    const cuentaRegresiva = crearCampoCuentaRegresiva(datos);
+
+    if (cuentaRegresiva) {
+        embed.addFields(cuentaRegresiva);
+    }
 
     if (datos.tema) {
         embed.addFields({
@@ -692,7 +795,6 @@ function crearEmbedSeccion(titulo, descripcion, datos) {
 function crearEmbedsDrops(datos) {
     const embeds = [];
 
-    // Mensaje separador: Drops generales.
     embeds.push(
         crearEmbedSeccion(
             "🎁 DROPS GENERALES",
@@ -736,6 +838,12 @@ function crearEmbedsDrops(datos) {
             })
             .setTimestamp(new Date(datos.consultado));
 
+        const cuentaRegresiva = crearCampoCuentaRegresiva(datos);
+
+        if (cuentaRegresiva) {
+            embed.addFields(cuentaRegresiva);
+        }
+
         if (!esProximamente && esImagenValida(recompensa.imagen)) {
             embed.setImage(recompensa.imagen);
         }
@@ -743,7 +851,6 @@ function crearEmbedsDrops(datos) {
         embeds.push(embed);
     }
 
-    // Mensaje separador: Drops específicos de streamers.
     embeds.push(
         crearEmbedSeccion(
             "🎮 DROPS ESPECÍFICOS DE STREAMERS",
@@ -798,6 +905,12 @@ function crearEmbedsDrops(datos) {
             });
         }
 
+        const cuentaRegresiva = crearCampoCuentaRegresiva(datos);
+
+        if (cuentaRegresiva) {
+            embed.addFields(cuentaRegresiva);
+        }
+
         if (!esProximamente && esImagenValida(recompensa.imagen)) {
             embed.setImage(recompensa.imagen);
         }
@@ -826,13 +939,16 @@ function firmaCampana(datos) {
         estado: datos.estado,
         tema: datos.tema,
         fechas: datos.fechas,
+        inicioCampana: datos.inicioCampana,
+        finCampana: datos.finCampana,
+        cuentaRegresivaTick: Math.floor(Date.now() / INTERVALO_REVISION),
         generales: datos.generales,
         streamers: datos.streamers
     });
 }
 
 // ============================================================
-// PUBLICACIÓN MANUAL: CADA RECOMPENSA EN SU PROPIO MENSAJE
+// PUBLICACIÓN MANUAL: /DROPS RUST
 // ============================================================
 
 async function publicarRustDrops(interaction) {
@@ -862,14 +978,14 @@ async function publicarRustDrops(interaction) {
     }
 
     console.log(
-        `✅ /drops rust: publicados ${embeds.length} mensajes individuales, con secciones por tipo.`
+        `✅ /drops rust: publicados ${embeds.length} mensajes individuales.`
     );
 
     return datos;
 }
 
 // ============================================================
-// COMPATIBILIDAD CON EL MODELO MONGODB
+// COMPATIBILIDAD CON MONGODB
 // ============================================================
 
 function obtenerIdsMensajes(monitor) {
@@ -896,7 +1012,7 @@ function guardarIdsMensajes(monitor, ids) {
 }
 
 // ============================================================
-// PUBLICACIONES AUTOMÁTICAS
+// PUBLICACIÓN AUTOMÁTICA
 // ============================================================
 
 async function revisarDropsAutomaticos() {
@@ -1019,7 +1135,7 @@ async function revisarDropsAutomaticos() {
 
                 console.log(
                     `✅ Twitch Drops actualizados en ${canal.guild?.name || canal.id}: ` +
-                    `${embeds.length} mensajes individuales.`
+                    `${embeds.length} mensajes.`
                 );
             } catch (error) {
                 console.error(
@@ -1046,6 +1162,12 @@ function iniciarDropsAutomaticos(client) {
     if (temporizadorIniciado) return;
 
     cliente = client;
+
+    iniciarVigilanciaStreamers(
+        client,
+        obtenerDropsOficiales
+    );
+
     temporizadorIniciado = true;
 
     console.log(

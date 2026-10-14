@@ -1,4 +1,3 @@
-
 const mongoose = require("mongoose");
 
 const TwitchDropsMonitorSchema = new mongoose.Schema(
@@ -8,6 +7,7 @@ const TwitchDropsMonitorSchema = new mongoose.Schema(
             required: true,
             index: true
         },
+
         channelId: {
             type: String,
             required: true
@@ -25,22 +25,36 @@ const TwitchDropsMonitorSchema = new mongoose.Schema(
             default: []
         },
 
+        // Identificación de la campaña oficial.
         campaignKey: {
             type: String,
             default: null
         },
+
         campaignName: {
             type: String,
             default: null
         },
+
         campaignSignature: {
             type: String,
             default: null
         },
+
+        // Estado de los streamers asociados a los Drops.
+        // Permite detectar directos nuevos y evitar avisos duplicados.
+        streamerStates: {
+            type: mongoose.Schema.Types.Mixed,
+            default: () => ({})
+        },
+
+        // Activa o desactiva el monitor de este servidor.
         active: {
             type: Boolean,
             default: true
         },
+
+        // Fecha de la última comprobación.
         lastCheckedAt: {
             type: Date,
             default: null
@@ -51,6 +65,7 @@ const TwitchDropsMonitorSchema = new mongoose.Schema(
     }
 );
 
+// Un monitor por servidor de Discord.
 TwitchDropsMonitorSchema.index(
     { guildId: 1 },
     { unique: true }
