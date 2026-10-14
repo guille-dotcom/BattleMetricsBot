@@ -1,25 +1,13 @@
 // ============================================================
 // RUSTLOGIX - TWITCH DROPS SERVICE
-// ============================================================
 // Fuente oficial: https://twitch.facepunch.com/
-//
-// - Extrae los Drops oficiales.
-// - Publica /drops en mensajes independientes.
-// - Actualiza automáticamente los anuncios.
-// - Actualiza la cuenta atrás cada minuto.
-// - Reconoce fechas en español e inglés.
-// - Convierte correctamente GMT-3 a UTC.
-// - Vigila streamers asociados a los Drops.
 // ============================================================
 
 const axios = require("axios");
 const cheerio = require("cheerio");
 const { EmbedBuilder } = require("discord.js");
 const RustDropsMonitor = require("../models/RustDropsMonitor");
-
-const {
-    iniciarVigilanciaStreamers
-} = require("./twitchStreamerDropWatcher");
+const { iniciarVigilanciaStreamers } = require("./twitchStreamerDropWatcher");
 
 const FACEPUNCH_URL = "https://twitch.facepunch.com/";
 const INTERVALO_REVISION = 60 * 1000;
@@ -56,20 +44,16 @@ function convertirUrl(url) {
             FACEPUNCH_URL
         );
 
-        if (!["http:", "https:"].includes(resultado.protocol)) {
-            return null;
-        }
-
-        return resultado.href;
+        return ["http:", "https:"].includes(resultado.protocol)
+            ? resultado.href
+            : null;
     } catch {
         return null;
     }
 }
 
 function esImagenValida(url) {
-    if (!url || !/^https?:\/\//i.test(url)) {
-        return false;
-    }
+    if (!url || !/^https?:\/\//i.test(url)) return false;
 
     if (
         /static-cdn\.jtvnw\.net/i.test(url) ||
@@ -80,11 +64,7 @@ function esImagenValida(url) {
         return false;
     }
 
-    return (
-        !/\.svg(?:[?#].*)?$/i.test(url) &&
-        !/\.mp4(?:[?#].*)?$/i.test(url) &&
-        !/\.webm(?:[?#].*)?$/i.test(url)
-    );
+    return !/\.(svg|mp4|webm)(?:[?#].*)?$/i.test(url);
 }
 
 function obtenerUrlMedia($, elemento) {
@@ -109,10 +89,7 @@ function obtenerUrlMedia($, elemento) {
 
     for (const candidato of candidatos) {
         const url = convertirUrl(candidato);
-
-        if (esImagenValida(url)) {
-            return url;
-        }
+        if (esImagenValida(url)) return url;
     }
 
     const estilo =
@@ -120,16 +97,11 @@ function obtenerUrlMedia($, elemento) {
         nodo.find("[style]").first().attr("style");
 
     if (estilo) {
-        const coincidencias = estilo.matchAll(
+        for (const coincidencia of estilo.matchAll(
             /url\(\s*(['"]?)(.*?)\1\s*\)/gi
-        );
-
-        for (const coincidencia of coincidencias) {
+        )) {
             const url = convertirUrl(coincidencia[2]);
-
-            if (esImagenValida(url)) {
-                return url;
-            }
+            if (esImagenValida(url)) return url;
         }
     }
 
@@ -155,10 +127,7 @@ function obtenerImagenTarjeta($, tarjeta) {
         if (imagen) return;
 
         const url = obtenerUrlMedia($, elemento);
-
-        if (url && esImagenValida(url)) {
-            imagen = url;
-        }
+        if (url && esImagenValida(url)) imagen = url;
     });
 
     return imagen;
@@ -177,10 +146,7 @@ function extraerDuracion(texto) {
 
     if (coincidencia) {
         const cantidad = Number(coincidencia[1]);
-
-        const unidad = /^(minutes?|mins?)$/i.test(
-            coincidencia[2]
-        )
+        const unidad = /^(minutes?|mins?)$/i.test(coincidencia[2])
             ? "min"
             : "h";
 
@@ -197,10 +163,7 @@ function extraerDuracion(texto) {
 
     if (
         coincidencia &&
-        (
-            coincidencia[1] !== undefined ||
-            coincidencia[2] !== undefined
-        )
+        (coincidencia[1] !== undefined || coincidencia[2] !== undefined)
     ) {
         const horas = Number(coincidencia[1] || 0);
         const minutos = Number(coincidencia[2] || 0);
@@ -214,11 +177,7 @@ function extraerDuracion(texto) {
         }
 
         if (horas > 0) {
-            return {
-                cantidad: horas,
-                unidad: "h",
-                texto: `${horas} h`
-            };
+            return { cantidad: horas, unidad: "h", texto: `${horas} h` };
         }
 
         if (minutos > 0) {
@@ -268,17 +227,13 @@ function esDropSinRevelar(texto) {
 function buscarEncabezado($, expresion) {
     let encontrado = null;
 
-    $("h1, h2, h3, h4, [role='heading']").each(
-        (_, elemento) => {
-            if (encontrado) return;
+    $("h1, h2, h3, h4, [role='heading']").each((_, elemento) => {
+        if (encontrado) return;
 
-            const texto = limpiarTexto($(elemento).text());
-
-            if (expresion.test(texto)) {
-                encontrado = elemento;
-            }
+        if (expresion.test(limpiarTexto($(elemento).text()))) {
+            encontrado = elemento;
         }
-    );
+    });
 
     return encontrado;
 }
@@ -314,16 +269,12 @@ function encontrarTarjeta($, nodo) {
         const texto = limpiarTexto(actual.text());
 
         if (texto.length > 0 && texto.length <= 350) {
-            if (
-                !tarjetaConEnlace &&
-                actual.find("a[href]").length > 0
-            ) {
+            if (!tarjetaConEnlace && actual.find("a[href]").length > 0) {
                 tarjetaConEnlace = actual;
             }
 
             if (tieneMediosDeImagen($, actual)) {
                 tarjetaConImagen = actual;
-
                 if (nivel >= 2) break;
             }
         }
@@ -348,21 +299,13 @@ function obtenerEnlaceStreamer($, tarjeta) {
         try {
             const url = new URL(href);
 
-            if (!/(^|\.)twitch\.tv$/i.test(url.hostname)) {
+            if (!/(^|\.)twitch\.tv$/i.test(url.hostname)) return;
+
+            if (/\/(directory|downloads|settings|videos|p|search)(\/|$)/i.test(url.pathname)) {
                 return;
             }
 
-            if (
-                /\/(directory|downloads|settings|videos|p|search)(\/|$)/i
-                    .test(url.pathname)
-            ) {
-                return;
-            }
-
-            const canal = url.pathname
-                .split("/")
-                .filter(Boolean)[0];
-
+            const canal = url.pathname.split("/").filter(Boolean)[0];
             if (!canal) return;
 
             resultado = {
@@ -387,9 +330,7 @@ function obtenerNombreRecompensa($, tarjeta, textoOriginal) {
     ];
 
     for (const selector of selectores) {
-        const nombre = limpiarTexto(
-            tarjeta.find(selector).first().text()
-        );
+        const nombre = limpiarTexto(tarjeta.find(selector).first().text());
 
         if (nombre) {
             return nombre
@@ -407,7 +348,6 @@ function obtenerNombreRecompensa($, tarjeta, textoOriginal) {
 function extraerTarjetas($, inicioOrden, finOrden) {
     const recompensas = [];
     const duplicados = new Set();
-
     const elementos = $("body *").toArray();
 
     elementos.forEach((elemento, indice) => {
@@ -420,20 +360,13 @@ function extraerTarjetas($, inicioOrden, finOrden) {
         if (nodo.children().length > 0) continue;
 
         const duracion = extraerDuracion(nodo.text());
-
         if (!duracion) continue;
 
         const orden = obtenerOrden(elemento);
 
-        if (
-            orden <= inicioOrden ||
-            orden >= finOrden
-        ) {
-            continue;
-        }
+        if (orden <= inicioOrden || orden >= finOrden) continue;
 
         const tarjeta = encontrarTarjeta($, elemento);
-
         if (!tarjeta || !tarjeta.length) continue;
 
         const textoOriginal = limpiarTexto(tarjeta.text());
@@ -447,21 +380,14 @@ function extraerTarjetas($, inicioOrden, finOrden) {
         if (sinRevelar) {
             nombre = "Próximamente";
         } else {
-            const enlaceStreamer = obtenerEnlaceStreamer(
-                $,
-                tarjeta
-            );
+            const enlaceStreamer = obtenerEnlaceStreamer($, tarjeta);
 
             if (enlaceStreamer) {
                 streamer = enlaceStreamer.nombre;
                 streamerUrl = enlaceStreamer.url;
             }
 
-            nombre = obtenerNombreRecompensa(
-                $,
-                tarjeta,
-                textoOriginal
-            );
+            nombre = obtenerNombreRecompensa($, tarjeta, textoOriginal);
 
             if (
                 !nombre ||
@@ -482,7 +408,6 @@ function extraerTarjetas($, inicioOrden, finOrden) {
         ].join("-");
 
         if (duplicados.has(clave)) continue;
-
         duplicados.add(clave);
 
         recompensas.push({
@@ -498,91 +423,99 @@ function extraerTarjetas($, inicioOrden, finOrden) {
 }
 
 // ============================================================
-// CONVERSIÓN DE FECHAS OFICIALES
+// FECHAS OFICIALES DE FACEPUNCH
+// Lee data-date-id, cuyo último segmento es el timestamp Unix.
 // ============================================================
 
-function convertirFechaOficial(fecha) {
-    if (!fecha) return null;
+function extraerFechasOficiales($) {
+    const fechas = [];
 
-    const texto = limpiarTexto(fecha);
+    $(".event-date .date").each((_, elemento) => {
+        const nodo = $(elemento);
+        const texto = limpiarTexto(nodo.text());
+        const identificador = nodo.attr("data-date-id");
 
-    const meses = {
-        enero: 0,
-        febrero: 1,
-        marzo: 2,
-        abril: 3,
-        mayo: 4,
-        junio: 5,
-        julio: 6,
-        agosto: 7,
-        septiembre: 8,
-        setiembre: 8,
-        octubre: 9,
-        noviembre: 10,
-        diciembre: 11
-    };
+        // Ejemplo:
+        // c19300...-1792778400
+        const coincidencia = identificador?.match(/-(\d{10,13})$/);
 
-    // Ejemplo:
-    // 23 de octubre de 2026 a las 15:00 GMT-3
-    const espanol = texto.match(
-        /(\d{1,2})\s+de\s+([a-záéíóú]+)\s+de\s+(\d{4})\s+a\s+las\s+(\d{1,2}):(\d{2})\s*(GMT|UTC)\s*([+-]\d{1,2})(?::?(\d{2}))?/i
+        let milisegundos = coincidencia
+            ? Number(coincidencia[1])
+            : NaN;
+
+        // Compatibilidad con timestamps que vengan en milisegundos.
+        if (Number.isFinite(milisegundos) && milisegundos < 1e12) {
+            milisegundos *= 1000;
+        }
+
+        // Alternativa: timestamp declarado en un script asociado.
+        if (!Number.isFinite(milisegundos) || milisegundos <= 0) {
+            const bloque = nodo.closest(".event-date").html() || "";
+            const scriptTimestamp = bloque.match(
+                /new Date\(\s*(\d{13})\s*\)/i
+            );
+
+            if (scriptTimestamp) {
+                milisegundos = Number(scriptTimestamp[1]);
+            }
+        }
+
+        if (Number.isFinite(milisegundos) && milisegundos > 0) {
+            fechas.push({
+                texto,
+                timestamp: milisegundos,
+                iso: new Date(milisegundos).toISOString()
+            });
+        }
+    });
+
+    return fechas.slice(0, 2);
+}
+
+// ============================================================
+// CONTADOR OFICIAL DE FACEPUNCH
+// Se guardan los valores que devuelve el HTML.
+// La cuenta regresiva de Discord se calcula usando las fechas.
+// ============================================================
+
+function extraerContadorOficial($) {
+    const contador = $(".hero-countdown.counter").first();
+
+    if (!contador.length) return null;
+
+    const etiqueta = limpiarTexto(
+        contador.find(".counter-label").first().text()
     );
 
-    if (espanol) {
-        const dia = Number(espanol[1]);
-        const mes = meses[espanol[2].toLowerCase()];
-        const anio = Number(espanol[3]);
-        const hora = Number(espanol[4]);
-        const minuto = Number(espanol[5]);
+    function leerNumero(selector) {
+        const texto = limpiarTexto(
+            contador.find(selector).first().text()
+        );
 
-        const signo = espanol[7].startsWith("-") ? -1 : 1;
-        const desfaseHoras = Math.abs(Number(espanol[7]));
-        const desfaseMinutos = Number(espanol[8] || 0);
+        if (!texto) return null;
 
-        if (
-            mes === undefined ||
-            dia < 1 ||
-            dia > 31 ||
-            hora < 0 ||
-            hora > 23 ||
-            minuto < 0 ||
-            minuto > 59
-        ) {
-            return null;
-        }
-
-        const desfaseTotal =
-            signo * (desfaseHoras * 60 + desfaseMinutos);
-
-        const milisegundos = Date.UTC(
-            anio,
-            mes,
-            dia,
-            hora,
-            minuto
-        ) - desfaseTotal * 60 * 1000;
-
-        const resultado = new Date(milisegundos);
-
-        if (
-            resultado.getUTCFullYear() !== anio ||
-            resultado.getUTCMonth() !== mes ||
-            resultado.getUTCDate() !== dia
-        ) {
-            return null;
-        }
-
-        return resultado.toISOString();
+        const numero = Number(texto);
+        return Number.isFinite(numero) && numero >= 0
+            ? numero
+            : null;
     }
 
-    // Formato inglés:
-    // October 23, 2026 at 3:00 PM UTC
-    const ingles = texto.replace(/\s+at\s+/i, " ");
-    const milisegundos = Date.parse(ingles);
+    const resultado = {
+        etiqueta: etiqueta || null,
+        dias: leerNumero(".value.day"),
+        horas: leerNumero(".value.hour"),
+        minutos: leerNumero(".value.minute"),
+        segundos: leerNumero(".value.second")
+    };
 
-    return Number.isFinite(milisegundos)
-        ? new Date(milisegundos).toISOString()
-        : null;
+    const tieneValores = [
+        resultado.dias,
+        resultado.horas,
+        resultado.minutos,
+        resultado.segundos
+    ].some(valor => valor !== null);
+
+    return tieneValores || resultado.etiqueta ? resultado : null;
 }
 
 // ============================================================
@@ -605,8 +538,7 @@ function extraerDatosCampana($, textoCompleto) {
     let numero = null;
     let anfitrion = null;
 
-    const textoCabecera =
-        encabezadoCampana?.texto || textoCompleto;
+    const textoCabecera = encabezadoCampana?.texto || textoCompleto;
 
     const coincidenciaCabecera = textoCabecera.match(
         /Twitch\s*Drops\s*(?:Round\s*)?#?\s*(\d+)\s*Hosted\s*by\s+(.+?)(?=Base Invaders|General Drops|Streamer Drops|$)/i
@@ -622,9 +554,7 @@ function extraerDatosCampana($, textoCompleto) {
             /Twitch\s*Drops\s*(?:Round\s*)?#?\s*(\d+)/i
         );
 
-        if (coincidencia) {
-            numero = coincidencia[1];
-        }
+        if (coincidencia) numero = coincidencia[1];
     }
 
     if (!anfitrion) {
@@ -632,31 +562,39 @@ function extraerDatosCampana($, textoCompleto) {
             /Twitch\s*Drops\s*(?:Round\s*)?#?\s*\d+\s*Hosted\s*by\s+(.+?)(?=Base Invaders|General Drops|Streamer Drops|$)/i
         );
 
-        if (coincidencia) {
-            anfitrion = limpiarTexto(coincidencia[1]);
+        if (coincidencia) anfitrion = limpiarTexto(coincidencia[1]);
+    }
+
+    // Primero usamos los timestamps oficiales del HTML.
+    const fechasOficiales = extraerFechasOficiales($);
+
+    let fechaInicioTexto = fechasOficiales[0]?.texto || null;
+    let fechaFinTexto = fechasOficiales[1]?.texto || null;
+
+    let inicioCampana = fechasOficiales[0]?.iso || null;
+    let finCampana = fechasOficiales[1]?.iso || null;
+
+    // Fallback si Facepunch no proporciona data-date-id.
+    if (!inicioCampana || !finCampana) {
+        const regexFechaEspanol =
+            /(\d{1,2}\s+de\s+[a-záéíóú]+\s+de\s+\d{4}\s+a\s+las\s+\d{1,2}:\d{2}\s*(?:GMT|UTC)\s*[+-]\d{1,2}(?::?\d{2})?)\s*[-–]\s*(\d{1,2}\s+de\s+[a-záéíóú]+\s+de\s+\d{4}\s+a\s+las\s+\d{1,2}:\d{2}\s*(?:GMT|UTC)\s*[+-]\d{1,2}(?::?\d{2})?)/i;
+
+        const fechasMatch = textoCompleto.match(regexFechaEspanol);
+
+        if (fechasMatch) {
+            fechaInicioTexto ||= fechasMatch[1];
+            fechaFinTexto ||= fechasMatch[2];
+
+            inicioCampana ||= convertirFechaOficial(fechasMatch[1]);
+            finCampana ||= convertirFechaOficial(fechasMatch[2]);
         }
     }
 
-    const regexFechaEspanol =
-        /(\d{1,2}\s+de\s+[a-záéíóú]+\s+de\s+\d{4}\s+a\s+las\s+\d{1,2}:\d{2}\s*(?:GMT|UTC)\s*[+-]\d{1,2}(?::?\d{2})?)\s*[-–]\s*(\d{1,2}\s+de\s+[a-záéíóú]+\s+de\s+\d{4}\s+a\s+las\s+\d{1,2}:\d{2}\s*(?:GMT|UTC)\s*[+-]\d{1,2}(?::?\d{2})?)/i;
+    const fechas = fechaInicioTexto && fechaFinTexto
+        ? `${fechaInicioTexto} - ${fechaFinTexto}`
+        : null;
 
-    const regexFechaIngles =
-        /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*(?:UTC|GMT)(?:\s*[+-]\d{1,2}(?::?\d{2})?)?)\s*[-–]\s*((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s*(?:UTC|GMT)(?:\s*[+-]\d{1,2}(?::?\d{2})?)?)/i;
-
-    const fechasMatch =
-        textoCompleto.match(regexFechaEspanol) ||
-        textoCompleto.match(regexFechaIngles);
-
-    const fechaInicioTexto = fechasMatch?.[1] || null;
-    const fechaFinTexto = fechasMatch?.[2] || null;
-
-    const inicioCampana = convertirFechaOficial(
-        fechaInicioTexto
-    );
-
-    const finCampana = convertirFechaOficial(
-        fechaFinTexto
-    );
+    const contadorOficial = extraerContadorOficial($);
 
     let estado = null;
 
@@ -685,8 +623,7 @@ function extraerDatosCampana($, textoCompleto) {
     } else {
         const temaEncabezado = encabezados.find(item =>
             item.orden > (encabezadoCampana?.orden ?? -1) &&
-            !/Twitch Drops|General Drops|Streamer Drops|Drops Metrics|Upcoming|Live Now/i
-                .test(item.texto)
+            !/Twitch Drops|General Drops|Streamer Drops|Drops Metrics|Upcoming|Live Now/i.test(item.texto)
         );
 
         tema = temaEncabezado?.texto || null;
@@ -698,12 +635,85 @@ function extraerDatosCampana($, textoCompleto) {
             : null,
         estado,
         tema,
-        fechas: fechasMatch
-            ? limpiarTexto(`${fechaInicioTexto} - ${fechaFinTexto}`)
-            : null,
+        fechas,
         inicioCampana,
-        finCampana
+        finCampana,
+        contadorOficial
     };
+}
+
+// Convierte fechas escritas en español a UTC respetando GMT-3, etc.
+function convertirFechaOficial(fecha) {
+    if (!fecha) return null;
+
+    const texto = limpiarTexto(fecha);
+
+    const meses = {
+        enero: 0,
+        febrero: 1,
+        marzo: 2,
+        abril: 3,
+        mayo: 4,
+        junio: 5,
+        julio: 6,
+        agosto: 7,
+        septiembre: 8,
+        setiembre: 8,
+        octubre: 9,
+        noviembre: 10,
+        diciembre: 11
+    };
+
+    const espanol = texto.match(
+        /(\d{1,2})\s+de\s+([a-záéíóú]+)\s+de\s+(\d{4})\s+a\s+las\s+(\d{1,2}):(\d{2})\s*(GMT|UTC)\s*([+-]\d{1,2})(?::?(\d{2}))?/i
+    );
+
+    if (espanol) {
+        const dia = Number(espanol[1]);
+        const mes = meses[espanol[2].toLowerCase()];
+        const anio = Number(espanol[3]);
+        const hora = Number(espanol[4]);
+        const minuto = Number(espanol[5]);
+        const signo = espanol[7].startsWith("-") ? -1 : 1;
+        const desfaseHoras = Math.abs(Number(espanol[7]));
+        const desfaseMinutos = Number(espanol[8] || 0);
+
+        if (
+            mes === undefined ||
+            hora > 23 ||
+            minuto > 59 ||
+            desfaseHoras > 14 ||
+            desfaseMinutos > 59
+        ) {
+            return null;
+        }
+
+        const comprobacion = new Date(Date.UTC(anio, mes, dia));
+
+        if (
+            comprobacion.getUTCFullYear() !== anio ||
+            comprobacion.getUTCMonth() !== mes ||
+            comprobacion.getUTCDate() !== dia
+        ) {
+            return null;
+        }
+
+        const desfaseTotal = signo * (
+            desfaseHoras * 60 + desfaseMinutos
+        );
+
+        return new Date(
+            Date.UTC(anio, mes, dia, hora, minuto) -
+            desfaseTotal * 60 * 1000
+        ).toISOString();
+    }
+
+    const ingles = texto.replace(/\s+at\s+/i, " ");
+    const milisegundos = Date.parse(ingles);
+
+    return Number.isFinite(milisegundos)
+        ? new Date(milisegundos).toISOString()
+        : null;
 }
 
 // ============================================================
@@ -721,13 +731,8 @@ async function obtenerDropsOficiales() {
         }
     });
 
-    if (
-        respuesta.status !== 200 ||
-        typeof respuesta.data !== "string"
-    ) {
-        throw new Error(
-            "Facepunch no devolvió una página HTML válida."
-        );
+    if (respuesta.status !== 200 || typeof respuesta.data !== "string") {
+        throw new Error("Facepunch no devolvió una página HTML válida.");
     }
 
     const $ = cheerio.load(respuesta.data);
@@ -748,55 +753,27 @@ async function obtenerDropsOficiales() {
         elemento.__dropsOrder = indice;
     });
 
-    const general = buscarEncabezado(
-        $,
-        /^General Drops\b/i
-    );
-
-    const streamer = buscarEncabezado(
-        $,
-        /^Streamer Drops\b/i
-    );
-
-    const metricas = buscarEncabezado(
-        $,
-        /^Drops Metrics\b/i
-    );
+    const general = buscarEncabezado($, /^General Drops\b/i);
+    const streamer = buscarEncabezado($, /^Streamer Drops\b/i);
+    const metricas = buscarEncabezado($, /^Drops Metrics\b/i);
 
     if (!general || !streamer) {
-        throw new Error(
-            "No se encontraron las secciones oficiales de Drops."
-        );
+        throw new Error("No se encontraron las secciones oficiales de Drops.");
     }
 
     const ordenGeneral = obtenerOrden(general);
     const ordenStreamer = obtenerOrden(streamer);
-
     const ordenMetricas = metricas
         ? obtenerOrden(metricas)
         : Number.MAX_SAFE_INTEGER;
 
-    const generales = extraerTarjetas(
-        $,
-        ordenGeneral,
-        ordenStreamer
-    );
+    const generales = extraerTarjetas($, ordenGeneral, ordenStreamer);
+    const streamers = extraerTarjetas($, ordenStreamer, ordenMetricas);
 
-    const streamers = extraerTarjetas(
-        $,
-        ordenStreamer,
-        ordenMetricas
-    );
-
-    const campana = extraerDatosCampana(
-        $,
-        textoCompleto
-    );
+    const campana = extraerDatosCampana($, textoCompleto);
 
     if (!generales.length && !streamers.length) {
-        throw new Error(
-            "No se pudieron identificar las recompensas oficiales."
-        );
+        throw new Error("No se pudieron identificar las recompensas oficiales.");
     }
 
     console.log(
@@ -808,40 +785,37 @@ async function obtenerDropsOficiales() {
             fechas: campana.fechas,
             inicioCampana: campana.inicioCampana,
             finCampana: campana.finCampana,
-            generales: generales.map(
-                ({ nombre, tiempo, imagen }) => ({
-                    nombre,
-                    tiempo,
-                    imagen: Boolean(imagen)
-                })
-            ),
-            streamers: streamers.map(
-                ({
-                    nombre,
-                    streamer,
-                    streamerUrl,
-                    tiempo,
-                    imagen
-                }) => ({
-                    nombre,
-                    streamer,
-                    streamerUrl,
-                    tiempo,
-                    imagen: Boolean(imagen)
-                })
-            )
+            contadorOficial: campana.contadorOficial,
+            generales: generales.map(({ nombre, tiempo, imagen }) => ({
+                nombre,
+                tiempo,
+                imagen: Boolean(imagen)
+            })),
+            streamers: streamers.map(({
+                nombre,
+                streamer,
+                streamerUrl,
+                tiempo,
+                imagen
+            }) => ({
+                nombre,
+                streamer,
+                streamerUrl,
+                tiempo,
+                imagen: Boolean(imagen)
+            }))
         })
     );
 
     return {
         fuente: FACEPUNCH_URL,
-        campana: campana.campana ||
-            "Campaña oficial de Rust",
+        campana: campana.campana || "Campaña oficial de Rust",
         estado: campana.estado || "Consulta oficial",
         tema: campana.tema,
         fechas: campana.fechas,
         inicioCampana: campana.inicioCampana,
         finCampana: campana.finCampana,
+        contadorOficial: campana.contadorOficial,
         generales,
         streamers,
         consultado: new Date().toISOString()
@@ -849,7 +823,8 @@ async function obtenerDropsOficiales() {
 }
 
 // ============================================================
-// CUENTA REGRESIVA
+// CUENTA REGRESIVA PARA DISCORD
+// Se calcula con los timestamps oficiales, no con números estáticos.
 // ============================================================
 
 function crearCampoCuentaRegresiva(datos) {
@@ -882,14 +857,9 @@ function crearCampoCuentaRegresiva(datos) {
     );
 
     const dias = Math.floor(totalSegundos / 86400);
-    const horas = Math.floor(
-        (totalSegundos % 86400) / 3600
-    );
-    const minutos = Math.floor(
-        (totalSegundos % 3600) / 60
-    );
+    const horas = Math.floor((totalSegundos % 86400) / 3600);
+    const minutos = Math.floor((totalSegundos % 3600) / 60);
     const segundos = totalSegundos % 60;
-
     const timestampDiscord = Math.floor(objetivo / 1000);
 
     return {
@@ -920,10 +890,7 @@ function crearEmbedSeccion(titulo, descripcion, datos) {
         .setTimestamp(new Date(datos.consultado));
 
     const cuentaRegresiva = crearCampoCuentaRegresiva(datos);
-
-    if (cuentaRegresiva) {
-        embed.addFields(cuentaRegresiva);
-    }
+    if (cuentaRegresiva) embed.addFields(cuentaRegresiva);
 
     if (datos.tema) {
         embed.addFields({
@@ -938,6 +905,14 @@ function crearEmbedSeccion(titulo, descripcion, datos) {
             name: "📅 Fechas oficiales",
             value: datos.fechas,
             inline: false
+        });
+    }
+
+    if (datos.contadorOficial?.etiqueta) {
+        embed.addFields({
+            name: "⏱️ Contador oficial de Facepunch",
+            value: datos.contadorOficial.etiqueta,
+            inline: true
         });
     }
 
@@ -958,8 +933,7 @@ function crearEmbedsDrops(datos) {
     );
 
     for (const recompensa of datos.generales || []) {
-        const proximamente =
-            /^Próximamente$/i.test(recompensa.nombre);
+        const proximamente = /^Próximamente$/i.test(recompensa.nombre);
 
         const embed = new EmbedBuilder()
             .setColor(0x9146ff)
@@ -968,17 +942,14 @@ function crearEmbedsDrops(datos) {
             .setDescription(
                 `**Campaña:** ${datos.campana}\n` +
                 `**Estado:** ${datos.estado}` +
-                (
-                    proximamente
-                        ? "\n\nEl objeto está pendiente de revelación oficial."
-                        : ""
-                )
+                (proximamente
+                    ? "\n\nEl objeto está pendiente de revelación oficial."
+                    : "")
             )
             .addFields(
                 {
                     name: "⏱️ Tiempo necesario",
-                    value: recompensa.tiempo ||
-                        "Duración no detectada",
+                    value: recompensa.tiempo || "Duración no detectada",
                     inline: true
                 },
                 {
@@ -996,17 +967,10 @@ function crearEmbedsDrops(datos) {
             })
             .setTimestamp(new Date(datos.consultado));
 
-        const cuentaRegresiva =
-            crearCampoCuentaRegresiva(datos);
+        const cuentaRegresiva = crearCampoCuentaRegresiva(datos);
+        if (cuentaRegresiva) embed.addFields(cuentaRegresiva);
 
-        if (cuentaRegresiva) {
-            embed.addFields(cuentaRegresiva);
-        }
-
-        if (
-            !proximamente &&
-            esImagenValida(recompensa.imagen)
-        ) {
+        if (!proximamente && esImagenValida(recompensa.imagen)) {
             embed.setImage(recompensa.imagen);
         }
 
@@ -1024,8 +988,7 @@ function crearEmbedsDrops(datos) {
     );
 
     for (const recompensa of datos.streamers || []) {
-        const proximamente =
-            /^Próximamente$/i.test(recompensa.nombre);
+        const proximamente = /^Próximamente$/i.test(recompensa.nombre);
 
         const embed = new EmbedBuilder()
             .setColor(0x6441a5)
@@ -1034,17 +997,14 @@ function crearEmbedsDrops(datos) {
             .setDescription(
                 `**Campaña:** ${datos.campana}\n` +
                 `**Estado:** ${datos.estado}` +
-                (
-                    proximamente
-                        ? "\n\nEl objeto está pendiente de revelación oficial."
-                        : ""
-                )
+                (proximamente
+                    ? "\n\nEl objeto está pendiente de revelación oficial."
+                    : "")
             )
             .addFields(
                 {
                     name: "⏱️ Tiempo necesario",
-                    value: recompensa.tiempo ||
-                        "Duración no detectada",
+                    value: recompensa.tiempo || "Duración no detectada",
                     inline: true
                 },
                 {
@@ -1072,17 +1032,10 @@ function crearEmbedsDrops(datos) {
             });
         }
 
-        const cuentaRegresiva =
-            crearCampoCuentaRegresiva(datos);
+        const cuentaRegresiva = crearCampoCuentaRegresiva(datos);
+        if (cuentaRegresiva) embed.addFields(cuentaRegresiva);
 
-        if (cuentaRegresiva) {
-            embed.addFields(cuentaRegresiva);
-        }
-
-        if (
-            !proximamente &&
-            esImagenValida(recompensa.imagen)
-        ) {
+        if (!proximamente && esImagenValida(recompensa.imagen)) {
             embed.setImage(recompensa.imagen);
         }
 
@@ -1098,9 +1051,7 @@ function crearEmbedDrops(datos) {
             .setColor(0x9146ff)
             .setTitle("🎁 Rust — Twitch Drops oficiales")
             .setURL(FACEPUNCH_URL)
-            .setDescription(
-                "No se encontraron recompensas disponibles."
-            );
+            .setDescription("No se encontraron recompensas disponibles.");
 }
 
 // ============================================================
@@ -1115,9 +1066,8 @@ function firmaCampana(datos) {
         fechas: datos.fechas,
         inicioCampana: datos.inicioCampana,
         finCampana: datos.finCampana,
-        cuentaRegresivaTick: Math.floor(
-            Date.now() / INTERVALO_REVISION
-        ),
+        // Cambia cada minuto para actualizar la cuenta regresiva.
+        cuentaRegresivaTick: Math.floor(Date.now() / INTERVALO_REVISION),
         generales: datos.generales,
         streamers: datos.streamers
     });
@@ -1165,18 +1115,13 @@ async function publicarRustDrops(interaction) {
 // ============================================================
 
 function obtenerIdsMensajes(monitor) {
-    if (
-        Array.isArray(monitor.messageIds) &&
-        monitor.messageIds.length
-    ) {
+    if (Array.isArray(monitor.messageIds) && monitor.messageIds.length) {
         return monitor.messageIds
             .map(id => String(id).trim())
             .filter(Boolean);
     }
 
-    if (!monitor.messageId) {
-        return [];
-    }
+    if (!monitor.messageId) return [];
 
     return String(monitor.messageId)
         .split(",")
@@ -1229,7 +1174,6 @@ async function revisarDropsAutomaticos() {
             console.warn(
                 "⚠️ No se generaron embeds. Se conservan los mensajes actuales."
             );
-
             return;
         }
 
@@ -1239,15 +1183,10 @@ async function revisarDropsAutomaticos() {
                     .fetch(monitor.channelId)
                     .catch(() => null);
 
-                if (
-                    !canal ||
-                    !canal.isTextBased() ||
-                    !canal.messages
-                ) {
+                if (!canal || !canal.isTextBased() || !canal.messages) {
                     console.warn(
                         `⚠️ Canal de Drops no disponible: ${monitor.channelId}`
                     );
-
                     continue;
                 }
 
@@ -1262,9 +1201,7 @@ async function revisarDropsAutomaticos() {
                     mensajes.push(mensaje);
                 }
 
-                const mismaFirma =
-                    monitor.campaignSignature === firma;
-
+                const mismaFirma = monitor.campaignSignature === firma;
                 const todosExisten =
                     mensajes.length === embeds.length &&
                     mensajes.every(Boolean);
@@ -1353,16 +1290,12 @@ function iniciarDropsAutomaticos(client) {
 
     cliente = client;
 
-    iniciarVigilanciaStreamers(
-        client,
-        obtenerDropsOficiales
-    );
+    iniciarVigilanciaStreamers(client, obtenerDropsOficiales);
 
     temporizadorIniciado = true;
 
     console.log(
-        "🟣 Monitor oficial de Twitch Drops iniciado. " +
-        "Actualización cada minuto."
+        "🟣 Monitor oficial de Twitch Drops iniciado. Actualización cada minuto."
     );
 
     revisarDropsAutomaticos().catch(console.error);
