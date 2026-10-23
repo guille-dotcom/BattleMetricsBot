@@ -8,6 +8,10 @@ const {
     consultarWardog
 } = require("../services/wardogService");
 
+const {
+    formatearDuracion
+} = require("../services/battlemetricsHoursBm");
+
 function limitarTexto(texto, maximo = 1024) {
     const valor = String(texto || "No disponible");
 
@@ -20,7 +24,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName("wardog")
         .setDescription(
-            "Busca jugadores online en servidores WARDOG."
+            "Consulta en qué servidor WARDOG está jugando un jugador."
         )
         .addStringOption(option =>
             option
@@ -47,9 +51,9 @@ module.exports = {
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xe67e22)
-                            .setTitle("No hay coincidencias online")
+                            .setTitle("No se encontró una sesión activa en WARDOG")
                             .setDescription(
-                                "No se encontraron perfiles que estén online actualmente en un servidor WARDOG."
+                                "BattleMetrics no confirmó una sesión activa en un servidor cuyo nombre contenga WARDOG. Esto no descarta que el jugador esté conectado si BattleMetrics no registra o no permite consultar esa sesión."
                             )
                     ]
                 });
@@ -62,12 +66,12 @@ module.exports = {
                 .setAuthor({
                     name: "🐺 RustLogix · WARDOG"
                 })
-                .setTitle("Jugadores online en servidores WARDOG")
+                .setTitle("Servidor WARDOG actual")
                 .setDescription(
-                    `Se encontraron **${perfiles.length}** perfil(es) que cumplen la condición.`
+                    `BattleMetrics confirmó ${perfiles.length} perfil(es) con una sesión activa en WARDOG.`
                 )
                 .setFooter({
-                    text: "Datos consultados en BattleMetrics"
+                    text: "Sesión activa consultada en BattleMetrics"
                 })
                 .setTimestamp();
 
@@ -75,34 +79,38 @@ module.exports = {
                 const servidor = perfil.servidorActual?.nombre ||
                     "Servidor no disponible";
 
-                const duracion = perfil.duracionSesionSegundos !== null &&
+                const duracion =
+                    perfil.duracionSesionSegundos !== null &&
                     perfil.duracionSesionSegundos !== undefined
-                    ? require("../services/battlemetricsHoursBm")
-                        .formatearDuracion(
+                        ? formatearDuracion(
                             perfil.duracionSesionSegundos
                         )
-                    : "No disponible";
+                        : "No disponible";
+
+                const campos = [
+                    "**Estado:** 🟢 Online",
+                    `**Servidor donde está jugando:** ${limitarTexto(servidor, 500)}`,
+                    `**Tiempo de la sesión actual:** ${limitarTexto(duracion)}`,
+                    `**Horas registradas en ese servidor:** ${limitarTexto(perfil.horasServidor)}`,
+                    `**Fuente de las horas:** ${limitarTexto(perfil.fuenteHoras)}`,
+                    perfil.urlBattleMetrics
+                        ? `[Perfil BattleMetrics](${perfil.urlBattleMetrics})`
+                        : null,
+                    perfil.urlSteam
+                        ? `[Perfil Steam](${perfil.urlSteam})`
+                        : null
+                ].filter(Boolean);
 
                 embed.addFields({
                     name: limitarTexto(perfil.nombre, 256),
-                    value: [
-                        `**Estado:** 🟢 Online`,
-                        `**Servidor actual:** ${limitarTexto(servidor, 500)}`,
-                        `**Horas registradas en el servidor:** ${limitarTexto(perfil.horasServidor)}`,
-                        `**Sesión actual:** ${limitarTexto(duracion)}`,
-                        `**Fuente:** ${limitarTexto(perfil.fuenteHoras)}`,
-                        `[Perfil BattleMetrics](${perfil.urlBattleMetrics})`,
-                        perfil.urlSteam
-                            ? `[Perfil Steam](${perfil.urlSteam})`
-                            : null
-                    ].filter(Boolean).join("\n"),
+                    value: campos.join("\n"),
                     inline: false
                 });
             }
 
             if (perfiles.length > 10) {
                 embed.setDescription(
-                    `Se encontraron **${perfiles.length}** perfiles online en servidores WARDOG. Se muestran los primeros 10.`
+                    `Se encontraron ${perfiles.length} perfiles. Se muestran los primeros 10.`
                 );
             }
 
