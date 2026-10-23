@@ -1,3 +1,4 @@
+
 const {
     SlashCommandBuilder,
     EmbedBuilder
@@ -19,7 +20,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName("wardog")
         .setDescription(
-            "Consulta el servidor actual y las horas jugadas de un jugador de Rust."
+            "Busca jugadores online en servidores WARDOG."
         )
         .addStringOption(option =>
             option
@@ -34,90 +35,76 @@ module.exports = {
         await interaction.deferReply();
 
         try {
-            const perfil = interaction.options.getString(
+            const entrada = interaction.options.getString(
                 "perfil",
                 true
             );
 
-            const datos = await consultarWardog(perfil);
+            const perfiles = await consultarWardog(entrada);
 
-            let color = 0x95a5a6;
-            let estadoTexto = "⚪ Estado desconocido";
-            let servidorTexto =
-                "No se pudo confirmar un servidor Rust actual.";
-
-            if (datos.estado === "online") {
-                color = 0x2ecc71;
-
-                const duracion =
-                    datos.duracionSesionSegundos !== null &&
-                    datos.duracionSesionSegundos !== undefined
-                        ? require("../services/battlemetricsHoursBm")
-                            .formatearDuracion(
-                                datos.duracionSesionSegundos
+            if (!Array.isArray(perfiles) || perfiles.length === 0) {
+                await interaction.editReply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xe67e22)
+                            .setTitle("No hay coincidencias online")
+                            .setDescription(
+                                "No se encontraron perfiles que estén online actualmente en un servidor WARDOG."
                             )
-                        : "duración no disponible";
+                    ]
+                });
 
-                estadoTexto = `🟢 Jugando Rust · ${duracion}`;
-
-                if (datos.servidorActual) {
-                    servidorTexto = limitarTexto(
-                        datos.servidorActual.nombre
-                    );
-                }
-            } else if (datos.estado === "offline") {
-                color = 0xe74c3c;
-                estadoTexto = "🔴 Offline";
+                return;
             }
 
-            const horasTexto = datos.servidorActual
-                ? datos.horasServidor || "Sin horas disponibles"
-                : "No está conectado a un servidor Rust confirmado.";
-
             const embed = new EmbedBuilder()
-                .setColor(color)
+                .setColor(0x2ecc71)
                 .setAuthor({
-                    name: "🐺 RustLogix · WARDOG",
-                    url: datos.urlBattleMetrics
+                    name: "🐺 RustLogix · WARDOG"
                 })
-                .setTitle(
-                    limitarTexto(datos.nombre, 256)
-                )
-                .setURL(datos.urlBattleMetrics)
+                .setTitle("Jugadores online en servidores WARDOG")
                 .setDescription(
-                    "Estado actual del jugador y tiempo registrado en su servidor."
-                )
-                .addFields(
-                    {
-                        name: "🎮 Estado",
-                        value: estadoTexto,
-                        inline: false
-                    },
-                    {
-                        name: "🌐 Servidor actual",
-                        value: servidorTexto,
-                        inline: false
-                    },
-                    {
-                        name: "⏱️ Horas en ese servidor",
-                        value: limitarTexto(horasTexto),
-                        inline: true
-                    },
-                    {
-                        name: "📊 Fuente del tiempo",
-                        value: limitarTexto(datos.fuenteHoras),
-                        inline: true
-                    },
-                    {
-                        name: "🆔 Perfil BattleMetrics",
-                        value: `[Abrir perfil](${datos.urlBattleMetrics})`,
-                        inline: false
-                    }
+                    `Se encontraron **${perfiles.length}** perfil(es) que cumplen la condición.`
                 )
                 .setFooter({
-                    text: "RustLogix • WARDOG"
+                    text: "Datos consultados en BattleMetrics"
                 })
                 .setTimestamp();
+
+            for (const perfil of perfiles.slice(0, 10)) {
+                const servidor = perfil.servidorActual?.nombre ||
+                    "Servidor no disponible";
+
+                const duracion = perfil.duracionSesionSegundos !== null &&
+                    perfil.duracionSesionSegundos !== undefined
+                    ? require("../services/battlemetricsHoursBm")
+                        .formatearDuracion(
+                            perfil.duracionSesionSegundos
+                        )
+                    : "No disponible";
+
+                embed.addFields({
+                    name: limitarTexto(perfil.nombre, 256),
+                    value: [
+                        `**Estado:** 🟢 Online`,
+                        `**Servidor actual:** ${limitarTexto(servidor, 500)}`,
+                        `**Horas registradas en el servidor:** ${limitarTexto(perfil.horasServidor)}`,
+                        `**Sesión actual:** ${limitarTexto(duracion)}`,
+                        `**Fuente:** ${limitarTexto(perfil.fuenteHoras)}`,
+                        `[Perfil BattleMetrics](${perfil.urlBattleMetrics})`,
+                        perfil.urlSteam
+                            ? `[Perfil Steam](${perfil.urlSteam})`
+                            : null
+                    ].filter(Boolean).join("\n"),
+                    inline: false
+                });
+            }
+
+            if (perfiles.length > 10) {
+                embed.setDescription(
+                    `Se encontraron **${perfiles.length}** perfiles online en servidores WARDOG. Se muestran los primeros 10.`
+                );
+            }
 
             await interaction.editReply({
                 embeds: [embed]
@@ -129,10 +116,18 @@ module.exports = {
             );
 
             await interaction.editReply({
-                content: `❌ ${limitarTexto(
-                    error.message ||
-                    "No se pudo consultar al jugador."
-                )}`
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xe74c3c)
+                        .setTitle("Error al consultar WARDOG")
+                        .setDescription(
+                            limitarTexto(
+                                error.message ||
+                                "No se pudo consultar BattleMetrics.",
+                                4000
+                            )
+                        )
+                ]
             }).catch(() => {});
         }
     }
