@@ -9,6 +9,13 @@ const {
 const API_BM = "https://api.battlemetrics.com";
 const API_STEAM = "https://api.steampowered.com";
 const TIMEOUT = 20000;
+const MAX_PAGINAS_SESIONES = 10;
+
+// Agrega aquí los IDs de TODOS los servidores WARDOGS.
+// El nombre visible del servidor no se utiliza para identificarlos.
+const SERVIDORES_WARDOGS = new Set([
+    "41195439"
+]);
 
 function extraerEntrada(entrada) {
     const texto = String(entrada || "").trim();
@@ -18,11 +25,19 @@ function extraerEntrada(entrada) {
     }
 
     const enlaceBM = texto.match(
-        /(?:https?:\/\/)?(?:www\.)?battlemetrics\.com\/players\/(\d+)/i
+        /battlemetrics\.com\/servers\/(?:wardogs|rust|[^/]+)\/(\d+)/i
     );
 
     if (enlaceBM) {
-        return { tipo: "battlemetrics", id: enlaceBM[1] };
+        return { tipo: "servidor", id: enlaceBM[1] };
+    }
+
+    const perfilBM = texto.match(
+        /battlemetrics\.com\/players\/(\d+)/i
+    );
+
+    if (perfilBM) {
+        return { tipo: "battlemetrics", id: perfilBM[1] };
     }
 
     if (/^\d+$/.test(texto)) {
@@ -84,13 +99,8 @@ async function resolverVanitySteam(vanity) {
     const resultado = response.data?.response;
     const steamId = String(resultado?.steamid || "");
 
-    if (
-        Number(resultado?.success) !== 1 ||
-        !/^\d{17}$/.test(steamId)
-    ) {
-        throw new Error(
-            "Steam no pudo resolver ese enlace personalizado."
-        );
+    if (Number(resultado?.success) !== 1 || !/^\d{17}$/.test(steamId)) {
+        throw new Error("Steam no pudo resolver ese enlace personalizado.");
     }
 
     return steamId;
@@ -187,39 +197,31 @@ async function buscarIdsPorNombre(nombre) {
     ];
 }
 
-function servidorEsWardog(servidor) {
-    return /\bwardogs?\b/i.test(String(servidor?.nombre || ""));
-}
-
 async function obtenerServidor(serverId) {
-    if (!/^\d+$/.test(String(serverId || ""))) {
-        return null;
-    }
+    const id = String(serverId || "");
 
-    const response = await axios.get(
-        `${API_BM}/servers/${serverId}`,
-        {
-            headers: cabecerasBM(),
-            timeout: TIMEOUT
-        }
-    );
+    if (!/^\d+$/.test(id)) return null;
+
+    const response = await axios.get(`${API_BM}/servers/${id}`, {
+        headers: cabecerasBM(),
+        timeout: TIMEOUT
+    });
 
     const server = response.data?.data;
 
     if (!server) return null;
 
     return {
-        id: String(server.id || serverId),
-        nombre: String(server.attributes?.name || ""),
+        id: String(server.id || id),
+        nombre: String(server.attributes?.name || "Servidor sin nombre"),
         game: server.relationships?.game?.data?.id || null,
-        url: `https://www.battlemetrics.com/servers/${serverId}`
+        url: `https://www.battlemetrics.com/servers/wardogs/${id}`
     };
 }
 
-/*
- * Lee las sesiones recientes del perfil y encuentra una sesión
- * que siga abierta. Sigue links.next para cubrir la paginación.
- * No considera una sesión histórica como conexión actual.
+/**
+ * Devuelve una sesión abierta en un servidor WARDOGS reconocido
+ * por su ID. No se basa en el nombre del servidor.
  */
 async function obtenerSesionActiva(playerId) {
     let url =
@@ -228,10 +230,10 @@ async function obtenerSesionActiva(playerId) {
 
     const visitadas = new Set();
     let paginas = 0;
-    const MAX_PAGINAS = 10;
 
-    while (url && paginas < MAX_PAGINAS) {
+    while (url && paginas < MAX_PAGINAS_SESIONES) {
         if (visitadas.has(url)) break;
+
         visitadas.add(url);
         paginas++;
 
@@ -255,15 +257,20 @@ async function obtenerSesionActiva(playerId) {
             );
 
         for (const sesion of activas) {
-            const serverId =
-                sesion.relationships?.server?.data?.id;
+            const serverId = String(
+                sesion.relationships?.server?.data?.id || ""
+            );
 
-            if (!serverId) continue;
+            if (!SERVIDORES_WARDOGS.has(serverId)) continue;
+
+            const inicio = Date.parse(sesion.attributes.start);
+
+            if (!Number.isFinite(inicio)) continue;
 
             let servidor;
 
             try {
-                servidor = await obtenerServidor(String(serverId));
+                servidor = await obtenerServidor(serverId);
             } catch (error) {
                 console.warn(
                     `No se pudo consultar el servidor ${serverId}:`,
@@ -272,23 +279,14 @@ async function obtenerSesionActiva(playerId) {
                 continue;
             }
 
-            if (!servidor || !servidorEsWardog(servidor)) {
-                continue;
-            }
-
-            const inicio = Date.parse(sesion.attributes.start);
-
-            if (!Number.isFinite(inicio)) continue;
-
-            const duracionSesionSegundos = Math.max(
-                0,
-                Math.floor((Date.now() - inicio) / 1000)
-            );
+            if (!servidor) continue;
 
             return {
                 servidorActual: servidor,
-                duracionSesionSegundos,
-                nombreSesion: sesion.attributes.name || null,
+                duracionSesionSegundos: Math.max(
+                    0,
+                    Math.floor((Date.now() - inicio) / 1000)
+                ),
                 inicioSesion: sesion.attributes.start
             };
         }
@@ -297,8 +295,6 @@ async function obtenerSesionActiva(playerId) {
 
         if (!siguiente) break;
 
-        // BattleMetrics entrega la URL de paginación.
-        // Solo se aceptan enlaces del dominio oficial de su API.
         let urlSiguiente;
 
         try {
@@ -324,8 +320,7 @@ async function obtenerHorasServidor(playerId, serverId) {
             : [];
 
         const registro = historial.find(
-            servidor =>
-                String(servidor.id || "") === String(serverId)
+            servidor => String(servidor.id || "") === String(serverId)
         );
 
         if (registro) {
@@ -359,8 +354,6 @@ async function obtenerHorasServidor(playerId, serverId) {
 }
 
 async function consultarCandidato(playerId, nombreSteam, urlSteam) {
-    // La sesión activa se consulta directamente, sin depender del
-    // estado resumido que devuelve getBattleMetricsHoursBm().
     const sesion = await obtenerSesionActiva(String(playerId));
 
     if (!sesion) return null;
@@ -372,7 +365,7 @@ async function consultarCandidato(playerId, nombreSteam, urlSteam) {
 
     return {
         playerId: String(playerId),
-        nombre: nombreSteam || sesion.nombreSesion || `Jugador ${playerId}`,
+        nombre: nombreSteam || `Jugador ${playerId}`,
         estado: "online",
         servidorActual: sesion.servidorActual,
         duracionSesionSegundos: sesion.duracionSesionSegundos,
@@ -393,6 +386,12 @@ async function consultarWardog(entrada) {
         );
     }
 
+    if (identificador.tipo === "servidor") {
+        throw new Error(
+            "Has proporcionado un enlace de servidor. Introduce el perfil de Steam o BattleMetrics del jugador."
+        );
+    }
+
     if (identificador.tipo === "battlemetrics") {
         const perfil = await consultarCandidato(
             identificador.id,
@@ -408,6 +407,7 @@ async function consultarWardog(entrada) {
         : identificador.id;
 
     const steam = await obtenerPerfilSteam(steamId);
+
     let ids;
 
     try {
@@ -434,10 +434,6 @@ async function consultarWardog(entrada) {
 
             throw error;
         }
-    }
-
-    if (ids.length === 0) {
-        return [];
     }
 
     const perfiles = [];

@@ -39,11 +39,7 @@ module.exports = {
         await interaction.deferReply();
 
         try {
-            const entrada = interaction.options.getString(
-                "perfil",
-                true
-            );
-
+            const entrada = interaction.options.getString("perfil", true);
             const perfiles = await consultarWardog(entrada);
 
             if (!Array.isArray(perfiles) || perfiles.length === 0) {
@@ -51,9 +47,9 @@ module.exports = {
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xe67e22)
-                            .setTitle("No se encontró una sesión activa en WARDOG")
+                            .setTitle("No se encontró una sesión activa en WARDOGS")
                             .setDescription(
-                                "BattleMetrics no confirmó una sesión activa en un servidor cuyo nombre contenga WARDOG. Esto no descarta que el jugador esté conectado si BattleMetrics no registra o no permite consultar esa sesión."
+                                "No se encontró una sesión abierta en los IDs de servidores WARDOGS configurados. Si el jugador está conectado, comprueba que el servidor esté incluido en la lista y que BattleMetrics permita consultar sus sesiones."
                             )
                     ]
                 });
@@ -64,11 +60,11 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setColor(0x2ecc71)
                 .setAuthor({
-                    name: "🐺 RustLogix · WARDOG"
+                    name: "🐺 RustLogix · WARDOGS"
                 })
-                .setTitle("Servidor WARDOG actual")
+                .setTitle("Servidor WARDOGS actual")
                 .setDescription(
-                    `BattleMetrics confirmó ${perfiles.length} perfil(es) con una sesión activa en WARDOG.`
+                    `BattleMetrics confirmó ${perfiles.length} perfil(es) con una sesión activa en un servidor WARDOGS configurado.`
                 )
                 .setFooter({
                     text: "Sesión activa consultada en BattleMetrics"
@@ -76,15 +72,13 @@ module.exports = {
                 .setTimestamp();
 
             for (const perfil of perfiles.slice(0, 10)) {
-                const servidor = perfil.servidorActual?.nombre ||
-                    "Servidor no disponible";
+                const servidor =
+                    perfil.servidorActual?.nombre || "Servidor no disponible";
 
                 const duracion =
                     perfil.duracionSesionSegundos !== null &&
                     perfil.duracionSesionSegundos !== undefined
-                        ? formatearDuracion(
-                            perfil.duracionSesionSegundos
-                        )
+                        ? formatearDuracion(perfil.duracionSesionSegundos)
                         : "No disponible";
 
                 const campos = [
@@ -93,6 +87,9 @@ module.exports = {
                     `**Tiempo de la sesión actual:** ${limitarTexto(duracion)}`,
                     `**Horas registradas en ese servidor:** ${limitarTexto(perfil.horasServidor)}`,
                     `**Fuente de las horas:** ${limitarTexto(perfil.fuenteHoras)}`,
+                    perfil.servidorActual?.url
+                        ? `[Ver servidor WARDOGS](${perfil.servidorActual.url})`
+                        : null,
                     perfil.urlBattleMetrics
                         ? `[Perfil BattleMetrics](${perfil.urlBattleMetrics})`
                         : null,
@@ -127,11 +124,11 @@ module.exports = {
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0xe74c3c)
-                        .setTitle("Error al consultar WARDOG")
+                        .setTitle("Error al consultar WARDOGS")
                         .setDescription(
                             limitarTexto(
                                 error.message ||
-                                "No se pudo consultar BattleMetrics.",
+                                    "No se pudo consultar BattleMetrics.",
                                 4000
                             )
                         )
