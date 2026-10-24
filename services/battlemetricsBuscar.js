@@ -9,7 +9,7 @@ const TIMEZONE_CHILE =
     "America/Santiago";
 
 const MAX_LAST_SEEN_MINUTES =
-    60;
+    150;
 
 const LIMITE_PAGINAS_BUSQUEDA =
     1000;
@@ -2708,7 +2708,7 @@ async function construirResultadoJugador(
                 ? Number(
                     (
                         lastSeenMinutes /
-                        60
+                        150
                     ).toFixed(2)
                 )
                 : null,
